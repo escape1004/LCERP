@@ -1,5 +1,5 @@
 {
-  "name": "local-erp-nexus",
+  "name": "local-erp",
   "private": true,
   "version": "1.0.0",
   "main": "electron/main.js",
@@ -18,8 +18,8 @@
     "dev:electron": "concurrently \"npm run dev\" \"wait-on tcp:5174 && npm run start\""
   },
   "build": {
-    "appId": "com.local-erp-nexus",
-    "productName": "Local ERP Nexus",
+    "appId": "com.local-erp",
+    "productName": "Local ERP",
     "directories": {
       "output": "dist-electron"
     },
