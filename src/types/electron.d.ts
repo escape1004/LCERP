@@ -24,6 +24,9 @@ interface ElectronAPI {
   
   // Utility APIs
   openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
+  
+  backupDatabase: () => Promise<{ success: boolean }>;
+  openBackupLocation: () => Promise<{ success: boolean }>;
 }
 
 declare global {

@@ -21,4 +21,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // Utility APIs
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
+  
+  backupDatabase: () => ipcRenderer.invoke('backupDatabase'),
+  openBackupLocation: () => ipcRenderer.invoke('openBackupLocation'),
 }); 

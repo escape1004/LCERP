@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from './ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { Folder, RefreshCw } from 'lucide-react';
+import { Folder, RefreshCw, Save, FolderOpen } from 'lucide-react';
 import { useToast } from './ui/use-toast';
 import { useERPStore } from '../hooks/useERPStore';
 
@@ -73,6 +73,31 @@ export const DatabaseViewer: React.FC = () => {
     }
   };
 
+  const handleBackup = async () => {
+    try {
+      await window.electronAPI.backupDatabase();
+      toast({
+        title: '데이터베이스 백업이 완료되었습니다.',
+      });
+    } catch (error) {
+      toast({
+        title: '데이터베이스 백업에 실패했습니다.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleOpenBackup = async () => {
+    try {
+      await window.electronAPI.openBackupLocation();
+    } catch (error) {
+      toast({
+        title: '백업 폴더를 여는데 실패했습니다.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   useEffect(() => {
     loadTables();
     loadDbPath();
@@ -90,14 +115,32 @@ export const DatabaseViewer: React.FC = () => {
               <RefreshCw className="h-4 w-4" />
             </Button>
           </div>
-          <Button 
-            variant="outline" 
-            onClick={handleOpenFile} 
-            className="border-gray-600 hover:bg-discord-hover"
-          >
-            <Folder size={16} className="mr-2" />
-            DB 경로 열기
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              onClick={handleBackup}
+              className="border-gray-600 hover:bg-discord-hover"
+            >
+              <Save size={16} className="mr-2" />
+              백업하기
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={handleOpenBackup}
+              className="border-gray-600 hover:bg-discord-hover"
+            >
+              <FolderOpen size={16} className="mr-2" />
+              백업 폴더 열기
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={handleOpenFile} 
+              className="border-gray-600 hover:bg-discord-hover"
+            >
+              <Folder size={16} className="mr-2" />
+              DB 경로 열기
+            </Button>
+          </div>
         </div>
 
         <div className="text-sm text-muted-foreground">
