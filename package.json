@@ -105,8 +105,8 @@
       "legalTrademarks": "Escape"
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": false,
       "createStartMenuShortcut": false,
       "shortcutName": "Local ERP",
