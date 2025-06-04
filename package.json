@@ -23,7 +23,6 @@
   "build": {
     "appId": "com.escape.local-erp",
     "productName": "Local ERP",
-    "publisher": "Escape",
     "directories": {
       "output": "dist-electron"
     },
@@ -101,7 +100,9 @@
       "target": [
         "nsis"
       ],
-      "icon": "./resources/icon.ico"
+      "icon": "./resources/icon.ico",
+      "publisherName": "Escape",
+      "legalTrademarks": "Escape"
     },
     "nsis": {
       "oneClick": false,
