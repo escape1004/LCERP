@@ -25,6 +25,13 @@ export const Sidebar: React.FC = () => {
   const getSubCategories = (parentId: string) => 
     categories.filter(cat => cat.parentId === parentId).sort((a, b) => a.order - b.order);
 
+  // Check if category should be expanded (selected or has selected subcategory)
+  const shouldShowSubCategories = (categoryId: string) => {
+    if (selectedCategoryId === categoryId) return true;
+    const subCategories = getSubCategories(categoryId);
+    return subCategories.some(sub => sub.id === selectedCategoryId);
+  };
+
   const handleDragEnd = (result: any) => {
     if (!result.destination) return;
 
@@ -48,12 +55,12 @@ export const Sidebar: React.FC = () => {
   const renderCategory = (category: Category, level = 0) => {
     const subCategories = getSubCategories(category.id);
     const isSelected = selectedCategoryId === category.id;
-    const showSubCategories = isSelected && subCategories.length > 0;
+    const showSubCategories = shouldShowSubCategories(category.id);
 
     return (
       <div key={category.id}>
         <div
-          className={`flex items-center px-3 py-2 mx-3 mb-1 rounded cursor-pointer transition-colors group ${
+          className={`flex items-center py-2 px-3 mb-1 rounded cursor-pointer transition-colors group ${
             isSelected 
               ? 'bg-discord-accent text-white' 
               : 'hover:bg-discord-hover text-discord-text'
@@ -84,7 +91,7 @@ export const Sidebar: React.FC = () => {
           )}
         </div>
         
-        {showSubCategories && (
+        {showSubCategories && subCategories.length > 0 && (
           <div>
             {subCategories.map(subCategory => renderCategory(subCategory, level + 1))}
           </div>
@@ -96,7 +103,7 @@ export const Sidebar: React.FC = () => {
   if (isCollapsed) {
     return (
       <div className="w-12 bg-discord-sidebar h-screen flex flex-col border-r border-gray-800">
-        <div className="p-3 border-b border-gray-800">
+        <div className="flex items-center justify-center h-16 border-b border-gray-800">
           <Button
             size="sm"
             variant="ghost"

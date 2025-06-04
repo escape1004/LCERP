@@ -174,56 +174,82 @@ export const RecordModal: React.FC<RecordModalProps> = ({
       case 'select':
         if (field.multiSelect) {
           return (
-            <Popover open={openComboboxes[field.id]} onOpenChange={() => toggleCombobox(field.id)}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={openComboboxes[field.id]}
-                  className={`w-full justify-between bg-discord-sidebar border-gray-600 text-discord-text ${
-                    hasError ? 'border-red-500' : ''
-                  }`}
-                >
-                  {Array.isArray(value) && value.length > 0 
-                    ? `${value.length}개 선택됨`
-                    : `${field.name} 선택`}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-full p-0 bg-discord-sidebar border-gray-600">
-                <Command>
-                  <CommandInput placeholder={`${field.name} 검색...`} className="bg-discord-sidebar text-discord-text" />
-                  <CommandList>
-                    <CommandEmpty>옵션을 찾을 수 없습니다.</CommandEmpty>
-                    <CommandGroup>
-                      {field.selectOptions?.map((option) => (
-                        <CommandItem
-                          key={option}
-                          value={option}
-                          onSelect={() => {
-                            const currentValues = Array.isArray(value) ? value : [];
-                            if (currentValues.includes(option)) {
-                              updateFieldValue(field.id, currentValues.filter(v => v !== option));
-                            } else {
-                              updateFieldValue(field.id, [...currentValues, option]);
-                            }
-                          }}
-                          className="text-discord-text hover:bg-discord-hover"
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              Array.isArray(value) && value.includes(option) ? "opacity-100" : "opacity-0"
-                            )}
-                          />
-                          {option}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+            <div>
+              <Popover open={openComboboxes[field.id]} onOpenChange={() => toggleCombobox(field.id)}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openComboboxes[field.id]}
+                    className={`w-full justify-between bg-discord-sidebar border-gray-600 text-discord-text ${
+                      hasError ? 'border-red-500' : ''
+                    }`}
+                  >
+                    {Array.isArray(value) && value.length > 0 
+                      ? `${value.length}개 선택됨`
+                      : `${field.name} 선택`}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0 bg-discord-sidebar border-gray-600">
+                  <Command>
+                    <CommandInput placeholder={`${field.name} 검색...`} className="bg-discord-sidebar text-discord-text" />
+                    <CommandList>
+                      <CommandEmpty>옵션을 찾을 수 없습니다.</CommandEmpty>
+                      <CommandGroup>
+                        {field.selectOptions?.map((option) => (
+                          <CommandItem
+                            key={option}
+                            value={option}
+                            onSelect={() => {
+                              const currentValues = Array.isArray(value) ? value : [];
+                              if (currentValues.includes(option)) {
+                                updateFieldValue(field.id, currentValues.filter(v => v !== option));
+                              } else {
+                                updateFieldValue(field.id, [...currentValues, option]);
+                              }
+                            }}
+                            className="text-discord-text hover:bg-discord-hover"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                Array.isArray(value) && value.includes(option) ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {option}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              
+              {/* Selected items as tags */}
+              {Array.isArray(value) && value.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {value.map((item, index) => (
+                    <span
+                      key={index}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-discord-accent text-white text-xs rounded-full"
+                    >
+                      {String(item)}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newValues = value.filter(v => v !== item);
+                          updateFieldValue(field.id, newValues);
+                        }}
+                        className="hover:bg-blue-600 rounded-full p-0.5"
+                      >
+                        <X size={10} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           );
         } else {
           return (
@@ -259,59 +285,91 @@ export const RecordModal: React.FC<RecordModalProps> = ({
 
         if (field.multiSelect) {
           return (
-            <Popover open={openComboboxes[field.id]} onOpenChange={() => toggleCombobox(field.id)}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={openComboboxes[field.id]}
-                  className={`w-full justify-between bg-discord-sidebar border-gray-600 text-discord-text ${
-                    hasError ? 'border-red-500' : ''
-                  }`}
-                >
-                  {Array.isArray(value) && value.length > 0 
-                    ? `${value.length}개 선택됨`
-                    : `${field.name} 선택`}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-full p-0 bg-discord-sidebar border-gray-600">
-                <Command>
-                  <CommandInput placeholder={`${field.name} 검색...`} className="bg-discord-sidebar text-discord-text" />
-                  <CommandList>
-                    <CommandEmpty>항목을 찾을 수 없습니다.</CommandEmpty>
-                    <CommandGroup>
-                      {relatedRecords.map((relatedRecord) => {
-                        const displayValue = String(relatedRecord.data[displayField?.id] || relatedRecord.id);
-                        return (
-                          <CommandItem
-                            key={relatedRecord.id}
-                            value={displayValue}
-                            onSelect={() => {
-                              const currentValues = Array.isArray(value) ? value : [];
-                              if (currentValues.includes(relatedRecord.id)) {
-                                updateFieldValue(field.id, currentValues.filter(v => v !== relatedRecord.id));
-                              } else {
-                                updateFieldValue(field.id, [...currentValues, relatedRecord.id]);
-                              }
-                            }}
-                            className="text-discord-text hover:bg-discord-hover"
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                Array.isArray(value) && value.includes(relatedRecord.id) ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            {displayValue}
-                          </CommandItem>
-                        );
-                      })}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+            <div>
+              <Popover open={openComboboxes[field.id]} onOpenChange={() => toggleCombobox(field.id)}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openComboboxes[field.id]}
+                    className={`w-full justify-between bg-discord-sidebar border-gray-600 text-discord-text ${
+                      hasError ? 'border-red-500' : ''
+                    }`}
+                  >
+                    {Array.isArray(value) && value.length > 0 
+                      ? `${value.length}개 선택됨`
+                      : `${field.name} 선택`}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0 bg-discord-sidebar border-gray-600">
+                  <Command>
+                    <CommandInput placeholder={`${field.name} 검색...`} className="bg-discord-sidebar text-discord-text" />
+                    <CommandList>
+                      <CommandEmpty>항목을 찾을 수 없습니다.</CommandEmpty>
+                      <CommandGroup>
+                        {relatedRecords.map((relatedRecord) => {
+                          const displayValue = String(relatedRecord.data[displayField?.id] || relatedRecord.id);
+                          return (
+                            <CommandItem
+                              key={relatedRecord.id}
+                              value={displayValue}
+                              onSelect={() => {
+                                const currentValues = Array.isArray(value) ? value : [];
+                                if (currentValues.includes(relatedRecord.id)) {
+                                  updateFieldValue(field.id, currentValues.filter(v => v !== relatedRecord.id));
+                                } else {
+                                  updateFieldValue(field.id, [...currentValues, relatedRecord.id]);
+                                }
+                              }}
+                              className="text-discord-text hover:bg-discord-hover"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  Array.isArray(value) && value.includes(relatedRecord.id) ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {displayValue}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+
+              {/* Selected relation items as tags */}
+              {Array.isArray(value) && value.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {value.map((recordId, index) => {
+                    const relatedRecord = relatedRecords.find(r => r.id === recordId);
+                    const displayValue = relatedRecord ? 
+                      String(relatedRecord.data[displayField?.id] || relatedRecord.id) : 
+                      recordId;
+                    return (
+                      <span
+                        key={index}
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded-full"
+                      >
+                        {displayValue}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newValues = value.filter(v => v !== recordId);
+                            updateFieldValue(field.id, newValues);
+                          }}
+                          className="hover:bg-green-700 rounded-full p-0.5"
+                        >
+                          <X size={10} />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           );
         } else {
           return (

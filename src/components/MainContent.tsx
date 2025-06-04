@@ -1,12 +1,13 @@
 
 import React, { useState, useMemo } from 'react';
-import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink } from 'lucide-react';
+import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { DataRecord, FieldDefinition } from '../types';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { RecordModal } from './RecordModal';
 import { ViewRecordModal } from './ViewRecordModal';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 export const MainContent: React.FC = () => {
   const {
@@ -29,15 +30,35 @@ export const MainContent: React.FC = () => {
   const [viewingCategory, setViewingCategory] = useState<string>('');
   const [sortField, setSortField] = useState<string>('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [searchField, setSearchField] = useState<string>('all');
 
   const selectedCategory = categories.find(cat => cat.id === selectedCategoryId);
-  const allRecords = selectedCategoryId ? getFilteredRecords(selectedCategoryId) : [];
+  
+  // Custom filtered records based on field-specific search
+  const customFilteredRecords = useMemo(() => {
+    if (!selectedCategoryId) return [];
+    
+    const records = getCategoryRecords(selectedCategoryId);
+    
+    if (!searchTerm) return records;
+    
+    return records.filter((record) => {
+      if (searchField === 'all') {
+        return Object.values(record.data).some((value) =>
+          String(value).toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      } else {
+        const fieldValue = record.data[searchField];
+        return String(fieldValue || '').toLowerCase().includes(searchTerm.toLowerCase());
+      }
+    });
+  }, [selectedCategoryId, searchTerm, searchField, getCategoryRecords]);
 
   // Sorting
   const sortedRecords = useMemo(() => {
-    if (!sortField) return allRecords;
+    if (!sortField) return customFilteredRecords;
 
-    return [...allRecords].sort((a, b) => {
+    return [...customFilteredRecords].sort((a, b) => {
       let aValue = a.data[sortField];
       let bValue = b.data[sortField];
 
@@ -51,7 +72,7 @@ export const MainContent: React.FC = () => {
       if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [allRecords, sortField, sortDirection]);
+  }, [customFilteredRecords, sortField, sortDirection]);
 
   // Pagination
   const totalPages = Math.ceil(sortedRecords.length / itemsPerPage);
@@ -238,9 +259,15 @@ export const MainContent: React.FC = () => {
       {/* Header */}
       <div className="p-6 border-b border-gray-700">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold text-discord-text">
-            {selectedCategory.name}
-          </h1>
+          <div>
+            <h1 className="text-2xl font-bold text-discord-text">
+              {selectedCategory.name}
+            </h1>
+            <p className="text-sm text-discord-muted mt-1">
+              전체 {sortedRecords.length}개 항목
+              {searchTerm && ` (검색 결과: ${sortedRecords.length}개)`}
+            </p>
+          </div>
           <div className="flex gap-3">
             <Button
               onClick={exportToCSV}
@@ -265,14 +292,38 @@ export const MainContent: React.FC = () => {
         </div>
 
         {/* Search */}
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-discord-muted" />
-          <Input
-            placeholder="검색..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 bg-discord-sidebar border-gray-600 text-discord-text"
-          />
+        <div className="flex gap-3">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-discord-muted" />
+            <Input
+              placeholder={searchField === 'all' ? '전체 검색...' : `${selectedCategory.fields.find(f => f.id === searchField)?.name || ''} 검색...`}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 bg-discord-sidebar border-gray-600 text-discord-text"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-discord-muted hover:text-discord-text"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+          <Select value={searchField} onValueChange={setSearchField}>
+            <SelectTrigger className="w-48 bg-discord-sidebar border-gray-600 text-discord-text">
+              <Filter size={16} className="mr-2" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-discord-sidebar border-gray-600">
+              <SelectItem value="all">전체 필드</SelectItem>
+              {selectedCategory.fields.map(field => (
+                <SelectItem key={field.id} value={field.id}>
+                  {field.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -374,37 +425,35 @@ export const MainContent: React.FC = () => {
               </table>
             </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-700">
-                <div className="text-sm text-discord-muted">
-                  전체 {sortedRecords.length}개 중 {startIndex + 1}-{Math.min(startIndex + itemsPerPage, sortedRecords.length)}개 표시
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setCurrentPage(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className="border-gray-600 hover:bg-discord-hover"
-                  >
-                    이전
-                  </Button>
-                  <span className="flex items-center px-3 text-sm text-discord-text">
-                    {currentPage} / {totalPages}
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setCurrentPage(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                    className="border-gray-600 hover:bg-discord-hover"
-                  >
-                    다음
-                  </Button>
-                </div>
+            {/* Pagination - Always show */}
+            <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-700">
+              <div className="text-sm text-discord-muted">
+                전체 {sortedRecords.length}개 중 {startIndex + 1}-{Math.min(startIndex + itemsPerPage, sortedRecords.length)}개 표시
               </div>
-            )}
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCurrentPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="border-gray-600 hover:bg-discord-hover"
+                >
+                  이전
+                </Button>
+                <span className="flex items-center px-3 text-sm text-discord-text">
+                  {currentPage} / {Math.max(totalPages, 1)}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCurrentPage(currentPage + 1)}
+                  disabled={currentPage >= totalPages}
+                  className="border-gray-600 hover:bg-discord-hover"
+                >
+                  다음
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </div>

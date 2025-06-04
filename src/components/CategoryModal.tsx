@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, GripVertical } from 'lucide-react';
+import { X, GripVertical, Plus, Trash2 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { useERPStore } from '../hooks/useERPStore';
 import { Category, FieldDefinition } from '../types';
@@ -16,139 +15,124 @@ interface CategoryModalProps {
   category?: Category | null;
 }
 
-const fieldTypes = [
-  { id: 'text', name: '텍스트' },
-  { id: 'number', name: '숫자' },
-  { id: 'date', name: '날짜' },
-  { id: 'longtext', name: '긴 텍스트' },
-  { id: 'select', name: '선택' },
-  { id: 'relation', name: '관계형' },
-];
-
 export const CategoryModal: React.FC<CategoryModalProps> = ({
   isOpen,
   onClose,
   category,
 }) => {
-  const { categories, addCategory, updateCategory, deleteCategory } = useERPStore();
-  const [name, setName] = useState('');
-  const [parentId, setParentId] = useState('');
-  const [fields, setFields] = useState<FieldDefinition[]>([]);
+  const { categories, addCategory, updateCategory } = useERPStore();
+  const [formData, setFormData] = useState({
+    name: '',
+    parentId: undefined,
+    fields: [] as FieldDefinition[],
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (category) {
-      setName(category.name);
-      setParentId(category.parentId || '');
-      setFields([...category.fields]);
+      setFormData({
+        name: category.name,
+        parentId: category.parentId,
+        fields: category.fields,
+      });
     } else {
-      setName('');
-      setParentId('');
-      setFields([]);
+      setFormData({
+        name: '',
+        parentId: undefined,
+        fields: [],
+      });
     }
+    setErrors({});
   }, [category, isOpen]);
 
-  const availableParentCategories = categories.filter(cat => 
-    cat.id !== category?.id && !cat.parentId
-  );
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
 
-  const availableRelationCategories = categories.filter(cat => 
-    cat.id !== category?.id
-  );
+    if (!formData.name.trim()) {
+      newErrors.name = '카테고리 이름을 입력하세요.';
+    }
 
-  const generateFieldId = () => Math.random().toString(36).substring(2) + Date.now().toString(36);
+    // Validate field names
+    formData.fields.forEach((field, index) => {
+      if (!field.name.trim()) {
+        newErrors[`field_${index}_name`] = '필드명을 입력하세요.';
+      }
+    });
 
-  const addField = () => {
-    const newField: FieldDefinition = {
-      id: generateFieldId(),
-      name: '',
-      type: 'text',
-      required: false,
-      order: fields.length,
-    };
-    setFields([...fields, newField]);
-  };
-
-  const updateField = (fieldId: string, updates: Partial<FieldDefinition>) => {
-    setFields(fields.map(field =>
-      field.id === fieldId ? { ...field, ...updates } : field
-    ));
-  };
-
-  const removeField = (fieldId: string) => {
-    setFields(fields.filter(field => field.id !== fieldId));
-  };
-
-  const handleDragEnd = (result: any) => {
-    if (!result.destination) return;
-
-    const items = Array.from(fields);
-    const [reorderedItem] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reorderedItem);
-
-    const reorderedFields = items.map((item, index) => ({
-      ...item,
-      order: index,
-    }));
-
-    setFields(reorderedFields);
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = () => {
-    if (!name.trim()) return;
-
-    const processedFields = fields.map((field, index) => ({
-      ...field,
-      order: index,
-    }));
-
-    const categoryData = {
-      name: name.trim(),
-      parentId: parentId === 'none' ? undefined : parentId || undefined,
-      fields: processedFields,
-      order: category?.order ?? categories.length,
-    };
+    if (!validateForm()) return;
 
     if (category) {
-      updateCategory(category.id, categoryData);
+      updateCategory(category.id, {
+        name: formData.name,
+        parentId: formData.parentId,
+        fields: formData.fields,
+      });
     } else {
-      addCategory(categoryData);
+      addCategory({
+        name: formData.name,
+        parentId: formData.parentId,
+        fields: formData.fields,
+        order: categories.length,
+      });
     }
 
     onClose();
   };
 
-  const handleDelete = () => {
-    if (category && window.confirm('이 카테고리를 삭제하시겠습니까?')) {
-      deleteCategory(category.id);
-      onClose();
-    }
+  const addField = () => {
+    const newField: FieldDefinition = {
+      id: Math.random().toString(36).substring(2),
+      name: '',
+      type: 'text',
+      required: false,
+      order: formData.fields.length,
+    };
+    setFormData(prev => ({ ...prev, fields: [...prev.fields, newField] }));
   };
 
-  const addSelectOption = (fieldId: string) => {
-    const field = fields.find(f => f.id === fieldId);
-    if (field) {
-      const options = field.selectOptions || [];
-      updateField(fieldId, {
-        selectOptions: [...options, '']
+  const removeField = (index: number) => {
+    const newFields = formData.fields.filter((_, i) => i !== index);
+    setFormData(prev => ({ ...prev, fields: newFields }));
+  };
+
+  const updateField = (index: number, updates: Partial<FieldDefinition>) => {
+    const newFields = [...formData.fields];
+    newFields[index] = { ...newFields[index], ...updates };
+    setFormData(prev => ({ ...prev, fields: newFields }));
+    
+    // Clear field name error when user starts typing
+    if (updates.name && errors[`field_${index}_name`]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[`field_${index}_name`];
+        return newErrors;
       });
     }
   };
 
-  const updateSelectOption = (fieldId: string, optionIndex: number, value: string) => {
-    const field = fields.find(f => f.id === fieldId);
-    if (field && field.selectOptions) {
-      const newOptions = [...field.selectOptions];
-      newOptions[optionIndex] = value;
-      updateField(fieldId, { selectOptions: newOptions });
-    }
+  const moveField = (dragIndex: number, hoverIndex: number) => {
+    const newFields = [...formData.fields];
+    const draggedField = newFields[dragIndex];
+    newFields.splice(dragIndex, 1);
+    newFields.splice(hoverIndex, 0, draggedField);
+
+    // Update order
+    const reorderedFields = newFields.map((field, index) => ({
+      ...field,
+      order: index,
+    }));
+
+    setFormData(prev => ({ ...prev, fields: reorderedFields }));
   };
 
-  const removeSelectOption = (fieldId: string, optionIndex: number) => {
-    const field = fields.find(f => f.id === fieldId);
-    if (field && field.selectOptions) {
-      const newOptions = field.selectOptions.filter((_, index) => index !== optionIndex);
-      updateField(fieldId, { selectOptions: newOptions });
-    }
+  const handleFieldDragEnd = (result: any) => {
+    if (!result.destination) return;
+    moveField(result.source.index, result.destination.index);
   };
 
   if (!isOpen) return null;
@@ -171,113 +155,148 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
 
         {/* Content */}
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-160px)] discord-scrollbar">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Basic Info */}
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="name" className="text-discord-text">카테고리명 *</Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="bg-discord-sidebar border-gray-600 text-discord-text"
-                  placeholder="카테고리명을 입력하세요"
-                />
-              </div>
-              <div>
-                <Label htmlFor="parent" className="text-discord-text">상위 카테고리</Label>
-                <Select value={parentId || 'none'} onValueChange={(value) => setParentId(value === 'none' ? '' : value)}>
-                  <SelectTrigger className="bg-discord-sidebar border-gray-600 text-discord-text">
-                    <SelectValue placeholder="상위 카테고리 선택 (선택사항)" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-discord-sidebar border-gray-600">
-                    <SelectItem value="none">없음</SelectItem>
-                    {availableParentCategories.map(cat => (
+          <div className="space-y-6">
+            {/* Category Name */}
+            <div>
+              <Label className="text-discord-text font-medium">
+                카테고리 이름 <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                value={formData.name}
+                onChange={(e) => {
+                  setFormData(prev => ({ ...prev, name: e.target.value }));
+                  if (errors.name) {
+                    setErrors(prev => {
+                      const newErrors = { ...prev };
+                      delete newErrors.name;
+                      return newErrors;
+                    });
+                  }
+                }}
+                className={`mt-2 bg-discord-sidebar border-gray-600 text-discord-text ${
+                  errors.name ? 'border-red-500' : ''
+                }`}
+                placeholder="카테고리 이름을 입력하세요"
+              />
+              {errors.name && (
+                <p className="text-red-500 text-sm mt-1">{errors.name}</p>
+              )}
+            </div>
+
+            {/* Parent Category */}
+            <div>
+              <Label className="text-discord-text font-medium">상위 카테고리</Label>
+              <Select
+                value={formData.parentId || 'none'}
+                onValueChange={(value) => setFormData(prev => ({ 
+                  ...prev, 
+                  parentId: value === 'none' ? undefined : value 
+                }))}
+              >
+                <SelectTrigger className="mt-2 bg-discord-sidebar border-gray-600 text-discord-text">
+                  <SelectValue placeholder="상위 카테고리 선택 (선택사항)" />
+                </SelectTrigger>
+                <SelectContent className="bg-discord-sidebar border-gray-600">
+                  <SelectItem value="none">없음 (최상위 카테고리)</SelectItem>
+                  {categories
+                    .filter(cat => !cat.parentId && cat.id !== category?.id)
+                    .map(cat => (
                       <SelectItem key={cat.id} value={cat.id}>
                         {cat.name}
                       </SelectItem>
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Fields */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-discord-text">필드 설정</h3>
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <Label className="text-discord-text font-medium">필드 설정</Label>
                 <Button
+                  type="button"
                   onClick={addField}
                   size="sm"
                   className="bg-discord-accent hover:bg-blue-600"
                 >
-                  <Plus size={16} className="mr-2" />
+                  <Plus size={16} className="mr-1" />
                   필드 추가
                 </Button>
               </div>
 
-              <DragDropContext onDragEnd={handleDragEnd}>
+              <DragDropContext onDragEnd={handleFieldDragEnd}>
                 <Droppable droppableId="fields">
                   {(provided) => (
                     <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-4">
-                      {fields.map((field, index) => (
+                      {formData.fields.map((field, index) => (
                         <Draggable key={field.id} draggableId={field.id} index={index}>
                           {(provided) => (
                             <div
                               ref={provided.innerRef}
                               {...provided.draggableProps}
-                              className="p-4 bg-discord-sidebar rounded-lg border border-gray-700"
+                              className="p-4 bg-discord-sidebar rounded-lg border border-gray-600"
                             >
-                              <div className="flex items-start gap-3">
-                                <div
-                                  {...provided.dragHandleProps}
-                                  className="mt-2 text-discord-muted cursor-move"
-                                >
+                              <div className="flex items-center gap-2 mb-3">
+                                <div {...provided.dragHandleProps} className="cursor-move text-discord-muted">
                                   <GripVertical size={16} />
                                 </div>
-                                
-                                <div className="flex-1 space-y-3">
-                                  <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                      <Label className="text-discord-text text-sm">필드명</Label>
-                                      <Input
-                                        value={field.name}
-                                        onChange={(e) => updateField(field.id, { name: e.target.value })}
-                                        className="bg-discord-bg border-gray-600 text-discord-text"
-                                        placeholder="필드명을 입력하세요"
-                                      />
-                                    </div>
-                                    <div>
-                                      <Label className="text-discord-text text-sm">타입</Label>
-                                      <Select
-                                        value={field.type}
-                                        onValueChange={(value) => updateField(field.id, { type: value as any })}
-                                      >
-                                        <SelectTrigger className="bg-discord-bg border-gray-600 text-discord-text">
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-discord-sidebar border-gray-600">
-                                          {fieldTypes.map(type => (
-                                            <SelectItem key={type.id} value={type.id}>
-                                              {type.name}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                  </div>
+                                <Input
+                                  placeholder="필드명을 입력하세요"
+                                  value={field.name}
+                                  onChange={(e) => updateField(index, { name: e.target.value })}
+                                  className={`flex-1 bg-discord-bg border-gray-700 text-discord-text ${
+                                    errors[`field_${index}_name`] ? 'border-red-500' : ''
+                                  }`}
+                                />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => removeField(index)}
+                                  className="text-red-400 hover:text-red-300 hover:bg-red-900/20"
+                                >
+                                  <Trash2 size={16} />
+                                </Button>
+                              </div>
+                              
+                              {errors[`field_${index}_name`] && (
+                                <p className="text-red-500 text-sm mb-3 ml-6">{errors[`field_${index}_name`]}</p>
+                              )}
 
+                              <div className="grid grid-cols-2 gap-4 ml-6">
+                                <div>
+                                  <Label className="text-discord-text text-sm">필드 타입</Label>
+                                  <Select
+                                    value={field.type}
+                                    onValueChange={(value) => updateField(index, { 
+                                      type: value as FieldDefinition['type'],
+                                      selectOptions: value === 'select' ? [] : undefined,
+                                      relationCategoryId: value === 'relation' ? undefined : field.relationCategoryId
+                                    })}
+                                  >
+                                    <SelectTrigger className="mt-1 bg-discord-bg border-gray-700 text-discord-text">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-discord-sidebar border-gray-600">
+                                      <SelectItem value="text">텍스트</SelectItem>
+                                      <SelectItem value="number">숫자</SelectItem>
+                                      <SelectItem value="date">날짜</SelectItem>
+                                      <SelectItem value="longtext">긴 텍스트</SelectItem>
+                                      <SelectItem value="select">선택 목록</SelectItem>
+                                      <SelectItem value="relation">관계형 (다른 카테고리 참조)</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+
+                                <div className="flex items-center gap-4 mt-6">
                                   <div className="flex items-center space-x-2">
                                     <Checkbox
                                       id={`required-${field.id}`}
-                                      checked={field.required}
-                                      onCheckedChange={(checked) => updateField(field.id, { required: !!checked })}
+                                      checked={field.required || false}
+                                      onCheckedChange={(checked) => updateField(index, { required: !!checked })}
                                     />
-                                    <Label 
-                                      htmlFor={`required-${field.id}`}
-                                      className="text-discord-text text-sm"
-                                    >
-                                      필수 입력
+                                    <Label htmlFor={`required-${field.id}`} className="text-discord-text text-sm">
+                                      필수
                                     </Label>
                                   </div>
 
@@ -285,87 +304,91 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                     <div className="flex items-center space-x-2">
                                       <Checkbox
                                         id={`multi-${field.id}`}
-                                        checked={field.multiSelect}
-                                        onCheckedChange={(checked) => updateField(field.id, { multiSelect: !!checked })}
+                                        checked={field.multiSelect || false}
+                                        onCheckedChange={(checked) => updateField(index, { multiSelect: !!checked })}
                                       />
-                                      <Label 
-                                        htmlFor={`multi-${field.id}`}
-                                        className="text-discord-text text-sm"
-                                      >
+                                      <Label htmlFor={`multi-${field.id}`} className="text-discord-text text-sm">
                                         다중 선택
                                       </Label>
                                     </div>
                                   )}
+                                </div>
+                              </div>
 
-                                  {field.type === 'select' && (
-                                    <div>
-                                      <Label className="text-discord-text text-sm">선택 옵션</Label>
-                                      <div className="space-y-2">
-                                        {field.selectOptions?.map((option, optionIndex) => (
-                                          <div key={optionIndex} className="flex gap-2">
-                                            <Input
-                                              value={option}
-                                              onChange={(e) => updateSelectOption(field.id, optionIndex, e.target.value)}
-                                              className="bg-discord-bg border-gray-600 text-discord-text"
-                                              placeholder="옵션 입력"
-                                            />
-                                            <Button
-                                              size="sm"
-                                              variant="ghost"
-                                              onClick={() => removeSelectOption(field.id, optionIndex)}
-                                              className="text-discord-danger hover:bg-red-900"
-                                            >
-                                              <Trash2 size={14} />
-                                            </Button>
-                                          </div>
-                                        ))}
+                              {/* Select Options */}
+                              {field.type === 'select' && (
+                                <div className="mt-4 ml-6">
+                                  <Label className="text-discord-text text-sm">선택 옵션</Label>
+                                  <div className="mt-2 space-y-2">
+                                    {(field.selectOptions || []).map((option, optionIndex) => (
+                                      <div key={optionIndex} className="flex gap-2">
+                                        <Input
+                                          value={option}
+                                          onChange={(e) => {
+                                            const newOptions = [...(field.selectOptions || [])];
+                                            newOptions[optionIndex] = e.target.value;
+                                            updateField(index, { selectOptions: newOptions });
+                                          }}
+                                          className="bg-discord-bg border-gray-700 text-discord-text"
+                                          placeholder="옵션 입력"
+                                        />
                                         <Button
+                                          type="button"
+                                          variant="ghost"
                                           size="sm"
-                                          variant="outline"
-                                          onClick={() => addSelectOption(field.id)}
-                                          className="border-gray-600 hover:bg-discord-hover"
+                                          onClick={() => {
+                                            const newOptions = (field.selectOptions || []).filter((_, i) => i !== optionIndex);
+                                            updateField(index, { selectOptions: newOptions });
+                                          }}
+                                          className="text-red-400 hover:text-red-300"
                                         >
-                                          <Plus size={14} className="mr-2" />
-                                          옵션 추가
+                                          <X size={16} />
                                         </Button>
                                       </div>
-                                    </div>
-                                  )}
-
-                                  {field.type === 'relation' && (
-                                    <div className="mt-4">
-                                      <Label className="text-discord-text">참조 카테고리</Label>
-                                      <Select
-                                        value={field.relationCategoryId || 'none'}
-                                        onValueChange={(value) => 
-                                          updateField(field.id, { relationCategoryId: value === 'none' ? undefined : value })
-                                        }
-                                      >
-                                        <SelectTrigger className="bg-discord-bg border-gray-600 text-discord-text">
-                                          <SelectValue placeholder="참조할 카테고리 선택" />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-discord-sidebar border-gray-600">
-                                          <SelectItem value="none">선택 안함</SelectItem>
-                                          {availableRelationCategories.map(cat => (
-                                            <SelectItem key={cat.id} value={cat.id}>
-                                              {cat.name}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                  )}
+                                    ))}
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        const newOptions = [...(field.selectOptions || []), ''];
+                                        updateField(index, { selectOptions: newOptions });
+                                      }}
+                                      className="border-gray-600 hover:bg-discord-hover"
+                                    >
+                                      <Plus size={16} className="mr-1" />
+                                      옵션 추가
+                                    </Button>
+                                  </div>
                                 </div>
+                              )}
 
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => removeField(field.id)}
-                                  className="mt-2 text-discord-danger hover:bg-red-900"
-                                >
-                                  <Trash2 size={16} />
-                                </Button>
-                              </div>
+                              {/* Relation Category */}
+                              {field.type === 'relation' && (
+                                <div className="mt-4 ml-6">
+                                  <Label className="text-discord-text text-sm">참조할 카테고리</Label>
+                                  <Select
+                                    value={field.relationCategoryId || 'none'}
+                                    onValueChange={(value) => updateField(index, { 
+                                      relationCategoryId: value === 'none' ? undefined : value 
+                                    })}
+                                  >
+                                    <SelectTrigger className="mt-1 bg-discord-bg border-gray-700 text-discord-text">
+                                      <SelectValue placeholder="카테고리 선택" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-discord-sidebar border-gray-600">
+                                      <SelectItem value="none">선택 안함</SelectItem>
+                                      {categories
+                                        .filter(cat => cat.id !== category?.id)
+                                        .map(cat => (
+                                          <SelectItem key={cat.id} value={cat.id}>
+                                            {cat.name}
+                                          </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              )}
                             </div>
                           )}
                         </Draggable>
@@ -380,30 +403,16 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between p-6 border-t border-gray-700">
-          <div>
-            {category && (
-              <Button
-                onClick={handleDelete}
-                variant="ghost"
-                className="text-discord-danger hover:bg-red-900"
-              >
-                카테고리 삭제
-              </Button>
-            )}
-          </div>
-          <div className="flex gap-3">
-            <Button variant="ghost" onClick={onClose}>
-              취소
-            </Button>
-            <Button 
-              onClick={handleSubmit}
-              className="bg-discord-accent hover:bg-blue-600"
-              disabled={!name.trim()}
-            >
-              {category ? '수정' : '생성'}
-            </Button>
-          </div>
+        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-700">
+          <Button variant="ghost" onClick={onClose}>
+            취소
+          </Button>
+          <Button 
+            onClick={handleSubmit}
+            className="bg-discord-accent hover:bg-blue-600"
+          >
+            {category ? '수정' : '생성'}
+          </Button>
         </div>
       </div>
     </div>
