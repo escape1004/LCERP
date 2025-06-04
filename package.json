@@ -116,8 +116,9 @@
       "uninstallerIcon": "./resources/icon.ico",
       "perMachine": false,
       "allowElevation": true,
-      "runAfterFinish": false,
-      "differentialPackage": true
+      "runAfterFinish": true,
+      "differentialPackage": true,
+      "include": "build/installer.nsh"
     },
     "mac": {
       "target": [
