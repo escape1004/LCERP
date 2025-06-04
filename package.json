@@ -107,8 +107,8 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": "always",
-      "createStartMenuShortcut": true,
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": false,
       "shortcutName": "Local ERP",
       "uninstallDisplayName": "Local ERP",
       "deleteAppDataOnUninstall": false,
@@ -116,8 +116,12 @@
       "uninstallerIcon": "./resources/icon.ico",
       "perMachine": false,
       "allowElevation": true,
-      "runAfterFinish": true,
+      "runAfterFinish": false,
       "differentialPackage": true,
+      "displayLanguageSelector": true,
+      "installerSidebar": "installerSidebar.bmp",
+      "uninstallerSidebar": "uninstallerSidebar.bmp",
+      "installerHeader": "installerHeader.bmp",
       "include": "build/installer.nsh"
     },
     "mac": {
