@@ -114,7 +114,6 @@
       "deleteAppDataOnUninstall": false,
       "installerIcon": "./resources/icon.ico",
       "uninstallerIcon": "./resources/icon.ico",
-      "include": "installer.nsh",
       "perMachine": false,
       "allowElevation": true,
       "runAfterFinish": true,
