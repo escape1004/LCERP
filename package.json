@@ -105,10 +105,10 @@
       "legalTrademarks": "Escape"
     },
     "nsis": {
-      "oneClick": true,
-      "allowToChangeInstallationDirectory": false,
-      "createDesktopShortcut": false,
-      "createStartMenuShortcut": false,
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
       "shortcutName": "Local ERP",
       "uninstallDisplayName": "Local ERP",
       "deleteAppDataOnUninstall": false,
@@ -116,7 +116,7 @@
       "uninstallerIcon": "./resources/icon.ico",
       "perMachine": false,
       "allowElevation": true,
-      "runAfterFinish": true,
+      "runAfterFinish": false,
       "differentialPackage": true
     },
     "mac": {
