@@ -1,22 +1,56 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
-import { componentTagger } from "lovable-tagger";
+import { builtinModules } from 'module';
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
-  server: {
-    host: "::",
-    port: 8080,
-  },
-  plugins: [
-    react(),
-    mode === 'development' &&
-    componentTagger(),
-  ].filter(Boolean),
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
+export default defineConfig(({ command, mode }) => {
+  if (mode === 'preload') {
+    return {
+      build: {
+        outDir: 'dist',
+        lib: {
+          entry: path.resolve(__dirname, 'src/main/preload.ts'),
+          formats: ['cjs'],
+          fileName: () => 'preload.js',
+        },
+        rollupOptions: {
+          external: [
+            'electron',
+            ...builtinModules,
+          ],
+          output: {
+            entryFileNames: '[name].js',
+          },
+        },
+        emptyOutDir: false,
+      },
+    };
+  }
+
+  return {
+    server: {
+      port: 5173,
     },
-  },
-}));
+    plugins: [react()],
+    resolve: {
+      alias: {
+        "@": path.resolve(__dirname, "./src"),
+      },
+    },
+    base: process.env.VITE_DEV_SERVER_URL ? '/' : './',
+    build: {
+      outDir: 'dist',
+      emptyOutDir: true,
+      assetsDir: '.',  // 루트에 에셋 파일 생성
+      rollupOptions: {
+        input: {
+          main: path.resolve(__dirname, 'index.html'),
+        },
+      }
+    },
+    optimizeDeps: {
+      exclude: ['electron']
+    }
+  };
+});

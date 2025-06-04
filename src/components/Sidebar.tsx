@@ -1,18 +1,19 @@
-
 import React, { useState } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { Plus, Settings, Menu, X } from 'lucide-react';
+import { Plus, Settings, Menu, X, Database } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { Category } from '../types';
 import { Button } from './ui/button';
 import { CategoryModal } from './CategoryModal';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export const Sidebar: React.FC = () => {
   const { 
     categories, 
     selectedCategoryId, 
     selectCategory, 
-    reorderCategories 
+    reorderCategories,
+    setShowDbViewer 
   } = useERPStore();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -65,37 +66,48 @@ export const Sidebar: React.FC = () => {
               ? 'bg-discord-accent text-white' 
               : 'hover:bg-discord-hover text-discord-text'
           }`}
-          style={{ paddingLeft: `${12 + level * 20}px` }}
+          style={{ paddingLeft: `${12 + level * 12}px` }}
           onMouseEnter={() => setHoveredCategory(category.id)}
           onMouseLeave={() => setHoveredCategory(null)}
-          onClick={() => selectCategory(category.id)}
+          onClick={() => {
+            selectCategory(category.id);
+            setShowDbViewer(false);
+          }}
         >
           {level > 0 && (
-            <span className="mr-2 text-discord-muted">└</span>
+            <span className="mr-2 text-gray-400">└</span>
           )}
           
           <span className="flex-1 text-sm font-medium truncate">
             {category.name}
           </span>
           
-          {(hoveredCategory === category.id || isSelected) && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleEditCategory(category);
-              }}
-              className="ml-2 p-1 opacity-70 hover:opacity-100 hover:bg-discord-bg rounded transition-opacity"
-            >
-              <Settings size={14} />
-            </button>
-          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleEditCategory(category);
+            }}
+            className={`ml-2 p-1 rounded transition-opacity hover:bg-discord-bg ${
+              hoveredCategory === category.id || isSelected ? 'opacity-70 hover:opacity-100' : 'opacity-0'
+            }`}
+          >
+            <Settings size={14} />
+          </button>
         </div>
         
-        {showSubCategories && subCategories.length > 0 && (
-          <div>
-            {subCategories.map(subCategory => renderCategory(subCategory, level + 1))}
-          </div>
-        )}
+        <AnimatePresence>
+          {showSubCategories && subCategories.length > 0 && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+              style={{ overflow: "hidden" }}
+            >
+              {subCategories.map(subCategory => renderCategory(subCategory, level + 1))}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     );
   };
@@ -120,8 +132,8 @@ export const Sidebar: React.FC = () => {
   return (
     <div className="w-64 bg-discord-sidebar h-screen flex flex-col border-r border-gray-800">
       {/* Header */}
-      <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-        <h1 className="text-lg font-bold text-discord-text">ERP 시스템</h1>
+      <div className="p-3 border-b border-gray-800 flex items-center justify-between">
+        <h1 className="text-lg font-bold text-discord-text">Local ERP</h1>
         <Button
           size="sm"
           variant="ghost"
@@ -179,6 +191,18 @@ export const Sidebar: React.FC = () => {
             </Droppable>
           </DragDropContext>
         </div>
+      </div>
+
+      {/* DB 뷰어 버튼 */}
+      <div className="p-3 border-gray-800">
+        <Button
+          variant="ghost"
+          className="w-full justify-start text-discord-muted hover:text-discord-text"
+          onClick={() => setShowDbViewer(true)}
+        >
+          <Database className="mr-2 h-4 w-4" />
+          데이터베이스 보기
+        </Button>
       </div>
 
       {/* Category Modal */}

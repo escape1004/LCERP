@@ -1,6 +1,5 @@
-
-import React from 'react';
-import { X, ExternalLink } from 'lucide-react';
+import React, { useCallback } from 'react';
+import { X, ExternalLink, ChevronRight } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { Category, DataRecord, FieldDefinition } from '../types';
 import { Button } from './ui/button';
@@ -18,12 +17,58 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   category,
   record,
 }) => {
-  const { categories, getCategoryRecords } = useERPStore();
+  const { categories, getCategoryRecords, selectCategory } = useERPStore();
+
+  // Get parent categories path
+  const getParentPath = useCallback((currentCategory: Category): Category[] => {
+    const path: Category[] = [];
+    let parent = currentCategory.parentId ? categories.find(c => c.id === currentCategory.parentId) : null;
+    
+    while (parent) {
+      path.unshift(parent);
+      parent = parent.parentId ? categories.find(c => c.id === parent.parentId) : null;
+    }
+    
+    return path;
+  }, [categories]);
+
+  const handleCategoryClick = useCallback((categoryId: string) => {
+    selectCategory(categoryId);
+    onClose();
+  }, [selectCategory, onClose]);
 
   if (!isOpen || !record) return null;
 
+  const handleUrlClick = async (e: React.MouseEvent, url: string) => {
+    e.preventDefault();
+    console.log('Attempting to open URL:', url);
+    try {
+      const result = await window.electronAPI.openExternal(url);
+      if (!result.success) {
+        console.error('Failed to open URL:', result.error);
+        // TODO: Add toast notification here
+      }
+    } catch (error) {
+      console.error('Error opening URL:', error);
+      // TODO: Add toast notification here
+    }
+  };
+
+  const renderUrl = (url: string) => (
+    <button
+      type="button"
+      onClick={(e) => handleUrlClick(e, url)}
+      className="text-discord-accent hover:underline flex items-center gap-2 break-all"
+    >
+      {url}
+      <ExternalLink size={16} className="flex-shrink-0" />
+    </button>
+  );
+
   const formatFieldValue = (field: FieldDefinition, value: any) => {
     if (value === null || value === undefined || value === '') return '-';
+
+    const urlPattern = /^https?:\/\/.+/i;
 
     switch (field.type) {
       case 'date':
@@ -81,20 +126,8 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         }
       
       default:
-        // URL detection and linking
-        const urlPattern = /^https?:\/\/.+/i;
         if (typeof value === 'string' && urlPattern.test(value)) {
-          return (
-            <a
-              href={value}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-discord-accent hover:underline flex items-center gap-2 break-all"
-            >
-              {value}
-              <ExternalLink size={16} className="flex-shrink-0" />
-            </a>
-          );
+          return renderUrl(value);
         }
         return String(value);
     }
@@ -109,9 +142,26 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
             <h2 className="text-xl font-bold text-discord-text">
               항목 상세 정보
             </h2>
-            <p className="text-discord-muted text-sm mt-1">
-              {category.name}
-            </p>
+            <div className="text-sm text-discord-muted mt-1 flex items-center gap-1">
+              {category.parentId ? (
+                <>
+                  {getParentPath(category).map((cat, index) => (
+                    <React.Fragment key={cat.id}>
+                      <button
+                        onClick={() => handleCategoryClick(cat.id)}
+                        className="hover:text-discord-text hover:underline"
+                      >
+                        {cat.name}
+                      </button>
+                      <ChevronRight size={14} className="text-discord-muted mx-0.5" />
+                    </React.Fragment>
+                  ))}
+                  <span className="text-discord-text">{category.name}</span>
+                </>
+              ) : (
+                <span className="text-discord-text">{category.name}</span>
+              )}
+            </div>
           </div>
           <button
             onClick={onClose}

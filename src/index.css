@@ -1,7 +1,31 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Custom scrollbar style */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #3b82f6;
+  border-radius: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #3b82f6 transparent;
+}
 
 @layer base {
   * {

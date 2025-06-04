@@ -1,144 +1,177 @@
-
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { Category, DataRecord, FieldDefinition, ERPState } from '../types';
+import { Category, DataRecord, NewCategory, NewRecord } from '@/types';
 
-interface ERPStore extends ERPState {
-  // Category actions
-  addCategory: (category: Omit<Category, 'id' | 'createdAt' | 'updatedAt'>) => string;
-  updateCategory: (id: string, updates: Partial<Category>) => void;
-  deleteCategory: (id: string) => void;
-  reorderCategories: (categories: Category[]) => void;
-  
-  // Record actions
-  addRecord: (record: Omit<DataRecord, 'id' | 'createdAt' | 'updatedAt'>) => string;
-  updateRecord: (id: string, data: Record<string, any>) => void;
-  deleteRecord: (id: string) => void;
-  
-  // UI actions
+declare global {
+  interface Window {
+    electronAPI: {
+      getCategories: () => Promise<Category[]>;
+      addCategory: (category: NewCategory & { id: string }) => Promise<string>;
+      updateCategory: (id: string, updates: Partial<NewCategory>) => Promise<void>;
+      deleteCategory: (id: string) => Promise<void>;
+      getRecords: (categoryId: string) => Promise<DataRecord[]>;
+      addRecord: (record: NewRecord & { id: string }) => Promise<string>;
+      updateRecord: (id: string, data: Record<string, any>) => Promise<void>;
+      deleteRecord: (id: string) => Promise<void>;
+      openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
+    };
+  }
+}
+
+interface ERPStore {
+  categories: Category[];
+  recordsByCategory: Record<string, DataRecord[]>;
+  selectedCategoryId?: string;
+  searchTerm: string;
+  currentPage: number;
+  itemsPerPage: number;
+  showDbViewer: boolean;
+
+  loadCategories: () => Promise<void>;
+  loadRecords: (categoryId: string) => Promise<void>;
+  addCategory: (category: NewCategory) => Promise<string>;
+  updateCategory: (id: string, updates: Partial<NewCategory>) => Promise<void>;
+  deleteCategory: (id: string) => Promise<void>;
+  reorderCategories: (categories: Category[]) => Promise<void>;
+  addRecord: (record: NewRecord) => Promise<string>;
+  updateRecord: (id: string, data: Record<string, any>) => Promise<void>;
+  deleteRecord: (id: string) => Promise<void>;
   selectCategory: (id: string) => void;
   setSearchTerm: (term: string) => void;
   setCurrentPage: (page: number) => void;
-  
-  // Utility functions
   getCategoryRecords: (categoryId: string) => DataRecord[];
-  getFilteredRecords: (categoryId: string) => DataRecord[];
+  setShowDbViewer: (show: boolean) => void;
 }
 
-const generateId = () => Math.random().toString(36).substring(2) + Date.now().toString(36);
+export const useERPStore = create<ERPStore>((set, get) => ({
+  categories: [],
+  recordsByCategory: {},
+  selectedCategoryId: undefined,
+  searchTerm: '',
+  currentPage: 1,
+  itemsPerPage: 20,
+  showDbViewer: false,
 
-export const useERPStore = create<ERPStore>()(
-  persist(
-    (set, get) => ({
-      categories: [],
-      records: [],
-      selectedCategoryId: undefined,
-      searchTerm: '',
-      currentPage: 1,
-      itemsPerPage: 20,
+  loadCategories: async () => {
+    const categories = await window.electronAPI.getCategories();
+    set({ categories });
+  },
 
-      addCategory: (categoryData) => {
-        const id = generateId();
-        const category: Category = {
-          ...categoryData,
-          id,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-        
-        set((state) => ({
-          categories: [...state.categories, category],
-        }));
-        
-        return id;
-      },
-
-      updateCategory: (id, updates) => {
-        set((state) => ({
-          categories: state.categories.map((cat) =>
-            cat.id === id 
-              ? { ...cat, ...updates, updatedAt: new Date() }
-              : cat
-          ),
-        }));
-      },
-
-      deleteCategory: (id) => {
-        set((state) => ({
-          categories: state.categories.filter((cat) => cat.id !== id && cat.parentId !== id),
-          records: state.records.filter((record) => record.categoryId !== id),
-          selectedCategoryId: state.selectedCategoryId === id ? undefined : state.selectedCategoryId,
-        }));
-      },
-
-      reorderCategories: (categories) => {
-        set({ categories });
-      },
-
-      addRecord: (recordData) => {
-        const id = generateId();
-        const record: DataRecord = {
-          ...recordData,
-          id,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-        
-        set((state) => ({
-          records: [...state.records, record],
-        }));
-        
-        return id;
-      },
-
-      updateRecord: (id, data) => {
-        set((state) => ({
-          records: state.records.map((record) =>
-            record.id === id
-              ? { ...record, data, updatedAt: new Date() }
-              : record
-          ),
-        }));
-      },
-
-      deleteRecord: (id) => {
-        set((state) => ({
-          records: state.records.filter((record) => record.id !== id),
-        }));
-      },
-
-      selectCategory: (id) => {
-        set({ selectedCategoryId: id, currentPage: 1, searchTerm: '' });
-      },
-
-      setSearchTerm: (term) => {
-        set({ searchTerm: term, currentPage: 1 });
-      },
-
-      setCurrentPage: (page) => {
-        set({ currentPage: page });
-      },
-
-      getCategoryRecords: (categoryId) => {
-        const state = get();
-        return state.records.filter((record) => record.categoryId === categoryId);
-      },
-
-      getFilteredRecords: (categoryId) => {
-        const state = get();
-        const records = state.getCategoryRecords(categoryId);
-        
-        if (!state.searchTerm) return records;
-        
-        return records.filter((record) =>
-          Object.values(record.data).some((value) =>
-            String(value).toLowerCase().includes(state.searchTerm.toLowerCase())
-          )
-        );
-      },
-    }),
-    {
-      name: 'erp-storage',
+  loadRecords: async (categoryId: string) => {
+    console.log('Loading records for category:', categoryId);
+    try {
+      const records = await window.electronAPI.getRecords(categoryId);
+      console.log('Loaded records:', records);
+      set(state => ({
+        recordsByCategory: {
+          ...state.recordsByCategory,
+          [categoryId]: records
+        }
+      }));
+    } catch (error) {
+      console.error('Error loading records:', error);
+      set(state => ({
+        recordsByCategory: {
+          ...state.recordsByCategory,
+          [categoryId]: []
+        }
+      }));
     }
-  )
-);
+  },
+
+  addCategory: async (categoryData: NewCategory) => {
+    const id = Math.random().toString(36).substring(2);
+    await window.electronAPI.addCategory({
+      id,
+      ...categoryData,
+    });
+    await get().loadCategories();
+    return id;
+  },
+
+  updateCategory: async (id, updates) => {
+    await window.electronAPI.updateCategory(id, updates);
+    await get().loadCategories();
+  },
+
+  deleteCategory: async (id) => {
+    await window.electronAPI.deleteCategory(id);
+    await get().loadCategories();
+    set(state => {
+      const { [id]: _, ...remainingRecords } = state.recordsByCategory;
+      return {
+        selectedCategoryId: state.selectedCategoryId === id ? undefined : state.selectedCategoryId,
+        recordsByCategory: remainingRecords
+      };
+    });
+  },
+
+  reorderCategories: async (categories) => {
+    for (const [index, category] of categories.entries()) {
+      await window.electronAPI.updateCategory(category.id, { ...category, order: index });
+    }
+    await get().loadCategories();
+  },
+
+  addRecord: async (recordData: NewRecord) => {
+    console.log('Adding record:', recordData);
+    const record = {
+      ...recordData,
+      id: recordData.id || Math.random().toString(36).substring(2)
+    };
+    await window.electronAPI.addRecord(record);
+    
+    if (get().selectedCategoryId) {
+      console.log('Reloading records after add');
+      await get().loadRecords(get().selectedCategoryId);
+    }
+    return record.id;
+  },
+
+  updateRecord: async (id, data) => {
+    await window.electronAPI.updateRecord(id, data);
+    if (get().selectedCategoryId) {
+      await get().loadRecords(get().selectedCategoryId);
+    }
+  },
+
+  deleteRecord: async (id) => {
+    await window.electronAPI.deleteRecord(id);
+    if (get().selectedCategoryId) {
+      await get().loadRecords(get().selectedCategoryId);
+    }
+  },
+
+  selectCategory: async (id) => {
+    console.log('Selecting category:', id);
+    try {
+      const records = await window.electronAPI.getRecords(id);
+      console.log('Loaded records for category:', { id, count: records.length });
+      set(state => ({
+        selectedCategoryId: id,
+        recordsByCategory: {
+          ...state.recordsByCategory,
+          [id]: records
+        }
+      }));
+    } catch (error) {
+      console.error('Error loading records for category:', { id, error });
+      set(state => ({
+        selectedCategoryId: id,
+        recordsByCategory: {
+          ...state.recordsByCategory,
+          [id]: []
+        }
+      }));
+    }
+  },
+
+  setSearchTerm: (term) => set({ searchTerm: term }),
+
+  setCurrentPage: (page) => set({ currentPage: page }),
+
+  getCategoryRecords: (categoryId) => {
+    return get().recordsByCategory[categoryId] || [];
+  },
+
+  setShowDbViewer: (show) => set({ showDbViewer: show }),
+}));

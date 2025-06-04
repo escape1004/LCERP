@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, GripVertical, Plus, Trash2 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { useERPStore } from '../hooks/useERPStore';
-import { Category, FieldDefinition } from '../types';
+import { Category, FieldDefinition, NewCategory } from '../types';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -20,13 +20,22 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   onClose,
   category,
 }) => {
-  const { categories, addCategory, updateCategory } = useERPStore();
+  const { categories, addCategory, updateCategory, getCategoryRecords, loadRecords } = useERPStore();
   const [formData, setFormData] = useState({
     name: '',
     parentId: undefined,
     fields: [] as FieldDefinition[],
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [duplicateErrors, setDuplicateErrors] = useState<Record<string, string>>({});
+  const [isValidating, setIsValidating] = useState(false);
+
+  // 카테고리가 변경될 때마다 레코드 로드
+  useEffect(() => {
+    if (category) {
+      loadRecords(category.id);
+    }
+  }, [category, loadRecords]);
 
   useEffect(() => {
     if (category) {
@@ -43,9 +52,67 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
       });
     }
     setErrors({});
+    setDuplicateErrors({});
   }, [category, isOpen]);
 
-  const validateForm = () => {
+  const checkDuplicates = async (fields: FieldDefinition[]) => {
+    setIsValidating(true);
+    setDuplicateErrors({});
+    const newDuplicateErrors: Record<string, string> = {};
+
+    try {
+      if (category) {
+        // 카테고리의 모든 레코드 가져오기
+        const records = getCategoryRecords(category.id);
+        console.log('Checking duplicates for category:', category.id);
+        console.log('Records:', records);
+
+        // 각 필드별로 중복 체크
+        for (const field of fields) {
+          if (field.unique && records.length > 0) {
+            console.log('Checking field for duplicates:', field);
+            // 각 필드의 값들을 Set으로 만들어서 중복 체크
+            const values = new Set();
+            let hasDuplicate = false;
+
+            for (const record of records) {
+              const value = record.data[field.id];
+              console.log('Checking value:', value);
+              if (value != null) {  // null이나 undefined가 아닌 경우만 체크
+                if (values.has(value)) {
+                  hasDuplicate = true;
+                  console.log('Found duplicate value:', value);
+                  break;
+                }
+                values.add(value);
+              }
+            }
+
+            if (hasDuplicate) {
+              console.log('Setting duplicate error for field:', field.id);
+              newDuplicateErrors[field.id] = `이 필드에 중복된 값이 있습니다. 중복 불가 설정을 해제하거나, 기존 데이터의 중복을 해결해주세요.`;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking duplicates:', error);
+    }
+
+    console.log('Final duplicate errors:', newDuplicateErrors);
+    setDuplicateErrors(newDuplicateErrors);
+    setIsValidating(false);
+    return Object.keys(newDuplicateErrors).length === 0;
+  };
+
+  // unique 속성이 변경될 때마다 중복 체크 실행
+  useEffect(() => {
+    if (category && formData.fields.some(field => field.unique)) {
+      checkDuplicates(formData.fields);
+    }
+  }, [category, formData.fields]);
+
+  const validateForm = async () => {
     const newErrors: Record<string, string> = {};
 
     if (!formData.name.trim()) {
@@ -60,25 +127,37 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     });
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+
+    // 중복 체크
+    const duplicatesValid = await checkDuplicates(formData.fields);
+    
+    return Object.keys(newErrors).length === 0 && duplicatesValid;
   };
 
-  const handleSubmit = () => {
-    if (!validateForm()) return;
+  const handleSubmit = async () => {
+    if (isValidating) return;
+    
+    const isValid = await validateForm();
+    if (!isValid) return;
 
     if (category) {
       updateCategory(category.id, {
         name: formData.name,
         parentId: formData.parentId,
         fields: formData.fields,
+        order: category.order,
       });
     } else {
-      addCategory({
+      const now = new Date().toISOString();
+      const newCategory: NewCategory = {
         name: formData.name,
         parentId: formData.parentId,
         fields: formData.fields,
         order: categories.length,
-      });
+        createdAt: now,
+        updatedAt: now,
+      };
+      addCategory(newCategory);
     }
 
     onClose();
@@ -90,6 +169,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
       name: '',
       type: 'text',
       required: false,
+      unique: false,
       order: formData.fields.length,
     };
     setFormData(prev => ({ ...prev, fields: [...prev.fields, newField] }));
@@ -263,6 +343,13 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                 <p className="text-red-500 text-sm mb-3 ml-6">{errors[`field_${index}_name`]}</p>
                               )}
 
+                              {/* 중복 에러 메시지 */}
+                              {duplicateErrors[field.id] && (
+                                <p className="text-yellow-500 text-sm mt-2 ml-6">
+                                  {duplicateErrors[field.id]}
+                                </p>
+                              )}
+
                               <div className="grid grid-cols-2 gap-4 ml-6">
                                 <div>
                                   <Label className="text-discord-text text-sm">필드 타입</Label>
@@ -270,7 +357,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                     value={field.type}
                                     onValueChange={(value) => updateField(index, { 
                                       type: value as FieldDefinition['type'],
-                                      selectOptions: value === 'select' ? [] : undefined,
+                                      options: value === 'select' ? [] : undefined,
                                       relationCategoryId: value === 'relation' ? undefined : field.relationCategoryId
                                     })}
                                   >
@@ -289,58 +376,81 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                 </div>
 
                                 <div className="flex items-center gap-4 mt-6">
+                                  {/* 필수값 체크박스 */}
                                   <div className="flex items-center space-x-2">
                                     <Checkbox
                                       id={`required-${field.id}`}
-                                      checked={field.required || false}
-                                      onCheckedChange={(checked) => updateField(index, { required: !!checked })}
+                                      checked={field.required}
+                                      onCheckedChange={(checked) => updateField(index, { required: checked === true })}
                                     />
-                                    <Label htmlFor={`required-${field.id}`} className="text-discord-text text-sm">
-                                      필수
-                                    </Label>
+                                    <label
+                                      htmlFor={`required-${field.id}`}
+                                      className="text-sm font-medium leading-none text-discord-text cursor-pointer"
+                                    >
+                                      필수값
+                                    </label>
                                   </div>
 
-                                  {(field.type === 'select' || field.type === 'relation') && (
+                                  {/* 중복 불가 체크박스 */}
+                                  <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`unique-${field.id}`}
+                                      checked={field.unique}
+                                      onCheckedChange={(checked) => updateField(index, { unique: checked === true })}
+                                    />
+                                    <label
+                                      htmlFor={`unique-${field.id}`}
+                                      className="text-sm font-medium leading-none text-discord-text cursor-pointer"
+                                    >
+                                      중복 불가
+                                    </label>
+                                  </div>
+
+                                  {/* 다중 선택 체크박스 (select 타입일 때만) */}
+                                  {field.type === 'select' && (
                                     <div className="flex items-center space-x-2">
                                       <Checkbox
-                                        id={`multi-${field.id}`}
-                                        checked={field.multiSelect || false}
-                                        onCheckedChange={(checked) => updateField(index, { multiSelect: !!checked })}
+                                        id={`multiple-${field.id}`}
+                                        checked={field.multiple}
+                                        onCheckedChange={(checked) => updateField(index, { multiple: checked === true })}
                                       />
-                                      <Label htmlFor={`multi-${field.id}`} className="text-discord-text text-sm">
+                                      <label
+                                        htmlFor={`multiple-${field.id}`}
+                                        className="text-sm font-medium leading-none text-discord-text cursor-pointer"
+                                      >
                                         다중 선택
-                                      </Label>
+                                      </label>
                                     </div>
                                   )}
                                 </div>
                               </div>
 
-                              {/* Select Options */}
+                              {/* 선택 옵션 (select 타입일 때만) */}
                               {field.type === 'select' && (
                                 <div className="mt-4 ml-6">
-                                  <Label className="text-discord-text text-sm">선택 옵션</Label>
-                                  <div className="mt-2 space-y-2">
-                                    {(field.selectOptions || []).map((option, optionIndex) => (
-                                      <div key={optionIndex} className="flex gap-2">
+                                  <Label className="text-discord-text text-sm">옵션 목록</Label>
+                                  <div className="flex flex-wrap gap-2 mt-2">
+                                    {field.options?.map((option, optionIndex) => (
+                                      <div key={optionIndex} className="flex items-center gap-1">
                                         <Input
                                           value={option}
                                           onChange={(e) => {
-                                            const newOptions = [...(field.selectOptions || [])];
+                                            const newOptions = [...(field.options || [])];
                                             newOptions[optionIndex] = e.target.value;
-                                            updateField(index, { selectOptions: newOptions });
+                                            updateField(index, { options: newOptions });
                                           }}
-                                          className="bg-discord-bg border-gray-700 text-discord-text"
-                                          placeholder="옵션 입력"
+                                          className="w-32 bg-discord-bg border-gray-700 text-discord-text"
                                         />
                                         <Button
                                           type="button"
                                           variant="ghost"
                                           size="sm"
                                           onClick={() => {
-                                            const newOptions = (field.selectOptions || []).filter((_, i) => i !== optionIndex);
-                                            updateField(index, { selectOptions: newOptions });
+                                            const newOptions = [...(field.options || [])];
+                                            newOptions.splice(optionIndex, 1);
+                                            updateField(index, { options: newOptions });
                                           }}
-                                          className="text-red-400 hover:text-red-300"
+                                          className="text-discord-muted hover:text-discord-text"
                                         >
                                           <X size={16} />
                                         </Button>
@@ -351,10 +461,10 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                       variant="outline"
                                       size="sm"
                                       onClick={() => {
-                                        const newOptions = [...(field.selectOptions || []), ''];
-                                        updateField(index, { selectOptions: newOptions });
+                                        const newOptions = [...(field.options || []), ''];
+                                        updateField(index, { options: newOptions });
                                       }}
-                                      className="border-gray-600 hover:bg-discord-hover"
+                                      className="text-discord-text border-gray-600 hover:bg-discord-dark"
                                     >
                                       <Plus size={16} className="mr-1" />
                                       옵션 추가
@@ -363,21 +473,18 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                 </div>
                               )}
 
-                              {/* Relation Category */}
+                              {/* 관련 카테고리 선택 (relation 타입일 때만) */}
                               {field.type === 'relation' && (
                                 <div className="mt-4 ml-6">
-                                  <Label className="text-discord-text text-sm">참조할 카테고리</Label>
+                                  <Label className="text-discord-text text-sm">관련 카테고리</Label>
                                   <Select
-                                    value={field.relationCategoryId || 'none'}
-                                    onValueChange={(value) => updateField(index, { 
-                                      relationCategoryId: value === 'none' ? undefined : value 
-                                    })}
+                                    value={field.relationCategoryId}
+                                    onValueChange={(value) => updateField(index, { relationCategoryId: value })}
                                   >
                                     <SelectTrigger className="mt-1 bg-discord-bg border-gray-700 text-discord-text">
                                       <SelectValue placeholder="카테고리 선택" />
                                     </SelectTrigger>
                                     <SelectContent className="bg-discord-sidebar border-gray-600">
-                                      <SelectItem value="none">선택 안함</SelectItem>
                                       {categories
                                         .filter(cat => cat.id !== category?.id)
                                         .map(cat => (
@@ -409,9 +516,10 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
           </Button>
           <Button 
             onClick={handleSubmit}
-            className="bg-discord-accent hover:bg-blue-600"
+            className="bg-discord-accent hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isValidating || Object.keys(errors).length > 0 || Object.keys(duplicateErrors).length > 0}
           >
-            {category ? '수정' : '생성'}
+            {isValidating ? '검증 중...' : category ? '수정' : '생성'}
           </Button>
         </div>
       </div>

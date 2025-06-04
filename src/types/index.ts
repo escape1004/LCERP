@@ -2,12 +2,12 @@ export interface FieldDefinition {
   id: string;
   name: string;
   type: 'text' | 'number' | 'date' | 'longtext' | 'select' | 'relation';
-  required?: boolean;
+  required: boolean;
+  unique: boolean;
   order: number;
+  multiSelect?: boolean;
   selectOptions?: string[];
   relationCategoryId?: string;
-  multiSelect?: boolean;
-  hidden?: boolean;
 }
 
 export interface Category {
@@ -16,23 +16,18 @@ export interface Category {
   parentId?: string;
   fields: FieldDefinition[];
   order: number;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
 }
+
+export interface NewCategory extends Omit<Category, 'id'> {}
 
 export interface DataRecord {
   id: string;
   categoryId: string;
   data: Record<string, any>;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface ERPState {
-  categories: Category[];
-  records: DataRecord[];
-  selectedCategoryId?: string;
-  searchTerm: string;
-  currentPage: number;
-  itemsPerPage: number;
-}
+export interface NewRecord extends Omit<DataRecord, 'id'> {} 
