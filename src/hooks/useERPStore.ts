@@ -149,11 +149,12 @@ export const useERPStore = create<ERPStore>((set, get) => ({
       return;
     }
     
+    set({ selectedCategoryId: id });
+    
     try {
       const records = await window.electronAPI.getRecords(id);
       console.log('Loaded records for category:', { id, count: records.length });
       set(state => ({
-        selectedCategoryId: id,
         recordsByCategory: {
           ...state.recordsByCategory,
           [id]: records
@@ -162,7 +163,6 @@ export const useERPStore = create<ERPStore>((set, get) => ({
     } catch (error) {
       console.error('Error loading records for category:', { id, error });
       set(state => ({
-        selectedCategoryId: id,
         recordsByCategory: {
           ...state.recordsByCategory,
           [id]: []

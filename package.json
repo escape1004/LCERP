@@ -1,9 +1,9 @@
 {
   "name": "local-erp",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Local ERP System for Business Management",
-  "author": "Local ERP Team",
+  "author": "Escape",
   "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
@@ -21,7 +21,7 @@
     "postinstall": "electron-builder install-app-deps"
   },
   "build": {
-    "appId": "com.local-erp",
+    "appId": "com.escape.local-erp",
     "productName": "Local ERP",
     "directories": {
       "output": "dist-electron"
@@ -105,13 +105,20 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": false,
       "shortcutName": "Local ERP",
       "uninstallDisplayName": "Local ERP",
       "deleteAppDataOnUninstall": false,
       "installerIcon": "./resources/icon.ico",
-      "uninstallerIcon": "./resources/icon.ico"
+      "uninstallerIcon": "./resources/icon.ico",
+      "include": "installer.nsh",
+      "perMachine": false,
+      "allowElevation": true,
+      "runAfterFinish": true,
+      "differentialPackage": true,
+      "displayName": "Local ERP",
+      "publisher": "Escape"
     },
     "mac": {
       "target": [
