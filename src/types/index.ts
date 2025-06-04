@@ -1,4 +1,3 @@
-
 export interface FieldDefinition {
   id: string;
   name: string;
@@ -8,6 +7,7 @@ export interface FieldDefinition {
   selectOptions?: string[];
   relationCategoryId?: string;
   multiSelect?: boolean;
+  hidden?: boolean;
 }
 
 export interface Category {
