@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { Plus, Settings, ChevronRight, ChevronDown } from 'lucide-react';
+import { Plus, Settings, Menu, X } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { Category } from '../types';
 import { Button } from './ui/button';
@@ -18,7 +18,7 @@ export const Sidebar: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const rootCategories = categories.filter(cat => !cat.parentId).sort((a, b) => a.order - b.order);
   
@@ -40,16 +40,6 @@ export const Sidebar: React.FC = () => {
     reorderCategories(reorderedCategories);
   };
 
-  const toggleExpanded = (categoryId: string) => {
-    const newExpanded = new Set(expandedCategories);
-    if (newExpanded.has(categoryId)) {
-      newExpanded.delete(categoryId);
-    } else {
-      newExpanded.add(categoryId);
-    }
-    setExpandedCategories(newExpanded);
-  };
-
   const handleEditCategory = (category: Category) => {
     setEditingCategory(category);
     setIsModalOpen(true);
@@ -57,37 +47,24 @@ export const Sidebar: React.FC = () => {
 
   const renderCategory = (category: Category, level = 0) => {
     const subCategories = getSubCategories(category.id);
-    const hasSubCategories = subCategories.length > 0;
-    const isExpanded = expandedCategories.has(category.id);
     const isSelected = selectedCategoryId === category.id;
+    const showSubCategories = isSelected && subCategories.length > 0;
 
     return (
       <div key={category.id}>
         <div
-          className={`flex items-center px-2 py-2 mx-2 rounded cursor-pointer transition-colors group ${
+          className={`flex items-center px-3 py-2 mx-3 mb-1 rounded cursor-pointer transition-colors group ${
             isSelected 
               ? 'bg-discord-accent text-white' 
               : 'hover:bg-discord-hover text-discord-text'
           }`}
-          style={{ paddingLeft: `${8 + level * 16}px` }}
+          style={{ paddingLeft: `${12 + level * 20}px` }}
           onMouseEnter={() => setHoveredCategory(category.id)}
           onMouseLeave={() => setHoveredCategory(null)}
           onClick={() => selectCategory(category.id)}
         >
-          {hasSubCategories && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleExpanded(category.id);
-              }}
-              className="mr-1 p-0.5 hover:bg-discord-bg rounded"
-            >
-              {isExpanded ? (
-                <ChevronDown size={14} />
-              ) : (
-                <ChevronRight size={14} />
-              )}
-            </button>
+          {level > 0 && (
+            <span className="mr-2 text-discord-muted">└</span>
           )}
           
           <span className="flex-1 text-sm font-medium truncate">
@@ -107,7 +84,7 @@ export const Sidebar: React.FC = () => {
           )}
         </div>
         
-        {hasSubCategories && isExpanded && (
+        {showSubCategories && (
           <div>
             {subCategories.map(subCategory => renderCategory(subCategory, level + 1))}
           </div>
@@ -116,16 +93,41 @@ export const Sidebar: React.FC = () => {
     );
   };
 
+  if (isCollapsed) {
+    return (
+      <div className="w-12 bg-discord-sidebar h-screen flex flex-col border-r border-gray-800">
+        <div className="p-3 border-b border-gray-800">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setIsCollapsed(false)}
+            className="h-8 w-8 p-0 hover:bg-discord-hover"
+          >
+            <Menu size={16} />
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-64 bg-discord-sidebar h-screen flex flex-col border-r border-gray-800">
       {/* Header */}
-      <div className="p-4 border-b border-gray-800">
+      <div className="p-4 border-b border-gray-800 flex items-center justify-between">
         <h1 className="text-lg font-bold text-discord-text">ERP 시스템</h1>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => setIsCollapsed(true)}
+          className="h-8 w-8 p-0 hover:bg-discord-hover"
+        >
+          <X size={16} />
+        </Button>
       </div>
 
       {/* Categories */}
       <div className="flex-1 overflow-y-auto discord-scrollbar">
-        <div className="p-2">
+        <div className="p-3">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-discord-muted uppercase tracking-wide">
               카테고리

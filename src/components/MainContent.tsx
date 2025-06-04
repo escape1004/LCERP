@@ -19,12 +19,14 @@ export const MainContent: React.FC = () => {
     itemsPerPage,
     getFilteredRecords,
     deleteRecord,
+    getCategoryRecords,
   } = useERPStore();
 
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<DataRecord | null>(null);
   const [viewingRecord, setViewingRecord] = useState<DataRecord | null>(null);
+  const [viewingCategory, setViewingCategory] = useState<string>('');
   const [sortField, setSortField] = useState<string>('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
@@ -58,7 +60,13 @@ export const MainContent: React.FC = () => {
 
   const handleSort = (fieldId: string) => {
     if (sortField === fieldId) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else {
+        // Reset sorting on third click
+        setSortField('');
+        setSortDirection('asc');
+      }
     } else {
       setSortField(fieldId);
       setSortDirection('asc');
@@ -72,7 +80,18 @@ export const MainContent: React.FC = () => {
 
   const handleView = (record: DataRecord) => {
     setViewingRecord(record);
+    setViewingCategory(selectedCategoryId || '');
     setIsViewModalOpen(true);
+  };
+
+  const handleViewRelatedRecord = (recordId: string, categoryId: string) => {
+    const relatedRecords = getCategoryRecords(categoryId);
+    const relatedRecord = relatedRecords.find(r => r.id === recordId);
+    if (relatedRecord) {
+      setViewingRecord(relatedRecord);
+      setViewingCategory(categoryId);
+      setIsViewModalOpen(true);
+    }
   };
 
   const handleDelete = (record: DataRecord) => {
@@ -119,7 +138,6 @@ export const MainContent: React.FC = () => {
       case 'date':
         return value ? new Date(value).toLocaleDateString() : '-';
       case 'select':
-      case 'relation':
         if (Array.isArray(value)) {
           return (
             <div className="flex flex-wrap gap-1">
@@ -135,6 +153,49 @@ export const MainContent: React.FC = () => {
           );
         }
         return String(value);
+      case 'relation':
+        if (!field.relationCategoryId) return '-';
+        
+        const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
+        if (!relatedCategory) return '-';
+        
+        const relatedRecords = getCategoryRecords(field.relationCategoryId);
+        const displayField = relatedCategory.fields[0];
+        
+        if (Array.isArray(value)) {
+          return (
+            <div className="flex flex-wrap gap-1">
+              {value.map((recordId, index) => {
+                const relatedRecord = relatedRecords.find(r => r.id === recordId);
+                const displayValue = relatedRecord ? 
+                  String(relatedRecord.data[displayField?.id] || relatedRecord.id) : 
+                  recordId;
+                return (
+                  <span
+                    key={index}
+                    className="px-2 py-1 bg-green-600 text-white text-xs rounded-full cursor-pointer hover:bg-green-700"
+                    onClick={() => handleViewRelatedRecord(recordId, field.relationCategoryId!)}
+                  >
+                    {displayValue}
+                  </span>
+                );
+              })}
+            </div>
+          );
+        } else {
+          const relatedRecord = relatedRecords.find(r => r.id === value);
+          const displayValue = relatedRecord ? 
+            String(relatedRecord.data[displayField?.id] || relatedRecord.id) : 
+            value;
+          return (
+            <span
+              className="text-green-400 cursor-pointer hover:text-green-300 hover:underline"
+              onClick={() => handleViewRelatedRecord(value, field.relationCategoryId!)}
+            >
+              {displayValue}
+            </span>
+          );
+        }
       case 'longtext':
         return String(value).length > 50 ? String(value).substring(0, 50) + '...' : String(value);
       default:
@@ -364,8 +425,9 @@ export const MainContent: React.FC = () => {
         onClose={() => {
           setIsViewModalOpen(false);
           setViewingRecord(null);
+          setViewingCategory('');
         }}
-        category={selectedCategory}
+        category={categories.find(cat => cat.id === viewingCategory) || selectedCategory}
         record={viewingRecord}
       />
     </div>

@@ -1,14 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
-import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { X, Plus, Trash2, GripVertical } from 'lucide-react';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { useERPStore } from '../hooks/useERPStore';
 import { Category, FieldDefinition } from '../types';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Textarea } from './ui/textarea';
 import { Checkbox } from './ui/checkbox';
 
 interface CategoryModalProps {
@@ -17,46 +16,51 @@ interface CategoryModalProps {
   category?: Category | null;
 }
 
+const fieldTypes = [
+  { id: 'text', name: '텍스트' },
+  { id: 'number', name: '숫자' },
+  { id: 'date', name: '날짜' },
+  { id: 'longtext', name: '긴 텍스트' },
+  { id: 'select', name: '선택' },
+  { id: 'relation', name: '관계형' },
+];
+
 export const CategoryModal: React.FC<CategoryModalProps> = ({
   isOpen,
   onClose,
   category,
 }) => {
   const { categories, addCategory, updateCategory, deleteCategory } = useERPStore();
-  
   const [name, setName] = useState('');
-  const [parentId, setParentId] = useState<string>('');
+  const [parentId, setParentId] = useState('');
   const [fields, setFields] = useState<FieldDefinition[]>([]);
-  const [selectOptions, setSelectOptions] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (category) {
       setName(category.name);
       setParentId(category.parentId || '');
-      setFields([...category.fields].sort((a, b) => a.order - b.order));
-      
-      // Initialize select options
-      const options: Record<string, string> = {};
-      category.fields.forEach(field => {
-        if (field.type === 'select' && field.selectOptions) {
-          options[field.id] = field.selectOptions.join('\n');
-        }
-      });
-      setSelectOptions(options);
+      setFields([...category.fields]);
     } else {
       setName('');
       setParentId('');
       setFields([]);
-      setSelectOptions({});
     }
   }, [category, isOpen]);
+
+  const availableParentCategories = categories.filter(cat => 
+    cat.id !== category?.id && !cat.parentId
+  );
+
+  const availableRelationCategories = categories.filter(cat => 
+    cat.id !== category?.id
+  );
 
   const generateFieldId = () => Math.random().toString(36).substring(2) + Date.now().toString(36);
 
   const addField = () => {
     const newField: FieldDefinition = {
       id: generateFieldId(),
-      name: '새 필드',
+      name: '',
       type: 'text',
       required: false,
       order: fields.length,
@@ -64,20 +68,17 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     setFields([...fields, newField]);
   };
 
-  const updateField = (id: string, updates: Partial<FieldDefinition>) => {
-    setFields(fields.map(field => 
-      field.id === id ? { ...field, ...updates } : field
+  const updateField = (fieldId: string, updates: Partial<FieldDefinition>) => {
+    setFields(fields.map(field =>
+      field.id === fieldId ? { ...field, ...updates } : field
     ));
   };
 
-  const deleteField = (id: string) => {
-    setFields(fields.filter(field => field.id !== id));
-    const newSelectOptions = { ...selectOptions };
-    delete newSelectOptions[id];
-    setSelectOptions(newSelectOptions);
+  const removeField = (fieldId: string) => {
+    setFields(fields.filter(field => field.id !== fieldId));
   };
 
-  const handleFieldDragEnd = (result: any) => {
+  const handleDragEnd = (result: any) => {
     if (!result.destination) return;
 
     const items = Array.from(fields);
@@ -92,20 +93,13 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     setFields(reorderedFields);
   };
 
-  const handleSave = () => {
+  const handleSubmit = () => {
     if (!name.trim()) return;
 
-    // Process select options
-    const processedFields = fields.map(field => {
-      if (field.type === 'select') {
-        const options = selectOptions[field.id];
-        return {
-          ...field,
-          selectOptions: options ? options.split('\n').filter(opt => opt.trim()) : [],
-        };
-      }
-      return field;
-    });
+    const processedFields = fields.map((field, index) => ({
+      ...field,
+      order: index,
+    }));
 
     const categoryData = {
       name: name.trim(),
@@ -124,19 +118,38 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   };
 
   const handleDelete = () => {
-    if (category && window.confirm('이 카테고리를 삭제하시겠습니까? 모든 데이터가 삭제됩니다.')) {
+    if (category && window.confirm('이 카테고리를 삭제하시겠습니까?')) {
       deleteCategory(category.id);
       onClose();
     }
   };
 
-  const availableParentCategories = categories.filter(cat => 
-    !cat.parentId && (!category || cat.id !== category.id)
-  );
+  const addSelectOption = (fieldId: string) => {
+    const field = fields.find(f => f.id === fieldId);
+    if (field) {
+      const options = field.selectOptions || [];
+      updateField(fieldId, {
+        selectOptions: [...options, '']
+      });
+    }
+  };
 
-  const availableRelationCategories = categories.filter(cat => 
-    !category || cat.id !== category.id
-  );
+  const updateSelectOption = (fieldId: string, optionIndex: number, value: string) => {
+    const field = fields.find(f => f.id === fieldId);
+    if (field && field.selectOptions) {
+      const newOptions = [...field.selectOptions];
+      newOptions[optionIndex] = value;
+      updateField(fieldId, { selectOptions: newOptions });
+    }
+  };
+
+  const removeSelectOption = (fieldId: string, optionIndex: number) => {
+    const field = fields.find(f => f.id === fieldId);
+    if (field && field.selectOptions) {
+      const newOptions = field.selectOptions.filter((_, index) => index !== optionIndex);
+      updateField(fieldId, { selectOptions: newOptions });
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -146,7 +159,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-700">
           <h2 className="text-xl font-bold text-discord-text">
-            {category ? '카테고리 수정' : '새 카테고리'}
+            {category ? '카테고리 수정' : '새 카테고리 생성'}
           </h2>
           <button
             onClick={onClose}
@@ -157,18 +170,18 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)] discord-scrollbar">
-          <div className="space-y-6">
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-160px)] discord-scrollbar">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Basic Info */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-4">
               <div>
-                <Label htmlFor="name" className="text-discord-text">카테고리 이름</Label>
+                <Label htmlFor="name" className="text-discord-text">카테고리명 *</Label>
                 <Input
                   id="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="bg-discord-sidebar border-gray-600 text-discord-text"
-                  placeholder="카테고리 이름을 입력하세요"
+                  placeholder="카테고리명을 입력하세요"
                 />
               </div>
               <div>
@@ -190,16 +203,20 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
             </div>
 
             {/* Fields */}
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <Label className="text-discord-text text-lg">필드 설정</Label>
-                <Button onClick={addField} size="sm" className="bg-discord-accent hover:bg-blue-600">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-discord-text">필드 설정</h3>
+                <Button
+                  onClick={addField}
+                  size="sm"
+                  className="bg-discord-accent hover:bg-blue-600"
+                >
                   <Plus size={16} className="mr-2" />
                   필드 추가
                 </Button>
               </div>
 
-              <DragDropContext onDragEnd={handleFieldDragEnd}>
+              <DragDropContext onDragEnd={handleDragEnd}>
                 <Droppable droppableId="fields">
                   {(provided) => (
                     <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-4">
@@ -209,130 +226,146 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                             <div
                               ref={provided.innerRef}
                               {...provided.draggableProps}
-                              className="bg-discord-sidebar rounded-lg p-4 border border-gray-700"
+                              className="p-4 bg-discord-sidebar rounded-lg border border-gray-700"
                             >
-                              <div className="flex items-start gap-4">
-                                <div {...provided.dragHandleProps} className="mt-6">
-                                  <GripVertical size={16} className="text-discord-muted" />
+                              <div className="flex items-start gap-3">
+                                <div
+                                  {...provided.dragHandleProps}
+                                  className="mt-2 text-discord-muted cursor-move"
+                                >
+                                  <GripVertical size={16} />
                                 </div>
                                 
-                                <div className="flex-1 grid grid-cols-3 gap-4">
-                                  <div>
-                                    <Label className="text-discord-text">필드명</Label>
-                                    <Input
-                                      value={field.name}
-                                      onChange={(e) => updateField(field.id, { name: e.target.value })}
-                                      className="bg-discord-bg border-gray-600 text-discord-text"
+                                <div className="flex-1 space-y-3">
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                      <Label className="text-discord-text text-sm">필드명</Label>
+                                      <Input
+                                        value={field.name}
+                                        onChange={(e) => updateField(field.id, { name: e.target.value })}
+                                        className="bg-discord-bg border-gray-600 text-discord-text"
+                                        placeholder="필드명을 입력하세요"
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label className="text-discord-text text-sm">타입</Label>
+                                      <Select
+                                        value={field.type}
+                                        onValueChange={(value) => updateField(field.id, { type: value as any })}
+                                      >
+                                        <SelectTrigger className="bg-discord-bg border-gray-600 text-discord-text">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-discord-sidebar border-gray-600">
+                                          {fieldTypes.map(type => (
+                                            <SelectItem key={type.id} value={type.id}>
+                                              {type.name}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`required-${field.id}`}
+                                      checked={field.required}
+                                      onCheckedChange={(checked) => updateField(field.id, { required: !!checked })}
                                     />
-                                  </div>
-                                  
-                                  <div>
-                                    <Label className="text-discord-text">타입</Label>
-                                    <Select
-                                      value={field.type}
-                                      onValueChange={(value: any) => updateField(field.id, { type: value })}
+                                    <Label 
+                                      htmlFor={`required-${field.id}`}
+                                      className="text-discord-text text-sm"
                                     >
-                                      <SelectTrigger className="bg-discord-bg border-gray-600 text-discord-text">
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent className="bg-discord-sidebar border-gray-600">
-                                        <SelectItem value="text">텍스트</SelectItem>
-                                        <SelectItem value="number">숫자</SelectItem>
-                                        <SelectItem value="date">날짜</SelectItem>
-                                        <SelectItem value="longtext">긴 텍스트</SelectItem>
-                                        <SelectItem value="select">셀렉트</SelectItem>
-                                        <SelectItem value="relation">관계형</SelectItem>
-                                      </SelectContent>
-                                    </Select>
+                                      필수 입력
+                                    </Label>
                                   </div>
-                                  
-                                  <div className="flex items-center space-x-4 pt-6">
+
+                                  {(field.type === 'select' || field.type === 'relation') && (
                                     <div className="flex items-center space-x-2">
                                       <Checkbox
-                                        id={`required-${field.id}`}
-                                        checked={field.required}
-                                        onCheckedChange={(checked) => 
-                                          updateField(field.id, { required: !!checked })
-                                        }
+                                        id={`multi-${field.id}`}
+                                        checked={field.multiSelect}
+                                        onCheckedChange={(checked) => updateField(field.id, { multiSelect: !!checked })}
                                       />
                                       <Label 
-                                        htmlFor={`required-${field.id}`} 
+                                        htmlFor={`multi-${field.id}`}
                                         className="text-discord-text text-sm"
                                       >
-                                        필수
+                                        다중 선택
                                       </Label>
                                     </div>
-                                    
-                                    {(field.type === 'select' || field.type === 'relation') && (
-                                      <div className="flex items-center space-x-2">
-                                        <Checkbox
-                                          id={`multi-${field.id}`}
-                                          checked={field.multiSelect}
-                                          onCheckedChange={(checked) => 
-                                            updateField(field.id, { multiSelect: !!checked })
-                                          }
-                                        />
-                                        <Label 
-                                          htmlFor={`multi-${field.id}`} 
-                                          className="text-discord-text text-sm"
+                                  )}
+
+                                  {field.type === 'select' && (
+                                    <div>
+                                      <Label className="text-discord-text text-sm">선택 옵션</Label>
+                                      <div className="space-y-2">
+                                        {field.selectOptions?.map((option, optionIndex) => (
+                                          <div key={optionIndex} className="flex gap-2">
+                                            <Input
+                                              value={option}
+                                              onChange={(e) => updateSelectOption(field.id, optionIndex, e.target.value)}
+                                              className="bg-discord-bg border-gray-600 text-discord-text"
+                                              placeholder="옵션 입력"
+                                            />
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              onClick={() => removeSelectOption(field.id, optionIndex)}
+                                              className="text-discord-danger hover:bg-red-900"
+                                            >
+                                              <Trash2 size={14} />
+                                            </Button>
+                                          </div>
+                                        ))}
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => addSelectOption(field.id)}
+                                          className="border-gray-600 hover:bg-discord-hover"
                                         >
-                                          다중선택
-                                        </Label>
+                                          <Plus size={14} className="mr-2" />
+                                          옵션 추가
+                                        </Button>
                                       </div>
-                                    )}
-                                  </div>
+                                    </div>
+                                  )}
+
+                                  {field.type === 'relation' && (
+                                    <div className="mt-4">
+                                      <Label className="text-discord-text">참조 카테고리</Label>
+                                      <Select
+                                        value={field.relationCategoryId || 'none'}
+                                        onValueChange={(value) => 
+                                          updateField(field.id, { relationCategoryId: value === 'none' ? undefined : value })
+                                        }
+                                      >
+                                        <SelectTrigger className="bg-discord-bg border-gray-600 text-discord-text">
+                                          <SelectValue placeholder="참조할 카테고리 선택" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-discord-sidebar border-gray-600">
+                                          <SelectItem value="none">선택 안함</SelectItem>
+                                          {availableRelationCategories.map(cat => (
+                                            <SelectItem key={cat.id} value={cat.id}>
+                                              {cat.name}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  )}
                                 </div>
-                                
+
                                 <Button
-                                  variant="ghost"
                                   size="sm"
-                                  onClick={() => deleteField(field.id)}
-                                  className="text-discord-danger hover:bg-red-900"
+                                  variant="ghost"
+                                  onClick={() => removeField(field.id)}
+                                  className="mt-2 text-discord-danger hover:bg-red-900"
                                 >
                                   <Trash2 size={16} />
                                 </Button>
                               </div>
-                              
-                              {/* Field-specific options */}
-                              {field.type === 'select' && (
-                                <div className="mt-4">
-                                  <Label className="text-discord-text">선택 옵션 (한 줄에 하나씩)</Label>
-                                  <Textarea
-                                    value={selectOptions[field.id] || ''}
-                                    onChange={(e) => setSelectOptions({
-                                      ...selectOptions,
-                                      [field.id]: e.target.value
-                                    })}
-                                    className="bg-discord-bg border-gray-600 text-discord-text"
-                                    placeholder="옵션1&#10;옵션2&#10;옵션3"
-                                    rows={3}
-                                  />
-                                </div>
-                              )}
-                              
-                              {field.type === 'relation' && (
-                                <div className="mt-4">
-                                  <Label className="text-discord-text">참조 카테고리</Label>
-                                  <Select
-                                    value={field.relationCategoryId || 'none'}
-                                    onValueChange={(value) => 
-                                      updateField(field.id, { relationCategoryId: value === 'none' ? undefined : value })
-                                    }
-                                  >
-                                    <SelectTrigger className="bg-discord-bg border-gray-600 text-discord-text">
-                                      <SelectValue placeholder="참조할 카테고리 선택" />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-discord-sidebar border-gray-600">
-                                      <SelectItem value="none">선택 안함</SelectItem>
-                                      {availableRelationCategories.map(cat => (
-                                        <SelectItem key={cat.id} value={cat.id}>
-                                          {cat.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              )}
                             </div>
                           )}
                         </Draggable>
@@ -351,9 +384,9 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
           <div>
             {category && (
               <Button
-                variant="destructive"
                 onClick={handleDelete}
-                className="bg-discord-danger hover:bg-red-600"
+                variant="ghost"
+                className="text-discord-danger hover:bg-red-900"
               >
                 카테고리 삭제
               </Button>
@@ -364,7 +397,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
               취소
             </Button>
             <Button 
-              onClick={handleSave}
+              onClick={handleSubmit}
               className="bg-discord-accent hover:bg-blue-600"
               disabled={!name.trim()}
             >

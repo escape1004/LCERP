@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Search, Check, ChevronsUpDown } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { Category, DataRecord, FieldDefinition } from '../types';
 import { Button } from './ui/button';
@@ -9,6 +9,9 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Checkbox } from './ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from './ui/command';
+import { cn } from '../lib/utils';
 
 interface RecordModalProps {
   isOpen: boolean;
@@ -26,6 +29,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
   const { categories, addRecord, updateRecord, getCategoryRecords } = useERPStore();
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [openComboboxes, setOpenComboboxes] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (record) {
@@ -105,6 +109,13 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     }
   };
 
+  const toggleCombobox = (fieldId: string) => {
+    setOpenComboboxes(prev => ({
+      ...prev,
+      [fieldId]: !prev[fieldId]
+    }));
+  };
+
   const renderField = (field: FieldDefinition) => {
     const value = formData[field.id] || (field.multiSelect ? [] : '');
     const hasError = !!errors[field.id];
@@ -163,30 +174,56 @@ export const RecordModal: React.FC<RecordModalProps> = ({
       case 'select':
         if (field.multiSelect) {
           return (
-            <div className="space-y-2">
-              {field.selectOptions?.map(option => (
-                <div key={option} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`${field.id}-${option}`}
-                    checked={Array.isArray(value) && value.includes(option)}
-                    onCheckedChange={(checked) => {
-                      const currentValues = Array.isArray(value) ? value : [];
-                      if (checked) {
-                        updateFieldValue(field.id, [...currentValues, option]);
-                      } else {
-                        updateFieldValue(field.id, currentValues.filter(v => v !== option));
-                      }
-                    }}
-                  />
-                  <Label 
-                    htmlFor={`${field.id}-${option}`}
-                    className="text-discord-text"
-                  >
-                    {option}
-                  </Label>
-                </div>
-              ))}
-            </div>
+            <Popover open={openComboboxes[field.id]} onOpenChange={() => toggleCombobox(field.id)}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openComboboxes[field.id]}
+                  className={`w-full justify-between bg-discord-sidebar border-gray-600 text-discord-text ${
+                    hasError ? 'border-red-500' : ''
+                  }`}
+                >
+                  {Array.isArray(value) && value.length > 0 
+                    ? `${value.length}개 선택됨`
+                    : `${field.name} 선택`}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-full p-0 bg-discord-sidebar border-gray-600">
+                <Command>
+                  <CommandInput placeholder={`${field.name} 검색...`} className="bg-discord-sidebar text-discord-text" />
+                  <CommandList>
+                    <CommandEmpty>옵션을 찾을 수 없습니다.</CommandEmpty>
+                    <CommandGroup>
+                      {field.selectOptions?.map((option) => (
+                        <CommandItem
+                          key={option}
+                          value={option}
+                          onSelect={() => {
+                            const currentValues = Array.isArray(value) ? value : [];
+                            if (currentValues.includes(option)) {
+                              updateFieldValue(field.id, currentValues.filter(v => v !== option));
+                            } else {
+                              updateFieldValue(field.id, [...currentValues, option]);
+                            }
+                          }}
+                          className="text-discord-text hover:bg-discord-hover"
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              Array.isArray(value) && value.includes(option) ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {option}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           );
         } else {
           return (
@@ -218,55 +255,126 @@ export const RecordModal: React.FC<RecordModalProps> = ({
         if (!relatedCategory) return null;
         
         const relatedRecords = getCategoryRecords(field.relationCategoryId);
-        const displayField = relatedCategory.fields[0]; // Use first field as display
+        const displayField = relatedCategory.fields[0];
 
         if (field.multiSelect) {
           return (
-            <div className="space-y-2 max-h-48 overflow-y-auto discord-scrollbar">
-              {relatedRecords.map(relatedRecord => (
-                <div key={relatedRecord.id} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`${field.id}-${relatedRecord.id}`}
-                    checked={Array.isArray(value) && value.includes(relatedRecord.id)}
-                    onCheckedChange={(checked) => {
-                      const currentValues = Array.isArray(value) ? value : [];
-                      if (checked) {
-                        updateFieldValue(field.id, [...currentValues, relatedRecord.id]);
-                      } else {
-                        updateFieldValue(field.id, currentValues.filter(v => v !== relatedRecord.id));
-                      }
-                    }}
-                  />
-                  <Label 
-                    htmlFor={`${field.id}-${relatedRecord.id}`}
-                    className="text-discord-text"
-                  >
-                    {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
-                  </Label>
-                </div>
-              ))}
-            </div>
+            <Popover open={openComboboxes[field.id]} onOpenChange={() => toggleCombobox(field.id)}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openComboboxes[field.id]}
+                  className={`w-full justify-between bg-discord-sidebar border-gray-600 text-discord-text ${
+                    hasError ? 'border-red-500' : ''
+                  }`}
+                >
+                  {Array.isArray(value) && value.length > 0 
+                    ? `${value.length}개 선택됨`
+                    : `${field.name} 선택`}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-full p-0 bg-discord-sidebar border-gray-600">
+                <Command>
+                  <CommandInput placeholder={`${field.name} 검색...`} className="bg-discord-sidebar text-discord-text" />
+                  <CommandList>
+                    <CommandEmpty>항목을 찾을 수 없습니다.</CommandEmpty>
+                    <CommandGroup>
+                      {relatedRecords.map((relatedRecord) => {
+                        const displayValue = String(relatedRecord.data[displayField?.id] || relatedRecord.id);
+                        return (
+                          <CommandItem
+                            key={relatedRecord.id}
+                            value={displayValue}
+                            onSelect={() => {
+                              const currentValues = Array.isArray(value) ? value : [];
+                              if (currentValues.includes(relatedRecord.id)) {
+                                updateFieldValue(field.id, currentValues.filter(v => v !== relatedRecord.id));
+                              } else {
+                                updateFieldValue(field.id, [...currentValues, relatedRecord.id]);
+                              }
+                            }}
+                            className="text-discord-text hover:bg-discord-hover"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                Array.isArray(value) && value.includes(relatedRecord.id) ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {displayValue}
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           );
         } else {
           return (
-            <Select
-              value={value || 'none'}
-              onValueChange={(selectedValue) => updateFieldValue(field.id, selectedValue === 'none' ? '' : selectedValue)}
-            >
-              <SelectTrigger className={`bg-discord-sidebar border-gray-600 text-discord-text ${
-                hasError ? 'border-red-500' : ''
-              }`}>
-                <SelectValue placeholder={`${field.name} 선택`} />
-              </SelectTrigger>
-              <SelectContent className="bg-discord-sidebar border-gray-600">
-                <SelectItem value="none">선택 해제</SelectItem>
-                {relatedRecords.map(relatedRecord => (
-                  <SelectItem key={relatedRecord.id} value={relatedRecord.id}>
-                    {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={openComboboxes[field.id]} onOpenChange={() => toggleCombobox(field.id)}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openComboboxes[field.id]}
+                  className={`w-full justify-between bg-discord-sidebar border-gray-600 text-discord-text ${
+                    hasError ? 'border-red-500' : ''
+                  }`}
+                >
+                  {value ? (() => {
+                    const selectedRecord = relatedRecords.find(r => r.id === value);
+                    return selectedRecord ? String(selectedRecord.data[displayField?.id] || selectedRecord.id) : value;
+                  })() : `${field.name} 선택`}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-full p-0 bg-discord-sidebar border-gray-600">
+                <Command>
+                  <CommandInput placeholder={`${field.name} 검색...`} className="bg-discord-sidebar text-discord-text" />
+                  <CommandList>
+                    <CommandEmpty>항목을 찾을 수 없습니다.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="none"
+                        onSelect={() => {
+                          updateFieldValue(field.id, '');
+                          toggleCombobox(field.id);
+                        }}
+                        className="text-discord-text hover:bg-discord-hover"
+                      >
+                        선택 해제
+                      </CommandItem>
+                      {relatedRecords.map((relatedRecord) => {
+                        const displayValue = String(relatedRecord.data[displayField?.id] || relatedRecord.id);
+                        return (
+                          <CommandItem
+                            key={relatedRecord.id}
+                            value={displayValue}
+                            onSelect={() => {
+                              updateFieldValue(field.id, relatedRecord.id);
+                              toggleCombobox(field.id);
+                            }}
+                            className="text-discord-text hover:bg-discord-hover"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                value === relatedRecord.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {displayValue}
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           );
         }
 
