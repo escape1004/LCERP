@@ -601,7 +601,12 @@ export const RecordModal: React.FC<RecordModalProps> = ({
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-700">
-          <Button variant="ghost" onClick={onClose} disabled={isValidating}>
+          <Button 
+            variant="ghost" 
+            onClick={onClose} 
+            disabled={isValidating}
+            className="text-discord-text hover:bg-discord-hover"
+          >
             취소
           </Button>
           <Button 

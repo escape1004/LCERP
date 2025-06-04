@@ -7,6 +7,21 @@ const fs = require('fs');
 const logPath = path.join(app.getPath('userData'), 'app.log');
 const logStream = fs.createWriteStream(logPath, { flags: 'a' });
 
+// 데이터베이스 및 백업 경로 설정
+const projectRoot = path.resolve(__dirname, '..');
+const dbPath = path.join(projectRoot, 'save', 'erp.db');
+const backupDir = path.join(app.getPath('userData'), 'backups');
+
+// save 폴더가 없으면 생성
+if (!fs.existsSync(path.dirname(dbPath))) {
+  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+}
+
+// 백업 폴더가 없으면 생성
+if (!fs.existsSync(backupDir)) {
+  fs.mkdirSync(backupDir, { recursive: true });
+}
+
 // 로깅 함수
 function log(message, data = '') {
   const timestamp = new Date().toISOString();
@@ -110,7 +125,6 @@ function createWindow() {
 }
 
 // 데이터베이스 연결 설정
-const dbPath = path.join(app.getPath('userData'), 'erp.db');
 log('Database path:', JSON.stringify(dbPath));
 
 const db = new Database(dbPath, {
@@ -493,4 +507,65 @@ ipcMain.handle('db:updateRecord', async (_, id, data) => {
 ipcMain.handle('db:deleteRecord', (_, id) => {
   const stmt = db.prepare('DELETE FROM records WHERE id = ?');
   stmt.run(id);
+});
+
+// 설정 관련 IPC 핸들러
+ipcMain.handle('getConfig', () => {
+  const config = {
+    dbPath: dbPath,
+    backupDir: backupDir,
+    backupInterval: 60 // 기본값: 60분
+  };
+  return config;
+});
+
+ipcMain.handle('setDbPath', async () => {
+  const { filePaths } = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: [{ name: 'Database', extensions: ['db'] }]
+  });
+  if (filePaths && filePaths.length > 0) {
+    return { success: true, path: filePaths[0] };
+  }
+  return { success: false };
+});
+
+ipcMain.handle('setBackupDir', async () => {
+  const { filePaths } = await dialog.showOpenDialog({
+    properties: ['openDirectory']
+  });
+  if (filePaths && filePaths.length > 0) {
+    return { success: true, path: filePaths[0] };
+  }
+  return { success: false };
+});
+
+ipcMain.handle('setBackupInterval', (event, minutes) => {
+  // TODO: 백업 주기 설정 로직 구현
+  return { success: true };
+});
+
+// 백업 관련 IPC 핸들러
+ipcMain.handle('backupDatabase', () => {
+  try {
+    const backupDir = path.join(app.getPath('userData'), 'backups');
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+    
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupPath = path.join(backupDir, `backup-${timestamp}.db`);
+    
+    fs.copyFileSync(dbPath, backupPath);
+    return { success: true, path: backupPath };
+  } catch (error) {
+    log('Backup failed:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('openBackupLocation', () => {
+  const backupDir = path.join(app.getPath('userData'), 'backups');
+  shell.openPath(backupDir);
+  return { success: true };
 }); 

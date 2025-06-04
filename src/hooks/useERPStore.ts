@@ -143,6 +143,11 @@ export const useERPStore = create<ERPStore>((set, get) => ({
 
   selectCategory: async (id) => {
     console.log('Selecting category:', id);
+    if (id === null) {
+      set({ selectedCategoryId: undefined });
+      return;
+    }
+    
     try {
       const records = await window.electronAPI.getRecords(id);
       console.log('Loaded records for category:', { id, count: records.length });

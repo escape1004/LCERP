@@ -19,6 +19,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getDbPath: () => ipcRenderer.invoke('db:getPath'),
   openDbFile: () => ipcRenderer.invoke('db:openFile'),
   
+  // 설정 관련 API
+  getConfig: () => ipcRenderer.invoke('getConfig'),
+  setDbPath: () => ipcRenderer.invoke('setDbPath'),
+  setBackupDir: () => ipcRenderer.invoke('setBackupDir'),
+  setBackupInterval: (minutes) => ipcRenderer.invoke('setBackupInterval', minutes),
+  
+  // 백업 관련 API
+  backupDatabase: () => ipcRenderer.invoke('backupDatabase'),
+  openBackupLocation: () => ipcRenderer.invoke('openBackupLocation'),
+  
   // 외부 링크 열기
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url)
 }); 

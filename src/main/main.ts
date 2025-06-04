@@ -13,12 +13,12 @@ const createWindow = () => {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, isDevelopment ? '../src/main/preload.ts' : '../dist/preload.js')
+      preload: path.join(__dirname, isDevelopment ? '../src/main/preload.ts' : 'preload.js')
     }
   });
 
   if (isDevelopment) {
-    win.loadURL('http://localhost:5173');
+    win.loadURL('http://localhost:5174');
     win.webContents.openDevTools();
   } else {
     win.loadFile(path.join(__dirname, '../dist/index.html'));

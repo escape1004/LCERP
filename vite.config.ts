@@ -1,7 +1,8 @@
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react-swc";
+import react from "@vitejs/plugin-react";
 import path from "path";
 import { builtinModules } from 'module';
+import electron from 'vite-plugin-electron';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ command, mode }) => {
@@ -30,9 +31,17 @@ export default defineConfig(({ command, mode }) => {
 
   return {
     server: {
-      port: 5173,
+      port: 5174,
     },
-    plugins: [react()],
+    plugins: [
+      react(),
+      electron({
+        entry: [
+          'src/main/main.ts',
+          'src/main/preload.ts'
+        ],
+      }),
+    ],
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),

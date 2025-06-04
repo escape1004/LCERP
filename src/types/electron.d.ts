@@ -3,18 +3,30 @@ interface TableData {
   rows: Record<string, any>[];
 }
 
-interface ElectronAPI {
+interface Config {
+  dbPath: string;
+  backupDir: string;
+  backupInterval: number;
+}
+
+interface ApiResponse {
+  success: boolean;
+  error?: string;
+  path?: string;
+}
+
+export interface ElectronAPI {
   // Category APIs
-  getCategories: () => Promise<Category[]>;
-  addCategory: (category: NewCategory & { id: string }) => Promise<string>;
-  updateCategory: (id: string, updates: Partial<NewCategory>) => Promise<void>;
-  deleteCategory: (id: string) => Promise<void>;
+  getCategories: () => Promise<any[]>;
+  addCategory: (category: any) => Promise<any>;
+  updateCategory: (id: string, updates: any) => Promise<any>;
+  deleteCategory: (id: string) => Promise<any>;
   
   // Record APIs
-  getRecords: (categoryId: string) => Promise<DataRecord[]>;
-  addRecord: (record: NewRecord & { id: string }) => Promise<string>;
-  updateRecord: (id: string, data: Record<string, any>) => Promise<void>;
-  deleteRecord: (categoryId: string, id: string) => Promise<void>;
+  getRecords: (categoryId: string) => Promise<any[]>;
+  addRecord: (record: any) => Promise<any>;
+  updateRecord: (id: string, data: any) => Promise<any>;
+  deleteRecord: (categoryId: string, id: string) => Promise<any>;
   
   // Database APIs
   getTables: () => Promise<{ name: string }[]>;
@@ -22,11 +34,18 @@ interface ElectronAPI {
   getDbPath: () => Promise<string>;
   openDbFile: () => Promise<void>;
   
-  // Utility APIs
-  openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
+  // Backup APIs
+  backupDatabase: () => Promise<ApiResponse>;
+  openBackupLocation: () => Promise<ApiResponse>;
   
-  backupDatabase: () => Promise<{ success: boolean }>;
-  openBackupLocation: () => Promise<{ success: boolean }>;
+  // Configuration APIs
+  getConfig: () => Promise<Config>;
+  setDbPath: () => Promise<ApiResponse>;
+  setBackupDir: () => Promise<ApiResponse>;
+  setBackupInterval: (minutes: number) => Promise<ApiResponse>;
+  
+  // Utility APIs
+  openExternal: (url: string) => Promise<ApiResponse>;
 }
 
 declare global {

@@ -14,7 +14,8 @@
     "electron:build": "npm run build && electron-builder",
     "electron:preview": "cross-env ELECTRON=true npm run build && electron .",
     "electron:preview-web": "npm run build && concurrently \"npm run preview\" \"npm run start\"",
-    "test": "jest"
+    "test": "jest",
+    "dev:electron": "concurrently \"npm run dev\" \"wait-on tcp:5174 && npm run start\""
   },
   "build": {
     "appId": "com.local-erp-nexus",
@@ -74,7 +75,6 @@
     "@radix-ui/react-toggle-group": "^1.1.0",
     "@radix-ui/react-tooltip": "^1.1.4",
     "@tanstack/react-query": "^5.56.2",
-    "@types/uuid": "^10.0.0",
     "better-sqlite3": "^11.10.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -97,7 +97,6 @@
     "sonner": "^1.5.0",
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",
-    "uuid": "^11.1.0",
     "vaul": "^0.9.3",
     "zod": "^3.23.8",
     "zustand": "^5.0.5"
@@ -108,6 +107,8 @@
     "@types/node": "^22.5.5",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^4.5.1",
     "@vitejs/plugin-react-swc": "^3.5.0",
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.1.2",
@@ -122,7 +123,9 @@
     "tailwindcss": "^3.4.11",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.0.1",
+    "uuid": "^11.1.0",
     "vite": "^5.4.1",
+    "vite-plugin-electron": "^0.29.0",
     "wait-on": "^8.0.3"
   }
 }

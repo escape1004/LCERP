@@ -511,7 +511,11 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-700">
-          <Button variant="ghost" onClick={onClose}>
+          <Button 
+            variant="ghost" 
+            onClick={onClose}
+            className="text-discord-text hover:bg-discord-hover"
+          >
             취소
           </Button>
           <Button 
