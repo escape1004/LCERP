@@ -191,8 +191,8 @@ export const RecordModal: React.FC<RecordModalProps> = ({
         } else {
           return (
             <Select
-              value={value}
-              onValueChange={(selectedValue) => updateFieldValue(field.id, selectedValue)}
+              value={value || 'none'}
+              onValueChange={(selectedValue) => updateFieldValue(field.id, selectedValue === 'none' ? '' : selectedValue)}
             >
               <SelectTrigger className={`bg-discord-sidebar border-gray-600 text-discord-text ${
                 hasError ? 'border-red-500' : ''
@@ -200,7 +200,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                 <SelectValue placeholder={`${field.name} 선택`} />
               </SelectTrigger>
               <SelectContent className="bg-discord-sidebar border-gray-600">
-                <SelectItem value="">선택 해제</SelectItem>
+                <SelectItem value="none">선택 해제</SelectItem>
                 {field.selectOptions?.map(option => (
                   <SelectItem key={option} value={option}>
                     {option}
@@ -250,8 +250,8 @@ export const RecordModal: React.FC<RecordModalProps> = ({
         } else {
           return (
             <Select
-              value={value}
-              onValueChange={(selectedValue) => updateFieldValue(field.id, selectedValue)}
+              value={value || 'none'}
+              onValueChange={(selectedValue) => updateFieldValue(field.id, selectedValue === 'none' ? '' : selectedValue)}
             >
               <SelectTrigger className={`bg-discord-sidebar border-gray-600 text-discord-text ${
                 hasError ? 'border-red-500' : ''
@@ -259,7 +259,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                 <SelectValue placeholder={`${field.name} 선택`} />
               </SelectTrigger>
               <SelectContent className="bg-discord-sidebar border-gray-600">
-                <SelectItem value="">선택 해제</SelectItem>
+                <SelectItem value="none">선택 해제</SelectItem>
                 {relatedRecords.map(relatedRecord => (
                   <SelectItem key={relatedRecord.id} value={relatedRecord.id}>
                     {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}

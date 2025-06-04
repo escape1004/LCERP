@@ -109,7 +109,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
 
     const categoryData = {
       name: name.trim(),
-      parentId: parentId || undefined,
+      parentId: parentId === 'none' ? undefined : parentId || undefined,
       fields: processedFields,
       order: category?.order ?? categories.length,
     };
@@ -173,12 +173,12 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
               </div>
               <div>
                 <Label htmlFor="parent" className="text-discord-text">상위 카테고리</Label>
-                <Select value={parentId} onValueChange={setParentId}>
+                <Select value={parentId || 'none'} onValueChange={(value) => setParentId(value === 'none' ? '' : value)}>
                   <SelectTrigger className="bg-discord-sidebar border-gray-600 text-discord-text">
                     <SelectValue placeholder="상위 카테고리 선택 (선택사항)" />
                   </SelectTrigger>
                   <SelectContent className="bg-discord-sidebar border-gray-600">
-                    <SelectItem value="">없음</SelectItem>
+                    <SelectItem value="none">없음</SelectItem>
                     {availableParentCategories.map(cat => (
                       <SelectItem key={cat.id} value={cat.id}>
                         {cat.name}
@@ -314,15 +314,16 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                 <div className="mt-4">
                                   <Label className="text-discord-text">참조 카테고리</Label>
                                   <Select
-                                    value={field.relationCategoryId || ''}
+                                    value={field.relationCategoryId || 'none'}
                                     onValueChange={(value) => 
-                                      updateField(field.id, { relationCategoryId: value })
+                                      updateField(field.id, { relationCategoryId: value === 'none' ? undefined : value })
                                     }
                                   >
                                     <SelectTrigger className="bg-discord-bg border-gray-600 text-discord-text">
                                       <SelectValue placeholder="참조할 카테고리 선택" />
                                     </SelectTrigger>
                                     <SelectContent className="bg-discord-sidebar border-gray-600">
+                                      <SelectItem value="none">선택 안함</SelectItem>
                                       {availableRelationCategories.map(cat => (
                                         <SelectItem key={cat.id} value={cat.id}>
                                           {cat.name}
