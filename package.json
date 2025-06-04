@@ -23,6 +23,7 @@
   "build": {
     "appId": "com.escape.local-erp",
     "productName": "Local ERP",
+    "publisher": "Escape",
     "directories": {
       "output": "dist-electron"
     },
@@ -116,9 +117,7 @@
       "perMachine": false,
       "allowElevation": true,
       "runAfterFinish": true,
-      "differentialPackage": true,
-      "displayName": "Local ERP",
-      "publisher": "Escape"
+      "differentialPackage": true
     },
     "mac": {
       "target": [
