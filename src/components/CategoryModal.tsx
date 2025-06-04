@@ -8,6 +8,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Checkbox } from './ui/checkbox';
+import { toast } from './ui/use-toast';
 
 interface CategoryModalProps {
   isOpen: boolean;
@@ -55,60 +56,39 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     setDuplicateErrors({});
   }, [category, isOpen]);
 
-  const checkDuplicates = async (fields: FieldDefinition[]) => {
-    setIsValidating(true);
-    setDuplicateErrors({});
-    const newDuplicateErrors: Record<string, string> = {};
+  const checkDuplicateValues = async () => {
+    if (!category) return;
 
     try {
-      if (category) {
-        // 카테고리의 모든 레코드 가져오기
-        const records = getCategoryRecords(category.id);
-        console.log('Checking duplicates for category:', category.id);
-        console.log('Records:', records);
+      const records = await window.electronAPI.getRecords(category.id);
+      const newDuplicateErrors: Record<string, string[]> = {};
 
-        // 각 필드별로 중복 체크
-        for (const field of fields) {
-          if (field.unique && records.length > 0) {
-            console.log('Checking field for duplicates:', field);
-            // 각 필드의 값들을 Set으로 만들어서 중복 체크
-            const values = new Set();
-            let hasDuplicate = false;
+      category.fields.forEach(field => {
+        if (field.unique) {
+          const values = records.map(record => record[field.id]);
+          const duplicates = values.filter((value, index) => 
+            values.indexOf(value) !== index && value !== undefined && value !== null && value !== ''
+          );
 
-            for (const record of records) {
-              const value = record.data[field.id];
-              console.log('Checking value:', value);
-              if (value != null) {  // null이나 undefined가 아닌 경우만 체크
-                if (values.has(value)) {
-                  hasDuplicate = true;
-                  console.log('Found duplicate value:', value);
-                  break;
-                }
-                values.add(value);
-              }
-            }
-
-            if (hasDuplicate) {
-              console.log('Setting duplicate error for field:', field.id);
-              newDuplicateErrors[field.id] = `이 필드에 중복된 값이 있습니다. 중복 불가 설정을 해제하거나, 기존 데이터의 중복을 해결해주세요.`;
-            }
+          if (duplicates.length > 0) {
+            newDuplicateErrors[field.id] = duplicates;
           }
         }
-      }
-    } catch (error) {
-      console.error('Error checking duplicates:', error);
-    }
+      });
 
-    console.log('Final duplicate errors:', newDuplicateErrors);
-    setDuplicateErrors(newDuplicateErrors);
-    setIsValidating(false);
-    return Object.keys(newDuplicateErrors).length === 0;
+      setDuplicateErrors(newDuplicateErrors);
+    } catch (error) {
+      toast({
+        title: '중복 값 확인에 실패했습니다.',
+        variant: 'destructive',
+      });
+    }
   };
 
   // unique 속성이 변경될 때마다 중복 체크 실행
   useEffect(() => {
     if (category && formData.fields.some(field => field.unique)) {
-      checkDuplicates(formData.fields);
+      checkDuplicateValues();
     }
   }, [category, formData.fields]);
 
@@ -129,7 +109,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     setErrors(newErrors);
 
     // 중복 체크
-    const duplicatesValid = await checkDuplicates(formData.fields);
+    const duplicatesValid = await checkDuplicateValues();
     
     return Object.keys(newErrors).length === 0 && duplicatesValid;
   };

@@ -7,11 +7,12 @@ const Index = () => {
   const { loadCategories } = useERPStore();
 
   useEffect(() => {
+    // 컴포넌트 마운트 시 카테고리 로드
     loadCategories();
   }, [loadCategories]);
 
   return (
-    <div className="h-screen w-full flex bg-discord-bg font-noto">
+    <div className="flex h-full overflow-hidden">
       <Sidebar />
       <MainContent />
     </div>

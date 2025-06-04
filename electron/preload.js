@@ -31,4 +31,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // 외부 링크 열기
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url)
-}); 
+});
+
+// Expose protected methods that allow the renderer process to use
+// the ipcRenderer without exposing the entire object
+contextBridge.exposeInMainWorld(
+  'electron',
+  {
+    send: (channel, data) => {
+      // whitelist channels
+      const validChannels = ['window-control'];
+      if (validChannels.includes(channel)) {
+        ipcRenderer.send(channel, data);
+      }
+    },
+    on: (channel, func) => {
+      const validChannels = ['window-state-change'];
+      if (validChannels.includes(channel)) {
+        // Strip event as it includes `sender` 
+        ipcRenderer.on(channel, (event, ...args) => func(...args));
+      }
+    }
+  }
+); 

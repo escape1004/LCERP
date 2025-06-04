@@ -8,7 +8,8 @@ const logPath = path.join(app.getPath('userData'), 'app.log');
 const logStream = fs.createWriteStream(logPath, { flags: 'a' });
 
 // 데이터베이스 및 백업 경로 설정
-const projectRoot = path.resolve(__dirname, '..');
+const isDev = process.env.VITE_DEV_SERVER_URL;
+const projectRoot = isDev ? path.resolve(__dirname, '..') : process.resourcesPath;
 const dbPath = path.join(projectRoot, 'save', 'erp.db');
 const backupDir = path.join(app.getPath('userData'), 'backups');
 
@@ -44,8 +45,9 @@ function registerProtocol() {
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: 1920,
+    height: 1080,
+    frame: false,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: true,
@@ -74,54 +76,51 @@ function createWindow() {
   // 개발 모드에서는 Vite 개발 서버 URL을 사용
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+    mainWindow.webContents.openDevTools();
   } else {
     // 프로덕션 모드에서는 빌드된 파일을 로드
-    const distPath = path.join(app.getAppPath(), 'dist');
-    const indexPath = path.join(distPath, 'index.html');
-    
-    console.log('=== Debug Information ===');
-    console.log('App path:', app.getAppPath());
-    console.log('Dist path:', distPath);
-    console.log('Index path:', indexPath);
-    console.log('File exists:', fs.existsSync(indexPath));
-    
-    try {
-      // 상대 경로로 로드
-      mainWindow.loadFile('dist/index.html').catch(e => {
-        console.error('Failed to load with relative path:', e);
-        
-        // 절대 경로로 시도
-        mainWindow.loadFile(indexPath).catch(e2 => {
-          console.error('Failed with absolute path:', e2);
-        });
-      });
-    } catch (err) {
-      console.error('Error during file loading:', err);
-    }
+    mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html')).catch(e => {
+      console.error('Failed to load index.html:', e);
+      app.quit();
+    });
   }
 
   // 디버깅을 위한 추가 이벤트 리스너
-  mainWindow.webContents.on('did-start-loading', () => {
-    console.log('Started loading content');
-  });
-
-  mainWindow.webContents.on('did-finish-load', () => {
-    console.log('Finished loading content');
-  });
-
-  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
     console.error('Failed to load:', {
       errorCode,
       errorDescription,
-      validatedURL,
-      isMainFrame
+      resourcePath: path.join(__dirname, '..', 'dist', 'index.html'),
+      exists: fs.existsSync(path.join(__dirname, '..', 'dist', 'index.html'))
     });
   });
 
-  // 개발 모드에서만 개발자 도구 열기
-  if (process.env.VITE_DEV_SERVER_URL) {
-    mainWindow.webContents.openDevTools();
-  }
+  // 창 상태 변경 이벤트 처리
+  mainWindow.on('maximize', () => {
+    mainWindow.webContents.send('window-state-change', { maximized: true });
+  });
+
+  mainWindow.on('unmaximize', () => {
+    mainWindow.webContents.send('window-state-change', { maximized: false });
+  });
+
+  // 창 제어 이벤트 처리
+  ipcMain.on('window-control', (_, command) => {
+    switch (command) {
+      case 'minimize':
+        mainWindow.minimize();
+        break;
+      case 'maximize':
+        mainWindow.maximize();
+        break;
+      case 'restore':
+        mainWindow.restore();
+        break;
+      case 'close':
+        mainWindow.close();
+        break;
+    }
+  });
 }
 
 // 데이터베이스 연결 설정

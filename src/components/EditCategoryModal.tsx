@@ -13,6 +13,7 @@ import {
 import { Category, FieldDefinition, NewCategory } from '../types';
 import { useERPStore } from '../hooks/useERPStore';
 import { v4 as uuidv4 } from 'uuid';
+import { nanoid } from 'nanoid';
 
 interface FieldEditorProps {
   field: FieldDefinition;
@@ -261,26 +262,22 @@ export const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
     }
   };
 
-  const addField = () => {
-    console.log('Adding new field...');
+  const handleAddField = () => {
     const newField: FieldDefinition = {
-      id: uuidv4(),
+      id: nanoid(),
       name: '',
       type: 'text',
-      order: fields.length,
       required: false,
       unique: false,
-      multiple: false,
+      options: [],
     };
-    console.log('New field created:', JSON.stringify(newField, null, 2));
     setFields([...fields, newField]);
   };
 
-  const updateField = (index: number, updatedField: FieldDefinition) => {
-    console.log('Updating field:', { index, field: JSON.stringify(updatedField, null, 2) });
-    const newFields = [...fields];
-    newFields[index] = updatedField;
-    setFields(newFields);
+  const handleFieldChange = (index: number, field: FieldDefinition) => {
+    const updatedFields = [...fields];
+    updatedFields[index] = field;
+    setFields(updatedFields);
   };
 
   const deleteField = (index: number) => {
@@ -315,7 +312,7 @@ export const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
               <h3 className="text-lg font-semibold text-discord-text">필드</h3>
               <Button
                 type="button"
-                onClick={addField}
+                onClick={handleAddField}
                 className="bg-discord-accent hover:bg-discord-accent/80"
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -328,7 +325,7 @@ export const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
                 <FieldEditor
                   key={field.id}
                   field={field}
-                  onChange={(updatedField) => updateField(index, updatedField)}
+                  onChange={(updatedField) => handleFieldChange(index, updatedField)}
                   onDelete={() => deleteField(index)}
                   categories={categories.filter(cat => cat.id !== category?.id)}
                 />

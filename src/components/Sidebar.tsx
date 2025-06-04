@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { Plus, Settings, Menu, X, Database } from 'lucide-react';
+import { Plus, Settings, Menu, ChevronLeft, Database } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { Category } from '../types';
 import { Button } from './ui/button';
@@ -114,8 +114,8 @@ export const Sidebar: React.FC = () => {
 
   if (isCollapsed) {
     return (
-      <div className="w-12 bg-discord-sidebar h-screen flex flex-col border-r border-gray-800">
-        <div className="flex items-center justify-center h-16 border-b border-gray-800">
+      <div className="w-12 h-full flex flex-col bg-discord-sidebar">
+        <div className="shrink-0 flex items-center justify-center h-16 border-b border-gray-800">
           <Button
             size="sm"
             variant="ghost"
@@ -130,9 +130,9 @@ export const Sidebar: React.FC = () => {
   }
 
   return (
-    <div className="w-64 bg-discord-sidebar h-screen flex flex-col border-r border-gray-800">
+    <div className="w-64 h-full flex flex-col bg-discord-sidebar">
       {/* Header */}
-      <div className="p-3 border-b border-gray-800 flex items-center justify-between">
+      <div className="shrink-0 p-3 border-b border-gray-800 flex items-center justify-between">
         <h1 className="text-lg font-bold text-discord-text">Local ERP</h1>
         <Button
           size="sm"
@@ -140,7 +140,7 @@ export const Sidebar: React.FC = () => {
           onClick={() => setIsCollapsed(true)}
           className="h-8 w-8 p-0 hover:bg-discord-hover"
         >
-          <X size={16} />
+          <ChevronLeft size={16} />
         </Button>
       </div>
 

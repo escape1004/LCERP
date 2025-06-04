@@ -96,9 +96,7 @@ export const DatabaseViewer: React.FC = () => {
     try {
       const path = await window.electronAPI.getDbPath();
       setDbPath(path);
-      console.log('Loaded DB path:', path);
     } catch (error) {
-      console.error('Failed to load DB path:', error);
       toast({
         title: 'DB 경로를 불러오는데 실패했습니다.',
         variant: 'destructive',
@@ -145,10 +143,8 @@ export const DatabaseViewer: React.FC = () => {
   const loadConfig = async () => {
     try {
       const config = await window.electronAPI.getConfig();
-      console.log('Loaded config:', config);
       setConfig(config);
       setDbPath(config.dbPath);
-      // 백업 주기는 이미 분 단위로 전달됨
       const intervalInMinutes = Math.max(1, config.backupInterval);
       setBackupInterval(String(intervalInMinutes));
       form.reset({
@@ -157,7 +153,6 @@ export const DatabaseViewer: React.FC = () => {
         backupInterval: String(intervalInMinutes),
       });
     } catch (error) {
-      console.error('Failed to load config:', error);
       toast({
         title: '설정을 불러오는데 실패했습니다.',
         variant: 'destructive',
@@ -176,7 +171,6 @@ export const DatabaseViewer: React.FC = () => {
         await loadTables();
       }
     } catch (error) {
-      console.error('Failed to set DB path:', error);
       toast({
         title: 'DB 저장 위치 변경에 실패했습니다.',
         variant: 'destructive',
@@ -194,7 +188,6 @@ export const DatabaseViewer: React.FC = () => {
         });
       }
     } catch (error) {
-      console.error('Failed to set backup directory:', error);
       toast({
         title: '백업 저장 위치 변경에 실패했습니다.',
         variant: 'destructive',
@@ -221,7 +214,6 @@ export const DatabaseViewer: React.FC = () => {
         });
       }
     } catch (error) {
-      console.error('Failed to set backup interval:', error);
       toast({
         title: '백업 주기 변경에 실패했습니다.',
         variant: 'destructive',
@@ -236,7 +228,6 @@ export const DatabaseViewer: React.FC = () => {
         await loadTables();
         // 카테고리 선택을 초기화하지 않음
       } catch (error) {
-        console.error('Failed to initialize viewer:', error);
         toast({
           title: '초기화에 실패했습니다.',
           variant: 'destructive',
@@ -266,7 +257,7 @@ export const DatabaseViewer: React.FC = () => {
   }, [config, form]);
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full w-full flex flex-col bg-discord-bg">
       {/* Header */}
       <div className="shrink-0 p-6 space-y-4 border-b border-gray-700">
         <div className="flex items-center justify-between">
@@ -347,45 +338,45 @@ export const DatabaseViewer: React.FC = () => {
       </div>
 
       {/* Table Content */}
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="flex-1 overflow-hidden">
         {tableData && (
-          <div className="h-full overflow-auto custom-scrollbar">
-            <div className="min-w-full inline-block align-middle">
-              <div className="overflow-x-auto custom-scrollbar">
-                <Table>
-                  <TableHeader className="[&_tr]:border-b [&_tr]:border-gray-700 [&_tr]:bg-discord-sidebar">
-                    <TableRow>
-                      {tableData.columns.map((column) => (
-                        <TableHead 
-                          key={column} 
-                          className="px-3 py-2 whitespace-nowrap text-sm font-semibold text-discord-text select-none"
-                        >
-                          {column}
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {tableData.rows.map((row, i) => (
-                      <TableRow 
-                        key={i}
-                        className="border-b border-gray-800 transition-colors hover:bg-discord-hover cursor-pointer"
+          <div className="relative w-full h-full">
+            <div className="absolute inset-0 overflow-x-scroll overflow-y-auto scrollbar-thin scrollbar-thumb-[#4a4b50] hover:scrollbar-thumb-[#6a6b70] scrollbar-track-[#2b2d31]">
+              <table className="min-w-[1500px] border-separate border-spacing-0">
+                <thead>
+                  <tr>
+                    {tableData.columns.map((column) => (
+                      <th 
+                        key={column} 
+                        className="bg-discord-sidebar text-sm font-medium text-discord-text p-2 text-left sticky top-0 border-b border-gray-700 first:pl-4"
                       >
-                        {tableData.columns.map((column) => (
-                          <TableCell 
-                            key={column} 
-                            className="px-3 py-2 whitespace-nowrap text-sm"
-                          >
-                            {typeof row[column] === 'object'
-                              ? JSON.stringify(row[column])
-                              : String(row[column])}
-                          </TableCell>
-                        ))}
-                      </TableRow>
+                        {column}
+                      </th>
                     ))}
-                  </TableBody>
-                </Table>
-              </div>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tableData.rows.map((row, i) => (
+                    <tr 
+                      key={i}
+                      className="hover:bg-discord-hover transition-colors"
+                    >
+                      {tableData.columns.map((column, colIndex) => (
+                        <td 
+                          key={column} 
+                          className={`p-2 text-sm text-discord-text border-b border-gray-700 ${
+                            colIndex === 0 ? 'pl-4' : ''
+                          }`}
+                        >
+                          {typeof row[column] === 'object'
+                            ? JSON.stringify(row[column])
+                            : String(row[column])}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}

@@ -51,5 +51,11 @@ export interface ElectronAPI {
 declare global {
   interface Window {
     electronAPI: ElectronAPI;
+    electron: {
+      send: (channel: string, data: any) => void;
+      on: (channel: string, func: (...args: any[]) => void) => void;
+    };
   }
-} 
+}
+
+export {}; 

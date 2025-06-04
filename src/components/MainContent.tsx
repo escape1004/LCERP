@@ -9,6 +9,7 @@ import { ViewRecordModal } from './ViewRecordModal';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { CategoryContent } from './CategoryContent';
 import { DatabaseViewer } from './DatabaseViewer';
+import { toast } from './ui/use-toast';
 
 // Custom event type
 declare global {
@@ -90,11 +91,22 @@ export const MainContent: React.FC = () => {
 
   // Load current category records
   useEffect(() => {
-    if (selectedCategoryId) {
-      console.log('Loading records for selected category:', selectedCategoryId);
-      loadRecords(selectedCategoryId);
-    }
-  }, [selectedCategoryId, loadRecords]);
+    const loadRecords = async () => {
+      if (selectedCategoryId) {
+        try {
+          const records = await window.electronAPI.getRecords(selectedCategoryId);
+          setCurrentRecords(records);
+        } catch (error) {
+          toast({
+            title: '레코드를 불러오는데 실패했습니다.',
+            variant: 'destructive',
+          });
+        }
+      }
+    };
+
+    loadRecords();
+  }, [selectedCategoryId, toast]);
 
   // Load related records when category changes
   useEffect(() => {
@@ -114,11 +126,8 @@ export const MainContent: React.FC = () => {
   }, [selectedCategoryId, categories, loadRecords]);
 
   React.useEffect(() => {
-    console.log('Current records:', currentRecords);
-    console.log('Selected category:', selectedCategoryId);
     if (selectedCategoryId) {
       const categoryRecords = getCategoryRecords(selectedCategoryId);
-      console.log('Filtered records for category:', categoryRecords);
     }
   }, [currentRecords, selectedCategoryId, getCategoryRecords]);
 
@@ -443,11 +452,13 @@ export const MainContent: React.FC = () => {
   }
 
   return (
-    <div className="flex-1 h-full overflow-hidden">
+    <div className="flex-1 h-full flex flex-col bg-discord-bg">
       {showDbViewer ? (
-        <DatabaseViewer />
+        <div className="flex-1 flex flex-col min-h-0">
+          <DatabaseViewer />
+        </div>
       ) : (
-        <div className="flex-1 flex flex-col h-full bg-discord-bg">
+        <div className="flex-1 flex flex-col min-h-0">
           {/* Header */}
           <div className="shrink-0 p-6 border-b border-gray-700">
             <div className="flex items-center justify-between mb-4">
