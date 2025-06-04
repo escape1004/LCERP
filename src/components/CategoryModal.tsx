@@ -57,11 +57,11 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   }, [category, isOpen]);
 
   const checkDuplicateValues = async () => {
-    if (!category) return;
+    if (!category) return true;
 
     try {
       const records = await window.electronAPI.getRecords(category.id);
-      const newDuplicateErrors: Record<string, string[]> = {};
+      const newDuplicateErrors: Record<string, string> = {};
 
       category.fields.forEach(field => {
         if (field.unique) {
@@ -71,17 +71,19 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
           );
 
           if (duplicates.length > 0) {
-            newDuplicateErrors[field.id] = duplicates;
+            newDuplicateErrors[field.id] = `중복된 값이 존재합니다: ${duplicates.join(', ')}`;
           }
         }
       });
 
       setDuplicateErrors(newDuplicateErrors);
+      return Object.keys(newDuplicateErrors).length === 0;
     } catch (error) {
       toast({
         title: '중복 값 확인에 실패했습니다.',
         variant: 'destructive',
       });
+      return false;
     }
   };
 
@@ -115,32 +117,44 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   };
 
   const handleSubmit = async () => {
+    console.log('handleSubmit called');
     if (isValidating) return;
     
     const isValid = await validateForm();
+    console.log('Form validation result:', isValid);
     if (!isValid) return;
 
-    if (category) {
-      updateCategory(category.id, {
-        name: formData.name,
-        parentId: formData.parentId,
-        fields: formData.fields,
-        order: category.order,
-      });
-    } else {
-      const now = new Date().toISOString();
-      const newCategory: NewCategory = {
-        name: formData.name,
-        parentId: formData.parentId,
-        fields: formData.fields,
-        order: categories.length,
-        createdAt: now,
-        updatedAt: now,
-      };
-      addCategory(newCategory);
-    }
+    try {
+      if (category) {
+        console.log('Updating category:', category.id);
+        updateCategory(category.id, {
+          name: formData.name,
+          parentId: formData.parentId,
+          fields: formData.fields,
+          order: category.order,
+        });
+      } else {
+        console.log('Creating new category:', formData);
+        const now = new Date().toISOString();
+        const newCategory: NewCategory = {
+          name: formData.name,
+          parentId: formData.parentId,
+          fields: formData.fields,
+          order: categories.length,
+          createdAt: now,
+          updatedAt: now,
+        };
+        await addCategory(newCategory);
+      }
 
-    onClose();
+      onClose();
+    } catch (error) {
+      console.error('Error in handleSubmit:', error);
+      toast({
+        title: '카테고리 저장 중 오류가 발생했습니다.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const addField = () => {

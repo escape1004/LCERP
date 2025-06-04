@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, protocol, dialog, shell } = require('electr
 const path = require('path');
 const Database = require('better-sqlite3');
 const fs = require('fs');
+const crypto = require('crypto');
 
 // 로그 파일 설정
 const logPath = path.join(app.getPath('userData'), 'app.log');
@@ -267,28 +268,33 @@ ipcMain.handle('shell:openExternal', async (_, url) => {
   }
 });
 
-ipcMain.handle('db:addCategory', (_, category) => {
-  log('Adding category:', category);
-  const stmt = db.prepare(`
-    INSERT INTO categories (id, name, parentId, fields, order_num, createdAt, updatedAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-  
+function generateUUID() {
+  return crypto.randomUUID();
+}
+
+ipcMain.handle('db:addCategory', async (_, category) => {
+  console.log('IPC: Received addCategory request:', category);
+  const id = generateUUID();
   const now = new Date().toISOString();
+  
   try {
-    const result = stmt.run(
-      category.id,
+    console.log('IPC: Inserting category into database');
+    db.prepare(`
+      INSERT INTO categories (id, name, parentId, fields, order_num, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
       category.name,
       category.parentId || null,
       JSON.stringify(category.fields),
-      category.order,
+      category.order_num || 0,
       now,
       now
     );
-    log('Category added successfully:', { id: category.id, changes: result.changes });
-    return category.id;
+    console.log('IPC: Category inserted successfully:', id);
+    return id;
   } catch (error) {
-    log('Error adding category:', error);
+    console.error('IPC: Error adding category:', error);
     throw error;
   }
 });

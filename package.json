@@ -29,22 +29,78 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
-      "save/**/*"
+      "resources/**/*",
+      "save/**/!(*db|*.sqlite|*.sqlite3|db.json)"
     ],
     "extraResources": [
       {
         "from": "save",
         "to": "save",
         "filter": [
+          "!**/*.db",
+          "!**/*.sqlite",
+          "!**/*.sqlite3",
+          "!**/db.json",
+          "!**/.git/**",
+          "!**/.vscode/**",
+          "!**/node_modules/**",
+          "!**/*.log",
+          "!**/.env*",
+          "!**/*.bak",
+          "!**/*.backup",
+          "!**/*~",
+          "!**/.DS_Store",
+          "!**/thumbs.db",
+          "!**/.gitignore",
+          "!**/tsconfig.json",
+          "!**/.eslintrc*",
+          "!**/jest.config.*",
+          "!**/README.md",
+          "!**/.temp/**",
+          "!**/.tmp/**",
+          "!**/.cache/**",
+          "!**/config.*.json",
+          "!**/__tests__/**",
+          "!**/*.test.*",
+          "!**/*.spec.*",
+          "!**/*.d.ts",
+          "!**/*.map",
+          "!**/example/**",
+          "!**/examples/**",
+          "!**/demo/**",
+          "!**/docs/**",
+          "!**/*.md",
+          "!**/LICENSE*",
+          "!**/.npmignore",
+          "!**/.prettierrc*",
+          "!**/.travis.yml",
+          "!**/.github/**",
+          "!**/coverage/**",
+          "!**/.nyc_output/**",
+          "!**/test/**",
+          "!**/tests/**",
+          "!**/*.tsbuildinfo",
+          "!**/.editorconfig",
+          "!**/.babelrc*",
+          "!**/rollup.config.*",
+          "!**/webpack.config.*",
+          "!**/karma.conf.*",
+          "!**/yarn.lock",
+          "!**/package-lock.json",
+          "!**/pnpm-lock.yaml",
           "**/*"
         ]
       }
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*"
     ],
     "win": {
       "target": [
         "nsis"
       ],
-      "icon": "resources/icon.ico"
+      "icon": "./resources/icon.ico"
     },
     "nsis": {
       "oneClick": false,
@@ -53,7 +109,9 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Local ERP",
       "uninstallDisplayName": "Local ERP",
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "./resources/icon.ico",
+      "uninstallerIcon": "./resources/icon.ico"
     },
     "mac": {
       "target": [
@@ -119,6 +177,7 @@
     "sonner": "^1.5.0",
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",
+    "uuid": "^9.0.1",
     "vaul": "^0.9.3",
     "zod": "^3.23.8",
     "zustand": "^5.0.5"
@@ -149,7 +208,6 @@
     "tailwindcss": "^3.4.11",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.0.1",
-    "uuid": "^11.1.0",
     "vite": "^5.4.1",
     "vite-plugin-electron": "^0.29.0",
     "wait-on": "^8.0.3"

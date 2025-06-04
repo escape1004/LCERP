@@ -83,6 +83,7 @@ export const useERPStore = create<ERPStore>((set, get) => ({
     await window.electronAPI.addCategory({
       id,
       ...categoryData,
+      order_num: categoryData.order,
     });
     await get().loadCategories();
     return id;

@@ -17,15 +17,22 @@ export interface NewCategory {
   updatedAt: string;
 }
 
+export interface CategoryUpdate {
+  name: string;
+  parentId?: string;
+  fields: FieldDefinition[];
+  order: number;
+}
+
 export interface FieldDefinition {
   id: string;
   name: string;
-  type: 'text' | 'number' | 'date' | 'select' | 'relation' | 'longtext';
-  order: number;
+  type: 'text' | 'number' | 'date' | 'longtext' | 'select' | 'relation';
   required: boolean;
   unique: boolean;
-  multiple?: boolean;
+  order: number;
   options?: string[];
+  multiple?: boolean;
   relationCategoryId?: string;
 }
 
@@ -38,11 +45,11 @@ export interface DataRecord {
 }
 
 export interface NewRecord {
-  id?: string;
+  id: string;
   categoryId: string;
-  data: Record<string, any>;
-  createdAt: string;
-  updatedAt: string;
+  data: any;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ElectronAPI {

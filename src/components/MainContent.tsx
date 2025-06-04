@@ -89,25 +89,6 @@ export const MainContent: React.FC = () => {
     setSearchField('all');
   }, [selectedCategoryId]);
 
-  // Load current category records
-  useEffect(() => {
-    const loadRecords = async () => {
-      if (selectedCategoryId) {
-        try {
-          const records = await window.electronAPI.getRecords(selectedCategoryId);
-          setCurrentRecords(records);
-        } catch (error) {
-          toast({
-            title: '레코드를 불러오는데 실패했습니다.',
-            variant: 'destructive',
-          });
-        }
-      }
-    };
-
-    loadRecords();
-  }, [selectedCategoryId, toast]);
-
   // Load related records when category changes
   useEffect(() => {
     if (selectedCategoryId) {
@@ -124,12 +105,6 @@ export const MainContent: React.FC = () => {
       }
     }
   }, [selectedCategoryId, categories, loadRecords]);
-
-  React.useEffect(() => {
-    if (selectedCategoryId) {
-      const categoryRecords = getCategoryRecords(selectedCategoryId);
-    }
-  }, [currentRecords, selectedCategoryId, getCategoryRecords]);
 
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
