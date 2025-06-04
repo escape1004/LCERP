@@ -118,10 +118,6 @@
       "allowElevation": true,
       "runAfterFinish": false,
       "differentialPackage": true,
-      "displayLanguageSelector": true,
-      "installerSidebar": "installerSidebar.bmp",
-      "uninstallerSidebar": "uninstallerSidebar.bmp",
-      "installerHeader": "installerHeader.bmp",
       "include": "build/installer.nsh"
     },
     "mac": {
