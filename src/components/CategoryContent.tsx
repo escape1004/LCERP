@@ -275,7 +275,7 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
               placeholder={searchField === 'all' ? '전체 검색...' : `${selectedCategory.fields.find(f => f.id === searchField)?.name || ''} 검색...`}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 bg-discord-sidebar border-gray-600 text-discord-text"
+              className="pl-10 bg-discord-sidebar border-gray-600 text-discord-text placeholder:text-gray-500"
             />
             {searchTerm && (
               <button
