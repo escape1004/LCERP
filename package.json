@@ -1,7 +1,7 @@
 {
   "name": "local-erp",
   "private": true,
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Local ERP System for Business Management",
   "author": "Escape",
   "main": "electron/main.js",
