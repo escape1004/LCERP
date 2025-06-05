@@ -1,26 +1,10 @@
 import { create } from 'zustand';
 import { Category, DataRecord, NewCategory, NewRecord } from '@/types';
 
-declare global {
-  interface Window {
-    electronAPI: {
-      getCategories: () => Promise<Category[]>;
-      addCategory: (category: NewCategory & { id: string }) => Promise<string>;
-      updateCategory: (id: string, updates: Partial<NewCategory>) => Promise<void>;
-      deleteCategory: (id: string) => Promise<void>;
-      getRecords: (categoryId: string) => Promise<DataRecord[]>;
-      addRecord: (record: NewRecord & { id: string }) => Promise<string>;
-      updateRecord: (id: string, data: Record<string, any>) => Promise<void>;
-      deleteRecord: (id: string) => Promise<void>;
-      openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
-    };
-  }
-}
-
 interface ERPStore {
   categories: Category[];
-  recordsByCategory: Record<string, DataRecord[]>;
-  selectedCategoryId?: string;
+  records: Record<string, DataRecord[]>;
+  selectedCategoryId: string | null;
   searchTerm: string;
   currentPage: number;
   itemsPerPage: number;
@@ -35,17 +19,19 @@ interface ERPStore {
   addRecord: (record: NewRecord) => Promise<string>;
   updateRecord: (id: string, data: Record<string, any>) => Promise<void>;
   deleteRecord: (id: string) => Promise<void>;
-  selectCategory: (id: string) => void;
+  selectCategory: (id: string | null) => void;
   setSearchTerm: (term: string) => void;
   setCurrentPage: (page: number) => void;
   getCategoryRecords: (categoryId: string) => DataRecord[];
   setShowDbViewer: (show: boolean) => void;
+  getRecordReferenceCount: (recordId: string, categoryId: string) => number;
+  toggleDbViewer: () => void;
 }
 
 export const useERPStore = create<ERPStore>((set, get) => ({
   categories: [],
-  recordsByCategory: {},
-  selectedCategoryId: undefined,
+  records: {},
+  selectedCategoryId: null,
   searchTerm: '',
   currentPage: 1,
   itemsPerPage: 20,
@@ -62,16 +48,16 @@ export const useERPStore = create<ERPStore>((set, get) => ({
       const records = await window.electronAPI.getRecords(categoryId);
       console.log('Loaded records:', records);
       set(state => ({
-        recordsByCategory: {
-          ...state.recordsByCategory,
+        records: {
+          ...state.records,
           [categoryId]: records
         }
       }));
     } catch (error) {
       console.error('Error loading records:', error);
       set(state => ({
-        recordsByCategory: {
-          ...state.recordsByCategory,
+        records: {
+          ...state.records,
           [categoryId]: []
         }
       }));
@@ -83,7 +69,6 @@ export const useERPStore = create<ERPStore>((set, get) => ({
     await window.electronAPI.addCategory({
       id,
       ...categoryData,
-      order_num: categoryData.order,
     });
     await get().loadCategories();
     return id;
@@ -98,10 +83,10 @@ export const useERPStore = create<ERPStore>((set, get) => ({
     await window.electronAPI.deleteCategory(id);
     await get().loadCategories();
     set(state => {
-      const { [id]: _, ...remainingRecords } = state.recordsByCategory;
+      const { [id]: _, ...remainingRecords } = state.records;
       return {
-        selectedCategoryId: state.selectedCategoryId === id ? undefined : state.selectedCategoryId,
-        recordsByCategory: remainingRecords
+        selectedCategoryId: state.selectedCategoryId === id ? null : state.selectedCategoryId,
+        records: remainingRecords
       };
     });
   },
@@ -115,9 +100,10 @@ export const useERPStore = create<ERPStore>((set, get) => ({
 
   addRecord: async (recordData: NewRecord) => {
     console.log('Adding record:', recordData);
+    const id = Math.random().toString(36).substring(2);
     const record = {
       ...recordData,
-      id: recordData.id || Math.random().toString(36).substring(2)
+      id
     };
     await window.electronAPI.addRecord(record);
     
@@ -125,7 +111,7 @@ export const useERPStore = create<ERPStore>((set, get) => ({
       console.log('Reloading records after add');
       await get().loadRecords(get().selectedCategoryId);
     }
-    return record.id;
+    return id;
   },
 
   updateRecord: async (id, data) => {
@@ -145,7 +131,7 @@ export const useERPStore = create<ERPStore>((set, get) => ({
   selectCategory: async (id) => {
     console.log('Selecting category:', id);
     if (id === null) {
-      set({ selectedCategoryId: undefined });
+      set({ selectedCategoryId: null });
       return;
     }
     
@@ -155,16 +141,16 @@ export const useERPStore = create<ERPStore>((set, get) => ({
       const records = await window.electronAPI.getRecords(id);
       console.log('Loaded records for category:', { id, count: records.length });
       set(state => ({
-        recordsByCategory: {
-          ...state.recordsByCategory,
+        records: {
+          ...state.records,
           [id]: records
         }
       }));
     } catch (error) {
       console.error('Error loading records for category:', { id, error });
       set(state => ({
-        recordsByCategory: {
-          ...state.recordsByCategory,
+        records: {
+          ...state.records,
           [id]: []
         }
       }));
@@ -176,8 +162,37 @@ export const useERPStore = create<ERPStore>((set, get) => ({
   setCurrentPage: (page) => set({ currentPage: page }),
 
   getCategoryRecords: (categoryId) => {
-    return get().recordsByCategory[categoryId] || [];
+    return get().records[categoryId] || [];
   },
 
   setShowDbViewer: (show) => set({ showDbViewer: show }),
+
+  getRecordReferenceCount: (recordId: string, categoryId: string) => {
+    let count = 0;
+    const { categories, records: allRecords } = get();
+    
+    // 모든 카테고리를 순회하면서 참조 횟수 계산
+    categories.forEach(category => {
+      const categoryRecords = allRecords[category.id] || [];
+      categoryRecords.forEach(record => {
+        category.fields.forEach(field => {
+          if (field.type === 'relation' && field.relationCategoryId === categoryId) {
+            // 단일 참조인 경우
+            if (!field.multiple && record.data[field.id] === recordId) {
+              count++;
+            }
+            // 다중 참조인 경우
+            if (field.multiple && Array.isArray(record.data[field.id])) {
+              count += record.data[field.id].filter((id: string) => id === recordId).length;
+            }
+          }
+        });
+      });
+    });
+    return count;
+  },
+
+  toggleDbViewer: () => {
+    set(state => ({ showDbViewer: !state.showDbViewer }));
+  },
 }));

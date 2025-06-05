@@ -198,7 +198,10 @@ export const Sidebar: React.FC = () => {
         <Button
           variant="ghost"
           className="w-full justify-start text-discord-muted hover:text-discord-text"
-          onClick={() => setShowDbViewer(true)}
+          onClick={() => {
+            selectCategory(null);
+            setShowDbViewer(true);
+          }}
         >
           <Database className="mr-2 h-4 w-4" />
           데이터베이스 보기

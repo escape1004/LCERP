@@ -365,7 +365,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                       <SelectItem value="date">날짜</SelectItem>
                                       <SelectItem value="longtext">긴 텍스트</SelectItem>
                                       <SelectItem value="select">선택 목록</SelectItem>
-                                      <SelectItem value="relation">관계형 (다른 카테고리 참조)</SelectItem>
+                                      <SelectItem value="relation">관계형 (하위 카테고리 참조)</SelectItem>
                                     </SelectContent>
                                   </Select>
                                 </div>
@@ -481,7 +481,13 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                     </SelectTrigger>
                                     <SelectContent className="bg-discord-sidebar border-gray-600">
                                       {categories
-                                        .filter(cat => cat.id !== category?.id)
+                                        .filter(cat => {
+                                          // 현재 카테고리를 제외
+                                          if (cat.id === category?.id) return false;
+                                          
+                                          // 현재 카테고리의 직접적인 하위 카테고리만 선택 가능
+                                          return cat.parentId === category?.id;
+                                        })
                                         .map(cat => (
                                           <SelectItem key={cat.id} value={cat.id}>
                                             {cat.name}

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight } from 'lucide-react';
+import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { DataRecord, FieldDefinition, Category } from '../types';
 import { Button } from './ui/button';
@@ -84,10 +84,42 @@ export const MainContent: React.FC = () => {
   const selectedCategory = categories.find(cat => cat.id === selectedCategoryId);
   const currentRecords = selectedCategoryId ? getCategoryRecords(selectedCategoryId) : [];
   
+  const getRecordReferenceCount = useCallback((recordId: string, categoryId: string): number => {
+    let count = 0;
+    
+    // 모든 카테고리를 순회
+    categories.forEach(category => {
+      // 현재 카테고리의 relation 타입 필드 중 targetCategoryId가 일치하는 것만 확인
+      const relationFields = category.fields.filter(
+        field => field.type === 'relation' && field.relationCategoryId === categoryId
+      );
+      
+      if (relationFields.length > 0) {
+        // 해당 카테고리의 모든 레코드를 확인
+        const records = getCategoryRecords(category.id);
+        records.forEach(record => {
+          relationFields.forEach(field => {
+            const value = record.data[field.id];
+            if (field.multiple && Array.isArray(value)) {
+              // 다중 선택인 경우 배열에서 recordId가 포함된 횟수를 더함
+              count += value.filter(id => id === recordId).length;
+            } else if (value === recordId) {
+              // 단일 선택인 경우 값이 일치하면 카운트 증가
+              count += 1;
+            }
+          });
+        });
+      }
+    });
+    
+    return count;
+  }, [categories, getCategoryRecords]);
+  
   // Reset search field to 'all' when category changes
   useEffect(() => {
     setSearchField('all');
-  }, [selectedCategoryId]);
+    setCurrentPage(1); // Reset pagination when category changes
+  }, [selectedCategoryId, setCurrentPage]);
 
   // Load related records when category changes
   useEffect(() => {
@@ -138,6 +170,12 @@ export const MainContent: React.FC = () => {
     if (!sortField) return customFilteredRecords;
 
     return [...customFilteredRecords].sort((a, b) => {
+      if (sortField === '__refCount') {
+        const countA = getRecordReferenceCount(a.id, selectedCategory.id);
+        const countB = getRecordReferenceCount(b.id, selectedCategory.id);
+        return sortDirection === 'asc' ? countA - countB : countB - countA;
+      }
+
       let aValue = a.data[sortField];
       let bValue = b.data[sortField];
 
@@ -151,7 +189,7 @@ export const MainContent: React.FC = () => {
       if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [customFilteredRecords, sortField, sortDirection]);
+  }, [customFilteredRecords, sortField, sortDirection, selectedCategory?.id, getRecordReferenceCount]);
 
   // Pagination
   const totalPages = Math.ceil(sortedRecords.length / itemsPerPage);
@@ -570,6 +608,26 @@ export const MainContent: React.FC = () => {
                             </div>
                           </th>
                         ))}
+                        {/* 참조되는 카테고리인 경우에만 참조 횟수 컬럼 표시 */}
+                        {categories.some(cat => 
+                          cat.fields.some(field => 
+                            field.type === 'relation' && field.relationCategoryId === selectedCategory.id
+                          )
+                        ) && (
+                          <th
+                            className="px-4 py-3 text-left text-sm font-semibold text-discord-text cursor-pointer hover:bg-discord-hover"
+                            onClick={() => handleSort('__refCount')}
+                          >
+                            <div className="flex items-center gap-2">
+                              참조 횟수
+                              {sortField === '__refCount' && (
+                                <span className="text-discord-accent">
+                                  {sortDirection === 'asc' ? '↑' : '↓'}
+                                </span>
+                              )}
+                            </div>
+                          </th>
+                        )}
                         <th className="px-4 py-3 text-left text-sm font-semibold text-discord-text w-32">
                           작업
                         </th>
@@ -586,6 +644,19 @@ export const MainContent: React.FC = () => {
                               {formatFieldValue(field, record.data[field.id])}
                             </td>
                           ))}
+                          {/* 참조되는 카테고리인 경우에만 참조 횟수 표시 */}
+                          {categories.some(cat => 
+                            cat.fields.some(field => 
+                              field.type === 'relation' && field.relationCategoryId === selectedCategory.id
+                            )
+                          ) && (
+                            <td className="px-4 py-3 text-sm">
+                              {(() => {
+                                const count = getRecordReferenceCount(record.id, selectedCategory.id);
+                                return count > 0 ? count : '-';
+                              })()}
+                            </td>
+                          )}
                           <td className="px-4 py-3">
                             <div className="flex gap-2">
                               <Button
