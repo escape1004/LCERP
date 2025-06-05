@@ -1,73 +1,78 @@
-# Welcome to your Lovable project
+# Local ERP
 
-## Project info
+로컬 환경에서 동작하는 비즈니스 관리 시스템입니다. Electron과 React를 기반으로 제작되었으며, SQLite를 사용하여 데이터를 관리합니다.
 
-**URL**: https://lovable.dev/projects/2090bbb9-77bf-470a-aaf1-a1e408a926ee
+## 주요 기능
 
-## How can I edit this code?
+- **카테고리 관리**: 비즈니스 데이터를 카테고리별로 구분하여 관리
+- **데이터베이스 관리**: 
+  - 데이터베이스 조회 및 관리
+  - 자동 백업 시스템
+  - 데이터 저장 위치 커스터마이징
+- **사용자 친화적 UI**: 
+  - Discord 스타일의 모던한 디자인
+  - 직관적인 네비게이션
+  - 실시간 피드백 시스템
 
-There are several ways of editing your application.
+## 기술 스택
 
-**Use Lovable**
+- **프레임워크**: 
+  - Electron (v36)
+  - React (v18)
+  - TypeScript
+  - Vite
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/2090bbb9-77bf-470a-aaf1-a1e408a926ee) and start prompting.
+- **UI/UX**:
+  - TailwindCSS
+  - Radix UI
+  - Framer Motion
+  - Lucide Icons
 
-Changes made via Lovable will be committed automatically to this repo.
+- **상태 관리 & 데이터**:
+  - Zustand
+  - React Query
+  - Better SQLite3
 
-**Use your preferred IDE**
+## 시작하기
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### 개발 환경 설정
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+```bash
+# 의존성 설치
+npm install
 
-Follow these steps:
+# 개발 서버 실행
+npm run electron:dev
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+# 프로덕션 빌드
+npm run electron:build
 ```
 
-**Edit a file directly in GitHub**
+### 빌드 옵션
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+- Windows: NSIS 인스톨러
+- macOS: DMG 패키지
+- Linux: AppImage
 
-**Use GitHub Codespaces**
+## 주요 기능 설명
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### 데이터베이스 관리
+- 자동 백업 시스템 내장
+- 백업 주기 설정 가능
+- 데이터베이스 및 백업 저장 위치 커스터마이징
+- 테이블 데이터 실시간 조회
 
-## What technologies are used for this project?
+### 카테고리 시스템
+- 계층형 카테고리 구조
+- 드래그 앤 드롭으로 카테고리 순서 변경
+- 카테고리별 데이터 관리
 
-This project is built with:
+## 시스템 요구사항
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+- Windows 10 이상
+- macOS 10.13 이상
+- Linux (최신 버전의 주요 배포판)
 
-## How can I deploy this project?
+## 라이선스
 
-Simply open [Lovable](https://lovable.dev/projects/2090bbb9-77bf-470a-aaf1-a1e408a926ee) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+Copyright © 2024 Escape. All rights reserved.
