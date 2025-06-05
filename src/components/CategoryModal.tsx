@@ -352,7 +352,8 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                     onValueChange={(value) => updateField(index, { 
                                       type: value as FieldDefinition['type'],
                                       options: value === 'select' ? [] : undefined,
-                                      relationCategoryId: value === 'relation' ? undefined : field.relationCategoryId
+                                      relationCategoryId: value === 'relation' ? undefined : field.relationCategoryId,
+                                      multiple: value === 'relation' ? false : field.multiple
                                     })}
                                   >
                                     <SelectTrigger className="mt-1 bg-discord-bg border-gray-700 text-discord-text">
@@ -400,8 +401,8 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                     </label>
                                   </div>
 
-                                  {/* 다중 선택 체크박스 (select 타입일 때만) */}
-                                  {field.type === 'select' && (
+                                  {/* 다중 선택 체크박스 (select 타입이나 relation 타입일 때) */}
+                                  {(field.type === 'select' || field.type === 'relation') && (
                                     <div className="flex items-center space-x-2">
                                       <Checkbox
                                         id={`multiple-${field.id}`}

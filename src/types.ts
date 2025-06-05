@@ -27,13 +27,13 @@ export interface CategoryUpdate {
 export interface FieldDefinition {
   id: string;
   name: string;
-  type: 'text' | 'number' | 'date' | 'longtext' | 'select' | 'relation';
+  type: 'text' | 'number' | 'date' | 'select' | 'relation' | 'longtext';
   required: boolean;
   unique: boolean;
   order: number;
   options?: string[];
-  multiple?: boolean;
   relationCategoryId?: string;
+  multiple?: boolean;
 }
 
 export interface DataRecord {
@@ -45,7 +45,6 @@ export interface DataRecord {
 }
 
 export interface NewRecord {
-  id: string;
   categoryId: string;
   data: any;
   createdAt?: string;

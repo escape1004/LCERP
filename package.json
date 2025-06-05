@@ -30,8 +30,7 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
-      "resources/**/*",
-      "save/**/!(*db|*.sqlite|*.sqlite3|db.json)"
+      "resources/**/*"
     ],
     "extraResources": [
       {
@@ -39,56 +38,10 @@
         "to": "save",
         "filter": [
           "!**/*.db",
-          "!**/*.sqlite",
-          "!**/*.sqlite3",
+          "!**/*.sqlite*",
           "!**/db.json",
           "!**/.git/**",
-          "!**/.vscode/**",
           "!**/node_modules/**",
-          "!**/*.log",
-          "!**/.env*",
-          "!**/*.bak",
-          "!**/*.backup",
-          "!**/*~",
-          "!**/.DS_Store",
-          "!**/thumbs.db",
-          "!**/.gitignore",
-          "!**/tsconfig.json",
-          "!**/.eslintrc*",
-          "!**/jest.config.*",
-          "!**/README.md",
-          "!**/.temp/**",
-          "!**/.tmp/**",
-          "!**/.cache/**",
-          "!**/config.*.json",
-          "!**/__tests__/**",
-          "!**/*.test.*",
-          "!**/*.spec.*",
-          "!**/*.d.ts",
-          "!**/*.map",
-          "!**/example/**",
-          "!**/examples/**",
-          "!**/demo/**",
-          "!**/docs/**",
-          "!**/*.md",
-          "!**/LICENSE*",
-          "!**/.npmignore",
-          "!**/.prettierrc*",
-          "!**/.travis.yml",
-          "!**/.github/**",
-          "!**/coverage/**",
-          "!**/.nyc_output/**",
-          "!**/test/**",
-          "!**/tests/**",
-          "!**/*.tsbuildinfo",
-          "!**/.editorconfig",
-          "!**/.babelrc*",
-          "!**/rollup.config.*",
-          "!**/webpack.config.*",
-          "!**/karma.conf.*",
-          "!**/yarn.lock",
-          "!**/package-lock.json",
-          "!**/pnpm-lock.yaml",
           "**/*"
         ]
       }
@@ -107,8 +60,8 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": false,
-      "createStartMenuShortcut": false,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
       "shortcutName": "Local ERP",
       "uninstallDisplayName": "Local ERP",
       "deleteAppDataOnUninstall": false,
@@ -116,9 +69,8 @@
       "uninstallerIcon": "./resources/icon.ico",
       "perMachine": false,
       "allowElevation": true,
-      "runAfterFinish": false,
-      "differentialPackage": true,
-      "include": "build/installer.nsh"
+      "runAfterFinish": true,
+      "differentialPackage": true
     },
     "mac": {
       "target": [

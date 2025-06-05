@@ -37,9 +37,9 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     return field.type === 'select';
   }, []);
 
-  const isMultiSelectField = useCallback((field: FieldDefinition): boolean => {
-    return isSelectField(field) && field.multiSelect === true;
-  }, [isSelectField]);
+  const isMultiSelectField = (field: FieldDefinition): boolean => {
+    return (field.type === 'select' || field.type === 'relation') && field.multiple === true;
+  };
 
   // Memoize sorted fields
   const sortedFields = useMemo(() => {
@@ -370,7 +370,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                     <CommandList>
                       <CommandEmpty>옵션을 찾을 수 없습니다.</CommandEmpty>
                       <CommandGroup>
-                        {field.selectOptions?.map((option) => (
+                        {field.options?.map((option) => (
                           <CommandItem
                             key={option}
                             value={option}
@@ -398,6 +398,30 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                   </Command>
                 </PopoverContent>
               </Popover>
+              {/* 선택된 항목들을 태그로 표시 */}
+              {Array.isArray(value) && value.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {value.map((item) => (
+                    <div
+                      key={item}
+                      className="flex items-center gap-1 px-2 py-1 bg-discord-accent text-white text-xs rounded-full"
+                    >
+                      <span>{item}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const newValue = value.filter((v) => v !== item);
+                          updateFieldValue(field.id, newValue);
+                        }}
+                        className="text-white hover:text-gray-200"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               {renderErrorMessage()}
             </div>
           );
@@ -413,7 +437,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                 </SelectTrigger>
                 <SelectContent className="bg-discord-sidebar border-gray-600">
                   <SelectItem value="none">선택 해제</SelectItem>
-                  {field.selectOptions?.map(option => (
+                  {field.options?.map(option => (
                     <SelectItem key={option} value={option}>
                       {option}
                     </SelectItem>
@@ -434,7 +458,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
         const relatedRecords = getCategoryRecords(field.relationCategoryId);
         const displayField = relatedCategory.fields[0];
 
-        if (field.multiSelect) {
+        if (field.multiple) {
           return (
             <div>
               <Popover open={openComboboxes[field.id]} onOpenChange={() => toggleCombobox(field.id)}>
@@ -488,6 +512,36 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                   </Command>
                 </PopoverContent>
               </Popover>
+              {/* 관계형 필드의 다중 선택에도 동일한 태그 표시 추가 */}
+              {Array.isArray(value) && value.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {value.map((recordId) => {
+                    const selectedRecord = relatedRecords.find(r => r.id === recordId);
+                    const displayValue = selectedRecord 
+                      ? String(selectedRecord.data[displayField?.id] || selectedRecord.id)
+                      : recordId;
+                    return (
+                      <div
+                        key={recordId}
+                        className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded-full"
+                      >
+                        <span>{displayValue}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const newValue = value.filter((v) => v !== recordId);
+                            updateFieldValue(field.id, newValue);
+                          }}
+                          className="text-white hover:text-gray-200"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               {renderErrorMessage()}
             </div>
           );
