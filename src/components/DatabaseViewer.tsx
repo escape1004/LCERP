@@ -1,19 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from './ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { Folder, RefreshCw, Save, FolderOpen, Settings2, Link2, X } from 'lucide-react';
+import { Save, Settings2, Link2, X } from 'lucide-react';
 import { useToast } from './ui/use-toast';
 import { useERPStore } from '../hooks/useERPStore';
 import { Input } from './ui/input';
-import { Label } from './ui/label';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from './ui/dialog';
 import {
   Form,
   FormField,
@@ -23,21 +13,7 @@ import {
   FormControl,
 } from './ui/form';
 import { useForm } from 'react-hook-form';
-
-interface TableInfo {
-  name: string;
-}
-
-interface TableData {
-  columns: string[];
-  rows: Record<string, any>[];
-}
-
-interface Config {
-  dbPath: string;
-  backupDir: string;
-  backupInterval: number;
-}
+import { TableInfo, TableData, Config, ApiResponse } from '../types/electron';
 
 interface FormValues {
   dbPath: string;
@@ -52,7 +28,6 @@ export const DatabaseViewer: React.FC = () => {
   const [dbPath, setDbPath] = useState<string>('');
   const [config, setConfig] = useState<Config | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [backupInterval, setBackupInterval] = useState('60');
   const { toast } = useToast();
   const { selectCategory } = useERPStore();
 
@@ -64,6 +39,26 @@ export const DatabaseViewer: React.FC = () => {
     }
   });
 
+  const showSuccessToast = (message: string) => {
+    toast({
+      title: message,
+      className: 'bg-[#2a3a2a] border border-[#40ff40] text-white',
+    });
+  };
+
+  const showErrorToast = (message: string) => {
+    toast({
+      title: message,
+      variant: 'destructive',
+      className: 'bg-[#3a2a2a] border border-[#ff4040] text-white',
+    });
+  };
+
+  const handleApiError = (error: unknown, fallbackMessage: string) => {
+    const message = error instanceof Error ? error.message : fallbackMessage;
+    showErrorToast(message);
+  };
+
   const loadTables = async () => {
     try {
       const tables = await window.electronAPI.getTables();
@@ -72,10 +67,7 @@ export const DatabaseViewer: React.FC = () => {
         loadTableData(tables[0].name);
       }
     } catch (error) {
-      toast({
-        title: '테이블 목록을 불러오는데 실패했습니다.',
-        variant: 'destructive',
-      });
+      handleApiError(error, '테이블 목록을 불러오는데 실패했습니다.');
     }
   };
 
@@ -85,22 +77,7 @@ export const DatabaseViewer: React.FC = () => {
       setTableData(data);
       setSelectedTable(tableName);
     } catch (error) {
-      toast({
-        title: '테이블 데이터를 불러오는데 실패했습니다.',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const loadDbPath = async () => {
-    try {
-      const path = await window.electronAPI.getDbPath();
-      setDbPath(path);
-    } catch (error) {
-      toast({
-        title: 'DB 경로를 불러오는데 실패했습니다.',
-        variant: 'destructive',
-      });
+      handleApiError(error, '테이블 데이터를 불러오는데 실패했습니다.');
     }
   };
 
@@ -108,35 +85,31 @@ export const DatabaseViewer: React.FC = () => {
     try {
       await window.electronAPI.openDbFile();
     } catch (error) {
-      toast({
-        title: 'DB 파일을 여는데 실패했습니다.',
-        variant: 'destructive',
-      });
+      handleApiError(error, 'DB 파일을 여는데 실패했습니다.');
     }
   };
 
   const handleBackup = async () => {
     try {
-      await window.electronAPI.backupDatabase();
-      toast({
-        title: '데이터베이스 백업이 완료되었습니다.',
-      });
+      const result = await window.electronAPI.backupDatabase();
+      if (result.success) {
+        showSuccessToast('데이터베이스 백업이 완료되었습니다.');
+      } else {
+        throw new Error(result.error);
+      }
     } catch (error) {
-      toast({
-        title: '데이터베이스 백업에 실패했습니다.',
-        variant: 'destructive',
-      });
+      handleApiError(error, '데이터베이스 백업에 실패했습니다.');
     }
   };
 
   const handleOpenBackup = async () => {
     try {
-      await window.electronAPI.openBackupLocation();
+      const result = await window.electronAPI.openBackupLocation();
+      if (!result.success && result.error) {
+        throw new Error(result.error);
+      }
     } catch (error) {
-      toast({
-        title: '백업 폴더를 여는데 실패했습니다.',
-        variant: 'destructive',
-      });
+      handleApiError(error, '백업 폴더를 여는데 실패했습니다.');
     }
   };
 
@@ -145,18 +118,13 @@ export const DatabaseViewer: React.FC = () => {
       const config = await window.electronAPI.getConfig();
       setConfig(config);
       setDbPath(config.dbPath);
-      const intervalInMinutes = Math.max(1, config.backupInterval);
-      setBackupInterval(String(intervalInMinutes));
       form.reset({
         dbPath: config.dbPath,
         backupDir: config.backupDir,
-        backupInterval: String(intervalInMinutes),
+        backupInterval: String(Math.max(1, config.backupInterval)),
       });
     } catch (error) {
-      toast({
-        title: '설정을 불러오는데 실패했습니다.',
-        variant: 'destructive',
-      });
+      handleApiError(error, '설정을 불러오는데 실패했습니다.');
     }
   };
 
@@ -165,16 +133,11 @@ export const DatabaseViewer: React.FC = () => {
       const result = await window.electronAPI.setDbPath();
       if (result.success && result.path) {
         await loadConfig();
-        toast({
-          title: 'DB 저장 위치가 변경되었습니다.',
-        });
+        showSuccessToast('DB 저장 위치가 변경되었습니다.');
         await loadTables();
       }
     } catch (error) {
-      toast({
-        title: 'DB 저장 위치 변경에 실패했습니다.',
-        variant: 'destructive',
-      });
+      handleApiError(error, 'DB 저장 위치 변경에 실패했습니다.');
     }
   };
 
@@ -183,15 +146,10 @@ export const DatabaseViewer: React.FC = () => {
       const result = await window.electronAPI.setBackupDir();
       if (result.success && result.path) {
         await loadConfig();
-        toast({
-          title: '백업 저장 위치가 변경되었습니다.',
-        });
+        showSuccessToast('백업 저장 위치가 변경되었습니다.');
       }
     } catch (error) {
-      toast({
-        title: '백업 저장 위치 변경에 실패했습니다.',
-        variant: 'destructive',
-      });
+      handleApiError(error, '백업 저장 위치 변경에 실패했습니다.');
     }
   };
 
@@ -199,25 +157,17 @@ export const DatabaseViewer: React.FC = () => {
     try {
       const minutes = parseInt(form.getValues("backupInterval"));
       if (isNaN(minutes) || minutes < 1) {
-        toast({
-          title: '유효한 시간 간격을 입력해주세요.',
-          variant: 'destructive',
-        });
+        showErrorToast('유효한 시간 간격을 입력해주세요.');
         return;
       }
 
       const result = await window.electronAPI.setBackupInterval(minutes);
       if (result.success) {
-        setBackupInterval(String(minutes));
-        toast({
-          title: '백업 주기가 변경되었습니다.',
-        });
+        showSuccessToast('백업 주기가 변경되었습니다.');
+        setIsSettingsOpen(false);
       }
     } catch (error) {
-      toast({
-        title: '백업 주기 변경에 실패했습니다.',
-        variant: 'destructive',
-      });
+      handleApiError(error, '백업 주기 변경에 실패했습니다.');
     }
   };
 
@@ -226,47 +176,21 @@ export const DatabaseViewer: React.FC = () => {
       try {
         await loadConfig();
         await loadTables();
-        // 카테고리 선택을 초기화하지 않음
       } catch (error) {
-        toast({
-          title: '초기화에 실패했습니다.',
-          variant: 'destructive',
-        });
+        handleApiError(error, '초기화에 실패했습니다.');
       }
     };
 
     initializeViewer();
+    selectCategory(null);
   }, []);
-
-  // 컴포넌트가 언마운트될 때 카테고리 선택 초기화
-  useEffect(() => {
-    return () => {
-      selectCategory(null);
-    };
-  }, [selectCategory]);
-
-  useEffect(() => {
-    if (config) {
-      const intervalInMinutes = Math.max(1, config.backupInterval);
-      form.reset({
-        dbPath: config.dbPath,
-        backupDir: config.backupDir,
-        backupInterval: String(intervalInMinutes),
-      });
-    }
-  }, [config, form]);
 
   return (
     <div className="h-full w-full flex flex-col bg-discord-bg">
       {/* Header */}
       <div className="shrink-0 p-6 space-y-4 border-b border-gray-700">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <h1 className="text-2xl font-bold">데이터베이스 뷰어</h1>
-            <Button variant="ghost" size="icon" onClick={() => loadTables()}>
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-          </div>
+          <h1 className="text-2xl font-bold">데이터베이스 뷰어</h1>
           <div className="flex items-center gap-2">
             <Button 
               variant="outline" 
@@ -318,7 +242,7 @@ export const DatabaseViewer: React.FC = () => {
           </div>
         </div>
 
-        {/* Table List - Horizontal */}
+        {/* Table List */}
         <div className="flex flex-wrap gap-2">
           {tables.map((table) => (
             <Button
@@ -386,7 +310,6 @@ export const DatabaseViewer: React.FC = () => {
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-discord-bg rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden">
-            {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-700">
               <h2 className="text-xl font-bold text-discord-text">
                 데이터베이스 설정
@@ -399,7 +322,6 @@ export const DatabaseViewer: React.FC = () => {
               </button>
             </div>
 
-            {/* Content */}
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-160px)] discord-scrollbar">
               <Form {...form}>
                 <div className="space-y-6">
@@ -496,7 +418,6 @@ export const DatabaseViewer: React.FC = () => {
               </Form>
             </div>
 
-            {/* Footer */}
             <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-700">
               <Button
                 type="button"
@@ -508,10 +429,7 @@ export const DatabaseViewer: React.FC = () => {
               </Button>
               <Button
                 type="button"
-                onClick={async () => {
-                  await handleSetBackupInterval();
-                  setIsSettingsOpen(false);
-                }}
+                onClick={handleSetBackupInterval}
                 className="bg-discord-accent hover:bg-discord-accent/80 text-white"
               >
                 저장

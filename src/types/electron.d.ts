@@ -1,21 +1,37 @@
-interface TableData {
+export interface TableInfo {
+  name: string;
+}
+
+export interface TableData {
   columns: string[];
   rows: Record<string, any>[];
 }
 
-interface Config {
+export interface Config {
   dbPath: string;
   backupDir: string;
   backupInterval: number;
 }
 
-interface ApiResponse {
+export interface ApiResponse {
   success: boolean;
   error?: string;
   path?: string;
 }
 
 export interface ElectronAPI {
+  // Database viewer APIs
+  getTables: () => Promise<TableInfo[]>;
+  getTableData: (tableName: string) => Promise<TableData>;
+  getDbPath: () => Promise<string>;
+  openDbFile: () => Promise<void>;
+  backupDatabase: () => Promise<ApiResponse>;
+  openBackupLocation: () => Promise<ApiResponse>;
+  getConfig: () => Promise<Config>;
+  setDbPath: () => Promise<ApiResponse>;
+  setBackupDir: () => Promise<ApiResponse>;
+  setBackupInterval: (minutes: number) => Promise<ApiResponse>;
+  
   // Category APIs
   getCategories: () => Promise<any[]>;
   addCategory: (category: any) => Promise<any>;
@@ -28,22 +44,6 @@ export interface ElectronAPI {
   updateRecord: (id: string, data: any) => Promise<any>;
   deleteRecord: (categoryId: string, id: string) => Promise<any>;
   
-  // Database APIs
-  getTables: () => Promise<{ name: string }[]>;
-  getTableData: (tableName: string) => Promise<TableData>;
-  getDbPath: () => Promise<string>;
-  openDbFile: () => Promise<void>;
-  
-  // Backup APIs
-  backupDatabase: () => Promise<ApiResponse>;
-  openBackupLocation: () => Promise<ApiResponse>;
-  
-  // Configuration APIs
-  getConfig: () => Promise<Config>;
-  setDbPath: () => Promise<ApiResponse>;
-  setBackupDir: () => Promise<ApiResponse>;
-  setBackupInterval: (minutes: number) => Promise<ApiResponse>;
-  
   // Utility APIs
   openExternal: (url: string) => Promise<ApiResponse>;
 }
@@ -51,10 +51,6 @@ export interface ElectronAPI {
 declare global {
   interface Window {
     electronAPI: ElectronAPI;
-    electron: {
-      send: (channel: string, data: any) => void;
-      on: (channel: string, func: (...args: any[]) => void) => void;
-    };
   }
 }
 
