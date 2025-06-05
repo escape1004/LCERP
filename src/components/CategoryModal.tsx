@@ -236,6 +236,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                 카테고리 이름 <span className="text-red-500">*</span>
               </Label>
               <Input
+                placeholder="카테고리 이름 (필수)"
                 value={formData.name}
                 onChange={(e) => {
                   setFormData(prev => ({ ...prev, name: e.target.value }));
@@ -250,7 +251,6 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                 className={`mt-2 bg-discord-sidebar border-gray-600 text-discord-text ${
                   errors.name ? 'border-red-500' : ''
                 }`}
-                placeholder="카테고리 이름을 입력하세요"
               />
               {errors.name && (
                 <p className="text-red-500 text-sm mt-1">{errors.name}</p>

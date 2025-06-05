@@ -306,12 +306,13 @@ export const RecordModal: React.FC<RecordModalProps> = ({
         return (
           <div>
             <Input
-              type={field.type}
+              id={field.id}
+              type={field.type === 'number' ? 'number' : 'text'}
+              placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
               value={value}
               onChange={(e) => updateFieldValue(field.id, e.target.value)}
               onBlur={() => handleFieldBlur(field.id)}
               className={inputClassName}
-              placeholder={`${field.name} 입력`}
             />
             {renderErrorMessage()}
           </div>
@@ -617,7 +618,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-discord-bg rounded-lg w-full max-w-2xl max-h-[90vh] overflow-hidden">
+      <div className="bg-discord-bg rounded-lg w-full max-w-2xl flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-700">
           <div>
@@ -637,7 +638,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-160px)] discord-scrollbar">
+        <div className="p-6 overflow-y-auto flex-1">
           <div className="space-y-6">
             {sortedFields.map(field => (
               <div key={field.id}>
@@ -654,7 +655,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-700">
+        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-700 bg-discord-bg">
           <Button 
             variant="ghost" 
             onClick={onClose} 
