@@ -269,10 +269,10 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                   parentId: value === 'none' ? undefined : value 
                 }))}
               >
-                <SelectTrigger className="mt-2 bg-[#2b2d31] border-gray-600 text-discord-text">
+                <SelectTrigger className="mt-2 bg-discord-sidebar border-gray-600 text-gray-200">
                   <SelectValue placeholder="상위 카테고리 선택 (선택사항)" />
                 </SelectTrigger>
-                <SelectContent className="bg-[#2b2d31] border-gray-600">
+                <SelectContent className="bg-discord-sidebar border-gray-600">
                   <SelectItem value="none">없음 (최상위 카테고리)</SelectItem>
                   {categories
                     .filter(cat => !cat.parentId && cat.id !== category?.id)
@@ -310,7 +310,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                             <div
                               ref={provided.innerRef}
                               {...provided.draggableProps}
-                              className="bg-[#1e1f22] rounded-lg p-4"
+                              className="bg-discord-sidebar border border-gray-600 rounded-lg p-4"
                             >
                               <div className="flex flex-col gap-3">
                                 <div className="flex items-center gap-3">
@@ -321,7 +321,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                     <Input
                                       value={field.name}
                                       onChange={(e) => updateField(index, { name: e.target.value })}
-                                      className="w-full bg-[#2b2d31] border-0 text-gray-200"
+                                      className="w-full bg-[#2b2d31] border-gray-600 text-gray-200"
                                       placeholder="필드명을 입력하세요"
                                     />
                                   </div>
@@ -343,10 +343,10 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                         value={field.type}
                                         onValueChange={(value) => updateField(index, { type: value as FieldDefinition['type'] })}
                                       >
-                                        <SelectTrigger className="w-[200px] bg-[#2b2d31] border-0 text-gray-200">
+                                        <SelectTrigger className="w-[200px] bg-[#2b2d31] border-gray-600 text-gray-200">
                                           <SelectValue placeholder="필드 타입" />
                                         </SelectTrigger>
-                                        <SelectContent className="bg-[#2b2d31] border-0">
+                                        <SelectContent className="bg-[#2b2d31] border-gray-600">
                                           <SelectItem value="text">텍스트</SelectItem>
                                           <SelectItem value="number">숫자</SelectItem>
                                           <SelectItem value="date">날짜</SelectItem>
@@ -405,7 +405,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                                   newOptions[optionIndex] = e.target.value;
                                                   updateField(index, { options: newOptions });
                                                 }}
-                                                className="border-0 bg-transparent h-8 px-2 w-24"
+                                                className="h-10 px-3 w-full bg-[#2b2d31] border-gray-600 text-gray-200"
                                               />
                                               <Button
                                                 variant="ghost"
@@ -414,7 +414,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                                   const newOptions = field.options?.filter((_, i) => i !== optionIndex);
                                                   updateField(index, { options: newOptions });
                                                 }}
-                                                className="h-8 w-8 text-gray-400 hover:text-gray-200"
+                                                className="h-10 w-10 bg-discord-sidebar text-gray-400 hover:text-gray-200 hover:bg-discord-sidebar"
                                               >
                                                 <X size={14} />
                                               </Button>
@@ -442,10 +442,10 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                         value={field.relationCategoryId || ''}
                                         onValueChange={(value) => updateField(index, { relationCategoryId: value })}
                                       >
-                                        <SelectTrigger className="w-full bg-[#2b2d31] border-0 text-gray-200">
+                                        <SelectTrigger className="w-full bg-[#2b2d31] border-gray-600 text-gray-200">
                                           <SelectValue placeholder="카테고리를 선택하세요" />
                                         </SelectTrigger>
-                                        <SelectContent className="bg-[#2b2d31] border-0">
+                                        <SelectContent className="bg-[#2b2d31] border-gray-600">
                                           {categories
                                             .filter((cat) => cat.id !== category?.id)
                                             .map((cat) => (
