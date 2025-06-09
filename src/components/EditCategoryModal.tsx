@@ -76,54 +76,55 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, onChange, onDelete, ca
       </div>
 
       {/* 필드 옵션 */}
-      <div className="grid grid-cols-3 gap-4">
-        {/* 필수값 체크박스 */}
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id={`required-${field.id}`}
-            checked={field.required}
-            onCheckedChange={(checked) => onChange({ ...field, required: checked === true })}
-          />
-          <label
-            htmlFor={`required-${field.id}`}
-            className="text-sm font-medium leading-none text-discord-text cursor-pointer"
-          >
-            필수값
-          </label>
-        </div>
-
-        {/* 중복 불가 체크박스 */}
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id={`unique-${field.id}`}
-            checked={field.unique}
-            onCheckedChange={(checked) => onChange({ ...field, unique: checked === true })}
-          />
-          <label
-            htmlFor={`unique-${field.id}`}
-            className="text-sm font-medium leading-none text-discord-text cursor-pointer"
-          >
-            중복 불가
-          </label>
-        </div>
-
-        {/* 다중 선택 체크박스 (select 타입일 때만) */}
-        {field.type === 'select' && (
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          {/* 기존 체크박스들 */}
           <div className="flex items-center space-x-2">
             <Checkbox
-              id={`multiple-${field.id}`}
-              checked={field.multiple}
-              onCheckedChange={(checked) => onChange({ ...field, multiple: checked === true })}
+              id={`required-${field.id}`}
+              checked={field.required}
+              onCheckedChange={(checked) => onChange({ ...field, required: checked === true })}
             />
             <label
-              htmlFor={`multiple-${field.id}`}
+              htmlFor={`required-${field.id}`}
               className="text-sm font-medium leading-none text-discord-text cursor-pointer"
             >
-              다중 선택
+              필수값
             </label>
           </div>
-        )}
+
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id={`unique-${field.id}`}
+              checked={field.unique}
+              onCheckedChange={(checked) => onChange({ ...field, unique: checked === true })}
+            />
+            <label
+              htmlFor={`unique-${field.id}`}
+              className="text-sm font-medium leading-none text-discord-text cursor-pointer"
+            >
+              중복 불가
+            </label>
+          </div>
+        </div>
       </div>
+
+      {/* 다중 선택 체크박스 (select 타입일 때만) */}
+      {field.type === 'select' && (
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id={`multiple-${field.id}`}
+            checked={field.multiple}
+            onCheckedChange={(checked) => onChange({ ...field, multiple: checked === true })}
+          />
+          <label
+            htmlFor={`multiple-${field.id}`}
+            className="text-sm font-medium leading-none text-discord-text cursor-pointer"
+          >
+            다중 선택
+          </label>
+        </div>
+      )}
 
       {/* 선택 옵션 (select 타입일 때만) */}
       {field.type === 'select' && (
@@ -269,7 +270,8 @@ export const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
       type: 'text',
       required: false,
       unique: false,
-      options: [],
+      order: fields.length,
+      options: []
     };
     setFields([...fields, newField]);
   };

@@ -8,6 +8,7 @@ export interface FieldDefinition {
   multiSelect?: boolean;
   selectOptions?: string[];
   relationCategoryId?: string;
+  description?: string;
 }
 
 export interface Category {

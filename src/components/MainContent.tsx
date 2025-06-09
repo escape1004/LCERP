@@ -10,6 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { CategoryContent } from './CategoryContent';
 import { DatabaseViewer } from './DatabaseViewer';
 import { toast } from './ui/use-toast';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "./ui/tooltip";
 
 // Custom event type
 declare global {
@@ -146,6 +152,7 @@ export const MainContent: React.FC = () => {
   const [sortField, setSortField] = useState<string>('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [searchField, setSearchField] = useState<string>('all');
+  const [expandedTags, setExpandedTags] = useState<{[key: string]: boolean}>({});
 
   // Custom filtered records based on field-specific search
   const customFilteredRecords = useMemo(() => {
@@ -351,84 +358,151 @@ export const MainContent: React.FC = () => {
     </button>
   );
 
-  const formatFieldValue = (field: FieldDefinition, value: any) => {
-    if (value === null || value === undefined) return '-';
-
-    const urlPattern = /^https?:\/\/.+/i;
+  const formatFieldValue = (field: FieldDefinition, value: any, recordId: string) => {
+    if (value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0)) {
+      return '-';
+    }
 
     switch (field.type) {
       case 'date':
-        return value ? new Date(value).toLocaleDateString() : '-';
+        return new Date(value).toLocaleDateString();
+      
       case 'select':
         if (Array.isArray(value)) {
+          const isExpanded = expandedTags[`${recordId}-${field.id}`];
+          const displayTags = isExpanded ? value : value.slice(0, 3);
+          const remainingCount = value.length - 3;
+
           return (
             <div className="flex flex-wrap gap-1">
-              {value.map((item, index) => (
+              {displayTags.map((item, index) => (
                 <span
                   key={index}
-                  className="px-2 py-1 bg-discord-accent text-white text-xs rounded-full"
+                  className="px-2 py-1 text-xs rounded bg-green-600/20 text-green-500"
                 >
                   {String(item)}
                 </span>
               ))}
+              {!isExpanded && remainingCount > 0 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpandedTags(prev => ({
+                      ...prev,
+                      [`${recordId}-${field.id}`]: true
+                    }));
+                  }}
+                  className="px-2 py-1 text-xs rounded bg-discord-blurple text-white hover:bg-discord-blurple/80"
+                >
+                  +{remainingCount}개 더보기
+                </button>
+              )}
+              {isExpanded && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpandedTags(prev => ({
+                      ...prev,
+                      [`${recordId}-${field.id}`]: false
+                    }));
+                  }}
+                  className="px-2 py-1 text-xs rounded bg-gray-500 text-white hover:bg-gray-600"
+                >
+                  접기
+                </button>
+              )}
             </div>
           );
         }
         return String(value);
+      
       case 'relation':
-        if (!field.relationCategoryId) return '-';
+        if (!field.relationCategoryId) return String(value);
         
         const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
-        if (!relatedCategory) return '-';
+        if (!relatedCategory) return String(value);
         
         const relatedRecords = getCategoryRecords(field.relationCategoryId);
         const displayField = relatedCategory.fields[0];
         
-        if (Array.isArray(value)) {
+        if (field.multiple && Array.isArray(value)) {
+          const isExpanded = expandedTags[`${recordId}-${field.id}`];
+          const displayTags = isExpanded ? value : value.slice(0, 3);
+          const remainingCount = value.length - 3;
+
           return (
             <div className="flex flex-wrap gap-1">
-              {value.map((recordId, index) => {
-                const relatedRecord = relatedRecords.find(r => r.id === recordId);
+              {displayTags.map((relatedId, index) => {
+                const relatedRecord = relatedRecords.find(r => r.id === relatedId);
                 if (!relatedRecord) return null;
                 
-                const displayValue = relatedRecord.data[displayField?.id] || '(제목 없음)';
                 return (
                   <span
                     key={index}
-                    className="px-2 py-1 bg-green-600 text-white text-xs rounded-full cursor-pointer hover:bg-green-700"
-                    onClick={() => handleViewRelatedRecord(recordId, field.relationCategoryId!)}
+                    className="px-2 py-1 text-xs rounded bg-green-600/20 text-green-500 cursor-pointer hover:bg-green-600/30"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setViewingRecord(relatedRecord);
+                      setViewingCategory(field.relationCategoryId!);
+                      setIsViewModalOpen(true);
+                    }}
                   >
-                    {displayValue}
+                    {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
                   </span>
                 );
               })}
+              {!isExpanded && remainingCount > 0 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpandedTags(prev => ({
+                      ...prev,
+                      [`${recordId}-${field.id}`]: true
+                    }));
+                  }}
+                  className="px-2 py-1 text-xs rounded bg-discord-blurple text-white hover:bg-discord-blurple/80"
+                >
+                  +{remainingCount}개 더보기
+                </button>
+              )}
+              {isExpanded && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpandedTags(prev => ({
+                      ...prev,
+                      [`${recordId}-${field.id}`]: false
+                    }));
+                  }}
+                  className="px-2 py-1 text-xs rounded bg-gray-500 text-white hover:bg-gray-600"
+                >
+                  접기
+                </button>
+              )}
             </div>
           );
         } else {
+          // 단일 선택 필드는 일반 텍스트로 표시
           const relatedRecord = relatedRecords.find(r => r.id === value);
-          if (!relatedRecord) return '-';
+          if (!relatedRecord) return String(value);
           
-          const displayValue = relatedRecord.data[displayField?.id] || '(제목 없음)';
           return (
             <span
-              className="text-green-400 cursor-pointer hover:text-green-300 hover:underline"
-              onClick={() => handleViewRelatedRecord(value, field.relationCategoryId!)}
+              className="text-green-500 cursor-pointer hover:underline"
+              onClick={(e) => {
+                e.stopPropagation();
+                setViewingRecord(relatedRecord);
+                setViewingCategory(field.relationCategoryId!);
+                setIsViewModalOpen(true);
+              }}
             >
-              {displayValue}
+              {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
             </span>
           );
         }
-      case 'longtext':
-        const text = String(value);
-        if (urlPattern.test(text)) {
-          return renderUrl(text, 50);
-        }
-        return text.length > 50 ? text.substring(0, 50) + '...' : text;
+      
       default:
-        if (typeof value === 'string' && urlPattern.test(value)) {
-          return renderUrl(value, 30);
-        }
-        return String(value);
+        return String(value || '-');
     }
   };
 
@@ -595,7 +669,7 @@ export const MainContent: React.FC = () => {
                         {selectedCategory.fields.map(field => (
                           <th
                             key={field.id}
-                            className="px-4 py-3 text-left text-sm font-semibold text-discord-text cursor-pointer hover:bg-discord-hover"
+                            className="px-2 py-2 text-left text-sm font-semibold text-discord-text cursor-pointer hover:bg-discord-hover"
                             onClick={() => handleSort(field.id)}
                           >
                             <div className="flex items-center gap-2">
@@ -608,14 +682,13 @@ export const MainContent: React.FC = () => {
                             </div>
                           </th>
                         ))}
-                        {/* 참조되는 카테고리인 경우에만 참조 횟수 컬럼 표시 */}
                         {categories.some(cat => 
                           cat.fields.some(field => 
                             field.type === 'relation' && field.relationCategoryId === selectedCategory.id
                           )
                         ) && (
                           <th
-                            className="px-4 py-3 text-left text-sm font-semibold text-discord-text cursor-pointer hover:bg-discord-hover"
+                            className="px-2 py-2 text-left text-sm font-semibold text-discord-text cursor-pointer hover:bg-discord-hover"
                             onClick={() => handleSort('__refCount')}
                           >
                             <div className="flex items-center gap-2">
@@ -628,7 +701,7 @@ export const MainContent: React.FC = () => {
                             </div>
                           </th>
                         )}
-                        <th className="px-4 py-3 text-left text-sm font-semibold text-discord-text w-32">
+                        <th className="px-2 py-2 text-left text-sm font-semibold text-discord-text w-32">
                           작업
                         </th>
                       </tr>
@@ -640,25 +713,24 @@ export const MainContent: React.FC = () => {
                           className="border-b border-gray-800 hover:bg-discord-hover transition-colors"
                         >
                           {selectedCategory.fields.map(field => (
-                            <td key={field.id} className="px-4 py-3 text-sm text-discord-text">
-                              {formatFieldValue(field, record.data[field.id])}
+                            <td key={field.id} className="px-2 py-3 text-sm text-discord-text">
+                              {formatFieldValue(field, record.data[field.id], record.id)}
                             </td>
                           ))}
-                          {/* 참조되는 카테고리인 경우에만 참조 횟수 표시 */}
                           {categories.some(cat => 
                             cat.fields.some(field => 
                               field.type === 'relation' && field.relationCategoryId === selectedCategory.id
                             )
                           ) && (
-                            <td className="px-4 py-3 text-sm">
+                            <td className="px-2 py-3 text-sm">
                               {(() => {
                                 const count = getRecordReferenceCount(record.id, selectedCategory.id);
                                 return count > 0 ? count : '-';
                               })()}
                             </td>
                           )}
-                          <td className="px-4 py-3">
-                            <div className="flex gap-2">
+                          <td className="px-2 py-3">
+                            <div className="flex gap-1">
                               <Button
                                 size="sm"
                                 variant="ghost"

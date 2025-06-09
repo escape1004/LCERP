@@ -34,6 +34,8 @@ export interface FieldDefinition {
   options?: string[];
   relationCategoryId?: string;
   multiple?: boolean;
+  isAddingOption?: boolean;
+  newOption?: string;
 }
 
 export interface DataRecord {

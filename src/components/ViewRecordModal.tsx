@@ -193,13 +193,13 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                 <div>
                   <span className="text-discord-muted">생성일:</span>
                   <div className="text-discord-text">
-                    {record.createdAt.toLocaleString()}
+                    {new Date(record.createdAt).toLocaleString()}
                   </div>
                 </div>
                 <div>
                   <span className="text-discord-muted">수정일:</span>
                   <div className="text-discord-text">
-                    {record.updatedAt.toLocaleString()}
+                    {new Date(record.updatedAt).toLocaleString()}
                   </div>
                 </div>
               </div>

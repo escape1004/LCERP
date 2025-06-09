@@ -7,7 +7,14 @@ import { RecordModal } from './RecordModal';
 import { ViewRecordModal } from './ViewRecordModal';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Category, DataRecord } from '../types';
+import type { ElectronAPI } from '../types/electron';
 import { LinkIcon } from 'lucide-react';
+
+declare global {
+  interface Window {
+    electronAPI: ElectronAPI;
+  }
+}
 
 interface CategoryContentProps {
   categoryId: string | null;
@@ -32,6 +39,39 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
   const [editingRecord, setEditingRecord] = useState<DataRecord | null>(null);
   const [viewingRecord, setViewingRecord] = useState<DataRecord | null>(null);
   const [viewingCategory, setViewingCategory] = useState<string>('');
+
+  const isEmpty = (v: any): boolean => {
+    // null, undefined 체크
+    if (v === null || v === undefined) return true;
+    
+    // 문자열 체크
+    if (typeof v === 'string') {
+      return v.trim() === '';
+    }
+    
+    // 배열 체크
+    if (Array.isArray(v)) {
+      return v.length === 0 || v.every(item => isEmpty(item));
+    }
+    
+    // 객체 체크 (빈 객체도 빈 값으로 처리)
+    if (typeof v === 'object') {
+      return Object.keys(v).length === 0;
+    }
+    
+    // 숫자 체크 (0은 유효한 값)
+    if (typeof v === 'number') {
+      return isNaN(v);
+    }
+    
+    // boolean 체크 (false도 유효한 값)
+    if (typeof v === 'boolean') {
+      return false;
+    }
+    
+    // 나머지는 빈 값이 아님
+    return false;
+  };
 
   // Reset pagination when category changes
   useEffect(() => {
@@ -175,19 +215,6 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
     }
   };
 
-  const formatFieldValue = (field: Category['fields'][0], value: any): string => {
-    if (value === null || value === undefined) return '';
-    
-    switch (field.type) {
-      case 'date':
-        return new Date(value).toLocaleDateString();
-      case 'number':
-        return Number(value).toLocaleString();
-      default:
-        return String(value);
-    }
-  };
-
   const exportToCSV = async () => {
     const headers = selectedCategory.fields.map(f => f.name).join(',');
     const rows = sortedRecords.map(record => 
@@ -211,6 +238,47 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
     } finally {
       URL.revokeObjectURL(url);
     }
+  };
+
+  const formatFieldValue = (field: any, value: any): string | JSX.Element => {
+    // 테스트용: 모든 값을 "-"로 출력
+    console.log('원래 값:', value); // 디버깅용 로그
+    return '-';
+  };
+
+  const formatRelationArray = (values: any[], field: any): string => {
+    if (!field.relationCategoryId || !values.length) return '-';
+    
+    const relatedRecords = records[field.relationCategoryId] || [];
+    const relatedCategory = categories.find(c => c.id === field.relationCategoryId);
+    if (!relatedCategory || !relatedCategory.fields[0]) return '-';
+    
+    const displayField = relatedCategory.fields[0];
+    const names = values
+      .map(id => {
+        const record = relatedRecords.find(r => r.id === id);
+        if (!record) return null;
+        const displayValue = record.data[displayField.id];
+        return displayValue || null;
+      })
+      .filter(Boolean);
+    
+    return names.length > 0 ? names.join(', ') : '-';
+  };
+
+  const formatRelation = (value: any, field: any): string => {
+    if (!field.relationCategoryId || !value) return '-';
+    
+    const relatedRecords = records[field.relationCategoryId] || [];
+    const relatedCategory = categories.find(c => c.id === field.relationCategoryId);
+    if (!relatedCategory || !relatedCategory.fields[0]) return '-';
+    
+    const record = relatedRecords.find(r => r.id === value);
+    if (!record) return '-';
+    
+    const displayField = relatedCategory.fields[0];
+    const displayValue = record.data[displayField.id];
+    return displayValue || '-';
   };
 
   return (
@@ -338,7 +406,7 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
                     {selectedCategory.fields.map(field => (
                       <th
                         key={field.id}
-                        className="px-4 py-3 text-left text-sm font-semibold text-discord-text cursor-pointer hover:bg-discord-hover"
+                        className="px-2 py-2 text-left text-sm font-semibold text-discord-text cursor-pointer hover:bg-discord-hover"
                         onClick={() => handleSort(field.id)}
                       >
                         <div className="flex items-center gap-2">
@@ -358,7 +426,7 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
                       )
                     ) && (
                       <th
-                        className="px-4 py-3 text-left text-sm font-semibold text-discord-text cursor-pointer hover:bg-discord-hover"
+                        className="px-2 py-2 text-left text-sm font-semibold text-discord-text cursor-pointer hover:bg-discord-hover"
                         onClick={() => handleSort('__refCount')}
                       >
                         <div className="flex items-center gap-2">
@@ -371,7 +439,7 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
                         </div>
                       </th>
                     )}
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-discord-text w-32">
+                    <th className="px-2 py-2 text-left text-sm font-semibold text-discord-text w-32">
                       작업
                     </th>
                   </tr>
@@ -382,26 +450,29 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
                       key={record.id}
                       className="border-b border-gray-800 hover:bg-discord-hover transition-colors"
                     >
-                      {selectedCategory.fields.map(field => (
-                        <td key={field.id} className="px-4 py-3 text-sm text-discord-text">
-                          {formatFieldValue(field, record.data[field.id])}
-                        </td>
-                      ))}
+                      {selectedCategory.fields.map(field => {
+                        const value = record.data[field.id];
+                        return (
+                          <td key={field.id} className="px-2 py-3 text-sm text-discord-text whitespace-nowrap">
+                            {formatFieldValue(field, value)}
+                          </td>
+                        );
+                      })}
                       {/* 참조되는 카테고리인 경우에만 참조 횟수 표시 */}
                       {categories.some(cat => 
                         cat.fields.some(field => 
                           field.type === 'relation' && field.relationCategoryId === selectedCategory.id
                         )
                       ) && (
-                        <td className="px-4 py-3 text-sm">
+                        <td className="px-2 py-3 text-sm whitespace-nowrap">
                           {(() => {
                             const count = getRecordReferenceCount(record.id, selectedCategory.id);
-                            return count > 0 ? count : '-';
+                            return count === 0 ? '0' : count;
                           })()}
                         </td>
                       )}
-                      <td className="px-4 py-3">
-                        <div className="flex gap-2">
+                      <td className="px-2 py-3">
+                        <div className="flex gap-1">
                           <Button
                             size="sm"
                             variant="ghost"

@@ -1,16 +1,15 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { X, Search, Check, ChevronsUpDown, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { X, Search, Check, ChevronsUpDown } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import type { Category, DataRecord, FieldDefinition, NewRecord } from '../types';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Checkbox } from './ui/checkbox';
-import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from './ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { cn } from '../lib/utils';
+import { toast } from './ui/use-toast';
 
 interface RecordModalProps {
   isOpen: boolean;
@@ -25,162 +24,20 @@ export const RecordModal: React.FC<RecordModalProps> = ({
   category,
   record,
 }) => {
-  const { categories, addRecord, updateRecord, getCategoryRecords, loadRecords } = useERPStore();
+  const { addRecord, updateRecord, categories, getCategoryRecords } = useERPStore();
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [duplicateErrors, setDuplicateErrors] = useState<Record<string, string>>({});
   const [isValidating, setIsValidating] = useState(false);
   const [openComboboxes, setOpenComboboxes] = useState<Record<string, boolean>>({});
 
-  // Memoize utility functions
-  const isSelectField = useCallback((field: FieldDefinition): boolean => {
-    return field.type === 'select';
-  }, []);
-
-  const isMultiSelectField = (field: FieldDefinition): boolean => {
-    return (field.type === 'select' || field.type === 'relation') && field.multiple === true;
-  };
-
-  // Memoize sorted fields
-  const sortedFields = useMemo(() => {
-    return [...category.fields].sort((a, b) => a.order - b.order);
-  }, [category.fields]);
-
-  // Memoize related records for relation fields
-  const relatedRecordsMap = useMemo(() => {
-    const map = new Map<string, DataRecord[]>();
-    const relationFields = category.fields.filter(field => field.type === 'relation');
-    
-    relationFields.forEach(field => {
-      if (field.relationCategoryId) {
-        map.set(field.relationCategoryId, getCategoryRecords(field.relationCategoryId));
-      }
-    });
-
-    return map;
-  }, [category.fields, getCategoryRecords]);
-
-  // Optimize form validation by memoizing field requirements
-  const requiredFields = useMemo(() => {
-    return category.fields.filter(field => field.required);
-  }, [category.fields]);
-
-  const uniqueFields = useMemo(() => {
-    return category.fields.filter(field => field.unique);
-  }, [category.fields]);
-
-  // Debounced field update
-  const debouncedUpdateField = useCallback((fieldId: string, value: any) => {
-    setFormData(prev => ({
-      ...prev,
-      [fieldId]: value,
-    }));
-    
-    if (errors[fieldId]) {
-      setErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[fieldId];
-        return newErrors;
-      });
-    }
-  }, [errors]);
-
-  // Optimize duplicate check by caching results
-  const duplicateCheckCache = useMemo(() => new Map<string, boolean>(), []);
-
-  const checkDuplicates = useCallback(async (fieldId: string, value: any) => {
-    const field = category.fields.find(f => f.id === fieldId);
-    if (!field?.unique || value == null || value === '') return true;
-
-    const cacheKey = `${fieldId}:${value}`;
-    if (duplicateCheckCache.has(cacheKey)) {
-      return duplicateCheckCache.get(cacheKey);
-    }
-
-    setIsValidating(true);
-    try {
-      const records = getCategoryRecords(category.id);
-      const hasDuplicate = records.some(r => 
-        r.id !== record?.id && 
-        r.data[fieldId] === value
-      );
-
-      if (hasDuplicate) {
-        setDuplicateErrors(prev => ({
-          ...prev,
-          [fieldId]: `이미 사용 중인 값입니다. 다른 값을 입력해주세요.`
-        }));
-        duplicateCheckCache.set(cacheKey, false);
-        return false;
-      } else {
-        setDuplicateErrors(prev => {
-          const newErrors = { ...prev };
-          delete newErrors[fieldId];
-          return newErrors;
-        });
-        duplicateCheckCache.set(cacheKey, true);
-        return true;
-      }
-    } catch (error) {
-      console.error('중복 체크 중 오류 발생:', error);
-      return false;
-    } finally {
-      setIsValidating(false);
-    }
-  }, [category.fields, category.id, getCategoryRecords, record?.id]);
-
-  // Optimize form validation
-  const validateForm = useCallback(async () => {
-    const newErrors: Record<string, string> = {};
-
-    // Required field validation
-    for (const field of requiredFields) {
-      const value = formData[field.id];
-      if (!value && value !== 0 && value !== false) {
-        newErrors[field.id] = `${field.name}은(는) 필수 입력 항목입니다.`;
-      }
-    }
-
-    setErrors(newErrors);
-
-    // Duplicate validation for all unique fields
-    const duplicateChecks = await Promise.all(
-      uniqueFields.map(field => checkDuplicates(field.id, formData[field.id]))
-    );
-
-    return Object.keys(newErrors).length === 0 && duplicateChecks.every(isValid => isValid);
-  }, [formData, requiredFields, uniqueFields, checkDuplicates]);
-
-  // Clear cache when modal closes
-  useEffect(() => {
-    if (!isOpen) {
-      duplicateCheckCache.clear();
-    }
-  }, [isOpen]);
-
-  // Load related category records when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      // Find all relation fields
-      const relationFields = category.fields.filter(field => field.type === 'relation');
-      
-      // Load records for each related category
-      relationFields.forEach(async (field) => {
-        if (field.relationCategoryId) {
-          await loadRecords(field.relationCategoryId);
-        }
-      });
-    }
-  }, [isOpen, category, loadRecords]);
-
+  // Reset form data when modal opens/closes or record changes
   useEffect(() => {
     if (record) {
       setFormData({ ...record.data });
     } else {
-      // Initialize form with empty values
       const initialData: Record<string, any> = {};
       category.fields.forEach(field => {
-        if (isMultiSelectField(field)) {
+        if (field.type === 'select' && field.multiple) {
           initialData[field.id] = [];
         } else {
           initialData[field.id] = '';
@@ -189,57 +46,41 @@ export const RecordModal: React.FC<RecordModalProps> = ({
       setFormData(initialData);
     }
     setErrors({});
-    setDuplicateErrors({});
-  }, [record, category, isOpen]);
+    setOpenComboboxes({});
+  }, [record, category]);
 
-  const processFormData = (data: Record<string, any>): Record<string, any> => {
-    const processedData = { ...data };
-
+  const validateForm = useCallback(() => {
+    const newErrors: Record<string, string> = {};
+    
     category.fields.forEach(field => {
-      const value = processedData[field.id];
-      
-      if (field.type === 'number' && value !== '') {
-        processedData[field.id] = Number(value);
-      } else if (field.type === 'date' && value) {
-        processedData[field.id] = value;
-      }
-
-      // Ensure empty values are properly handled
-      if (value === undefined || value === null) {
-        processedData[field.id] = isMultiSelectField(field) ? [] : '';
+      if (field.required) {
+        const value = formData[field.id];
+        if (!value && value !== 0 && value !== false) {
+          newErrors[field.id] = `${field.name}은(는) 필수 입력 항목입니다.`;
+        }
       }
     });
 
-    return processedData;
-  };
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }, [formData, category.fields]);
 
   const handleSubmit = async () => {
-    if (isValidating) {
-      alert('중복 체크가 진행 중입니다. 잠시만 기다려주세요.');
-      return;
-    }
-    
-    const isValid = await validateForm();
+    const isValid = validateForm();
     if (!isValid) {
-      if (Object.keys(errors).length > 0) {
-        alert('필수 입력 항목을 모두 입력해주세요.');
-      } else if (Object.keys(duplicateErrors).length > 0) {
-        alert('중복된 값이 있습니다. 수정 후 다시 시도해주세요.');
-      }
+      alert('필수 입력 항목을 모두 입력해주세요.');
       return;
     }
 
     try {
       setIsValidating(true);
-      const processedData = processFormData(formData);
-
       if (record) {
-        await updateRecord(record.id, processedData);
+        await updateRecord(record.id, formData);
       } else {
         const now = new Date().toISOString();
         const newRecord: NewRecord = {
           categoryId: category.id,
-          data: processedData,
+          data: formData,
           createdAt: now,
           updatedAt: now
         };
@@ -254,26 +95,18 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     }
   };
 
-  const updateFieldValue = async (fieldId: string, value: any) => {
+  const updateFieldValue = (fieldId: string, value: any) => {
     setFormData(prev => ({
       ...prev,
       [fieldId]: value,
     }));
     
-    // Clear error when user starts typing
     if (errors[fieldId]) {
       setErrors(prev => {
         const newErrors = { ...prev };
         delete newErrors[fieldId];
         return newErrors;
       });
-    }
-  };
-
-  const handleFieldBlur = async (fieldId: string) => {
-    const field = category.fields.find(f => f.id === fieldId);
-    if (field?.unique) {
-      await checkDuplicates(fieldId, formData[fieldId]);
     }
   };
 
@@ -285,91 +118,114 @@ export const RecordModal: React.FC<RecordModalProps> = ({
   };
 
   const renderField = (field: FieldDefinition) => {
-    const value = formData[field.id] || (isMultiSelectField(field) ? [] : '');
+    const value = formData[field.id] || (field.type === 'select' && field.multiple ? [] : '');
     const hasError = !!errors[field.id];
-    const hasDuplicateError = !!duplicateErrors[field.id];
-    const errorMessage = errors[field.id] || duplicateErrors[field.id];
-    const inputClassName = `bg-discord-sidebar border-gray-600 text-discord-text ${
-      hasError || hasDuplicateError ? 'border-red-500' : ''
-    }`;
-
-    const renderErrorMessage = () => {
-      if (!errorMessage) return null;
-      return (
-        <p className="text-red-500 text-sm mt-1">{errorMessage}</p>
-      );
-    };
+    const inputClassName = cn(
+      "bg-discord-sidebar border-gray-600 text-discord-text",
+      hasError && "border-red-500"
+    );
 
     switch (field.type) {
       case 'text':
       case 'number':
         return (
-          <div>
-            <Input
-              id={field.id}
-              type={field.type === 'number' ? 'number' : 'text'}
-              placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
-              value={value}
-              onChange={(e) => updateFieldValue(field.id, e.target.value)}
-              onBlur={() => handleFieldBlur(field.id)}
-              className={inputClassName}
-            />
-            {renderErrorMessage()}
-          </div>
+          <Input
+            type={field.type === 'number' ? 'number' : 'text'}
+            placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
+            value={value}
+            onChange={(e) => updateFieldValue(field.id, e.target.value)}
+            className={inputClassName}
+          />
         );
 
       case 'date':
         return (
-          <div>
-            <Input
-              type="date"
-              value={value}
-              onChange={(e) => updateFieldValue(field.id, e.target.value)}
-              onBlur={() => handleFieldBlur(field.id)}
-              className={inputClassName}
-            />
-            {renderErrorMessage()}
-          </div>
+          <Input
+            type="date"
+            value={value}
+            onChange={(e) => updateFieldValue(field.id, e.target.value)}
+            className={inputClassName}
+          />
         );
 
       case 'longtext':
         return (
-          <div>
-            <Textarea
-              value={value}
-              onChange={(e) => updateFieldValue(field.id, e.target.value)}
-              onBlur={() => handleFieldBlur(field.id)}
-              className={inputClassName}
-              placeholder={`${field.name} 입력`}
-              rows={4}
-            />
-            {renderErrorMessage()}
-          </div>
+          <Textarea
+            value={value}
+            onChange={(e) => updateFieldValue(field.id, e.target.value)}
+            className={inputClassName}
+            placeholder={`${field.name} 입력`}
+            rows={4}
+          />
         );
 
       case 'select':
-        if (isMultiSelectField(field)) {
+        if (field.multiple) {
           return (
-            <div>
+            <div className="space-y-2 w-full">
               <Popover open={openComboboxes[field.id]} onOpenChange={() => toggleCombobox(field.id)}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     role="combobox"
                     aria-expanded={openComboboxes[field.id]}
-                    className={inputClassName}
+                    className={cn(inputClassName, "w-full justify-between")}
                   >
-                    {Array.isArray(value) && value.length > 0 
-                      ? `${value.length}개 선택됨`
-                      : `${field.name} 선택`}
+                    <span className="truncate flex-1 text-left">
+                      {Array.isArray(value) && value.length > 0
+                        ? `${value.length}개 선택됨`
+                        : `${field.name} 선택...`}
+                    </span>
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-full p-0 bg-discord-sidebar border-gray-600">
-                  <Command>
-                    <CommandInput placeholder={`${field.name} 검색...`} className="bg-discord-sidebar text-discord-text" />
-                    <CommandList>
-                      <CommandEmpty>옵션을 찾을 수 없습니다.</CommandEmpty>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0 bg-discord-sidebar border-gray-600">
+                  <Command className="bg-discord-sidebar border-none">
+                    <CommandInput 
+                      placeholder={`${field.name} 검색...`} 
+                      className="h-9 bg-discord-sidebar text-discord-text border-b border-gray-600"
+                      onPaste={(e) => {
+                        e.preventDefault();
+                        const pastedText = e.clipboardData.getData('text');
+                        const pastedValues = pastedText.split(',').map(v => v.trim()).filter(v => v);
+                        
+                        // 기존 옵션에 있는 값만 필터링
+                        const validValues = pastedValues.filter(v => 
+                          field.options?.some(opt => opt.toLowerCase() === v.toLowerCase())
+                        );
+                        
+                        if (validValues.length > 0) {
+                          const currentValues = Array.isArray(value) ? value : [];
+                          const newValues = [...new Set([...currentValues, ...validValues])];
+                          updateFieldValue(field.id, newValues);
+                          
+                          // 유효하지 않은 값이 있었다면 상세한 알림
+                          const invalidValues = pastedValues.filter(v => 
+                            !field.options?.some(opt => opt.toLowerCase() === v.toLowerCase())
+                          );
+                          if (invalidValues.length > 0) {
+                            toast({
+                              title: "일부 값이 무시됨",
+                              description: `다음 값들이 유효하지 않아 제외되었습니다: ${invalidValues.join(', ')}`,
+                              variant: "destructive",
+                            });
+                          } else {
+                            toast({
+                              title: "값이 추가됨",
+                              description: `${validValues.length}개의 값이 추가되었습니다.`,
+                            });
+                          }
+                        } else {
+                          toast({
+                            title: "유효하지 않은 값",
+                            description: `붙여넣은 모든 값이 유효하지 않습니다: ${pastedValues.join(', ')}`,
+                            variant: "destructive",
+                          });
+                        }
+                      }}
+                    />
+                    <CommandList className="max-h-[200px] overflow-y-auto">
+                      <CommandEmpty className="py-2 text-sm text-discord-muted">항목을 찾을 수 없습니다.</CommandEmpty>
                       <CommandGroup>
                         {field.options?.map((option) => (
                           <CommandItem
@@ -399,15 +255,14 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                   </Command>
                 </PopoverContent>
               </Popover>
-              {/* 선택된 항목들을 태그로 표시 */}
               {Array.isArray(value) && value.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2">
                   {value.map((item) => (
                     <div
                       key={item}
-                      className="flex items-center gap-1 px-2 py-1 bg-discord-accent text-white text-xs rounded-full"
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-green-600/20 text-green-500 text-xs rounded hover:bg-green-600/30"
                     >
-                      <span>{item}</span>
+                      <span className="max-w-[150px] truncate">{item}</span>
                       <button
                         type="button"
                         onClick={(e) => {
@@ -415,7 +270,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                           const newValue = value.filter((v) => v !== item);
                           updateFieldValue(field.id, newValue);
                         }}
-                        className="text-white hover:text-gray-200"
+                        className="text-green-500 hover:text-green-400 shrink-0"
                       >
                         <X size={12} />
                       </button>
@@ -423,29 +278,66 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                   ))}
                 </div>
               )}
-              {renderErrorMessage()}
             </div>
           );
         } else {
           return (
-            <div>
-              <Select
-                value={value || 'none'}
-                onValueChange={(selectedValue) => updateFieldValue(field.id, selectedValue === 'none' ? '' : selectedValue)}
-              >
-                <SelectTrigger className={inputClassName}>
-                  <SelectValue placeholder={`${field.name} 선택`} />
-                </SelectTrigger>
-                <SelectContent className="bg-discord-sidebar border-gray-600">
-                  <SelectItem value="none">선택 해제</SelectItem>
-                  {field.options?.map(option => (
-                    <SelectItem key={option} value={option}>
-                      {option}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {renderErrorMessage()}
+            <div className="w-full">
+              <Popover open={openComboboxes[field.id]} onOpenChange={() => toggleCombobox(field.id)}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openComboboxes[field.id]}
+                    className={cn(inputClassName, "w-full justify-between")}
+                  >
+                    {value || `${field.name} 선택`}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0 bg-discord-sidebar border-gray-600">
+                  <Command className="bg-discord-sidebar border-none">
+                    <CommandInput 
+                      placeholder={`${field.name} 검색...`} 
+                      className="h-9 bg-discord-sidebar text-discord-text border-b border-gray-600"
+                    />
+                    <CommandList className="text-discord-text">
+                      <CommandEmpty className="py-2 text-sm text-discord-muted">항목을 찾을 수 없습니다.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value=""
+                          onSelect={() => {
+                            updateFieldValue(field.id, '');
+                            toggleCombobox(field.id);
+                          }}
+                          className="text-discord-text hover:bg-discord-hover"
+                        >
+                          선택 해제
+                        </CommandItem>
+                        {field.options?.map((option) => (
+                          <CommandItem
+                            key={option}
+                            value={option}
+                            onSelect={() => {
+                              updateFieldValue(field.id, option);
+                              toggleCombobox(field.id);
+                            }}
+                            className="text-discord-text hover:bg-discord-hover"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                value === option ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {option}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
           );
         }
@@ -461,72 +353,114 @@ export const RecordModal: React.FC<RecordModalProps> = ({
 
         if (field.multiple) {
           return (
-            <div>
+            <div className="space-y-2 w-full">
               <Popover open={openComboboxes[field.id]} onOpenChange={() => toggleCombobox(field.id)}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     role="combobox"
                     aria-expanded={openComboboxes[field.id]}
-                    className={inputClassName}
+                    className={cn(inputClassName, "w-full justify-between")}
                   >
-                    {Array.isArray(value) && value.length > 0 
-                      ? `${value.length}개 선택됨`
-                      : `${field.name} 선택`}
+                    <span className="truncate flex-1 text-left">
+                      {Array.isArray(value) && value.length > 0
+                        ? `${value.length}개 선택됨`
+                        : `${field.name} 선택...`}
+                    </span>
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-full p-0 bg-discord-sidebar border-gray-600">
-                  <Command>
-                    <CommandInput placeholder={`${field.name} 검색...`} className="bg-discord-sidebar text-discord-text" />
-                    <CommandList>
-                      <CommandEmpty>항목을 찾을 수 없습니다.</CommandEmpty>
-                      <CommandGroup>
-                        {relatedRecords.map((relatedRecord) => {
-                          const displayValue = String(relatedRecord.data[displayField?.id] || relatedRecord.id);
-                          return (
-                            <CommandItem
-                              key={relatedRecord.id}
-                              value={displayValue}
-                              onSelect={() => {
-                                const currentValues = Array.isArray(value) ? value : [];
-                                if (currentValues.includes(relatedRecord.id)) {
-                                  updateFieldValue(field.id, currentValues.filter(v => v !== relatedRecord.id));
-                                } else {
-                                  updateFieldValue(field.id, [...currentValues, relatedRecord.id]);
-                                }
-                              }}
-                              className="text-discord-text hover:bg-discord-hover"
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  Array.isArray(value) && value.includes(relatedRecord.id) ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                              {displayValue}
-                            </CommandItem>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0 bg-discord-sidebar border-gray-600">
+                  <Command className="bg-discord-sidebar border-none">
+                    <CommandInput 
+                      placeholder={`${field.name} 검색...`} 
+                      className="h-9 bg-discord-sidebar text-discord-text border-b border-gray-600"
+                      onPaste={(e) => {
+                        e.preventDefault();
+                        const pastedText = e.clipboardData.getData('text');
+                        const pastedValues = pastedText.split(',').map(v => v.trim()).filter(v => v);
+                        
+                        // 기존 레코드에서 일치하는 값 찾기
+                        const validRecords = relatedRecords.filter(record => 
+                          pastedValues.some(v => 
+                            record.data[displayField.id].toLowerCase() === v.toLowerCase()
+                          )
+                        );
+                        
+                        if (validRecords.length > 0) {
+                          const currentValues = Array.isArray(value) ? value : [];
+                          const newValues = [...new Set([...currentValues, ...validRecords.map(r => r.id)])];
+                          updateFieldValue(field.id, newValues);
+                          
+                          // 유효하지 않은 값이 있었다면 상세한 알림
+                          const invalidValues = pastedValues.filter(v => 
+                            !relatedRecords.some(record => 
+                              record.data[displayField.id].toLowerCase() === v.toLowerCase()
+                            )
                           );
-                        })}
+                          if (invalidValues.length > 0) {
+                            toast({
+                              title: "일부 값이 무시됨",
+                              description: `다음 값들이 유효하지 않아 제외되었습니다: ${invalidValues.join(', ')}`,
+                              variant: "destructive",
+                            });
+                          } else {
+                            toast({
+                              title: "값이 추가됨",
+                              description: `${validRecords.length}개의 값이 추가되었습니다.`,
+                            });
+                          }
+                        } else {
+                          toast({
+                            title: "유효하지 않은 값",
+                            description: `붙여넣은 모든 값이 유효하지 않습니다: ${pastedValues.join(', ')}`,
+                            variant: "destructive",
+                          });
+                        }
+                      }}
+                    />
+                    <CommandList className="max-h-[200px] overflow-y-auto">
+                      <CommandEmpty className="py-2 text-sm text-discord-muted">항목을 찾을 수 없습니다.</CommandEmpty>
+                      <CommandGroup>
+                        {relatedRecords.map((record) => (
+                          <CommandItem
+                            key={record.id}
+                            value={record.data[displayField.id]}
+                            onSelect={() => {
+                              const currentValues = Array.isArray(value) ? value : [];
+                              if (currentValues.includes(record.id)) {
+                                updateFieldValue(field.id, currentValues.filter(v => v !== record.id));
+                              } else {
+                                updateFieldValue(field.id, [...currentValues, record.id]);
+                              }
+                            }}
+                            className="text-discord-text hover:bg-discord-hover"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                Array.isArray(value) && value.includes(record.id) ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {record.data[displayField.id]}
+                          </CommandItem>
+                        ))}
                       </CommandGroup>
                     </CommandList>
                   </Command>
                 </PopoverContent>
               </Popover>
-              {/* 관계형 필드의 다중 선택에도 동일한 태그 표시 추가 */}
               {Array.isArray(value) && value.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2">
                   {value.map((recordId) => {
-                    const selectedRecord = relatedRecords.find(r => r.id === recordId);
-                    const displayValue = selectedRecord 
-                      ? String(selectedRecord.data[displayField?.id] || selectedRecord.id)
-                      : recordId;
+                    const record = relatedRecords.find(r => r.id === recordId);
+                    if (!record) return null;
                     return (
                       <div
                         key={recordId}
-                        className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded-full"
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-green-600/20 text-green-500 text-xs rounded hover:bg-green-600/30"
                       >
-                        <span>{displayValue}</span>
+                        <span className="max-w-[150px] truncate">{record.data[displayField.id]}</span>
                         <button
                           type="button"
                           onClick={(e) => {
@@ -534,7 +468,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                             const newValue = value.filter((v) => v !== recordId);
                             updateFieldValue(field.id, newValue);
                           }}
-                          className="text-white hover:text-gray-200"
+                          className="text-green-500 hover:text-green-400 shrink-0"
                         >
                           <X size={12} />
                         </button>
@@ -543,50 +477,48 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                   })}
                 </div>
               )}
-              {renderErrorMessage()}
             </div>
           );
         } else {
           return (
-            <Popover open={openComboboxes[field.id]} onOpenChange={() => toggleCombobox(field.id)}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={openComboboxes[field.id]}
-                  className={inputClassName}
-                >
-                  {value ? (() => {
-                    const selectedRecord = relatedRecords.find(r => r.id === value);
-                    return selectedRecord ? String(selectedRecord.data[displayField?.id] || selectedRecord.id) : value;
-                  })() : `${field.name} 선택`}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-full p-0 bg-discord-sidebar border-gray-600">
-                <Command>
-                  <CommandInput placeholder={`${field.name} 검색...`} className="bg-discord-sidebar text-discord-text" />
-                  <CommandList>
-                    <CommandEmpty>항목을 찾을 수 없습니다.</CommandEmpty>
-                    <CommandGroup>
-                      <CommandItem
-                        value="none"
-                        onSelect={() => {
-                          updateFieldValue(field.id, '');
-                          toggleCombobox(field.id);
-                        }}
-                        className="text-discord-text hover:bg-discord-hover"
-                      >
-                        선택 해제
-                      </CommandItem>
-                      {relatedRecords.map((relatedRecord) => {
-                        const displayValue = String(relatedRecord.data[displayField?.id] || relatedRecord.id);
-                        return (
+            <div className="w-full">
+              <Popover open={openComboboxes[field.id]} onOpenChange={() => toggleCombobox(field.id)}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openComboboxes[field.id]}
+                    className={cn(inputClassName, "w-full justify-between")}
+                  >
+                    {value ? relatedRecords.find(r => r.id === value)?.data[displayField.id] || value : `${field.name} 선택`}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0 bg-discord-sidebar border-gray-600">
+                  <Command className="bg-discord-sidebar border-none">
+                    <CommandInput 
+                      placeholder={`${field.name} 검색...`} 
+                      className="h-9 bg-discord-sidebar text-discord-text border-b border-gray-600"
+                    />
+                    <CommandList className="text-discord-text">
+                      <CommandEmpty className="py-2 text-sm text-discord-muted">항목을 찾을 수 없습니다.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value=""
+                          onSelect={() => {
+                            updateFieldValue(field.id, '');
+                            toggleCombobox(field.id);
+                          }}
+                          className="text-discord-text hover:bg-discord-hover"
+                        >
+                          선택 해제
+                        </CommandItem>
+                        {relatedRecords.map((record) => (
                           <CommandItem
-                            key={relatedRecord.id}
-                            value={displayValue}
+                            key={record.id}
+                            value={record.data[displayField.id]}
                             onSelect={() => {
-                              updateFieldValue(field.id, relatedRecord.id);
+                              updateFieldValue(field.id, record.id);
                               toggleCombobox(field.id);
                             }}
                             className="text-discord-text hover:bg-discord-hover"
@@ -594,18 +526,18 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                             <Check
                               className={cn(
                                 "mr-2 h-4 w-4",
-                                value === relatedRecord.id ? "opacity-100" : "opacity-0"
+                                value === record.id ? "opacity-100" : "opacity-0"
                               )}
                             />
-                            {displayValue}
+                            {record.data[displayField.id]}
                           </CommandItem>
-                        );
-                      })}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
           );
         }
 
@@ -619,11 +551,10 @@ export const RecordModal: React.FC<RecordModalProps> = ({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-discord-bg rounded-lg w-full max-w-2xl flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-700">
+        <div className="flex-shrink-0 flex items-center justify-between p-6 border-b border-gray-700">
           <div>
             <h2 className="text-xl font-bold text-discord-text">
-              {record ? '항목 수정' : '새 항목 추가'}
+              {record ? '항목 상세' : '새 항목 추가'}
             </h2>
             <p className="text-sm text-discord-muted mt-1">
               {category.name}
@@ -637,10 +568,9 @@ export const RecordModal: React.FC<RecordModalProps> = ({
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6 overflow-y-auto flex-1">
-          <div className="space-y-6">
-            {sortedFields.map(field => (
+        <div className="min-h-0 flex-1 overflow-y-auto p-6">
+          <div className="space-y-4">
+            {category.fields.map(field => (
               <div key={field.id}>
                 <Label className="text-discord-text font-medium">
                   {field.name}
@@ -648,29 +578,42 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                 </Label>
                 <div className="mt-2">
                   {renderField(field)}
+                  {errors[field.id] && (
+                    <p className="text-red-500 text-sm mt-1">{errors[field.id]}</p>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-700 bg-discord-bg">
-          <Button 
-            variant="ghost" 
-            onClick={onClose} 
-            disabled={isValidating}
-            className="text-discord-text hover:bg-discord-hover"
-          >
-            취소
-          </Button>
-          <Button 
-            onClick={handleSubmit}
-            className="bg-discord-accent hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={isValidating || Object.keys(errors).length > 0 || Object.keys(duplicateErrors).length > 0}
-          >
-            {isValidating ? '처리 중...' : record ? '수정' : '추가'}
-          </Button>
+        <div className="flex-shrink-0 flex items-center justify-end gap-3 p-6 border-t border-gray-700">
+          {record ? (
+            <Button 
+              onClick={onClose}
+              className="bg-discord-accent hover:bg-blue-600"
+            >
+              닫기
+            </Button>
+          ) : (
+            <>
+              <Button 
+                variant="ghost" 
+                onClick={onClose}
+                disabled={isValidating}
+                className="text-discord-text hover:bg-discord-hover"
+              >
+                취소
+              </Button>
+              <Button 
+                onClick={handleSubmit}
+                className="bg-discord-accent hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isValidating}
+              >
+                {isValidating ? '처리 중...' : '추가'}
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </div>
