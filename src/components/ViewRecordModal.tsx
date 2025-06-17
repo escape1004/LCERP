@@ -135,9 +135,9 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-discord-bg rounded-lg w-full max-w-3xl max-h-[90vh] overflow-hidden">
+      <div className="bg-discord-bg rounded-lg w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-700">
+        <div className="flex-shrink-0 flex items-center justify-between p-6 border-b border-gray-700">
           <div>
             <h2 className="text-xl font-bold text-discord-text">
               항목 상세 정보
@@ -172,7 +172,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-160px)] discord-scrollbar">
+        <div className="flex-1 min-h-0 p-6 overflow-y-auto max-h-[calc(90vh-160px)] discord-scrollbar">
           <div className="space-y-6">
             {category.fields
               .sort((a, b) => a.order - b.order)
@@ -208,7 +208,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end p-6 border-t border-gray-700">
+        <div className="flex-shrink-0 flex items-center justify-end p-6 border-t border-gray-700">
           <Button onClick={onClose} className="bg-discord-accent hover:bg-blue-600">
             닫기
           </Button>
