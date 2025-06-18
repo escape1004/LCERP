@@ -683,7 +683,7 @@ export const MainContent: React.FC = () => {
                   <table className="w-full">
                     <thead className="sticky top-0 bg-discord-sidebar border-b border-gray-700">
                       <tr>
-                        {fileField && <th className="px-2 py-2 text-left text-sm font-semibold text-discord-text">썸네일</th>}
+                        {fileField && <th className="px-2 py-2 text-left text-sm font-semibold text-discord-text w-[104px]">썸네일</th>}
                         {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
                           <th
                             key={field.id}
@@ -706,10 +706,10 @@ export const MainContent: React.FC = () => {
                           )
                         ) && (
                           <th
-                            className="px-2 py-2 text-left text-sm font-semibold text-discord-text cursor-pointer hover:bg-discord-hover"
+                            className="px-2 py-2 text-center text-sm font-semibold text-discord-text cursor-pointer hover:bg-discord-hover w-16 whitespace-nowrap"
                             onClick={() => handleSort('__refCount')}
                           >
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 justify-center">
                               참조 횟수
                               {sortField === '__refCount' && (
                                 <span className="text-discord-accent">
@@ -731,7 +731,7 @@ export const MainContent: React.FC = () => {
                           className="border-b border-gray-800 hover:bg-discord-hover transition-colors"
                         >
                           {fileField && (
-                            <td className="px-2 py-3 text-sm text-discord-text">
+                            <td className="px-2 py-3 text-sm text-discord-text w-[104px]">
                               <ThumbnailCell filePath={record.data[fileField.id]} />
                             </td>
                           )}
@@ -745,7 +745,7 @@ export const MainContent: React.FC = () => {
                               field.type === 'relation' && field.relationCategoryId === selectedCategorySafe.id
                             )
                           ) && (
-                            <td className="px-2 py-3 text-sm">
+                            <td className="px-2 py-3 text-sm text-center w-16 whitespace-nowrap">
                               {(() => {
                                 const count = getRecordReferenceCount(record.id, selectedCategorySafe.id);
                                 return count > 0 ? count : '-';
