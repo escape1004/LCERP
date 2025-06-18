@@ -52,7 +52,13 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, onChange, onDelete, ca
         />
         <Select
           value={field.type}
-          onValueChange={(value) => onChange({ ...field, type: value as FieldDefinition['type'] })}
+          onValueChange={(value) => {
+            if (value === 'file' && categories.some(cat => cat.fields.some(f => f.type === 'file' && f.id !== field.id))) {
+              alert('파일 필드는 한 개만 추가할 수 있습니다.');
+              return;
+            }
+            onChange({ ...field, type: value as FieldDefinition['type'] });
+          }}
         >
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="필드 타입" />
@@ -64,7 +70,7 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, onChange, onDelete, ca
             <SelectItem value="select">선택</SelectItem>
             <SelectItem value="relation">관계</SelectItem>
             <SelectItem value="longtext">긴 텍스트</SelectItem>
-            <SelectItem value="file">파일</SelectItem>
+            <SelectItem value="file" disabled={categories.some(cat => cat.fields.some(f => f.type === 'file' && f.id !== field.id))}>파일</SelectItem>
           </SelectContent>
         </Select>
         <Button

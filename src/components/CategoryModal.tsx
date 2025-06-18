@@ -177,6 +177,10 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   };
 
   const updateField = (index: number, updates: Partial<FieldDefinition>) => {
+    if (updates.type === 'file' && formData.fields.some((f, i) => f.type === 'file' && i !== index)) {
+      toast({ title: '파일 필드는 한 개만 추가할 수 있습니다.', variant: 'destructive' });
+      return;
+    }
     const newFields = [...formData.fields];
     newFields[index] = { ...newFields[index], ...updates };
     setFormData(prev => ({ ...prev, fields: newFields }));
@@ -352,7 +356,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                           <SelectItem value="date">날짜</SelectItem>
                                           <SelectItem value="select">선택 목록</SelectItem>
                                           <SelectItem value="relation">관계형</SelectItem>
-                                          <SelectItem value="file">파일</SelectItem>
+                                          <SelectItem value="file" disabled={formData.fields.some((f, i) => f.type === 'file' && i !== index)}>파일</SelectItem>
                                         </SelectContent>
                                       </Select>
                                       <div className="flex items-center gap-4 ml-auto">
