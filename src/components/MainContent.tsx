@@ -175,14 +175,14 @@ export const MainContent: React.FC = () => {
   }, [selectedCategoryId, categoriesSafe, loadRecords]);
 
   useEffect(() => {
-    if (!selectedCategoryId && categoriesSafe.length > 0) {
+    if (!selectedCategoryId && categoriesSafe.length > 0 && !showDbViewer) {
       const rootCategories = categoriesSafe.filter(cat => !cat.parentId);
       const firstRootCategory = [...rootCategories].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0];
       if (firstRootCategory) {
         selectCategory(firstRootCategory.id);
       }
     }
-  }, [selectedCategoryId, categoriesSafe, selectCategory]);
+  }, [selectedCategoryId, categoriesSafe, selectCategory, showDbViewer]);
 
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
