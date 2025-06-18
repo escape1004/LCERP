@@ -1,7 +1,7 @@
 {
   "name": "local-erp",
   "private": true,
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Local ERP System for Business Management",
   "author": "Escape",
   "main": "electron/main.js",
@@ -17,8 +17,10 @@
     "electron:preview": "cross-env ELECTRON=true npm run build && electron .",
     "electron:preview-web": "npm run build && concurrently \"npm run preview\" \"npm run start\"",
     "test": "jest",
-    "dev:electron": "concurrently \"npm run dev\" \"wait-on tcp:5174 && npm run start\"",
-    "postinstall": "electron-builder install-app-deps"
+    "dev:electron": "concurrently \"npm run dev\" \"npm run preload:watch\" \"wait-on tcp:5174 && npm run start\"",
+    "postinstall": "electron-builder install-app-deps",
+    "preload:watch": "vite build --mode preload --watch",
+    "postbuild": "copy /Y \"dist\\preload.js\" \"electron\\preload.js\""
   },
   "build": {
     "appId": "com.escape.local-erp",
@@ -83,7 +85,8 @@
         "AppImage"
       ],
       "icon": "resources/icon.png"
-    }
+    },
+    "icon": "build/icon.ico"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
@@ -169,6 +172,7 @@
     "typescript-eslint": "^8.0.1",
     "vite": "^5.4.1",
     "vite-plugin-electron": "^0.29.0",
+    "vite-plugin-static-copy": "^3.0.2",
     "wait-on": "^8.0.3"
   }
 }

@@ -352,6 +352,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                           <SelectItem value="date">날짜</SelectItem>
                                           <SelectItem value="select">선택 목록</SelectItem>
                                           <SelectItem value="relation">관계형</SelectItem>
+                                          <SelectItem value="file">파일</SelectItem>
                                         </SelectContent>
                                       </Select>
                                       <div className="flex items-center gap-4 ml-auto">

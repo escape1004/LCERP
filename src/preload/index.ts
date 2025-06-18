@@ -12,6 +12,7 @@ const api = {
   setBackupDir: () => ipcRenderer.invoke('db:setBackupDir'),
   getConfig: () => ipcRenderer.invoke('db:getConfig'),
   setBackupInterval: (minutes: number) => ipcRenderer.invoke('db:setBackupInterval', minutes),
+  send: (channel: string, ...args: any[]) => ipcRenderer.send(channel, ...args),
 };
 
 // API를 window 객체에 노출

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
 import path from 'path';
 import { registerCategoryHandlers } from './ipc/category';
 import { registerRecordHandlers } from './ipc/record';
@@ -17,7 +17,7 @@ const createWindow = () => {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, isDevelopment ? '../src/main/preload.ts' : 'preload.js')
+      preload: path.join(__dirname, '../dist/preload.js')
     }
   });
 
@@ -180,4 +180,15 @@ ipcMain.handle('updateRecord', async (_, id, data) => {
 
 ipcMain.handle('deleteRecord', async (_, categoryId, id) => {
   db.prepare('DELETE FROM records WHERE categoryId = ? AND id = ?').run(categoryId, id);
-}); 
+});
+
+ipcMain.handle('openFileDialog', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    title: '파일 선택'
+  });
+  return result;
+});
+
+console.log("=== Electron __dirname ===", __dirname);
+console.log("=== preload path ===", path.join(__dirname, '../dist/preload.js')); 

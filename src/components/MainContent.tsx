@@ -87,14 +87,16 @@ export const MainContent: React.FC = () => {
     showDbViewer,
   } = useERPStore();
 
-  const selectedCategory = categories.find(cat => cat.id === selectedCategoryId);
-  const currentRecords = selectedCategoryId ? getCategoryRecords(selectedCategoryId) : [];
-  
+  // categories, selectedCategory, currentRecords에 기본값 보장
+  const categoriesSafe = categories || [];
+  const selectedCategorySafe = categoriesSafe.find(cat => cat.id === selectedCategoryId) || null;
+  const currentRecordsSafe = selectedCategoryId ? getCategoryRecords(selectedCategoryId) || [] : [];
+
   const getRecordReferenceCount = useCallback((recordId: string, categoryId: string): number => {
     let count = 0;
     
     // 모든 카테고리를 순회
-    categories.forEach(category => {
+    categoriesSafe.forEach(category => {
       // 현재 카테고리의 relation 타입 필드 중 targetCategoryId가 일치하는 것만 확인
       const relationFields = category.fields.filter(
         field => field.type === 'relation' && field.relationCategoryId === categoryId
@@ -119,7 +121,7 @@ export const MainContent: React.FC = () => {
     });
     
     return count;
-  }, [categories, getCategoryRecords]);
+  }, [categoriesSafe, getCategoryRecords]);
   
   // Reset search field to 'all' when category changes
   useEffect(() => {
@@ -130,7 +132,7 @@ export const MainContent: React.FC = () => {
   // Load related records when category changes
   useEffect(() => {
     if (selectedCategoryId) {
-      const category = categories.find(cat => cat.id === selectedCategoryId);
+      const category = categoriesSafe.find(cat => cat.id === selectedCategoryId);
       if (category) {
         const relationFields = category.fields.filter(field => field.type === 'relation');
         const loadedCategories = new Set();
@@ -142,7 +144,7 @@ export const MainContent: React.FC = () => {
         });
       }
     }
-  }, [selectedCategoryId, categories, loadRecords]);
+  }, [selectedCategoryId, categoriesSafe, loadRecords]);
 
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -158,9 +160,9 @@ export const MainContent: React.FC = () => {
   const customFilteredRecords = useMemo(() => {
     if (!selectedCategoryId) return [];
     
-    if (!searchTerm) return currentRecords;
+    if (!searchTerm) return currentRecordsSafe;
     
-    return currentRecords.filter((record) => {
+    return currentRecordsSafe.filter((record) => {
       if (searchField === 'all') {
         return Object.values(record.data).some((value) =>
           String(value).toLowerCase().includes(searchTerm.toLowerCase())
@@ -170,7 +172,7 @@ export const MainContent: React.FC = () => {
         return String(fieldValue || '').toLowerCase().includes(searchTerm.toLowerCase());
       }
     });
-  }, [selectedCategoryId, searchTerm, searchField, currentRecords]);
+  }, [selectedCategoryId, searchTerm, searchField, currentRecordsSafe]);
 
   // Sorting
   const sortedRecords = useMemo(() => {
@@ -178,8 +180,8 @@ export const MainContent: React.FC = () => {
 
     return [...customFilteredRecords].sort((a, b) => {
       if (sortField === '__refCount') {
-        const countA = getRecordReferenceCount(a.id, selectedCategory.id);
-        const countB = getRecordReferenceCount(b.id, selectedCategory.id);
+        const countA = getRecordReferenceCount(a.id, selectedCategorySafe?.id || '');
+        const countB = getRecordReferenceCount(b.id, selectedCategorySafe?.id || '');
         return sortDirection === 'asc' ? countA - countB : countB - countA;
       }
 
@@ -196,7 +198,7 @@ export const MainContent: React.FC = () => {
       if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [customFilteredRecords, sortField, sortDirection, selectedCategory?.id, getRecordReferenceCount]);
+  }, [customFilteredRecords, sortField, sortDirection, selectedCategorySafe?.id, getRecordReferenceCount]);
 
   // Pagination
   const totalPages = Math.ceil(sortedRecords.length / itemsPerPage);
@@ -225,7 +227,7 @@ export const MainContent: React.FC = () => {
 
   const handleView = (record: DataRecord) => {
     setViewingRecord(record);
-    setViewingCategory(selectedCategoryId || '');
+    setViewingCategory(selectedCategorySafe?.id || '');
     setIsViewModalOpen(true);
   };
 
@@ -246,9 +248,9 @@ export const MainContent: React.FC = () => {
   };
 
   const exportToCSV = () => {
-    if (!selectedCategory || sortedRecords.length === 0) return;
+    if (!selectedCategorySafe || sortedRecords.length === 0) return;
 
-    const headers = ['ID', ...selectedCategory.fields.map(f => f.name), '생성일', '수정일'];
+    const headers = ['ID', ...selectedCategorySafe.fields.map(f => f.name), '생성일', '수정일'];
     
     // Add BOM for Korean encoding
     const BOM = '\uFEFF';
@@ -257,13 +259,13 @@ export const MainContent: React.FC = () => {
       headers.join(','),
       ...sortedRecords.map(record => [
         record.id,
-        ...selectedCategory.fields.map(field => {
+        ...selectedCategorySafe.fields.map(field => {
           const value = record.data[field.id];
           
           // Handle different field types
           if (field.type === 'relation') {
             if (Array.isArray(value)) {
-              const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
+              const relatedCategory = categoriesSafe.find(cat => cat.id === field.relationCategoryId);
               if (!relatedCategory) return `"${value.join(', ')}"`;
               
               const relatedRecords = getCategoryRecords(field.relationCategoryId!);
@@ -278,7 +280,7 @@ export const MainContent: React.FC = () => {
               
               return `"${displayValues.join(', ')}"`;
             } else if (value) {
-              const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
+              const relatedCategory = categoriesSafe.find(cat => cat.id === field.relationCategoryId);
               if (!relatedCategory) return `"${value}"`;
               
               const relatedRecords = getCategoryRecords(field.relationCategoryId!);
@@ -322,7 +324,7 @@ export const MainContent: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
     link.setAttribute('href', url);
-    link.setAttribute('download', `${selectedCategory.name}_${timestamp}.csv`);
+    link.setAttribute('download', `${selectedCategorySafe.name}_${timestamp}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -375,9 +377,9 @@ export const MainContent: React.FC = () => {
 
           return (
             <div className="flex flex-wrap gap-1">
-              {displayTags.map((item, index) => (
+              {displayTags.map((item) => (
                 <span
-                  key={index}
+                  key={item}
                   className="px-2 py-1 text-xs rounded bg-green-600/20 text-green-500"
                 >
                   {String(item)}
@@ -419,7 +421,7 @@ export const MainContent: React.FC = () => {
       case 'relation':
         if (!field.relationCategoryId) return String(value);
         
-        const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
+        const relatedCategory = categoriesSafe.find(cat => cat.id === field.relationCategoryId);
         if (!relatedCategory) return String(value);
         
         const relatedRecords = getCategoryRecords(field.relationCategoryId);
@@ -432,13 +434,12 @@ export const MainContent: React.FC = () => {
 
           return (
             <div className="flex flex-wrap gap-1">
-              {displayTags.map((relatedId, index) => {
+              {displayTags.map((relatedId) => {
                 const relatedRecord = relatedRecords.find(r => r.id === relatedId);
                 if (!relatedRecord) return null;
-                
                 return (
                   <span
-                    key={index}
+                    key={relatedId}
                     className="px-2 py-1 text-xs rounded bg-green-600/20 text-green-500 cursor-pointer hover:bg-green-600/30"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -513,29 +514,19 @@ export const MainContent: React.FC = () => {
   // Get parent categories path
   const getParentPath = useCallback((category: Category): Category[] => {
     const path: Category[] = [];
-    let parent = category.parentId ? categories.find(c => c.id === category.parentId) : null;
+    let parent = category.parentId ? categoriesSafe.find(c => c.id === category.parentId) : null;
     
     while (parent) {
       path.unshift(parent);
-      parent = parent.parentId ? categories.find(c => c.id === parent.parentId) : null;
+      parent = parent.parentId ? categoriesSafe.find(c => c.id === parent.parentId) : null;
     }
     
     return path;
-  }, [categories]);
+  }, [categoriesSafe]);
 
-  if (!selectedCategory && !showDbViewer) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-discord-bg">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-discord-text mb-4">
-            카테고리를 선택하세요
-          </h2>
-          <p className="text-discord-muted">
-            왼쪽 사이드바에서 카테고리를 선택하거나 새로 생성하세요.
-          </p>
-        </div>
-      </div>
-    );
+  // 렌더링 시 카테고리 없을 때 안내 메시지
+  if (!categoriesSafe || categoriesSafe.length === 0) {
+    return <div className="flex items-center justify-center h-full text-discord-muted">카테고리가 없습니다. 새로 추가해보세요.</div>;
   }
 
   return (
@@ -551,11 +542,11 @@ export const MainContent: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h1 className="text-2xl font-bold text-discord-text">
-                  {selectedCategory.name}
-                  {selectedCategory.parentId && (
+                  {selectedCategorySafe?.name}
+                  {selectedCategorySafe?.parentId && (
                     <span className="text-sm font-normal text-discord-muted ml-2">
                       (
-                      {getParentPath(selectedCategory).map((cat, index, array) => (
+                      {getParentPath(selectedCategorySafe).map((cat, index, array) => (
                         <React.Fragment key={cat.id}>
                           <button
                             onClick={() => handleCategoryClick(cat.id)}
@@ -603,7 +594,7 @@ export const MainContent: React.FC = () => {
               <div className="relative flex-1">
                 <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-discord-muted" />
                 <Input
-                  placeholder={searchField === 'all' ? '전체 검색...' : `${selectedCategory.fields.find(f => f.id === searchField)?.name || ''} 검색...`}
+                  placeholder={searchField === 'all' ? '전체 검색...' : `${selectedCategorySafe?.fields.find(f => f.id === searchField)?.name || ''} 검색...`}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 bg-discord-sidebar border-gray-600 text-discord-text placeholder:text-gray-500"
@@ -624,7 +615,7 @@ export const MainContent: React.FC = () => {
                 </SelectTrigger>
                 <SelectContent className="bg-discord-sidebar border-gray-600">
                   <SelectItem value="all">전체 필드</SelectItem>
-                  {selectedCategory.fields.map(field => (
+                  {selectedCategorySafe?.fields.map(field => (
                     <SelectItem key={field.id} value={field.id}>
                       {field.name}
                     </SelectItem>
@@ -666,7 +657,7 @@ export const MainContent: React.FC = () => {
                   <table className="w-full">
                     <thead className="sticky top-0 bg-discord-sidebar border-b border-gray-700">
                       <tr>
-                        {selectedCategory.fields.map(field => (
+                        {selectedCategorySafe?.fields.map(field => (
                           <th
                             key={field.id}
                             className="px-2 py-2 text-left text-sm font-semibold text-discord-text cursor-pointer hover:bg-discord-hover"
@@ -682,9 +673,9 @@ export const MainContent: React.FC = () => {
                             </div>
                           </th>
                         ))}
-                        {categories.some(cat => 
+                        {categoriesSafe.some(cat => 
                           cat.fields.some(field => 
-                            field.type === 'relation' && field.relationCategoryId === selectedCategory.id
+                            field.type === 'relation' && field.relationCategoryId === selectedCategorySafe.id
                           )
                         ) && (
                           <th
@@ -712,19 +703,19 @@ export const MainContent: React.FC = () => {
                           key={record.id}
                           className="border-b border-gray-800 hover:bg-discord-hover transition-colors"
                         >
-                          {selectedCategory.fields.map(field => (
+                          {selectedCategorySafe?.fields.map(field => (
                             <td key={field.id} className="px-2 py-3 text-sm text-discord-text">
                               {formatFieldValue(field, record.data[field.id], record.id)}
                             </td>
                           ))}
-                          {categories.some(cat => 
+                          {categoriesSafe.some(cat => 
                             cat.fields.some(field => 
-                              field.type === 'relation' && field.relationCategoryId === selectedCategory.id
+                              field.type === 'relation' && field.relationCategoryId === selectedCategorySafe.id
                             )
                           ) && (
                             <td className="px-2 py-3 text-sm">
                               {(() => {
-                                const count = getRecordReferenceCount(record.id, selectedCategory.id);
+                                const count = getRecordReferenceCount(record.id, selectedCategorySafe.id);
                                 return count > 0 ? count : '-';
                               })()}
                             </td>
@@ -805,7 +796,7 @@ export const MainContent: React.FC = () => {
               setIsRecordModalOpen(false);
               setEditingRecord(null);
             }}
-            category={selectedCategory}
+            category={selectedCategorySafe}
             record={editingRecord}
           />
 
@@ -816,7 +807,7 @@ export const MainContent: React.FC = () => {
               setViewingRecord(null);
               setViewingCategory('');
             }}
-            category={categories.find(cat => cat.id === viewingCategory) || selectedCategory}
+            category={categoriesSafe.find(cat => cat.id === viewingCategory) || selectedCategorySafe}
             record={viewingRecord}
           />
         </div>

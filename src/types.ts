@@ -27,7 +27,7 @@ export interface CategoryUpdate {
 export interface FieldDefinition {
   id: string;
   name: string;
-  type: 'text' | 'number' | 'date' | 'select' | 'relation' | 'longtext';
+  type: 'text' | 'number' | 'date' | 'select' | 'relation' | 'longtext' | 'file';
   required: boolean;
   unique: boolean;
   order: number;
@@ -54,16 +54,28 @@ export interface NewRecord {
 }
 
 export interface ElectronAPI {
-  getCategories: () => Promise<Category[]>;
-  addCategory: (category: Category) => Promise<string>;
-  updateCategory: (id: string, updates: Partial<Category>) => Promise<void>;
+  getTables: () => Promise<{ name: string }[]>;
+  getTableData: (tableName: string) => Promise<TableData>;
+  getDbPath: () => Promise<string>;
+  openDbFile: () => Promise<void>;
+  addCategory: (category: NewCategory) => Promise<string>;
+  updateCategory: (id: string, updates: CategoryUpdate) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;
-  
   getRecords: (categoryId: string) => Promise<DataRecord[]>;
-  addRecord: (record: DataRecord) => Promise<string>;
+  addRecord: (record: NewRecord) => Promise<string>;
   updateRecord: (id: string, data: Record<string, any>) => Promise<void>;
   deleteRecord: (id: string) => Promise<void>;
+  getCategories: () => Promise<Category[]>;
+  backupDatabase: () => Promise<{ success: boolean; path?: string; error?: string }>;
+  openBackupLocation: () => Promise<{ success: boolean }>;
+  getConfig: () => Promise<any>;
+  setDbPath: () => Promise<{ success: boolean; path?: string }>;
+  setBackupDir: () => Promise<{ success: boolean; path?: string }>;
+  setBackupInterval: (minutes: number) => Promise<{ success: boolean }>;
   openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
+  checkDuplicate: (categoryId: string, fieldId: string, value: any, recordId?: string) => Promise<{ isDuplicate: boolean }>;
+  send: (channel: string, ...args: any[]) => void;
+  openFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 // DB 뷰어 관련 타입
@@ -75,14 +87,6 @@ export interface TableData {
 
 declare global {
   interface Window {
-    electronAPI: {
-      // ... existing API types ...
-      
-      // DB 뷰어 관련 API
-      getTables: () => Promise<{ name: string }[]>;
-      getTableData: (tableName: string) => Promise<TableData>;
-      getDbPath: () => Promise<string>;
-      openDbFile: () => Promise<void>;
-    }
+    electronAPI: ElectronAPI;
   }
 } 

@@ -44,6 +44,12 @@ function registerProtocol() {
   });
 }
 
+const iconPath = isDev
+  ? path.join(__dirname, '..', 'resources', 'icon.ico')
+  : path.join(__dirname, '..', 'dist', 'icon.ico');
+
+console.log('ICON PATH:', iconPath, fs.existsSync(iconPath));
+
 function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 1920,
@@ -54,7 +60,8 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
       sandbox: false
-    }
+    },
+    icon: iconPath
   });
 
   // CSP 설정
@@ -181,6 +188,26 @@ function initializeDatabase() {
     // 테이블 확인
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
     log('Available tables:', tables);
+
+    // 임시 카테고리 자동 추가 (없을 때만)
+    const catCount = db.prepare('SELECT COUNT(*) as count FROM categories').get().count;
+    if (catCount === 0) {
+      db.prepare(`
+        INSERT INTO categories (id, name, parentId, fields, order_num, createdAt, updatedAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        'test-cat-1',
+        '테스트 카테고리',
+        null,
+        JSON.stringify([
+          { id: 'title', name: '제목', type: 'text', required: true, unique: true, order: 1 }
+        ]),
+        0,
+        new Date().toISOString(),
+        new Date().toISOString()
+      );
+      log('임시 카테고리 추가됨');
+    }
   } catch (error) {
     log('Error initializing database:', error);
     throw error;
@@ -573,4 +600,71 @@ ipcMain.handle('openBackupLocation', () => {
   const backupDir = path.join(app.getPath('userData'), 'backups');
   shell.openPath(backupDir);
   return { success: true };
+});
+
+// 실시간 중복 체크 핸들러
+ipcMain.handle('db:checkDuplicate', async (_, categoryId, fieldId, value, recordId = null) => {
+  try {
+    // 카테고리 필드 정보 가져오기
+    const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(categoryId);
+    if (!category) {
+      throw new Error(`Category not found: ${categoryId}`);
+    }
+
+    const fields = JSON.parse(category.fields);
+    const field = fields.find(f => f.id === fieldId);
+    
+    if (!field || !field.unique) {
+      return { isDuplicate: false };
+    }
+
+    // 빈 값은 중복 체크 제외
+    if (value === undefined || value === null || value === '') {
+      return { isDuplicate: false };
+    }
+
+    // 중복 검사 쿼리 준비
+    let query = `
+      SELECT id FROM records 
+      WHERE categoryId = ? 
+      AND json_extract(data, '$.${fieldId}') = ?
+    `;
+    let params = [categoryId, String(value)];
+
+    // 수정 시에는 자기 자신 제외
+    if (recordId) {
+      query += ' AND id != ?';
+      params.push(recordId);
+    }
+
+    const duplicate = db.prepare(query).get(...params);
+    return { isDuplicate: !!duplicate };
+  } catch (error) {
+    log('Error in checkDuplicate:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('openFileDialog', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    title: '파일 선택'
+  });
+  return result;
+});
+
+ipcMain.handle('openFile', async (_, filePath) => {
+  console.log('[IPC] openFile called with:', filePath);
+  if (!filePath) {
+    console.log('[IPC] openFile: 파일 경로 없음');
+    return { success: false, error: '파일 경로 없음' };
+  }
+  try {
+    const result = await shell.openPath(filePath);
+    console.log('[IPC] openFile: shell.openPath result:', result);
+    return { success: true };
+  } catch (e) {
+    console.log('[IPC] openFile: error:', e);
+    return { success: false, error: e.message };
+  }
 }); 

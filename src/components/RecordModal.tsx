@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { X, Search, Check, ChevronsUpDown } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import type { Category, DataRecord, FieldDefinition, NewRecord } from '../types';
+import type { ElectronAPI } from '../types/electron';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -24,10 +25,13 @@ export const RecordModal: React.FC<RecordModalProps> = ({
   category,
   record,
 }) => {
-  const { addRecord, updateRecord, categories, getCategoryRecords } = useERPStore();
+  const { addRecord, updateRecord, categories, getCategoryRecords, checkDuplicate } = useERPStore();
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [duplicateErrors, setDuplicateErrors] = useState<Record<string, string>>({});
   const [isValidating, setIsValidating] = useState(false);
+  const [isDuplicateChecking, setIsDuplicateChecking] = useState(false);
+  const [pendingDuplicateChecks, setPendingDuplicateChecks] = useState<Set<string>>(new Set());
   const [openComboboxes, setOpenComboboxes] = useState<Record<string, boolean>>({});
 
   // Reset form data when modal opens/closes or record changes
@@ -36,7 +40,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
       setFormData({ ...record.data });
     } else {
       const initialData: Record<string, any> = {};
-      category.fields.forEach(field => {
+      (category?.fields ?? []).forEach(field => {
         if (field.type === 'select' && field.multiple) {
           initialData[field.id] = [];
         } else {
@@ -46,13 +50,13 @@ export const RecordModal: React.FC<RecordModalProps> = ({
       setFormData(initialData);
     }
     setErrors({});
+    setDuplicateErrors({});
     setOpenComboboxes({});
   }, [record, category]);
 
   const validateForm = useCallback(() => {
     const newErrors: Record<string, string> = {};
-    
-    category.fields.forEach(field => {
+    (category?.fields ?? []).forEach(field => {
       if (field.required) {
         const value = formData[field.id];
         if (!value && value !== 0 && value !== false) {
@@ -60,18 +64,57 @@ export const RecordModal: React.FC<RecordModalProps> = ({
         }
       }
     });
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [formData, category.fields]);
+  }, [formData, category?.fields]);
+
+  const checkFieldDuplicate = useCallback(async (fieldId: string, value: any) => {
+    if (!category) return;
+    try {
+      setIsDuplicateChecking(true);
+      setPendingDuplicateChecks(prev => new Set([...prev, fieldId]));
+      const isDuplicate = await checkDuplicate(category.id, fieldId, value, record?.id);
+      if (isDuplicate) {
+        setDuplicateErrors(prev => ({
+          ...prev,
+          [fieldId]: '이미 사용 중인 값입니다.'
+        }));
+      } else {
+        setDuplicateErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors[fieldId];
+          return newErrors;
+        });
+      }
+      setPendingDuplicateChecks(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(fieldId);
+        return newSet;
+      });
+    } catch (error) {
+      console.error('중복 체크 중 오류 발생:', error);
+      setPendingDuplicateChecks(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(fieldId);
+        return newSet;
+      });
+    } finally {
+      if (pendingDuplicateChecks.size <= 1) {
+        setIsDuplicateChecking(false);
+      }
+    }
+  }, [category, record?.id, checkDuplicate, pendingDuplicateChecks]);
 
   const handleSubmit = async () => {
+    if (!category) {
+      alert('카테고리를 먼저 선택하세요.');
+      return;
+    }
     const isValid = validateForm();
     if (!isValid) {
       alert('필수 입력 항목을 모두 입력해주세요.');
       return;
     }
-
     try {
       setIsValidating(true);
       if (record) {
@@ -101,6 +144,26 @@ export const RecordModal: React.FC<RecordModalProps> = ({
       [fieldId]: value,
     }));
     
+    // 필드가 unique인 경우 중복 체크 실행
+    const field = (category?.fields ?? []).find(f => f.id === fieldId);
+    if (field?.unique) {
+      if (value !== undefined && value !== null && value !== '') {
+        checkFieldDuplicate(fieldId, value);
+      } else {
+        // 값이 비어있는 경우 중복 에러 제거
+        setDuplicateErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors[fieldId];
+          return newErrors;
+        });
+        setPendingDuplicateChecks(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(fieldId);
+          return newSet;
+        });
+      }
+    }
+    
     if (errors[fieldId]) {
       setErrors(prev => {
         const newErrors = { ...prev };
@@ -120,43 +183,63 @@ export const RecordModal: React.FC<RecordModalProps> = ({
   const renderField = (field: FieldDefinition) => {
     const value = formData[field.id] || (field.type === 'select' && field.multiple ? [] : '');
     const hasError = !!errors[field.id];
+    const hasDuplicateError = !!duplicateErrors[field.id];
     const inputClassName = cn(
       "bg-discord-sidebar border-gray-600 text-discord-text",
-      hasError && "border-red-500"
+      (hasError || hasDuplicateError) && "border-red-500"
     );
+
+    const renderError = () => {
+      if (hasError) {
+        return <p className="text-red-500 text-sm mt-1">{errors[field.id]}</p>;
+      }
+      if (hasDuplicateError) {
+        return <p className="text-red-500 text-sm mt-1">{duplicateErrors[field.id]}</p>;
+      }
+      return null;
+    };
 
     switch (field.type) {
       case 'text':
       case 'number':
         return (
-          <Input
-            type={field.type === 'number' ? 'number' : 'text'}
-            placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
-            value={value}
-            onChange={(e) => updateFieldValue(field.id, e.target.value)}
-            className={inputClassName}
-          />
+          <div className="space-y-1">
+            <Input
+              type={field.type === 'number' ? 'number' : 'text'}
+              placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
+              value={value}
+              onChange={(e) => updateFieldValue(field.id, e.target.value)}
+              className={inputClassName}
+            />
+            {renderError()}
+          </div>
         );
 
       case 'date':
         return (
-          <Input
-            type="date"
-            value={value}
-            onChange={(e) => updateFieldValue(field.id, e.target.value)}
-            className={inputClassName}
-          />
+          <div className="space-y-1">
+            <Input
+              type="date"
+              value={value}
+              onChange={(e) => updateFieldValue(field.id, e.target.value)}
+              className={inputClassName}
+            />
+            {renderError()}
+          </div>
         );
 
       case 'longtext':
         return (
-          <Textarea
-            value={value}
-            onChange={(e) => updateFieldValue(field.id, e.target.value)}
-            className={inputClassName}
-            placeholder={`${field.name} 입력`}
-            rows={4}
-          />
+          <div className="space-y-1">
+            <Textarea
+              value={value}
+              onChange={(e) => updateFieldValue(field.id, e.target.value)}
+              className={inputClassName}
+              placeholder={`${field.name} 입력`}
+              rows={4}
+            />
+            {renderError()}
+          </div>
         );
 
       case 'select':
@@ -541,10 +624,56 @@ export const RecordModal: React.FC<RecordModalProps> = ({
           );
         }
 
+      case 'file':
+        return (
+          <div className="flex items-center gap-2">
+            <Input
+              type="text"
+              placeholder="파일 경로를 입력하거나 파일 선택 버튼을 클릭하세요"
+              value={value}
+              onChange={(e) => updateFieldValue(field.id, e.target.value)}
+              className={inputClassName + ' flex-1'}
+              readOnly
+            />
+            <Button
+              type="button"
+              onClick={async () => {
+                // Electron 환경에서는 경로, 웹 환경에서는 파일명만 표시될 수 있음
+                if (window.electronAPI) {
+                  const result = await window.electronAPI.openFileDialog();
+                  if (result && result.filePaths && result.filePaths[0]) {
+                    updateFieldValue(field.id, result.filePaths[0]);
+                  }
+                } else {
+                  // fallback: input[type=file] 사용 (웹 환경)
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.onchange = (e: any) => {
+                    if (e.target.files && e.target.files[0]) {
+                      updateFieldValue(field.id, e.target.files[0].path || e.target.files[0].name);
+                    }
+                  };
+                  input.click();
+                }
+              }}
+              className="bg-discord-accent hover:bg-blue-600"
+            >
+              파일 선택
+            </Button>
+            {renderError()}
+          </div>
+        );
+
       default:
         return null;
     }
   };
+
+  const isSubmitDisabled = Object.keys(errors).length > 0 || 
+                          Object.keys(duplicateErrors).length > 0 || 
+                          isValidating ||
+                          isDuplicateChecking ||
+                          pendingDuplicateChecks.size > 0;
 
   if (!isOpen) return null;
 
@@ -554,10 +683,10 @@ export const RecordModal: React.FC<RecordModalProps> = ({
         <div className="flex-shrink-0 flex items-center justify-between p-6 border-b border-gray-700">
           <div>
             <h2 className="text-xl font-bold text-discord-text">
-              {record ? '항목 상세' : '새 항목 추가'}
+              {record ? '항목 수정' : '새 항목 추가'}
             </h2>
             <p className="text-sm text-discord-muted mt-1">
-              {category.name}
+              {category ? category.name : '카테고리를 먼저 선택하세요.'}
             </p>
           </div>
           <button
@@ -570,50 +699,41 @@ export const RecordModal: React.FC<RecordModalProps> = ({
 
         <div className="min-h-0 flex-1 overflow-y-auto p-6">
           <div className="space-y-4">
-            {category.fields.map(field => (
-              <div key={field.id}>
-                <Label className="text-discord-text font-medium">
+            {(category?.fields ?? []).sort((a, b) => a.order - b.order).map(field => (
+              <div key={field.id} className="space-y-2">
+                <Label className="text-sm font-medium text-discord-text">
                   {field.name}
                   {field.required && <span className="text-red-500 ml-1">*</span>}
+                  {field.unique && <span className="text-gray-400 ml-1 text-xs">(중복 불가)</span>}
                 </Label>
-                <div className="mt-2">
-                  {renderField(field)}
-                  {errors[field.id] && (
-                    <p className="text-red-500 text-sm mt-1">{errors[field.id]}</p>
-                  )}
-                </div>
+                {renderField(field)}
               </div>
             ))}
+            {(!category || (category?.fields?.length === 0)) && (
+              <div className="text-discord-muted text-center py-8">
+                카테고리를 먼저 선택하거나, 필드가 정의된 카테고리를 선택하세요.
+              </div>
+            )}
           </div>
         </div>
 
         <div className="flex-shrink-0 flex items-center justify-end gap-3 p-6 border-t border-gray-700">
-          {record ? (
-            <Button 
-              onClick={onClose}
-              className="bg-discord-accent hover:bg-blue-600"
-            >
-              닫기
-            </Button>
-          ) : (
-            <>
-              <Button 
-                variant="ghost" 
-                onClick={onClose}
-                disabled={isValidating}
-                className="text-discord-text hover:bg-discord-hover"
-              >
-                취소
-              </Button>
-              <Button 
-                onClick={handleSubmit}
-                className="bg-discord-accent hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={isValidating}
-              >
-                {isValidating ? '처리 중...' : '추가'}
-              </Button>
-            </>
-          )}
+          <Button 
+            variant="ghost" 
+            onClick={onClose}
+            className="text-discord-text hover:bg-discord-hover"
+          >
+            취소
+          </Button>
+          <Button 
+            onClick={handleSubmit}
+            className="bg-discord-accent hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isSubmitDisabled}
+          >
+            {isValidating ? '검증 중...' : 
+             isDuplicateChecking ? '중복 체크 중...' : 
+             record ? '수정' : '추가'}
+          </Button>
         </div>
       </div>
     </div>

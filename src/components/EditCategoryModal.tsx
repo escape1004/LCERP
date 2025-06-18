@@ -64,6 +64,7 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, onChange, onDelete, ca
             <SelectItem value="select">선택</SelectItem>
             <SelectItem value="relation">관계</SelectItem>
             <SelectItem value="longtext">긴 텍스트</SelectItem>
+            <SelectItem value="file">파일</SelectItem>
           </SelectContent>
         </Select>
         <Button

@@ -26,6 +26,7 @@ interface ERPStore {
   setShowDbViewer: (show: boolean) => void;
   getRecordReferenceCount: (recordId: string, categoryId: string) => number;
   toggleDbViewer: () => void;
+  checkDuplicate: (categoryId: string, fieldId: string, value: any, recordId?: string) => Promise<boolean>;
 }
 
 export const useERPStore = create<ERPStore>((set, get) => ({
@@ -194,5 +195,34 @@ export const useERPStore = create<ERPStore>((set, get) => ({
 
   toggleDbViewer: () => {
     set(state => ({ showDbViewer: !state.showDbViewer }));
+  },
+
+  checkDuplicate: async (categoryId: string, fieldId: string, value: any, recordId?: string) => {
+    try {
+      // 카테고리 찾기
+      const category = get().categories.find(c => c.id === categoryId);
+      if (!category) return false;
+
+      // 필드 찾기
+      const field = category.fields.find(f => f.id === fieldId);
+      if (!field || !field.unique) return false;
+
+      // 빈 값은 중복 체크 제외
+      if (value === undefined || value === null || value === '') return false;
+
+      // 현재 카테고리의 레코드들 가져오기
+      const records = get().getCategoryRecords(categoryId);
+
+      // 중복 체크
+      const duplicate = records.some(record => {
+        if (recordId && record.id === recordId) return false; // 자기 자신 제외
+        return record.data[fieldId] === value;
+      });
+
+      return duplicate;
+    } catch (error) {
+      console.error('중복 체크 중 오류 발생:', error);
+      return false;
+    }
   },
 }));

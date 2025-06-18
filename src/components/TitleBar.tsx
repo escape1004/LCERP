@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import type { ElectronAPI } from '../types';
 
 interface CSSPropertiesWithWebkit extends React.CSSProperties {
   WebkitAppRegion?: 'drag' | 'no-drag';
@@ -6,25 +7,34 @@ interface CSSPropertiesWithWebkit extends React.CSSProperties {
 
 export function TitleBar() {
   const [isMaximized, setIsMaximized] = useState(false);
+  const electronAPI = window.electronAPI as ElectronAPI;
 
   useEffect(() => {
-    // 창 상태 변경 감지
-    window.electron.on('window-state-change', (state: { maximized: boolean }) => {
-      setIsMaximized(state.maximized);
-    });
+    // 창 상태 변경 감지 (임시로 비활성화)
+    // if (window.electronAPI && typeof window.electronAPI.on === 'function') {
+    //   window.electronAPI.on('window-state-change', (state: { maximized: boolean }) => {
+    //     setIsMaximized(state.maximized);
+    //   });
+    // }
   }, []);
 
-  // 창 제어 함수들
+  // 창 제어 함수들 (복구)
   const handleMinimize = () => {
-    window.electron.send('window-control', 'minimize');
+    if (electronAPI && typeof electronAPI.send === 'function') {
+      electronAPI.send('window-control', 'minimize');
+    }
   };
 
   const handleMaximize = () => {
-    window.electron.send('window-control', isMaximized ? 'restore' : 'maximize');
+    if (electronAPI && typeof electronAPI.send === 'function') {
+      electronAPI.send('window-control', isMaximized ? 'restore' : 'maximize');
+    }
   };
 
   const handleClose = () => {
-    window.electron.send('window-control', 'close');
+    if (electronAPI && typeof electronAPI.send === 'function') {
+      electronAPI.send('window-control', 'close');
+    }
   };
 
   return (
@@ -35,7 +45,7 @@ export function TitleBar() {
       {/* 앱 아이콘 & 타이틀 */}
       <div className="flex items-center px-3 space-x-2">
         <img 
-          src={window.electron ? '../resources/icon.png' : '/icon.png'} 
+          src="/icon.png" 
           alt="App Icon" 
           className="w-4 h-4" 
         />

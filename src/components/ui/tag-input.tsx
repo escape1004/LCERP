@@ -22,7 +22,7 @@ export const TagInput: React.FC<TagInputProps> = ({
     <div className={cn("flex flex-wrap gap-2", className)}>
       {value.map((tag, index) => (
         <div
-          key={index}
+          key={`${tag}-${index}`}
           className={cn(
             "flex items-center gap-1 px-2 py-1 text-sm rounded bg-discord-dark text-discord-text",
             tagClassName

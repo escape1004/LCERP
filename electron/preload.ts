@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { Category, NewCategory, CategoryUpdate, NewRecord, ElectronAPI } from '../src/types';
+import { ElectronAPI, NewCategory, CategoryUpdate, NewRecord } from '../src/types';
 
 interface TableData {
   columns: string[];
@@ -25,7 +25,7 @@ const api: ElectronAPI = {
   deleteCategory: (id: string) => ipcRenderer.invoke('db:deleteCategory', id),
   getRecords: (categoryId: string) => ipcRenderer.invoke('db:getRecords', categoryId),
   addRecord: (record: NewRecord) => ipcRenderer.invoke('db:addRecord', record),
-  updateRecord: (id: string, data: any) => ipcRenderer.invoke('db:updateRecord', id, data),
+  updateRecord: (id: string, data: Record<string, any>) => ipcRenderer.invoke('db:updateRecord', id, data),
   deleteRecord: (id: string) => ipcRenderer.invoke('db:deleteRecord', id),
   getCategories: () => ipcRenderer.invoke('db:getCategories'),
   backupDatabase: () => ipcRenderer.invoke('backupDatabase'),
@@ -35,6 +35,8 @@ const api: ElectronAPI = {
   setBackupDir: () => ipcRenderer.invoke('setBackupDir'),
   setBackupInterval: (minutes: number) => ipcRenderer.invoke('setBackupInterval', minutes),
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
+  checkDuplicate: (categoryId: string, fieldId: string, value: any, recordId?: string) => 
+    ipcRenderer.invoke('db:checkDuplicate', categoryId, fieldId, value, recordId),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api); 

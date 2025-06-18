@@ -23,7 +23,7 @@ export interface Category {
 export interface Field {
   id: string;
   name: string;
-  type: 'text' | 'longtext' | 'number' | 'select' | 'relation' | 'date';
+  type: 'text' | 'longtext' | 'number' | 'select' | 'relation' | 'date' | 'file';
   multiple?: boolean;
   options?: string[];
   relationCategoryId?: string;

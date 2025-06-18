@@ -3,6 +3,7 @@ import { X, ExternalLink, ChevronRight } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { Category, DataRecord, FieldDefinition } from '../types';
 import { Button } from './ui/button';
+import { toast } from './ui/use-toast';
 
 interface ViewRecordModalProps {
   isOpen: boolean;
@@ -66,6 +67,26 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   );
 
   const formatFieldValue = (field: FieldDefinition, value: any) => {
+    if (field.type === 'file' && value) {
+      return (
+        <button
+          type="button"
+          className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(value);
+              toast({ title: '경로가 복사되었습니다.' });
+            } catch (e) {
+              toast({ title: '복사 실패', description: String(e), variant: 'destructive' });
+            }
+          }}
+          title="경로 복사"
+        >
+          {value}
+        </button>
+      );
+    }
+
     if (value === null || value === undefined || value === '') return '-';
 
     const urlPattern = /^https?:\/\/.+/i;
@@ -78,9 +99,9 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         if (Array.isArray(value)) {
           return (
             <div className="flex flex-wrap gap-2">
-              {value.map((item, index) => (
+              {value.map((item) => (
                 <span
-                  key={index}
+                  key={item}
                   className="px-3 py-1 bg-discord-accent text-white text-sm rounded-full"
                 >
                   {String(item)}
@@ -103,13 +124,12 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         if (Array.isArray(value)) {
           return (
             <div className="flex flex-wrap gap-2">
-              {value.map((relatedId, index) => {
+              {value.map((relatedId) => {
                 const relatedRecord = relatedRecords.find(r => r.id === relatedId);
                 if (!relatedRecord) return null;
-                
                 return (
                   <span
-                    key={index}
+                    key={relatedId}
                     className="px-3 py-1 bg-discord-success text-white text-sm rounded-full"
                   >
                     {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
@@ -132,6 +152,11 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         return String(value);
     }
   };
+
+  // Footer
+  const fileField = category.fields.find(f => f.type === 'file');
+  const filePath = fileField ? record.data[fileField.id] : null;
+  const canOpenFile = !!filePath && filePath !== '' && filePath !== '-';
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -209,6 +234,23 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
 
         {/* Footer */}
         <div className="flex-shrink-0 flex items-center justify-end p-6 border-t border-gray-700">
+          {canOpenFile && (
+            <>
+              <Button
+                variant="outline"
+                className="mr-2 hover:bg-discord-hover cursor-pointer"
+                onClick={async () => {
+                  try {
+                    await window.electronAPI.openFile(filePath);
+                  } catch (e) {
+                    // TODO: 에러 안내
+                  }
+                }}
+              >
+                원본 파일 열기
+              </Button>
+            </>
+          )}
           <Button onClick={onClose} className="bg-discord-accent hover:bg-blue-600">
             닫기
           </Button>
