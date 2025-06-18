@@ -245,34 +245,26 @@ ipcMain.handle('db:getCategories', () => {
 });
 
 // DB 뷰어를 위한 핸들러 추가
-ipcMain.handle('db:getTables', () => {
-  log('Getting database tables...');
+ipcMain.handle('getTables', (event) => {
+  // db:getTables와 동일하게 동작
   const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
   return tables;
 });
 
-ipcMain.handle('db:getTableData', (event, tableName) => {
-  log('Getting data for table:', tableName);
-  try {
-    // SQL injection 방지를 위한 테이블 이름 검증
-    const validTables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
-    if (!validTables.some(t => t.name === tableName)) {
-      throw new Error('Invalid table name');
-    }
-    
-    const stmt = db.prepare(`SELECT * FROM ${tableName} LIMIT 1000`);
-    const rows = stmt.all();
-    const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
-    
-    return {
-      columns,
-      rows,
-      total: rows.length
-    };
-  } catch (error) {
-    log('Error getting table data:', error);
-    throw error;
+ipcMain.handle('getTableData', (event, tableName) => {
+  // db:getTableData와 동일하게 동작
+  const validTables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+  if (!validTables.some(t => t.name === tableName)) {
+    throw new Error('Invalid table name');
   }
+  const stmt = db.prepare(`SELECT * FROM ${tableName} LIMIT 1000`);
+  const rows = stmt.all();
+  const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+  return {
+    columns,
+    rows,
+    total: rows.length
+  };
 });
 
 // DB 파일 경로 가져오기
@@ -699,4 +691,8 @@ ipcMain.handle('getThumbnailDataUrl', async (_, filePath) => {
   } catch (e) {
     return { success: false, error: e.message };
   }
+});
+
+ipcMain.handle('openDbFile', () => {
+  shell.showItemInFolder(dbPath);
 }); 

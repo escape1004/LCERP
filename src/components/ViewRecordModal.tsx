@@ -140,17 +140,17 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         return (
           <div className="flex flex-col items-start gap-2">
             {loading ? (
-              <div className="w-[80px] h-[80px] bg-gray-800 flex items-center justify-center text-xs text-gray-400">로딩중...</div>
+              <div className="w-[96px] h-[96px] bg-gray-800 flex items-center justify-center text-xs text-gray-400">로딩중...</div>
             ) : thumbnailDataUrl ? (
               <img
                 src={thumbnailDataUrl}
                 alt="썸네일"
-                className="w-[80px] h-[80px] object-contain rounded border border-gray-700 cursor-pointer hover:opacity-80"
+                className="w-[96px] h-[96px] object-contain rounded border border-gray-700 cursor-pointer hover:opacity-80"
                 onClick={() => window.electronAPI.openFile(value)}
                 title="썸네일 클릭 시 원본 파일 실행"
               />
             ) : (
-              <div className="w-[80px] h-[80px] bg-gray-900 flex items-center justify-center text-xs text-gray-500 border border-gray-700 rounded">썸네일 없음</div>
+              <div className="w-[96px] h-[96px] bg-gray-900 flex items-center justify-center text-xs text-gray-500 border border-gray-700 rounded">썸네일 없음</div>
             )}
             <button
               type="button"
@@ -256,6 +256,66 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
     }
   };
 
+  // 썸네일 전용 컴포넌트(상단에만 렌더)
+  const TopThumbnail: React.FC<{ filePath: string; canOpenFile: boolean }> = ({ filePath, canOpenFile }) => {
+    const [dataUrl, setDataUrl] = React.useState<string | null>(null);
+    const [loading, setLoading] = React.useState(false);
+    const [error, setError] = React.useState<string | null>(null);
+    const ext = filePath ? filePath.slice(filePath.lastIndexOf('.')).toLowerCase() : '';
+
+    React.useEffect(() => {
+      let ignore = false;
+      if (SUPPORTED_THUMBNAIL_EXTS.includes(ext) && filePath) {
+        setLoading(true);
+        window.electronAPI.getThumbnailDataUrl(filePath)
+          .then(res => {
+            if (!ignore) {
+              if (res.success && res.dataUrl) {
+                setDataUrl(res.dataUrl);
+                setError(null);
+              } else {
+                setDataUrl(null);
+                setError(res.error || '썸네일 생성 실패');
+              }
+              setLoading(false);
+            }
+          })
+          .catch(e => {
+            if (!ignore) {
+              setDataUrl(null);
+              setError(String(e));
+              setLoading(false);
+            }
+          });
+      } else {
+        setDataUrl(null);
+        setError(null);
+      }
+      return () => { ignore = true; };
+    }, [filePath]);
+
+    if (!SUPPORTED_THUMBNAIL_EXTS.includes(ext)) return null;
+
+    return (
+      <div className="flex flex-col items-center">
+        {loading ? (
+          <div className="w-[320px] h-[320px] bg-gray-800 flex items-center justify-center text-lg text-gray-400 rounded-xl border border-gray-700">로딩중...</div>
+        ) : dataUrl ? (
+          <img
+            src={dataUrl}
+            alt="썸네일"
+            className="w-[320px] h-[320px] object-contain rounded-xl border border-gray-700 cursor-pointer hover:opacity-80 transition"
+            onClick={() => canOpenFile && window.electronAPI.openFile(filePath)}
+            title="썸네일 클릭 시 원본 파일 실행"
+            style={{ maxWidth: 480, maxHeight: 480 }}
+          />
+        ) : (
+          <div className="w-[320px] h-[320px] bg-gray-900 flex items-center justify-center text-lg text-gray-500 border border-gray-700 rounded-xl">썸네일 없음</div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-discord-bg rounded-lg w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
@@ -294,6 +354,13 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
           </button>
         </div>
 
+        {/* 썸네일 최상단 렌더 */}
+        {fileField && filePath && (
+          <div className="flex flex-col items-center py-6 border-b border-gray-700 bg-discord-sidebar">
+            <TopThumbnail filePath={filePath} canOpenFile={canOpenFile} />
+          </div>
+        )}
+
         {/* Content */}
         <div className="flex-1 min-h-0 p-6 overflow-y-auto max-h-[calc(90vh-160px)] discord-scrollbar">
           <div className="space-y-6">
@@ -305,7 +372,26 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                     {field.name}
                   </h3>
                   <div className="text-discord-text">
-                    {formatFieldValue(field, record.data[field.id])}
+                    {/* 파일 필드는 상세 정보에서 썸네일 대신 경로 복사 버튼만 */}
+                    {field.type === 'file' && record.data[field.id] ? (
+                      <button
+                        type="button"
+                        className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(record.data[field.id]);
+                            toast({ title: '경로가 복사되었습니다.' });
+                          } catch (e) {
+                            toast({ title: '복사 실패', description: String(e), variant: 'destructive' });
+                          }
+                        }}
+                        title="경로 복사"
+                      >
+                        {record.data[field.id]}
+                      </button>
+                    ) : (
+                      formatFieldValue(field, record.data[field.id])
+                    )}
                   </div>
                 </div>
               ))}

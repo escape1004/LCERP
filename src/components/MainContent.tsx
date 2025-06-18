@@ -71,6 +71,29 @@ const CategoryBreadcrumb = React.memo(({
 
 CategoryBreadcrumb.displayName = 'CategoryBreadcrumb';
 
+// 썸네일 렌더링 유틸
+const ThumbnailCell: React.FC<{ filePath: string | undefined }> = ({ filePath }) => {
+  const [dataUrl, setDataUrl] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    let ignore = false;
+    if (filePath) {
+      window.electronAPI.getThumbnailDataUrl(filePath).then(res => {
+        if (!ignore) setDataUrl(res.success ? res.dataUrl || null : null);
+      });
+    } else {
+      setDataUrl(null);
+    }
+    return () => { ignore = true; };
+  }, [filePath]);
+  return dataUrl ? (
+    <img src={dataUrl} alt="썸네일" style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 8 }} />
+  ) : (
+    <div style={{ width: 96, height: 96, background: '#222', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 36 }}>
+      <span>🖼️</span>
+    </div>
+  );
+};
+
 export const MainContent: React.FC = () => {
   const {
     categories,
@@ -529,6 +552,9 @@ export const MainContent: React.FC = () => {
     return <div className="flex items-center justify-center h-full text-discord-muted">카테고리가 없습니다. 새로 추가해보세요.</div>;
   }
 
+  // 파일 필드 존재 여부
+  const fileField = selectedCategorySafe?.fields.find(f => f.type === 'file');
+
   return (
     <div className="flex-1 h-full flex flex-col bg-discord-bg">
       {showDbViewer ? (
@@ -657,6 +683,7 @@ export const MainContent: React.FC = () => {
                   <table className="w-full">
                     <thead className="sticky top-0 bg-discord-sidebar border-b border-gray-700">
                       <tr>
+                        {fileField && <th className="px-2 py-2 text-left text-sm font-semibold text-discord-text">썸네일</th>}
                         {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
                           <th
                             key={field.id}
@@ -703,6 +730,11 @@ export const MainContent: React.FC = () => {
                           key={record.id}
                           className="border-b border-gray-800 hover:bg-discord-hover transition-colors"
                         >
+                          {fileField && (
+                            <td className="px-2 py-3 text-sm text-discord-text">
+                              <ThumbnailCell filePath={record.data[fileField.id]} />
+                            </td>
+                          )}
                           {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
                             <td key={field.id} className="px-2 py-3 text-sm text-discord-text">
                               {formatFieldValue(field, record.data[field.id], record.id)}
