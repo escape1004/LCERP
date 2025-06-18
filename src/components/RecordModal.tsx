@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Search, Check, ChevronsUpDown } from 'lucide-react';
+import { X, Search, Check, ChevronsUpDown, ChevronRight } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import type { Category, DataRecord, FieldDefinition, NewRecord } from '../types';
 import type { ElectronAPI } from '../types/electron';
@@ -25,7 +25,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
   category,
   record,
 }) => {
-  const { addRecord, updateRecord, categories, getCategoryRecords, checkDuplicate } = useERPStore();
+  const { addRecord, updateRecord, categories, getCategoryRecords, checkDuplicate, selectCategory } = useERPStore();
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [duplicateErrors, setDuplicateErrors] = useState<Record<string, string>>({});
@@ -675,19 +675,55 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                           isDuplicateChecking ||
                           pendingDuplicateChecks.size > 0;
 
+  // 카테고리 경로 구하기 (ViewRecordModal 참고)
+  const getParentPath = useCallback((currentCategory: Category): Category[] => {
+    const path: Category[] = [];
+    let parent = currentCategory.parentId ? categories.find(c => c.id === currentCategory.parentId) : null;
+    while (parent) {
+      path.unshift(parent);
+      parent = parent.parentId ? categories.find(c => c.id === parent.parentId) : null;
+    }
+    return path;
+  }, [categories]);
+
+  const handleCategoryClick = useCallback((categoryId: string) => {
+    selectCategory(categoryId);
+    onClose();
+  }, [selectCategory, onClose]);
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-discord-bg rounded-lg w-full max-w-2xl flex flex-col max-h-[90vh]">
         <div className="flex-shrink-0 flex items-center justify-between p-6 border-b border-gray-700">
-          <div>
+          <div className="flex items-end">
             <h2 className="text-xl font-bold text-discord-text">
-              {record ? '항목 수정' : '새 항목 추가'}
+              {record ? '항목 수정' : '새 항목 등록'}
             </h2>
-            <p className="text-sm text-discord-muted mt-1">
-              {category ? category.name : '카테고리를 먼저 선택하세요.'}
-            </p>
+            <span className="ml-2 text-sm text-discord-muted flex items-center">
+              (
+              {(() => {
+                const parentPath = getParentPath(category);
+                return (
+                  <>
+                    {parentPath.map((cat, idx) => (
+                      <React.Fragment key={cat.id}>
+                        <button
+                          onClick={() => handleCategoryClick(cat.id)}
+                          className="hover:text-discord-text hover:underline"
+                        >
+                          {cat.name}
+                        </button>
+                        <ChevronRight size={14} className="mx-1 text-discord-muted" />
+                      </React.Fragment>
+                    ))}
+                    <span className="text-discord-muted font-semibold">{category.name}</span>
+                  </>
+                );
+              })()}
+              )
+            </span>
           </div>
           <button
             onClick={onClose}

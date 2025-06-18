@@ -321,30 +321,31 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
       <div className="bg-discord-bg rounded-lg w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between p-6 border-b border-gray-700">
-          <div>
-            <h2 className="text-xl font-bold text-discord-text">
-              항목 상세 정보
-            </h2>
-            <div className="text-sm text-discord-muted mt-1 flex items-center gap-1">
-              {category.parentId ? (
-                <>
-                  {getParentPath(category).map((cat, index) => (
-                    <React.Fragment key={cat.id}>
-                      <button
-                        onClick={() => handleCategoryClick(cat.id)}
-                        className="hover:text-discord-text hover:underline"
-                      >
-                        {cat.name}
-                      </button>
-                      <ChevronRight size={14} className="text-discord-muted mx-0.5" />
-                    </React.Fragment>
-                  ))}
-                  <span className="text-discord-text">{category.name}</span>
-                </>
-              ) : (
-                <span className="text-discord-text">{category.name}</span>
-              )}
-            </div>
+          <div className="flex items-end">
+            <h2 className="text-xl font-bold text-discord-text">항목 상세 정보</h2>
+            <span className="ml-2 text-sm text-discord-muted flex items-center">
+              (
+              {(() => {
+                const parentPath = getParentPath(category);
+                return (
+                  <>
+                    {parentPath.map((cat, idx) => (
+                      <React.Fragment key={cat.id}>
+                        <button
+                          onClick={() => handleCategoryClick(cat.id)}
+                          className="hover:text-discord-text hover:underline"
+                        >
+                          {cat.name}
+                        </button>
+                        <ChevronRight size={14} className="mx-1 text-discord-muted" />
+                      </React.Fragment>
+                    ))}
+                    <span className="text-discord-muted font-semibold">{category.name}</span>
+                  </>
+                );
+              })()}
+              )
+            </span>
           </div>
           <button
             onClick={onClose}
