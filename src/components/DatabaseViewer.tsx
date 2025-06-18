@@ -272,7 +272,7 @@ export const DatabaseViewer: React.FC = () => {
                     {tableData.columns.filter(f => !f.hidden).map((column) => (
                       <th 
                         key={column} 
-                        className="bg-discord-sidebar text-sm font-medium text-discord-text p-2 text-left sticky top-0 border-b border-gray-700 first:pl-2"
+                        className="bg-discord-sidebar text-xs font-medium text-discord-text p-2 text-left sticky top-0 border-b border-gray-700 first:pl-2"
                       >
                         {column}
                       </th>
@@ -288,7 +288,7 @@ export const DatabaseViewer: React.FC = () => {
                       {tableData.columns.filter(f => !f.hidden).map((column, colIndex) => (
                         <td 
                           key={column} 
-                          className={`p-2 text-sm text-discord-text border-b border-gray-700 ${
+                          className={`p-2 text-xs text-discord-text border-b border-gray-700 ${
                             colIndex === 0 ? 'pl-2' : ''
                           }`}
                         >

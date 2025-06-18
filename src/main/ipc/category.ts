@@ -54,7 +54,7 @@ export const registerCategoryHandlers = () => {
       updateFields.push('fields = ?');
       values.push(fields);
     }
-    if (updates.order_num !== undefined) {
+    if (updates.order_num !== undefined && updates.order_num !== null) {
       updateFields.push('order_num = ?');
       values.push(updates.order_num);
     }

@@ -224,7 +224,9 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         if (!relatedCategory) return String(value);
         
         const relatedRecords = getCategoryRecords(field.relationCategoryId);
-        const displayField = relatedCategory.fields[0];
+        const displayField = field.displayFieldId
+          ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
+          : relatedCategory.fields[0];
         
         if (Array.isArray(value)) {
           return (

@@ -432,7 +432,9 @@ export const RecordModal: React.FC<RecordModalProps> = ({
         if (!relatedCategory) return null;
         
         const relatedRecords = getCategoryRecords(field.relationCategoryId);
-        const displayField = relatedCategory.fields[0];
+        const displayField = field.displayFieldId
+          ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
+          : relatedCategory.fields[0];
 
         if (field.multiple) {
           return (

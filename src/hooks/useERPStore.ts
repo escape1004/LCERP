@@ -94,7 +94,12 @@ export const useERPStore = create<ERPStore>((set, get) => ({
 
   reorderCategories: async (categories) => {
     for (const [index, category] of categories.entries()) {
-      await window.electronAPI.updateCategory(category.id, { ...category, order: index });
+      await window.electronAPI.updateCategory(category.id, {
+        name: category.name,
+        parentId: category.parentId,
+        fields: category.fields,
+        order_num: index
+      });
     }
     await get().loadCategories();
   },

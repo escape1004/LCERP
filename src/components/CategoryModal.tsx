@@ -133,7 +133,6 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
           name: formData.name,
           parentId: formData.parentId,
           fields: formData.fields,
-          order: category.order,
         });
       } else {
         console.log('Creating new category:', formData);
@@ -470,6 +469,24 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                             ))}
                                         </SelectContent>
                                       </Select>
+                                      {field.relationCategoryId && (
+                                        <div className="space-y-1">
+                                          <Label className="text-sm text-gray-400">라벨 필드(선택 목록에 표시될 필드)</Label>
+                                          <Select
+                                            value={field.displayFieldId || ''}
+                                            onValueChange={(value) => updateField(index, { displayFieldId: value })}
+                                          >
+                                            <SelectTrigger className="w-full bg-[#2b2d31] border-gray-600 text-gray-200">
+                                              <SelectValue placeholder="필드 선택" />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-[#2b2d31] border-gray-600">
+                                              {(categories.find(cat => cat.id === field.relationCategoryId)?.fields.filter(f => f.required) || []).map(f => (
+                                                <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                      )}
                                     </div>
                                   )}
                                 </div>

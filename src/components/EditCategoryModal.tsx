@@ -210,6 +210,25 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, onChange, onDelete, ca
               ))}
             </SelectContent>
           </Select>
+          {/* 라벨 필드 선택 */}
+          {field.relationCategoryId && (
+            <div className="space-y-1">
+              <label className="text-sm text-discord-text">라벨 필드(선택 목록에 표시될 필드)</label>
+              <Select
+                value={field.displayFieldId || ''}
+                onValueChange={(value) => onChange({ ...field, displayFieldId: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="필드 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(categories.find(cat => cat.id === field.relationCategoryId)?.fields || []).map(f => (
+                    <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -260,7 +279,6 @@ export const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
       if (category) {
         // 수정
         await updateCategory(category.id, {
-          ...category,
           name,
           fields: fields.map((field, index) => ({ ...field, order: index })),
         });

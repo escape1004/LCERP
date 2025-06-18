@@ -21,7 +21,8 @@ export interface CategoryUpdate {
   name: string;
   parentId?: string;
   fields: FieldDefinition[];
-  order: number;
+  order?: number;
+  order_num?: number;
 }
 
 export interface FieldDefinition {
@@ -37,6 +38,7 @@ export interface FieldDefinition {
   isAddingOption?: boolean;
   newOption?: string;
   hidden?: boolean;
+  displayFieldId?: string;
 }
 
 export interface DataRecord {

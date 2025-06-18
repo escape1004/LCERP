@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, Upload, FileText, ChevronDown } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { DataRecord, FieldDefinition, Category } from '../types';
 import { Button } from './ui/button';
@@ -16,6 +16,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "./ui/tooltip";
+import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 
 // Custom event type
 declare global {
@@ -86,7 +88,7 @@ const ThumbnailCell: React.FC<{ filePath: string | undefined }> = ({ filePath })
     return () => { ignore = true; };
   }, [filePath]);
   return dataUrl ? (
-    <img src={dataUrl} alt="썸네일" style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 8 }} />
+    <img src={dataUrl} alt="썸네일" style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 8, display: 'block', maxHeight: '100%', position: 'static', margin: 0, padding: 0 }} />
   ) : (
     <div style={{ width: 96, height: 96, background: '#222', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 36 }}>
       <span>🖼️</span>
@@ -169,6 +171,16 @@ export const MainContent: React.FC = () => {
     }
   }, [selectedCategoryId, categoriesSafe, loadRecords]);
 
+  useEffect(() => {
+    if (!selectedCategoryId && categoriesSafe.length > 0) {
+      const rootCategories = categoriesSafe.filter(cat => !cat.parentId);
+      const firstRootCategory = [...rootCategories].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0];
+      if (firstRootCategory) {
+        selectCategory(firstRootCategory.id);
+      }
+    }
+  }, [selectedCategoryId, categoriesSafe, selectCategory]);
+
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<DataRecord | null>(null);
@@ -178,6 +190,9 @@ export const MainContent: React.FC = () => {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [searchField, setSearchField] = useState<string>('all');
   const [expandedTags, setExpandedTags] = useState<{[key: string]: boolean}>({});
+  const [csvDropdownOpen, setCsvDropdownOpen] = useState(false);
+  const csvInputRef = useRef<HTMLInputElement | null>(null);
+  const excelInputRef = useRef<HTMLInputElement | null>(null);
 
   // Custom filtered records based on field-specific search
   const customFilteredRecords = useMemo(() => {
@@ -444,7 +459,9 @@ export const MainContent: React.FC = () => {
         if (!relatedCategory) return String(value);
         
         const relatedRecords = getCategoryRecords(field.relationCategoryId);
-        const displayField = relatedCategory.fields[0];
+        const displayField = field.displayFieldId
+          ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
+          : relatedCategory.fields[0];
         
         if (field.multiple && Array.isArray(value)) {
           const isExpanded = expandedTags[`${recordId}-${field.id}`];
@@ -539,6 +556,204 @@ export const MainContent: React.FC = () => {
     return path;
   }, [categoriesSafe]);
 
+  const handleCsvDownload = () => {
+    exportToCSV();
+    setCsvDropdownOpen(false);
+  };
+
+  const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedCategorySafe) return;
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        const { data, errors } = results;
+        if (errors.length > 0) {
+          toast({ title: 'CSV 파싱 오류', description: errors.map(e => e.message).join(', '), variant: 'destructive' });
+          setCsvDropdownOpen(false);
+          return;
+        }
+        // 필드 매핑
+        const fields = selectedCategorySafe.fields;
+        const requiredFields = fields.filter(f => f.required);
+        let successCount = 0;
+        let failCount = 0;
+        let failRows: number[] = [];
+        for (let i = 0; i < data.length; i++) {
+          const row = data[i] as Record<string, any>;
+          // 필수값 누락 체크
+          const missing = requiredFields.find(f => !row[f.name] && row[f.name] !== 0);
+          if (missing) {
+            failCount++;
+            failRows.push(i + 2); // header + 1-based
+            continue;
+          }
+          // 중복 체크(고유 필드)
+          const uniqueField = fields.find(f => f.unique && row[f.name]);
+          if (uniqueField) {
+            const isDuplicate = currentRecordsSafe.some(r => r.data[uniqueField.id] === row[uniqueField.name]);
+            if (isDuplicate) {
+              failCount++;
+              failRows.push(i + 2);
+              continue;
+            }
+          }
+          // 데이터 변환 및 삽입
+          const recordData: Record<string, any> = {};
+          fields.forEach(f => {
+            recordData[f.id] = row[f.name] ?? '';
+          });
+          try {
+            const now = new Date().toISOString();
+            await window.electronAPI.addRecord({
+              categoryId: selectedCategorySafe.id,
+              data: recordData,
+              createdAt: now,
+              updatedAt: now,
+            });
+            successCount++;
+          } catch (err) {
+            failCount++;
+            failRows.push(i + 2);
+          }
+        }
+        toast({
+          title: `CSV 업로드 결과`,
+          description: `성공: ${successCount}건, 실패: ${failCount}건${failRows.length ? ' (실패 행: ' + failRows.join(', ') + ')' : ''}`,
+          variant: failCount > 0 ? 'destructive' : 'default',
+        });
+        setCsvDropdownOpen(false);
+        loadRecords(selectedCategorySafe.id);
+      },
+      error: (err) => {
+        toast({ title: 'CSV 파싱 실패', description: String(err), variant: 'destructive' });
+        setCsvDropdownOpen(false);
+      },
+    });
+  };
+
+  const handleTemplateDownload = () => {
+    if (!selectedCategorySafe) return;
+    const fields = selectedCategorySafe.fields;
+    // 필수 필드는 *표시, 옵션 필드는 그대로
+    const headers = fields.filter(f => !f.hidden).map(f => f.required ? `${f.name}*` : f.name);
+    // 예시 데이터: 필수는 "", 옵션은 ""
+    const example = fields.filter(f => !f.hidden).map(() => '');
+    const BOM = '\uFEFF';
+    const csvContent = BOM + [headers.join(','), example.join(',')].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${selectedCategorySafe.name}_양식.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setCsvDropdownOpen(false);
+  };
+
+  const handleExcelDownload = () => {
+    if (!selectedCategorySafe || sortedRecords.length === 0) return;
+    const headers = ['ID', ...selectedCategorySafe.fields.filter(f => !f.hidden).map(f => f.name), '생성일', '수정일'];
+    const data = sortedRecords.map(record => [
+      record.id,
+      ...selectedCategorySafe.fields.filter(f => !f.hidden).map(field => record.data[field.id]),
+      new Date(record.createdAt).toLocaleString(),
+      new Date(record.updatedAt).toLocaleString()
+    ]);
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Records');
+    XLSX.writeFile(wb, `${selectedCategorySafe.name}_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`);
+    setCsvDropdownOpen(false);
+  };
+
+  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedCategorySafe) return;
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+      const [header, ...rows] = json;
+      if (!header || !Array.isArray(header)) {
+        toast({ title: '엑셀 파싱 오류', description: '헤더가 올바르지 않습니다.', variant: 'destructive' });
+        setCsvDropdownOpen(false);
+        return;
+      }
+      const fields = selectedCategorySafe.fields;
+      const requiredFields = fields.filter(f => f.required);
+      let successCount = 0;
+      let failCount = 0;
+      let failRows: number[] = [];
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i] as any[];
+        const rowObj: Record<string, any> = {};
+        fields.filter(f => !f.hidden).forEach((f, idx) => {
+          rowObj[f.name] = row[idx];
+        });
+        // 필수값 누락 체크
+        const missing = requiredFields.find(f => !rowObj[f.name] && rowObj[f.name] !== 0);
+        if (missing) {
+          failCount++;
+          failRows.push(i + 2);
+          continue;
+        }
+        // 중복 체크(고유 필드)
+        const uniqueField = fields.find(f => f.unique && rowObj[f.name]);
+        if (uniqueField) {
+          const isDuplicate = currentRecordsSafe.some(r => r.data[uniqueField.id] === rowObj[uniqueField.name]);
+          if (isDuplicate) {
+            failCount++;
+            failRows.push(i + 2);
+            continue;
+          }
+        }
+        // 데이터 변환 및 삽입
+        const recordData: Record<string, any> = {};
+        fields.forEach(f => {
+          recordData[f.id] = rowObj[f.name] ?? '';
+        });
+        try {
+          const now = new Date().toISOString();
+          await window.electronAPI.addRecord({
+            categoryId: selectedCategorySafe.id,
+            data: recordData,
+            createdAt: now,
+            updatedAt: now,
+          });
+          successCount++;
+        } catch (err) {
+          failCount++;
+          failRows.push(i + 2);
+        }
+      }
+      toast({
+        title: `엑셀 업로드 결과`,
+        description: `성공: ${successCount}건, 실패: ${failCount}건${failRows.length ? ' (실패 행: ' + failRows.join(', ') + ')' : ''}`,
+        variant: failCount > 0 ? 'destructive' : 'default',
+      });
+      setCsvDropdownOpen(false);
+      loadRecords(selectedCategorySafe.id);
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleExcelTemplateDownload = () => {
+    if (!selectedCategorySafe) return;
+    const fields = selectedCategorySafe.fields;
+    const headers = fields.filter(f => !f.hidden).map(f => f.required ? `${f.name}*` : f.name);
+    const example = fields.filter(f => !f.hidden).map(() => '');
+    const ws = XLSX.utils.aoa_to_sheet([headers, example]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Template');
+    XLSX.writeFile(wb, `${selectedCategorySafe.name}_양식.xlsx`);
+    setCsvDropdownOpen(false);
+  };
+
   // 렌더링 시 카테고리 없을 때 안내 메시지
   if (!categoriesSafe || categoriesSafe.length === 0) {
     return <div className="flex items-center justify-center h-full text-discord-muted">카테고리가 없습니다. 새로 추가해보세요.</div>;
@@ -585,15 +800,58 @@ export const MainContent: React.FC = () => {
                 </p>
               </div>
               <div className="flex gap-3">
-                <Button
-                  onClick={exportToCSV}
-                  variant="outline"
-                  className="border-gray-600 hover:bg-discord-hover"
-                  disabled={sortedRecords.length === 0}
-                >
-                  <Download size={16} className="mr-2" />
-                  CSV 다운로드
-                </Button>
+                <div className="relative">
+                  <Button
+                    onClick={() => setCsvDropdownOpen((v) => !v)}
+                    variant="outline"
+                    className="border-gray-600 hover:bg-discord-hover flex items-center"
+                    disabled={sortedRecords.length === 0 && !selectedCategorySafe}
+                  >
+                    <FileText size={16} className="mr-2" />
+                    CSV 관리
+                    <ChevronDown size={16} className="ml-1" />
+                  </Button>
+                  {csvDropdownOpen && (
+                    <div className="absolute left-0 mt-2 w-48 bg-discord-sidebar border border-gray-700 rounded shadow-lg z-50">
+                      <button
+                        className="w-full flex items-center px-4 py-2 text-sm hover:bg-discord-hover text-discord-text"
+                        onClick={handleCsvDownload}
+                      >
+                        <Download size={16} className="mr-2" /> CSV 다운로드
+                      </button>
+                      <button
+                        className="w-full flex items-center px-4 py-2 text-sm hover:bg-discord-hover text-discord-text"
+                        onClick={() => csvInputRef.current?.click()}
+                      >
+                        <Upload size={16} className="mr-2" /> CSV 업로드
+                      </button>
+                      <button
+                        className="w-full flex items-center px-4 py-2 text-sm hover:bg-discord-hover text-discord-text"
+                        onClick={handleTemplateDownload}
+                      >
+                        <FileText size={16} className="mr-2" /> CSV 양식 다운로드
+                      </button>
+                      <input
+                        ref={csvInputRef}
+                        type="file"
+                        accept=".csv"
+                        className="hidden"
+                        onChange={handleCsvUpload}
+                      />
+                      <div className="border-t border-gray-700" />
+                      <button className="w-full flex items-center px-4 py-2 text-sm hover:bg-discord-hover text-discord-text" onClick={handleExcelDownload}>
+                        <Download size={16} className="mr-2" /> 엑셀 다운로드
+                      </button>
+                      <button className="w-full flex items-center px-4 py-2 text-sm hover:bg-discord-hover text-discord-text" onClick={() => excelInputRef.current?.click()}>
+                        <Upload size={16} className="mr-2" /> 엑셀 업로드
+                      </button>
+                      <button className="w-full flex items-center px-4 py-2 text-sm hover:bg-discord-hover text-discord-text" onClick={handleExcelTemplateDownload}>
+                        <FileText size={16} className="mr-2" /> 엑셀 양식 다운로드
+                      </button>
+                      <input ref={excelInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleExcelUpload} />
+                    </div>
+                  )}
+                </div>
                 <Button
                   onClick={() => {
                     setEditingRecord(null);
@@ -670,81 +928,52 @@ export const MainContent: React.FC = () => {
               </div>
             ) : (
               <>
-                {/* Table Container */}
-                <div className="flex-1 min-h-0 p-6 pb-0 overflow-auto discord-scrollbar">
-                  <table className="w-full">
-                    <thead className="sticky top-0 bg-discord-sidebar border-b border-gray-700">
+                {/* Table Container - padding 제거, 스크롤 div는 thead 바로 위에서 시작 */}
+                <div className="flex-1 min-h-0 overflow-auto discord-scrollbar">
+                  <table className="w-full table-fixed">
+                    <thead className="sticky top-0 z-10 bg-discord-sidebar border-b border-gray-700">
                       <tr>
-                        {fileField && <th className="px-2 py-2 text-left text-sm font-semibold text-discord-text w-[104px]">썸네일</th>}
+                        {fileField && <th className="px-2 py-2 text-left text-xs font-semibold text-discord-text w-[104px]">썸네일</th>}
                         {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
                           <th
                             key={field.id}
-                            className="px-2 py-2 text-left text-sm font-semibold text-discord-text cursor-pointer hover:bg-discord-hover"
+                            className="px-2 py-2 text-left text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover"
                             onClick={() => handleSort(field.id)}
                           >
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1 select-none">
                               {field.name}
                               {sortField === field.id && (
-                                <span className="text-discord-accent">
-                                  {sortDirection === 'asc' ? '↑' : '↓'}
-                                </span>
+                                <span>{sortDirection === 'asc' ? '▲' : '▼'}</span>
                               )}
                             </div>
                           </th>
                         ))}
-                        {categoriesSafe.some(cat => 
-                          cat.fields.some(field => 
-                            field.type === 'relation' && field.relationCategoryId === selectedCategorySafe.id
-                          )
-                        ) && (
-                          <th
-                            className="px-2 py-2 text-center text-sm font-semibold text-discord-text cursor-pointer hover:bg-discord-hover w-16 whitespace-nowrap"
-                            onClick={() => handleSort('__refCount')}
-                          >
-                            <div className="flex items-center gap-2 justify-center">
-                              참조 횟수
-                              {sortField === '__refCount' && (
-                                <span className="text-discord-accent">
-                                  {sortDirection === 'asc' ? '↑' : '↓'}
-                                </span>
-                              )}
-                            </div>
-                          </th>
-                        )}
-                        <th className="px-2 py-2 text-left text-sm font-semibold text-discord-text w-32">
-                          작업
+                        <th className="px-2 py-2 text-center text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover w-16 whitespace-nowrap" onClick={() => handleSort('__refCount')}>
+                          참조 횟수
+                          {sortField === '__refCount' && (
+                            <span>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                          )}
                         </th>
+                        <th className="px-2 py-2 text-left text-xs font-semibold text-discord-text w-32">작업</th>
                       </tr>
                     </thead>
                     <tbody>
                       {paginatedRecords.map((record) => (
-                        <tr
-                          key={record.id}
-                          className="border-b border-gray-800 hover:bg-discord-hover transition-colors"
-                        >
+                        <tr key={record.id} className="hover:bg-discord-hover group">
                           {fileField && (
-                            <td className="px-2 py-3 text-sm text-discord-text w-[104px]">
+                            <td className="px-2 py-3 text-xs text-discord-text w-[104px] overflow-hidden relative">
                               <ThumbnailCell filePath={record.data[fileField.id]} />
                             </td>
                           )}
                           {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
-                            <td key={field.id} className="px-2 py-3 text-sm text-discord-text">
+                            <td key={field.id} className="px-2 py-3 text-xs text-discord-text">
                               {formatFieldValue(field, record.data[field.id], record.id)}
                             </td>
                           ))}
-                          {categoriesSafe.some(cat => 
-                            cat.fields.some(field => 
-                              field.type === 'relation' && field.relationCategoryId === selectedCategorySafe.id
-                            )
-                          ) && (
-                            <td className="px-2 py-3 text-sm text-center w-16 whitespace-nowrap">
-                              {(() => {
-                                const count = getRecordReferenceCount(record.id, selectedCategorySafe.id);
-                                return count > 0 ? count : '-';
-                              })()}
-                            </td>
-                          )}
-                          <td className="px-2 py-3">
+                          <td className="px-2 py-3 text-xs text-discord-text text-center w-16">
+                            {getRecordReferenceCount(record.id, selectedCategorySafe.id)}
+                          </td>
+                          <td className="px-2 py-3 text-xs text-discord-text w-32">
                             <div className="flex gap-1">
                               <Button
                                 size="sm"
