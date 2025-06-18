@@ -23,6 +23,9 @@ app/dist/
 *.sqlite3
 *.db
 db.json
+save/*.db
+save/*.db-wal
+save/*.db-shm
 
 # Logs
 logs
@@ -80,3 +83,6 @@ Icon
 ._*
 .Spotlight-V100
 .Trashes
+
+# 썸네일 캐시
+thumbnails/

@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { X, ExternalLink, ChevronRight } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { Category, DataRecord, FieldDefinition } from '../types';
@@ -12,13 +12,23 @@ interface ViewRecordModalProps {
   record: DataRecord | null;
 }
 
+const SUPPORTED_THUMBNAIL_EXTS = [
+  '.jpg', '.jpeg', '.png', '.gif', '.webp',
+  '.mp4', '.avi', '.mkv', '.mov',
+  '.zip', '.7z'
+];
+
 export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   isOpen,
   onClose,
   category,
   record,
 }) => {
+  if (!isOpen || !record || !category) return null;
+
   const { categories, getCategoryRecords, selectCategory } = useERPStore();
+
+  const [fileExists, setFileExists] = useState<boolean | null>(null);
 
   // Get parent categories path
   const getParentPath = useCallback((currentCategory: Category): Category[] => {
@@ -38,7 +48,28 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
     onClose();
   }, [selectCategory, onClose]);
 
-  if (!isOpen || !record) return null;
+  // Footer 관련 변수들
+  const fileField = category.fields.find(f => f.type === 'file');
+  const filePath = fileField ? record?.data[fileField.id] : null;
+
+  useEffect(() => {
+    let ignore = false;
+    if (isOpen && filePath) {
+      window.electronAPI.checkFileExists(filePath).then(exists => {
+        if (!ignore) {
+          setFileExists(exists);
+          if (!exists) {
+            toast({ title: '원본 파일이 존재하지 않습니다.', variant: 'destructive' });
+          }
+        }
+      });
+    } else {
+      setFileExists(null);
+    }
+    return () => { ignore = true; };
+  }, [isOpen, filePath]);
+
+  const canOpenFile = !!filePath && filePath !== '' && filePath !== '-' && fileExists !== false;
 
   const handleUrlClick = async (e: React.MouseEvent, url: string) => {
     e.preventDefault();
@@ -68,6 +99,78 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
 
   const formatFieldValue = (field: FieldDefinition, value: any) => {
     if (field.type === 'file' && value) {
+      const ext = value ? value.slice(value.lastIndexOf('.')).toLowerCase() : '';
+      const [thumbnailDataUrl, setThumbnailDataUrl] = React.useState<string | null>(null);
+      const [loading, setLoading] = React.useState(false);
+      const [error, setError] = React.useState<string | null>(null);
+
+      React.useEffect(() => {
+        let ignore = false;
+        if (SUPPORTED_THUMBNAIL_EXTS.includes(ext) && value) {
+          setLoading(true);
+          window.electronAPI.getThumbnailDataUrl(value)
+            .then(res => {
+              if (!ignore) {
+                if (res.success && res.dataUrl) {
+                  setThumbnailDataUrl(res.dataUrl);
+                  setError(null);
+                } else {
+                  setThumbnailDataUrl(null);
+                  setError(res.error || '썸네일 생성 실패');
+                }
+                setLoading(false);
+              }
+            })
+            .catch(e => {
+              if (!ignore) {
+                setThumbnailDataUrl(null);
+                setError(String(e));
+                setLoading(false);
+              }
+            });
+        } else {
+          setThumbnailDataUrl(null);
+          setError(null);
+        }
+        return () => { ignore = true; };
+      }, [value]);
+
+      if (SUPPORTED_THUMBNAIL_EXTS.includes(ext)) {
+        console.log('썸네일 dataUrl:', thumbnailDataUrl, '에러:', error);
+        return (
+          <div className="flex flex-col items-start gap-2">
+            {loading ? (
+              <div className="w-[80px] h-[80px] bg-gray-800 flex items-center justify-center text-xs text-gray-400">로딩중...</div>
+            ) : thumbnailDataUrl ? (
+              <img
+                src={thumbnailDataUrl}
+                alt="썸네일"
+                className="w-[80px] h-[80px] object-contain rounded border border-gray-700 cursor-pointer hover:opacity-80"
+                onClick={() => window.electronAPI.openFile(value)}
+                title="썸네일 클릭 시 원본 파일 실행"
+              />
+            ) : (
+              <div className="w-[80px] h-[80px] bg-gray-900 flex items-center justify-center text-xs text-gray-500 border border-gray-700 rounded">썸네일 없음</div>
+            )}
+            <button
+              type="button"
+              className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(value);
+                  toast({ title: '경로가 복사되었습니다.' });
+                } catch (e) {
+                  toast({ title: '복사 실패', description: String(e), variant: 'destructive' });
+                }
+              }}
+              title="경로 복사"
+            >
+              {value}
+            </button>
+          </div>
+        );
+      }
+      // 미지원 확장자: 기존 경로 복사 버튼만
       return (
         <button
           type="button"
@@ -152,11 +255,6 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         return String(value);
     }
   };
-
-  // Footer
-  const fileField = category.fields.find(f => f.type === 'file');
-  const filePath = fileField ? record.data[fileField.id] : null;
-  const canOpenFile = !!filePath && filePath !== '' && filePath !== '-';
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -246,6 +344,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                     // TODO: 에러 안내
                   }
                 }}
+                disabled={!canOpenFile}
               >
                 원본 파일 열기
               </Button>

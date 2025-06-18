@@ -73,9 +73,12 @@ export interface ElectronAPI {
   setBackupDir: () => Promise<{ success: boolean; path?: string }>;
   setBackupInterval: (minutes: number) => Promise<{ success: boolean }>;
   openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
+  checkFileExists: (filePath: string) => Promise<boolean>;
   checkDuplicate: (categoryId: string, fieldId: string, value: any, recordId?: string) => Promise<{ isDuplicate: boolean }>;
   send: (channel: string, ...args: any[]) => void;
   openFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
+  generateThumbnail: (filePath: string) => Promise<{ success: boolean; thumbnailPath?: string; error?: string }>;
+  getThumbnailDataUrl: (filePath: string) => Promise<{ success: boolean; dataUrl?: string; error?: string }>;
 }
 
 // DB 뷰어 관련 타입

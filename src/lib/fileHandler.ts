@@ -15,7 +15,7 @@ interface FileInfo {
 const ALLOWED_EXTENSIONS = {
   image: ['.jpg', '.jpeg', '.png', '.gif', '.webp'],
   video: ['.mp4', '.avi', '.mkv', '.mov'],
-  archive: ['.zip', '.7z', '.rar']
+  archive: ['.zip', '.7z']
 };
 
 // 파일 경로 보안 검증
@@ -80,7 +80,10 @@ export async function generateThumbnail(filePath: string): Promise<string | null
               size: '200x200'
             })
             .on('end', () => resolve(thumbnailPath))
-            .on('error', reject);
+            .on('error', (err) => {
+              console.error('ffmpeg 썸네일 생성 에러:', err, '파일:', filePath);
+              reject(err);
+            });
         });
 
       case 'archive':
@@ -103,7 +106,7 @@ export async function generateThumbnail(filePath: string): Promise<string | null
         return null;
     }
   } catch (error) {
-    console.error('Error generating thumbnail:', error);
+    console.error('Error generating thumbnail:', error, '파일:', filePath);
     return null;
   }
 }

@@ -3,6 +3,7 @@ const path = require('path');
 const Database = require('better-sqlite3');
 const fs = require('fs');
 const crypto = require('crypto');
+const { generateThumbnail } = require('../dist/lib/fileHandler');
 
 // 로그 파일 설정
 const logPath = path.join(app.getPath('userData'), 'app.log');
@@ -58,7 +59,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, '..', 'dist', 'preload.js'),
       sandbox: false
     },
     icon: iconPath
@@ -665,6 +666,37 @@ ipcMain.handle('openFile', async (_, filePath) => {
     return { success: true };
   } catch (e) {
     console.log('[IPC] openFile: error:', e);
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('checkFileExists', async (_, filePath) => {
+  try {
+    return fs.existsSync(filePath);
+  } catch (e) {
+    return false;
+  }
+});
+
+ipcMain.handle('generateThumbnail', async (_, filePath) => {
+  try {
+    const result = await generateThumbnail(filePath);
+    return { success: !!result, thumbnailPath: result };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('getThumbnailDataUrl', async (_, filePath) => {
+  try {
+    const result = await generateThumbnail(filePath);
+    if (!result) return { success: false, error: '썸네일 생성 실패' };
+    const ext = path.extname(result).toLowerCase();
+    const mime = ext === '.png' ? 'image/png' : 'image/jpeg';
+    const buffer = fs.readFileSync(result);
+    const base64 = buffer.toString('base64');
+    return { success: true, dataUrl: `data:${mime};base64,${base64}` };
+  } catch (e) {
     return { success: false, error: e.message };
   }
 }); 

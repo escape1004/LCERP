@@ -18,6 +18,9 @@ const electronAPI = {
   openFileDialog: () => ipcRenderer.invoke('openFileDialog'),
   send: (channel: string, ...args: any[]) => ipcRenderer.send(channel, ...args),
   openFile: (filePath: string) => ipcRenderer.invoke('openFile', filePath),
+  checkFileExists: (filePath: string) => ipcRenderer.invoke('checkFileExists', filePath),
+  generateThumbnail: (filePath: string) => ipcRenderer.invoke('generateThumbnail', filePath),
+  getThumbnailDataUrl: (filePath: string) => ipcRenderer.invoke('getThumbnailDataUrl', filePath),
 } as const;
 
 // API를 window 객체에 노출

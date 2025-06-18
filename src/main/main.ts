@@ -4,6 +4,7 @@ import { registerCategoryHandlers } from './ipc/category';
 import { registerRecordHandlers } from './ipc/record';
 import { registerDatabaseHandlers } from './ipc/database';
 import Database from 'better-sqlite3';
+import fs from 'fs';
 
 const isDevelopment = process.env.NODE_ENV === 'development';
 
@@ -188,6 +189,14 @@ ipcMain.handle('openFileDialog', async () => {
     title: '파일 선택'
   });
   return result;
+});
+
+ipcMain.handle('checkFileExists', async (_, filePath) => {
+  try {
+    return fs.existsSync(filePath);
+  } catch (e) {
+    return false;
+  }
 });
 
 console.log("=== Electron __dirname ===", __dirname);
