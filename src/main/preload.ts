@@ -21,6 +21,11 @@ const electronAPI = {
   checkFileExists: (filePath: string) => ipcRenderer.invoke('checkFileExists', filePath),
   generateThumbnail: (filePath: string) => ipcRenderer.invoke('generateThumbnail', filePath),
   getThumbnailDataUrl: (filePath: string) => ipcRenderer.invoke('getThumbnailDataUrl', filePath),
+  getConfig: () => ipcRenderer.invoke('getConfig'),
+  openBackupLocation: () => ipcRenderer.invoke('openBackupLocation'),
+  backupDatabase: () => ipcRenderer.invoke('backupDatabase'),
+  setDbPath: () => ipcRenderer.invoke('setDbPath'),
+  setBackupDir: () => ipcRenderer.invoke('setBackupDir'),
 } as const;
 
 // API를 window 객체에 노출
