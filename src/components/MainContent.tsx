@@ -250,7 +250,7 @@ export const MainContent: React.FC = () => {
   const exportToCSV = () => {
     if (!selectedCategorySafe || sortedRecords.length === 0) return;
 
-    const headers = ['ID', ...selectedCategorySafe.fields.map(f => f.name), '생성일', '수정일'];
+    const headers = ['ID', ...selectedCategorySafe.fields.filter(f => !f.hidden).map(f => f.name), '생성일', '수정일'];
     
     // Add BOM for Korean encoding
     const BOM = '\uFEFF';
@@ -259,7 +259,7 @@ export const MainContent: React.FC = () => {
       headers.join(','),
       ...sortedRecords.map(record => [
         record.id,
-        ...selectedCategorySafe.fields.map(field => {
+        ...selectedCategorySafe.fields.filter(f => !f.hidden).map(field => {
           const value = record.data[field.id];
           
           // Handle different field types
@@ -615,7 +615,7 @@ export const MainContent: React.FC = () => {
                 </SelectTrigger>
                 <SelectContent className="bg-discord-sidebar border-gray-600">
                   <SelectItem value="all">전체 필드</SelectItem>
-                  {selectedCategorySafe?.fields.map(field => (
+                  {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
                     <SelectItem key={field.id} value={field.id}>
                       {field.name}
                     </SelectItem>
@@ -657,7 +657,7 @@ export const MainContent: React.FC = () => {
                   <table className="w-full">
                     <thead className="sticky top-0 bg-discord-sidebar border-b border-gray-700">
                       <tr>
-                        {selectedCategorySafe?.fields.map(field => (
+                        {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
                           <th
                             key={field.id}
                             className="px-2 py-2 text-left text-sm font-semibold text-discord-text cursor-pointer hover:bg-discord-hover"
@@ -703,7 +703,7 @@ export const MainContent: React.FC = () => {
                           key={record.id}
                           className="border-b border-gray-800 hover:bg-discord-hover transition-colors"
                         >
-                          {selectedCategorySafe?.fields.map(field => (
+                          {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
                             <td key={field.id} className="px-2 py-3 text-sm text-discord-text">
                               {formatFieldValue(field, record.data[field.id], record.id)}
                             </td>

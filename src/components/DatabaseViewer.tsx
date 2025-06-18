@@ -269,7 +269,7 @@ export const DatabaseViewer: React.FC = () => {
               <table className="min-w-[1500px] border-separate border-spacing-0">
                 <thead>
                   <tr>
-                    {tableData.columns.map((column) => (
+                    {tableData.columns.filter(f => !f.hidden).map((column) => (
                       <th 
                         key={column} 
                         className="bg-discord-sidebar text-sm font-medium text-discord-text p-2 text-left sticky top-0 border-b border-gray-700 first:pl-2"
@@ -285,7 +285,7 @@ export const DatabaseViewer: React.FC = () => {
                       key={i}
                       className="hover:bg-discord-hover transition-colors"
                     >
-                      {tableData.columns.map((column, colIndex) => (
+                      {tableData.columns.filter(f => !f.hidden).map((column, colIndex) => (
                         <td 
                           key={column} 
                           className={`p-2 text-sm text-discord-text border-b border-gray-700 ${

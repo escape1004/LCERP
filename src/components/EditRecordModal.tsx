@@ -53,6 +53,7 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {category.fields
+            .filter(f => !f.hidden)
             .sort((a, b) => a.order - b.order)
             .map(field => (
               <div key={field.id} className="space-y-2">

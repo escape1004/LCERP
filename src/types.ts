@@ -36,6 +36,7 @@ export interface FieldDefinition {
   multiple?: boolean;
   isAddingOption?: boolean;
   newOption?: string;
+  hidden?: boolean;
 }
 
 export interface DataRecord {

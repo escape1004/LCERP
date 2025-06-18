@@ -216,9 +216,9 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
   };
 
   const exportToCSV = async () => {
-    const headers = selectedCategory.fields.map(f => f.name).join(',');
+    const headers = selectedCategory.fields.filter(f => !f.hidden).map(f => f.name).join(',');
     const rows = sortedRecords.map(record => 
-      selectedCategory.fields.map(field => {
+      selectedCategory.fields.filter(f => !f.hidden).map(field => {
         const value = record.data[field.id];
         if (typeof value === 'string' && value.includes(',')) {
           return `"${value}"`;
@@ -361,7 +361,7 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
             </SelectTrigger>
             <SelectContent className="bg-discord-sidebar border-gray-600">
               <SelectItem value="all">전체 필드</SelectItem>
-              {selectedCategory.fields.map(field => (
+              {selectedCategory.fields.filter(f => !f.hidden).map(field => (
                 <SelectItem key={field.id} value={field.id}>
                   {field.name}
                 </SelectItem>
@@ -403,7 +403,7 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
               <table className="w-full">
                 <thead className="sticky top-0 bg-discord-sidebar border-b border-gray-700">
                   <tr>
-                    {selectedCategory.fields.map(field => (
+                    {selectedCategory.fields.filter(f => !f.hidden).map(field => (
                       <th
                         key={field.id}
                         className="px-2 py-2 text-left text-sm font-semibold text-discord-text cursor-pointer hover:bg-discord-hover"
@@ -450,7 +450,7 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
                       key={record.id}
                       className="border-b border-gray-800 hover:bg-discord-hover transition-colors"
                     >
-                      {selectedCategory.fields.map(field => {
+                      {selectedCategory.fields.filter(f => !f.hidden).map(field => {
                         const value = record.data[field.id];
                         return (
                           <td key={field.id} className="px-2 py-3 text-sm text-discord-text whitespace-nowrap">

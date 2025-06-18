@@ -380,6 +380,16 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                             중복 불가
                                           </label>
                                         </div>
+                                        <div className="flex items-center gap-2">
+                                          <Checkbox
+                                            id={`hidden-${field.id}`}
+                                            checked={field.hidden}
+                                            onCheckedChange={(checked) => updateField(index, { hidden: checked as boolean })}
+                                          />
+                                          <label htmlFor={`hidden-${field.id}`} className="text-sm text-gray-300">
+                                            미노출(리스트 숨김)
+                                          </label>
+                                        </div>
                                         {(field.type === 'select' || field.type === 'relation') && (
                                           <div className="flex items-center gap-2">
                                             <Checkbox

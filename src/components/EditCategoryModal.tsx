@@ -113,6 +113,20 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, onChange, onDelete, ca
               중복 불가
             </label>
           </div>
+
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id={`hidden-${field.id}`}
+              checked={field.hidden}
+              onCheckedChange={(checked) => onChange({ ...field, hidden: checked === true })}
+            />
+            <label
+              htmlFor={`hidden-${field.id}`}
+              className="text-sm font-medium leading-none text-discord-text cursor-pointer"
+            >
+              미노출(리스트 숨김)
+            </label>
+          </div>
         </div>
       </div>
 
