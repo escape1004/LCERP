@@ -671,24 +671,33 @@ ipcMain.handle('checkFileExists', async (_, filePath) => {
 });
 
 ipcMain.handle('generateThumbnail', async (_, filePath) => {
+  console.log('[IPC] generateThumbnail 호출됨:', filePath);
   try {
     const result = await generateThumbnail(filePath);
+    console.log('[IPC] generateThumbnail 결과:', result);
     return { success: !!result, thumbnailPath: result };
   } catch (e) {
+    console.error('[IPC] generateThumbnail 에러:', e);
     return { success: false, error: e.message };
   }
 });
 
 ipcMain.handle('getThumbnailDataUrl', async (_, filePath) => {
+  console.log('[IPC] getThumbnailDataUrl 호출됨:', filePath);
   try {
     const result = await generateThumbnail(filePath);
-    if (!result) return { success: false, error: '썸네일 생성 실패' };
+    if (!result) {
+      console.error('[IPC] getThumbnailDataUrl 썸네일 생성 실패');
+      return { success: false, error: '썸네일 생성 실패' };
+    }
     const ext = path.extname(result).toLowerCase();
     const mime = ext === '.png' ? 'image/png' : 'image/jpeg';
     const buffer = fs.readFileSync(result);
     const base64 = buffer.toString('base64');
+    console.log('[IPC] getThumbnailDataUrl 썸네일 생성 성공:', result);
     return { success: true, dataUrl: `data:${mime};base64,${base64}` };
   } catch (e) {
+    console.error('[IPC] getThumbnailDataUrl 에러:', e);
     return { success: false, error: e.message };
   }
 });

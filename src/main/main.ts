@@ -209,5 +209,18 @@ ipcMain.handle('generateThumbnail', async (_, filePath) => {
   }
 });
 
+ipcMain.handle('getThumbnailDataUrl', async (_, filePath) => {
+  const path = require('path');
+  const fs = require('fs');
+  const thumbnailDir = path.join(process.cwd(), 'thumbnails');
+  const thumbnailPath = path.join(thumbnailDir, `thumb_${path.basename(filePath)}.jpg`);
+  if (!fs.existsSync(thumbnailPath)) {
+    return { success: false, error: '썸네일 없음' };
+  }
+  const data = fs.readFileSync(thumbnailPath);
+  const dataUrl = `data:image/jpeg;base64,${data.toString('base64')}`;
+  return { success: true, dataUrl };
+});
+
 console.log("=== Electron __dirname ===", __dirname);
 console.log("=== preload path ===", path.join(__dirname, '../dist/preload.js')); 

@@ -2,8 +2,15 @@ import { shell } from 'electron';
 import sharp from 'sharp';
 import ffmpeg from 'fluent-ffmpeg';
 import AdmZip from 'adm-zip';
-import path from 'path';
-import fs from 'fs';
+import * as path from 'path';
+import * as fs from 'fs';
+const ffmpegStatic = require('ffmpeg-static');
+console.log('ffmpeg-static:', ffmpegStatic, fs.existsSync(ffmpegStatic));
+if (ffmpegStatic && fs.existsSync(ffmpegStatic)) {
+  ffmpeg.setFfmpegPath(ffmpegStatic);
+} else {
+  throw new Error('ffmpeg-static 바이너리 경로를 찾을 수 없습니다: ' + ffmpegStatic);
+}
 
 interface FileInfo {
   path: string;
@@ -53,6 +60,10 @@ export async function generateThumbnail(filePath: string): Promise<string | null
     throw new Error('Invalid or unauthorized file path');
   }
 
+  if (!ffmpegStatic || !fs.existsSync(ffmpegStatic)) {
+    throw new Error('ffmpeg-static 바이너리 경로를 찾을 수 없습니다. ffmpeg-static 패키지 설치 및 node_modules/ffmpeg-static 경로 확인 필요.');
+  }
+
   const fileType = getFileType(filePath);
   const thumbnailDir = path.join(process.cwd(), 'thumbnails');
   
@@ -66,7 +77,7 @@ export async function generateThumbnail(filePath: string): Promise<string | null
     switch (fileType) {
       case 'image':
         await sharp(filePath)
-          .resize(200, 200, { fit: 'contain' })
+          .resize(400, 400, { fit: 'contain' })
           .toFile(thumbnailPath);
         return thumbnailPath;
 
@@ -77,7 +88,7 @@ export async function generateThumbnail(filePath: string): Promise<string | null
               timestamps: ['00:00:01'],
               filename: path.basename(thumbnailPath),
               folder: thumbnailDir,
-              size: '200x200'
+              size: '400x400'
             })
             .on('end', () => resolve(thumbnailPath))
             .on('error', (err) => {
@@ -95,10 +106,15 @@ export async function generateThumbnail(filePath: string): Promise<string | null
 
         if (imageEntry) {
           const buffer = zip.readFile(imageEntry);
-          await sharp(buffer)
-            .resize(200, 200, { fit: 'contain' })
-            .toFile(thumbnailPath);
-          return thumbnailPath;
+          if (buffer) {
+            await sharp(buffer)
+              .resize(400, 400, { fit: 'contain' })
+              .toFile(thumbnailPath);
+            return thumbnailPath;
+          } else {
+            console.error('압축파일에서 이미지를 읽지 못함:', imageEntry.entryName);
+            return null;
+          }
         }
         return null;
 
