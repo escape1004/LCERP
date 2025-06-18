@@ -214,6 +214,17 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     moveField(result.source.index, result.destination.index);
   };
 
+  // 카테고리 경로 구하는 함수
+  const getCategoryPath = (cat: Category): string[] => {
+    const path: string[] = [cat.name];
+    let parent = cat.parentId ? categories.find(c => c.id === cat.parentId) : null;
+    while (parent) {
+      path.unshift(parent.name);
+      parent = parent.parentId ? categories.find(c => c.id === parent.parentId) : null;
+    }
+    return path;
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -460,13 +471,11 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                           <SelectValue placeholder="카테고리를 선택하세요" />
                                         </SelectTrigger>
                                         <SelectContent className="bg-[#2b2d31] border-gray-600">
-                                          {categories
-                                            .filter((cat) => cat.id !== category?.id)
-                                            .map((cat) => (
-                                              <SelectItem key={cat.id} value={cat.id}>
-                                                {cat.name}
-                                              </SelectItem>
-                                            ))}
+                                          {categories.map((cat) => (
+                                            <SelectItem key={cat.id} value={cat.id}>
+                                              {getCategoryPath(cat).join(' / ')}
+                                            </SelectItem>
+                                          ))}
                                         </SelectContent>
                                       </Select>
                                       {field.relationCategoryId && (

@@ -119,32 +119,30 @@ export const MainContent: React.FC = () => {
 
   const getRecordReferenceCount = useCallback((recordId: string, categoryId: string): number => {
     let count = 0;
-    
-    // 모든 카테고리를 순회
-    categoriesSafe.forEach(category => {
-      // 현재 카테고리의 relation 타입 필드 중 targetCategoryId가 일치하는 것만 확인
-      const relationFields = category.fields.filter(
-        field => field.type === 'relation' && field.relationCategoryId === categoryId
-      );
-      
-      if (relationFields.length > 0) {
-        // 해당 카테고리의 모든 레코드를 확인
-        const records = getCategoryRecords(category.id);
-        records.forEach(record => {
-          relationFields.forEach(field => {
-            const value = record.data[field.id];
-            if (field.multiple && Array.isArray(value)) {
-              // 다중 선택인 경우 배열에서 recordId가 포함된 횟수를 더함
-              count += value.filter(id => id === recordId).length;
-            } else if (value === recordId) {
-              // 단일 선택인 경우 값이 일치하면 카운트 증가
-              count += 1;
-            }
-          });
+    const currentCategory = categoriesSafe.find(cat => cat.id === categoryId);
+    if (!currentCategory || !currentCategory.parentId) return 0;
+
+    const parentCategory = categoriesSafe.find(cat => cat.id === currentCategory.parentId);
+    if (!parentCategory) return 0;
+
+    const relationFields = parentCategory.fields.filter(
+      field => field.type === 'relation' && field.relationCategoryId === categoryId
+    );
+
+    if (relationFields.length > 0) {
+      const records = getCategoryRecords(parentCategory.id);
+      records.forEach(record => {
+        relationFields.forEach(field => {
+          const value = record.data[field.id];
+          if (field.multiple && Array.isArray(value)) {
+            count += value.filter(id => id === recordId).length;
+          } else if (value === recordId) {
+            count += 1;
+          }
         });
-      }
-    });
-    
+      });
+    }
+
     return count;
   }, [categoriesSafe, getCategoryRecords]);
   
