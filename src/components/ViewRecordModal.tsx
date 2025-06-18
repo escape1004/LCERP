@@ -10,6 +10,7 @@ interface ViewRecordModalProps {
   onClose: () => void;
   category: Category;
   record: DataRecord | null;
+  onViewRecord?: (record: DataRecord, category: Category) => void;
 }
 
 const SUPPORTED_THUMBNAIL_EXTS = [
@@ -23,6 +24,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   onClose,
   category,
   record,
+  onViewRecord,
 }) => {
   if (!isOpen || !record || !category) return null;
 
@@ -201,11 +203,11 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
       case 'select':
         if (Array.isArray(value)) {
           return (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1">
               {value.map((item) => (
                 <span
                   key={item}
-                  className="px-3 py-1 bg-discord-accent text-white text-sm rounded-full"
+                  className="px-2 py-1 text-xs rounded bg-green-600/20 text-green-500"
                 >
                   {String(item)}
                 </span>
@@ -226,14 +228,23 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         
         if (Array.isArray(value)) {
           return (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1">
               {value.map((relatedId) => {
                 const relatedRecord = relatedRecords.find(r => r.id === relatedId);
                 if (!relatedRecord) return null;
                 return (
                   <span
                     key={relatedId}
-                    className="px-3 py-1 bg-discord-success text-white text-sm rounded-full"
+                    className="px-2 py-1 text-xs rounded bg-green-600/20 text-green-500 cursor-pointer hover:bg-green-600/30"
+                    onClick={() => {
+                      onClose();
+                      setTimeout(() => {
+                        if (onViewRecord) {
+                          onViewRecord(relatedRecord, relatedCategory);
+                        }
+                      }, 200);
+                    }}
+                    title="상세 보기"
                   >
                     {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
                   </span>
@@ -244,7 +255,22 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         } else {
           const relatedRecord = relatedRecords.find(r => r.id === value);
           return relatedRecord 
-            ? String(relatedRecord.data[displayField?.id] || relatedRecord.id)
+            ? (
+              <span
+                className="text-green-500 cursor-pointer hover:underline"
+                onClick={() => {
+                  onClose();
+                  setTimeout(() => {
+                    if (onViewRecord) {
+                      onViewRecord(relatedRecord, relatedCategory);
+                    }
+                  }, 200);
+                }}
+                title="상세 보기"
+              >
+                {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
+              </span>
+            )
             : String(value);
         }
       

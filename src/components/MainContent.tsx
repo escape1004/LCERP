@@ -254,14 +254,10 @@ export const MainContent: React.FC = () => {
     setIsViewModalOpen(true);
   };
 
-  const handleViewRelatedRecord = (recordId: string, categoryId: string) => {
-    const relatedRecords = getCategoryRecords(categoryId);
-    const relatedRecord = relatedRecords.find(r => r.id === recordId);
-    if (relatedRecord) {
-      setViewingRecord(relatedRecord);
-      setViewingCategory(categoryId);
-      setIsViewModalOpen(true);
-    }
+  const handleViewRelatedRecord = (record: DataRecord, category: Category) => {
+    setViewingRecord(record);
+    setViewingCategory(category.id);
+    setIsViewModalOpen(true);
   };
 
   const handleDelete = (record: DataRecord) => {
@@ -466,9 +462,7 @@ export const MainContent: React.FC = () => {
                     className="px-2 py-1 text-xs rounded bg-green-600/20 text-green-500 cursor-pointer hover:bg-green-600/30"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setViewingRecord(relatedRecord);
-                      setViewingCategory(field.relationCategoryId!);
-                      setIsViewModalOpen(true);
+                      handleViewRelatedRecord(relatedRecord, relatedCategory);
                     }}
                   >
                     {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
@@ -515,9 +509,7 @@ export const MainContent: React.FC = () => {
               className="text-green-500 cursor-pointer hover:underline"
               onClick={(e) => {
                 e.stopPropagation();
-                setViewingRecord(relatedRecord);
-                setViewingCategory(field.relationCategoryId!);
-                setIsViewModalOpen(true);
+                handleViewRelatedRecord(relatedRecord, relatedCategory);
               }}
             >
               {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
@@ -841,6 +833,7 @@ export const MainContent: React.FC = () => {
             }}
             category={categoriesSafe.find(cat => cat.id === viewingCategory) || selectedCategorySafe}
             record={viewingRecord}
+            onViewRecord={handleViewRelatedRecord}
           />
         </div>
       )}
