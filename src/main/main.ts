@@ -5,6 +5,7 @@ import { registerRecordHandlers } from './ipc/record';
 import { registerDatabaseHandlers } from './ipc/database';
 import Database from 'better-sqlite3';
 import fs from 'fs';
+import { generateThumbnail } from '../lib/fileHandler';
 
 const isDevelopment = process.env.NODE_ENV === 'development';
 
@@ -196,6 +197,15 @@ ipcMain.handle('checkFileExists', async (_, filePath) => {
     return fs.existsSync(filePath);
   } catch (e) {
     return false;
+  }
+});
+
+ipcMain.handle('generateThumbnail', async (_, filePath) => {
+  try {
+    const thumbnailPath = await generateThumbnail(filePath);
+    return { success: !!thumbnailPath, thumbnailPath };
+  } catch (error) {
+    return { success: false, error: String(error) };
   }
 });
 

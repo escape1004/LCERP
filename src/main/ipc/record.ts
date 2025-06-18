@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron';
 import { Database } from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
+import { generateThumbnail } from '../../lib/fileHandler';
 
 let db: Database;
 
@@ -79,8 +80,19 @@ export const registerRecordHandlers = () => {
     const normalizedData = normalizeValue(record.data);
     const stringifiedData = JSON.stringify(normalizedData);
     
-    console.log('Normalized data:', normalizedData);
-    console.log('Stringified data:', stringifiedData);
+    // 파일 필드 썸네일 미리 생성
+    const categoryRow = db.prepare('SELECT fields FROM categories WHERE id = ?').get(record.categoryId);
+    if (categoryRow && categoryRow.fields) {
+      try {
+        const fields = JSON.parse(categoryRow.fields);
+        const fileField = fields.find((f: any) => f.type === 'file');
+        if (fileField && normalizedData[fileField.id]) {
+          await generateThumbnail(normalizedData[fileField.id]);
+        }
+      } catch (e) {
+        console.error('썸네일 생성 중 오류:', e);
+      }
+    }
     
     db.prepare(`
       INSERT INTO records (id, categoryId, data, createdAt, updatedAt)
@@ -104,7 +116,22 @@ export const registerRecordHandlers = () => {
     const now = new Date().toISOString();
     const stringifiedData = JSON.stringify(data);
     
-    console.log('Stringified data:', stringifiedData);
+    // 파일 필드 썸네일 미리 생성
+    const recordRow = db.prepare('SELECT categoryId FROM records WHERE id = ?').get(id);
+    if (recordRow && recordRow.categoryId) {
+      const categoryRow = db.prepare('SELECT fields FROM categories WHERE id = ?').get(recordRow.categoryId);
+      if (categoryRow && categoryRow.fields) {
+        try {
+          const fields = JSON.parse(categoryRow.fields);
+          const fileField = fields.find((f: any) => f.type === 'file');
+          if (fileField && data[fileField.id]) {
+            await generateThumbnail(data[fileField.id]);
+          }
+        } catch (e) {
+          console.error('썸네일 생성 중 오류:', e);
+        }
+      }
+    }
     
     db.prepare(`
       UPDATE records 

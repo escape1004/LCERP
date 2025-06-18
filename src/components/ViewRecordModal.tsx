@@ -261,38 +261,37 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
     const [dataUrl, setDataUrl] = React.useState<string | null>(null);
     const [loading, setLoading] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
+    const [regenLoading, setRegenLoading] = React.useState(false);
     const ext = filePath ? filePath.slice(filePath.lastIndexOf('.')).toLowerCase() : '';
 
+    const reloadThumbnail = React.useCallback(() => {
+      setLoading(true);
+      window.electronAPI.getThumbnailDataUrl(filePath)
+        .then(res => {
+          if (res.success && res.dataUrl) {
+            setDataUrl(res.dataUrl);
+            setError(null);
+          } else {
+            setDataUrl(null);
+            setError(res.error || '썸네일 생성 실패');
+          }
+          setLoading(false);
+        })
+        .catch(e => {
+          setDataUrl(null);
+          setError(String(e));
+          setLoading(false);
+        });
+    }, [filePath]);
+
     React.useEffect(() => {
-      let ignore = false;
       if (SUPPORTED_THUMBNAIL_EXTS.includes(ext) && filePath) {
-        setLoading(true);
-        window.electronAPI.getThumbnailDataUrl(filePath)
-          .then(res => {
-            if (!ignore) {
-              if (res.success && res.dataUrl) {
-                setDataUrl(res.dataUrl);
-                setError(null);
-              } else {
-                setDataUrl(null);
-                setError(res.error || '썸네일 생성 실패');
-              }
-              setLoading(false);
-            }
-          })
-          .catch(e => {
-            if (!ignore) {
-              setDataUrl(null);
-              setError(String(e));
-              setLoading(false);
-            }
-          });
+        reloadThumbnail();
       } else {
         setDataUrl(null);
         setError(null);
       }
-      return () => { ignore = true; };
-    }, [filePath]);
+    }, [filePath, reloadThumbnail]);
 
     if (!SUPPORTED_THUMBNAIL_EXTS.includes(ext)) return null;
 
@@ -312,6 +311,30 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         ) : (
           <div className="w-[320px] h-[320px] bg-gray-900 flex items-center justify-center text-lg text-gray-500 border border-gray-700 rounded-xl">썸네일 없음</div>
         )}
+        <Button
+          size="sm"
+          className="mt-2 text-xs text-discord-muted bg-transparent hover:bg-discord-hover border-none shadow-none"
+          variant="ghost"
+          disabled={regenLoading}
+          onClick={async () => {
+            setRegenLoading(true);
+            try {
+              const res = await window.electronAPI.generateThumbnail(filePath);
+              if (res.success) {
+                toast({ title: '썸네일이 재생성되었습니다.' });
+                reloadThumbnail();
+              } else {
+                toast({ title: '썸네일 재생성 실패', description: res.error || '', variant: 'destructive' });
+              }
+            } catch (e) {
+              toast({ title: '썸네일 재생성 실패', description: String(e), variant: 'destructive' });
+            } finally {
+              setRegenLoading(false);
+            }
+          }}
+        >
+          {regenLoading ? '재생성 중...' : '썸네일 재생성'}
+        </Button>
       </div>
     );
   };
