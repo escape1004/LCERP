@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, Upload, FileText, ChevronDown } from 'lucide-react';
+import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, Upload, FileText, ChevronDown, ChevronUp, ArrowUpWideNarrow, ArrowDownWideNarrow, ArrowUp01, ArrowDown01, SortAsc, SortDesc } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { DataRecord, FieldDefinition, Category } from '../types';
 import { Button } from './ui/button';
@@ -152,6 +152,9 @@ export const MainContent: React.FC = () => {
   useEffect(() => {
     setSearchField('all');
     setCurrentPage(1); // Reset pagination when category changes
+    if (sortField === '__refCount') {
+      setSortField('');
+    }
   }, [selectedCategoryId, setCurrentPage]);
 
   // Load related records when category changes
@@ -754,6 +757,16 @@ export const MainContent: React.FC = () => {
     setCsvDropdownOpen(false);
   };
 
+  // 참조 횟수 컬럼 노출 조건 (id가 명확히 존재할 때만)
+  const showRefCount = !!selectedCategorySafe?.id &&
+    categoriesSafe.some(cat =>
+      cat.fields.some(field =>
+        field.type === 'relation' &&
+        !!field.relationCategoryId &&
+        field.relationCategoryId === selectedCategorySafe.id
+      )
+    );
+
   // 렌더링 시 카테고리 없을 때 안내 메시지
   if (!categoriesSafe || categoriesSafe.length === 0) {
     return <div className="flex items-center justify-center h-full text-discord-muted">카테고리가 없습니다. 새로 추가해보세요.</div>;
@@ -943,17 +956,29 @@ export const MainContent: React.FC = () => {
                             <div className="flex items-center gap-1 select-none">
                               {field.name}
                               {sortField === field.id && (
-                                <span>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                                sortDirection === 'asc' ? (
+                                  <SortAsc size={16} className="text-white" />
+                                ) : (
+                                  <SortDesc size={16} className="text-white" />
+                                )
                               )}
                             </div>
                           </th>
                         ))}
-                        <th className="px-2 py-2 text-center text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover w-16 whitespace-nowrap" onClick={() => handleSort('__refCount')}>
-                          참조 횟수
-                          {sortField === '__refCount' && (
-                            <span>{sortDirection === 'asc' ? '▲' : '▼'}</span>
-                          )}
-                        </th>
+                        {showRefCount && (
+                          <th className="px-2 py-2 text-left text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover w-24 whitespace-nowrap" onClick={() => handleSort('__refCount')}>
+                            <div className="flex items-center justify-start gap-1">
+                              참조 횟수
+                              {sortField === '__refCount' && (
+                                sortDirection === 'asc' ? (
+                                  <SortAsc size={16} className="text-white" />
+                                ) : (
+                                  <SortDesc size={16} className="text-white" />
+                                )
+                              )}
+                            </div>
+                          </th>
+                        )}
                         <th className="px-2 py-2 text-left text-xs font-semibold text-discord-text w-32">작업</th>
                       </tr>
                     </thead>
@@ -970,9 +995,11 @@ export const MainContent: React.FC = () => {
                               {formatFieldValue(field, record.data[field.id], record.id)}
                             </td>
                           ))}
-                          <td className="px-2 py-3 text-xs text-discord-text text-center w-16">
-                            {getRecordReferenceCount(record.id, selectedCategorySafe.id)}
-                          </td>
+                          {showRefCount && (
+                            <td className="px-2 py-3 text-xs text-discord-text text-left w-24">
+                              {getRecordReferenceCount(record.id, selectedCategorySafe.id)}
+                            </td>
+                          )}
                           <td className="px-2 py-3 text-xs text-discord-text w-32">
                             <div className="flex gap-1">
                               <Button
