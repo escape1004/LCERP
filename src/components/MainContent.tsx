@@ -102,18 +102,18 @@ const ThumbnailCell: React.FC<{
   };
 
   return (
-    <div className="relative">
+    <div className="relative w-24 h-24">
       {dataUrl ? (
         <img 
           src={dataUrl} 
           alt="썸네일" 
-          style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 8, display: 'block', maxHeight: '100%', position: 'static', margin: 0, padding: 0, cursor: 'pointer' }} 
+          className="w-24 h-24 object-contain rounded border border-gray-700 cursor-pointer hover:opacity-80"
           onClick={() => filePath && onThumbnailClick(filePath)}
           title="썸네일 클릭 시 뷰어 모달 열기"
         />
       ) : (
-        <div style={{ width: 96, height: 96, background: '#222', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 36 }}>
-          <span>🖼️</span>
+        <div className="w-24 h-24 bg-gray-800 flex items-center justify-center text-gray-500 border border-gray-700 rounded">
+          <span className="text-2xl">🖼️</span>
         </div>
       )}
       {/* 파일 확장자 표시 */}
@@ -1051,7 +1051,7 @@ export const MainContent: React.FC = () => {
                   <table className="w-full table-fixed">
                     <thead className="sticky top-0 z-10 bg-discord-sidebar border-b border-gray-700">
                       <tr>
-                        {fileField && <th className="px-2 py-2 text-left text-xs font-semibold text-discord-text w-[104px]">썸네일</th>}
+                        {fileField && <th className="px-2 py-2 text-left text-xs font-semibold text-discord-text w-[112px]">썸네일</th>}
                         {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
                           <th
                             key={field.id}
@@ -1095,7 +1095,7 @@ export const MainContent: React.FC = () => {
                       {paginatedRecords.map((record) => (
                         <tr key={record.id} className="hover:bg-discord-hover group">
                           {fileField && (
-                            <td className="px-2 py-3 text-xs text-discord-text w-[104px] overflow-hidden relative">
+                            <td className="px-2 py-3 text-xs text-discord-text w-[112px] overflow-hidden relative">
                               <ThumbnailCell
                                 filePath={record.data[fileField.id]}
                                 onThumbnailClick={async (filePath) => {
