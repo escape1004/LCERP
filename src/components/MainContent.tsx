@@ -671,11 +671,14 @@ export const MainContent: React.FC = () => {
           });
           try {
             const now = new Date().toISOString();
+            const createdAt = row['생성일'] ? new Date(row['생성일']).toISOString() : now;
+            const updatedAt = row['수정일'] ? new Date(row['수정일']).toISOString() : now;
+            
             await window.electronAPI.addRecord({
               categoryId: selectedCategorySafe.id,
               data: recordData,
-              createdAt: now,
-              updatedAt: now,
+              createdAt,
+              updatedAt,
             });
             successCount++;
           } catch (err) {
@@ -748,53 +751,84 @@ export const MainContent: React.FC = () => {
         setCsvDropdownOpen(false);
         return;
       }
+
+      // 필드 매핑 정보 생성
       const fields = selectedCategorySafe.fields;
+      const fieldMap = new Map();
+      let createdAtIndex = -1;
+      let updatedAtIndex = -1;
+
+      header.forEach((h: string, idx: number) => {
+        // 필수 필드 표시(*) 제거
+        const fieldName = h.replace(/\*$/, '');
+        if (fieldName === '생성일') {
+          createdAtIndex = idx;
+        } else if (fieldName === '수정일') {
+          updatedAtIndex = idx;
+        } else {
+          const field = fields.find(f => f.name === fieldName);
+          if (field) {
+            fieldMap.set(idx, field);
+          }
+        }
+      });
+
       const requiredFields = fields.filter(f => f.required);
       let successCount = 0;
       let failCount = 0;
       const failRows: number[] = [];
+
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i] as any[];
-        const rowObj: Record<string, any> = {};
-        fields.filter(f => !f.hidden).forEach((f, idx) => {
-          rowObj[f.name] = row[idx];
+        const recordData: Record<string, any> = {};
+
+        // 데이터 매핑
+        fieldMap.forEach((field, idx) => {
+          recordData[field.id] = row[idx] ?? '';
         });
+
         // 필수값 누락 체크
-        const missing = requiredFields.find(f => !rowObj[f.name] && rowObj[f.name] !== 0);
+        const missing = requiredFields.find(f => !recordData[f.id] && recordData[f.id] !== 0);
         if (missing) {
           failCount++;
-          failRows.push(i + 2);
+          failRows.push(i + 2); // header + 1-based
           continue;
         }
+
         // 중복 체크(고유 필드)
-        const uniqueField = fields.find(f => f.unique && rowObj[f.name]);
+        const uniqueField = fields.find(f => f.unique && recordData[f.id]);
         if (uniqueField) {
-          const isDuplicate = currentRecordsSafe.some(r => r.data[uniqueField.id] === rowObj[uniqueField.name]);
+          const isDuplicate = currentRecordsSafe.some(r => r.data[uniqueField.id] === recordData[uniqueField.id]);
           if (isDuplicate) {
             failCount++;
             failRows.push(i + 2);
             continue;
           }
         }
-        // 데이터 변환 및 삽입
-        const recordData: Record<string, any> = {};
-        fields.forEach(f => {
-          recordData[f.id] = rowObj[f.name] ?? '';
-        });
+
         try {
           const now = new Date().toISOString();
+          const createdAt = createdAtIndex >= 0 && row[createdAtIndex] 
+            ? new Date(row[createdAtIndex]).toISOString() 
+            : now;
+          const updatedAt = updatedAtIndex >= 0 && row[updatedAtIndex]
+            ? new Date(row[updatedAtIndex]).toISOString()
+            : now;
+
           await window.electronAPI.addRecord({
             categoryId: selectedCategorySafe.id,
             data: recordData,
-            createdAt: now,
-            updatedAt: now,
+            createdAt,
+            updatedAt,
           });
           successCount++;
         } catch (err) {
+          console.error('Record add error:', err);
           failCount++;
           failRows.push(i + 2);
         }
       }
+
       toast({
         title: `엑셀 업로드 결과`,
         description: `성공: ${successCount}건, 실패: ${failCount}건${failRows.length ? ' (실패 행: ' + failRows.join(', ') + ')' : ''}`,
