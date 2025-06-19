@@ -40,11 +40,19 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const [showControls, setShowControls] = useState(true);
   const controlsTimeoutRef = useRef<NodeJS.Timeout>();
 
-  // 이미지 확대/축소 및 패닝 상태 (압축파일/일반 이미지 공통)
+  // 일반 이미지 상태 및 핸들러
   const [imgScale, setImgScale] = useState(1);
   const [imgOffset, setImgOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const panStart = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  // 압축 이미지 상태 및 핸들러
+  const [archiveImgScale, setArchiveImgScale] = useState(1);
+  const [archiveImgOffset, setArchiveImgOffset] = useState({ x: 0, y: 0 });
+  const [archiveIsPanning, setArchiveIsPanning] = useState(false);
+  const archivePanStart = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
+  const archiveImgRef = useRef<HTMLImageElement>(null);
 
   // 이미지 컨테이너 ref
   const imgContainerRef = useRef<HTMLDivElement>(null);
@@ -237,19 +245,73 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     setImgOffset({ x: 0, y: 0 });
   }, [filePath, fileType, currentArchiveIndex]);
 
-  // 휠로 확대/축소
-  const handleImgWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    let nextScale = imgScale - e.deltaY * 0.001;
-    nextScale = Math.max(1, Math.min(5, nextScale));
-    let nextOffset = imgOffset;
-    if (nextScale === 1) nextOffset = { x: 0, y: 0 };
-    else nextOffset = clampImgOffset(imgOffset, nextScale);
-    setImgScale(nextScale);
-    setImgOffset(nextOffset);
-  };
+  // 일반 이미지 휠 확대/축소
+  useEffect(() => {
+    if (fileType !== 'image' || !dataUrl) return;
+    const img = imgRef.current;
+    const container = imgContainerRef.current;
+    if (!img || !container) return;
+    
+    const wheelHandler = (e: WheelEvent) => {
+      e.preventDefault();
+      setImgScale(prevScale => {
+        let nextScale = prevScale - e.deltaY * 0.001;
+        nextScale = Math.max(1, Math.min(5, nextScale));
+        return nextScale;
+      });
+      setImgOffset(prevOffset => {
+        const newScale = imgScale - e.deltaY * 0.001;
+        const nextScale = Math.max(1, Math.min(5, newScale));
+        let nextOffset = prevOffset;
+        if (nextScale === 1) nextOffset = { x: 0, y: 0 };
+        else nextOffset = clampImgOffset(nextOffset, nextScale);
+        return nextOffset;
+      });
+    };
+    
+    img.addEventListener('wheel', wheelHandler, { passive: false });
+    container.addEventListener('wheel', wheelHandler, { passive: false });
+    
+    return () => {
+      img.removeEventListener('wheel', wheelHandler);
+      container.removeEventListener('wheel', wheelHandler);
+    };
+  }, [fileType, dataUrl]);
 
-  // 드래그로 패닝
+  // 압축 이미지 휠 확대/축소
+  useEffect(() => {
+    if (fileType !== 'archive') return;
+    const img = archiveImgRef.current;
+    const container = imgContainerRef.current;
+    if (!img || !container) return;
+    
+    const wheelHandler = (e: WheelEvent) => {
+      e.preventDefault();
+      setArchiveImgScale(prevScale => {
+        let nextScale = prevScale - e.deltaY * 0.001;
+        nextScale = Math.max(1, Math.min(5, nextScale));
+        return nextScale;
+      });
+      setArchiveImgOffset(prevOffset => {
+        const newScale = archiveImgScale - e.deltaY * 0.001;
+        const nextScale = Math.max(1, Math.min(5, newScale));
+        let nextOffset = prevOffset;
+        if (nextScale === 1) nextOffset = { x: 0, y: 0 };
+        else nextOffset = clampImgOffset(nextOffset, nextScale);
+        return nextOffset;
+      });
+    };
+    
+    img.addEventListener('wheel', wheelHandler, { passive: false });
+    container.addEventListener('wheel', wheelHandler, { passive: false });
+    
+    return () => {
+      img.removeEventListener('wheel', wheelHandler);
+      container.removeEventListener('wheel', wheelHandler);
+    };
+  }, [fileType]);
+
+  // 일반 이미지 드래그 패닝
   const handleImgMouseDown = (e: React.MouseEvent) => {
     if (imgScale === 1) return;
     setIsPanning(true);
@@ -259,6 +321,44 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       offsetX: imgOffset.x,
       offsetY: imgOffset.y,
     };
+  };
+  const handleImgMouseMove = (e: React.MouseEvent) => {
+    if (!isPanning || !panStart.current) return;
+    const dx = e.clientX - panStart.current.x;
+    const dy = e.clientY - panStart.current.y;
+    const next = {
+      x: panStart.current.offsetX + dx,
+      y: panStart.current.offsetY + dy,
+    };
+    setImgOffset(clampImgOffset(next, imgScale));
+  };
+  const handleImgMouseUp = () => {
+    setIsPanning(false);
+  };
+
+  // 압축 이미지 드래그 패닝
+  const handleArchiveImgMouseDown = (e: React.MouseEvent) => {
+    if (archiveImgScale === 1) return;
+    setArchiveIsPanning(true);
+    archivePanStart.current = {
+      x: e.clientX,
+      y: e.clientY,
+      offsetX: archiveImgOffset.x,
+      offsetY: archiveImgOffset.y,
+    };
+  };
+  const handleArchiveImgMouseMove = (e: React.MouseEvent) => {
+    if (!archiveIsPanning || !archivePanStart.current) return;
+    const dx = e.clientX - archivePanStart.current.x;
+    const dy = e.clientY - archivePanStart.current.y;
+    const next = {
+      x: archivePanStart.current.offsetX + dx,
+      y: archivePanStart.current.offsetY + dy,
+    };
+    setArchiveImgOffset(clampImgOffset(next, archiveImgScale));
+  };
+  const handleArchiveImgMouseUp = () => {
+    setArchiveIsPanning(false);
   };
 
   // 패닝 한계 계산 함수
@@ -276,22 +376,6 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       y: Math.max(-maxY, Math.min(maxY, offset.y)),
     };
   }
-
-  // 패닝 시 clamp 적용
-  const handleImgMouseMove = (e: React.MouseEvent) => {
-    if (!isPanning || !panStart.current) return;
-    const dx = e.clientX - panStart.current.x;
-    const dy = e.clientY - panStart.current.y;
-    const next = {
-      x: panStart.current.offsetX + dx,
-      y: panStart.current.offsetY + dy,
-    };
-    setImgOffset(clampImgOffset(next, imgScale));
-  };
-
-  const handleImgMouseUp = () => {
-    setIsPanning(false);
-  };
 
   if (!isOpen || !filePath || !fileType) return null;
 
@@ -339,8 +423,12 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
               {fileType === 'image' && dataUrl && (
                 <div
                   ref={imgContainerRef}
-                  className="w-full h-full flex items-center justify-center overflow-hidden"
-                  style={{ maxHeight: '80vh', maxWidth: '100%' }}
+                  className="w-full h-full flex items-center justify-center"
+                  style={{ 
+                    maxHeight: '80vh', 
+                    maxWidth: '100%',
+                    overflow: imgScale > 1 ? 'hidden' : 'visible'
+                  }}
                 >
                   <img
                     src={dataUrl}
@@ -352,11 +440,23 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                       transition: isPanning ? 'none' : 'transform 0.2s',
                     }}
                     draggable={false}
-                    onWheel={handleImgWheel}
-                    onMouseDown={handleImgMouseDown}
-                    onMouseMove={handleImgMouseMove}
-                    onMouseUp={handleImgMouseUp}
-                    onMouseLeave={handleImgMouseUp}
+                    ref={imgRef}
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      handleImgMouseDown(e);
+                    }}
+                    onMouseMove={(e) => {
+                      e.stopPropagation();
+                      handleImgMouseMove(e);
+                    }}
+                    onMouseUp={(e) => {
+                      e.stopPropagation();
+                      handleImgMouseUp();
+                    }}
+                    onMouseLeave={(e) => {
+                      e.stopPropagation();
+                      handleImgMouseUp();
+                    }}
                   />
                 </div>
               )}
@@ -467,19 +567,36 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                   </div>
                   {/* 파일 내용 영역 */}
                   <div className="flex-1 flex flex-col h-full">
-                    <div className="flex-1 flex items-center justify-center relative overflow-auto">
+                    <div 
+                      className="flex-1 flex items-center justify-center relative"
+                      style={{ 
+                        overflow: currentFileExt !== 'txt' && archiveImgScale > 1 ? 'hidden' : 'auto'
+                      }}
+                    >
                       {/* 좌/우 투명 클릭 영역 */}
-                      {currentFileExt !== 'txt' && (
+                      {currentFileExt !== 'txt' && archiveImgScale === 1 && (
                         <>
                           <div
                             className="absolute top-0 left-0 h-full w-1/2 z-10 cursor-pointer"
-                            style={{ background: 'transparent' }}
+                            style={{ background: 'transparent', pointerEvents: 'auto' }}
                             onClick={handlePrevious}
                           />
                           <div
                             className="absolute top-0 right-0 h-full w-1/2 z-10 cursor-pointer"
-                            style={{ background: 'transparent' }}
+                            style={{ background: 'transparent', pointerEvents: 'auto' }}
                             onClick={handleNext}
+                          />
+                        </>
+                      )}
+                      {currentFileExt !== 'txt' && archiveImgScale > 1 && (
+                        <>
+                          <div
+                            className="absolute top-0 left-0 h-full w-1/2 z-10"
+                            style={{ background: 'transparent', pointerEvents: 'none' }}
+                          />
+                          <div
+                            className="absolute top-0 right-0 h-full w-1/2 z-10"
+                            style={{ background: 'transparent', pointerEvents: 'none' }}
                           />
                         </>
                       )}
@@ -504,16 +621,28 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                             style={{
                               maxHeight: '80vh',
                               maxWidth: '100%',
-                              transform: `scale(${imgScale}) translate(${imgOffset.x / imgScale}px, ${imgOffset.y / imgScale}px)`,
-                              cursor: imgScale > 1 ? (isPanning ? 'grabbing' : 'grab') : 'default',
-                              transition: isPanning ? 'none' : 'transform 0.2s',
+                              transform: `scale(${archiveImgScale}) translate(${archiveImgOffset.x / archiveImgScale}px, ${archiveImgOffset.y / archiveImgScale}px)`,
+                              cursor: archiveImgScale > 1 ? (archiveIsPanning ? 'grabbing' : 'grab') : 'default',
+                              transition: archiveIsPanning ? 'none' : 'transform 0.2s',
                             }}
                             draggable={false}
-                            onWheel={handleImgWheel}
-                            onMouseDown={handleImgMouseDown}
-                            onMouseMove={handleImgMouseMove}
-                            onMouseUp={handleImgMouseUp}
-                            onMouseLeave={handleImgMouseUp}
+                            ref={archiveImgRef}
+                            onMouseDown={(e) => {
+                              e.stopPropagation();
+                              handleArchiveImgMouseDown(e);
+                            }}
+                            onMouseMove={(e) => {
+                              e.stopPropagation();
+                              handleArchiveImgMouseMove(e);
+                            }}
+                            onMouseUp={(e) => {
+                              e.stopPropagation();
+                              handleArchiveImgMouseUp();
+                            }}
+                            onMouseLeave={(e) => {
+                              e.stopPropagation();
+                              handleArchiveImgMouseUp();
+                            }}
                           />
                         ) : (
                           <div className="text-discord-muted">이미지를 로드할 수 없습니다.</div>

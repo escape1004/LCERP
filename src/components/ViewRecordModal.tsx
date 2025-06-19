@@ -29,7 +29,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
 }) => {
   if (!isOpen || !record || !category) return null;
 
-  const { categories, getCategoryRecords, selectCategory } = useERPStore();
+  const { categories, getCategoryRecords, selectCategory, loadRecords } = useERPStore();
 
   const [fileExists, setFileExists] = useState<boolean | null>(null);
   const [viewerModalOpen, setViewerModalOpen] = useState(false);
@@ -327,12 +327,13 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   };
 
   // 썸네일 전용 컴포넌트(상단에만 렌더)
-  const TopThumbnail: React.FC<{ filePath: string; canOpenFile: boolean }> = ({ filePath, canOpenFile }) => {
+  const TopThumbnail: React.FC<{ filePath: string; canOpenFile: boolean; categoryId?: string }> = ({ filePath, canOpenFile, categoryId }) => {
     const [dataUrl, setDataUrl] = React.useState<string | null>(null);
     const [loading, setLoading] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
     const [regenLoading, setRegenLoading] = React.useState(false);
     const ext = filePath ? filePath.slice(filePath.lastIndexOf('.')).toLowerCase() : '';
+    const loadRecords = useERPStore(state => state.loadRecords);
 
     const reloadThumbnail = React.useCallback(() => {
       setLoading(true);
@@ -399,6 +400,9 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
               if (res) {
                 toast({ title: '썸네일이 재생성되었습니다.' });
                 reloadThumbnail();
+                if (categoryId) {
+                  await loadRecords(categoryId);
+                }
               } else {
                 toast({ title: '썸네일 재생성 실패', description: '', variant: 'destructive' });
               }
@@ -457,7 +461,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         {/* 썸네일 최상단 렌더 */}
         {fileField && filePath && (
           <div className="flex flex-col items-center py-6 border-b border-gray-700 bg-discord-sidebar">
-            <TopThumbnail filePath={filePath} canOpenFile={canOpenFile} />
+            <TopThumbnail filePath={filePath} canOpenFile={canOpenFile} categoryId={category.id} />
           </div>
         )}
 
