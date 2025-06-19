@@ -163,25 +163,6 @@ function initializeDatabase() {
         FOREIGN KEY (categoryId) REFERENCES categories(id)
       )
     `);
-
-    // 임시 카테고리 자동 추가 (없을 때만)
-    const catCount = db.prepare('SELECT COUNT(*) as count FROM categories').get().count;
-    if (catCount === 0) {
-      db.prepare(`
-        INSERT INTO categories (id, name, parentId, fields, order_num, createdAt, updatedAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        'test-cat-1',
-        '테스트 카테고리',
-        null,
-        JSON.stringify([
-          { id: 'title', name: '제목', type: 'text', required: true, unique: true, order: 1 }
-        ]),
-        0,
-        new Date().toISOString(),
-        new Date().toISOString()
-      );
-    }
   } catch (error) {
     log('Error initializing database:', error);
     throw error;
