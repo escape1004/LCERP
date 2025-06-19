@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, Upload, FileText, ChevronDown, ChevronUp, ArrowUpWideNarrow, ArrowDownWideNarrow, ArrowUp01, ArrowDown01, SortAsc, SortDesc } from 'lucide-react';
+import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, Upload, FileText, ChevronDown, ChevronUp, ArrowUpWideNarrow, ArrowDownWideNarrow, ArrowUp01, ArrowDown01, SortAsc, SortDesc, Check } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { DataRecord, FieldDefinition, Category } from '../types';
 import { Button } from './ui/button';
@@ -451,6 +451,9 @@ export const MainContent: React.FC = () => {
     switch (field.type) {
       case 'date':
         return new Date(value).toLocaleDateString();
+      
+      case 'checkbox':
+        return value ? <Check className="w-5 h-5 text-discord-accent" /> : <X className="w-5 h-5 text-discord-danger" />;
       
       case 'select':
         if (Array.isArray(value)) {
@@ -1025,7 +1028,11 @@ export const MainContent: React.FC = () => {
                         {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
                           <th
                             key={field.id}
-                            className="px-2 py-2 text-left text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover"
+                            className={
+                              field.type === 'checkbox'
+                                ? 'min-w-[40px] max-w-[160px] px-2 py-2 text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover text-left truncate'
+                                : 'px-2 py-2 text-left text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover'
+                            }
                             onClick={() => handleSort(field.id)}
                           >
                             <div className="flex items-center gap-1 select-none">
@@ -1066,7 +1073,11 @@ export const MainContent: React.FC = () => {
                             </td>
                           )}
                           {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
-                            <td key={field.id} className="px-2 py-3 text-xs text-discord-text">
+                            <td key={field.id} className={
+                              field.type === 'checkbox'
+                                ? 'min-w-[40px] max-w-[160px] px-2 py-3 text-xs text-discord-text text-left'
+                                : 'px-2 py-3 text-xs text-discord-text'
+                            }>
                               {formatFieldValue(field, record.data[field.id], record.id)}
                             </td>
                           ))}

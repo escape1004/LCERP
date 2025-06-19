@@ -383,6 +383,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                             <SelectItem value="number">숫자</SelectItem>
                                             <SelectItem value="date">날짜</SelectItem>
                                             <SelectItem value="select">선택 목록</SelectItem>
+                                            <SelectItem value="checkbox">체크박스</SelectItem>
                                             <SelectItem value="relation">관계형</SelectItem>
                                             <SelectItem value="file" disabled={formData.fields.some((f, i) => f.type === 'file' && i !== index)}>파일</SelectItem>
                                           </SelectContent>

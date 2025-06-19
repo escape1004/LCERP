@@ -1,7 +1,7 @@
 export interface FieldDefinition {
   id: string;
   name: string;
-  type: 'text' | 'number' | 'date' | 'longtext' | 'select' | 'relation' | 'file';
+  type: 'text' | 'number' | 'date' | 'select' | 'relation' | 'file' | 'checkbox';
   required: boolean;
   unique: boolean;
   order: number;

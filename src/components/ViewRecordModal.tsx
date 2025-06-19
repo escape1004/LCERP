@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { X, ExternalLink, ChevronRight } from 'lucide-react';
+import { X, ExternalLink, ChevronRight, Check } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { Category, DataRecord, FieldDefinition } from '../types';
 import { Button } from './ui/button';
@@ -216,6 +216,9 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
     switch (field.type) {
       case 'date':
         return new Date(value).toLocaleDateString();
+      
+      case 'checkbox':
+        return value ? <Check className="w-5 h-5 text-discord-accent" /> : <X className="w-5 h-5 text-discord-danger" />;
       
       case 'select':
         if (Array.isArray(value)) {

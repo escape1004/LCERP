@@ -55,7 +55,11 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, onChange, onDelete, ca
               onShowAlert?.('제한', '파일 필드는 한 개만 추가할 수 있습니다.', 'warning');
               return;
             }
-            onChange({ ...field, type: value as FieldDefinition['type'] });
+            const newField = { ...field, type: value as FieldDefinition['type'] };
+            if (value === 'checkbox') {
+              newField.unique = false;
+            }
+            onChange(newField);
           }}
         >
           <SelectTrigger className="w-[180px]">
@@ -66,6 +70,7 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, onChange, onDelete, ca
             <SelectItem value="number">숫자</SelectItem>
             <SelectItem value="date">날짜</SelectItem>
             <SelectItem value="select">선택</SelectItem>
+            <SelectItem value="checkbox">체크박스</SelectItem>
             <SelectItem value="relation">관계</SelectItem>
             <SelectItem value="longtext">긴 텍스트</SelectItem>
             <SelectItem value="file" disabled={categories.some(cat => cat.fields.some(f => f.type === 'file' && f.id !== field.id))}>파일</SelectItem>
@@ -103,10 +108,13 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, onChange, onDelete, ca
               id={`unique-${field.id}`}
               checked={field.unique}
               onCheckedChange={(checked) => onChange({ ...field, unique: checked === true })}
+              disabled={field.type === 'checkbox'}
             />
             <label
               htmlFor={`unique-${field.id}`}
-              className="text-sm font-medium leading-none text-discord-text cursor-pointer"
+              className={`text-sm font-medium leading-none cursor-pointer ${
+                field.type === 'checkbox' ? 'text-gray-500' : 'text-discord-text'
+              }`}
             >
               중복 불가
             </label>

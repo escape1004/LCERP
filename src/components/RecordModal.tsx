@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Search, Check, ChevronsUpDown, ChevronRight } from 'lucide-react';
+import { X, Search, Check, ChevronsUpDown, ChevronRight, CheckCircle2, XCircle } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import type { Category, DataRecord, FieldDefinition, NewRecord } from '../types';
 import type { ElectronAPI } from '../types/electron';
@@ -7,6 +7,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
+import { Switch } from './ui/switch';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from './ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { cn } from '../lib/utils';
@@ -54,6 +55,8 @@ export const RecordModal: React.FC<RecordModalProps> = ({
       (category?.fields ?? []).forEach(field => {
         if (field.type === 'select' && field.multiple) {
           initialData[field.id] = [];
+        } else if (field.type === 'checkbox') {
+          initialData[field.id] = false;
         } else {
           initialData[field.id] = '';
         }
@@ -197,7 +200,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
   };
 
   const renderField = (field: FieldDefinition) => {
-    const value = formData[field.id] || (field.type === 'select' && field.multiple ? [] : '');
+    const value = formData[field.id] || (field.type === 'select' && field.multiple ? [] : field.type === 'checkbox' ? false : '');
     const hasError = !!errors[field.id];
     const hasDuplicateError = !!duplicateErrors[field.id];
     const inputClassName = cn(
@@ -244,16 +247,25 @@ export const RecordModal: React.FC<RecordModalProps> = ({
           </div>
         );
 
-      case 'longtext':
+      case 'checkbox':
         return (
           <div className="space-y-1">
-            <Textarea
-              value={value}
-              onChange={(e) => updateFieldValue(field.id, e.target.value)}
-              className={inputClassName}
-              placeholder={`${field.name} 입력`}
-              rows={4}
-            />
+            <Button
+              variant="outline"
+              onClick={() => updateFieldValue(field.id, !value)}
+              className={cn(
+                "w-full h-10 flex items-center justify-center",
+                value 
+                  ? "bg-discord-accent hover:bg-blue-600 border-0 text-white" 
+                  : "bg-discord-danger hover:bg-red-900 border-0 text-white"
+              )}
+            >
+              {value ? (
+                <Check className="w-6 h-6" />
+              ) : (
+                <X className="w-6 h-6" />
+              )}
+            </Button>
             {renderError()}
           </div>
         );

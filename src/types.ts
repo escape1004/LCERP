@@ -1,3 +1,5 @@
+import type { ElectronAPI } from './types.d';
+
 export interface Category {
   id: string;
   name: string;
@@ -28,7 +30,7 @@ export interface CategoryUpdate {
 export interface FieldDefinition {
   id: string;
   name: string;
-  type: 'text' | 'number' | 'date' | 'select' | 'relation' | 'longtext' | 'file';
+  type: 'text' | 'number' | 'date' | 'select' | 'relation' | 'file' | 'checkbox';
   required: boolean;
   unique: boolean;
   order: number;
@@ -54,34 +56,6 @@ export interface NewRecord {
   data: any;
   createdAt?: string;
   updatedAt?: string;
-}
-
-export interface ElectronAPI {
-  getTables: () => Promise<{ name: string }[]>;
-  getTableData: (tableName: string) => Promise<TableData>;
-  getDbPath: () => Promise<string>;
-  openDbFile: () => Promise<void>;
-  addCategory: (category: NewCategory) => Promise<string>;
-  updateCategory: (id: string, updates: CategoryUpdate) => Promise<void>;
-  deleteCategory: (id: string) => Promise<void>;
-  getRecords: (categoryId: string) => Promise<DataRecord[]>;
-  addRecord: (record: NewRecord) => Promise<string>;
-  updateRecord: (id: string, data: Record<string, any>) => Promise<void>;
-  deleteRecord: (id: string) => Promise<void>;
-  getCategories: () => Promise<Category[]>;
-  backupDatabase: () => Promise<{ success: boolean; path?: string; error?: string }>;
-  openBackupLocation: () => Promise<{ success: boolean }>;
-  getConfig: () => Promise<any>;
-  setDbPath: () => Promise<{ success: boolean; path?: string }>;
-  setBackupDir: () => Promise<{ success: boolean; path?: string }>;
-  setBackupInterval: (minutes: number) => Promise<{ success: boolean }>;
-  openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
-  checkFileExists: (filePath: string) => Promise<boolean>;
-  checkDuplicate: (categoryId: string, fieldId: string, value: any, recordId?: string) => Promise<{ isDuplicate: boolean }>;
-  send: (channel: string, ...args: any[]) => void;
-  openFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
-  generateThumbnail: (filePath: string) => Promise<string | null>;
-  getThumbnailDataUrl: (filePath: string) => Promise<string | null>;
 }
 
 // DB 뷰어 관련 타입
