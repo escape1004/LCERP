@@ -35,21 +35,7 @@
       "electron/**/*",
       "resources/**/*"
     ],
-    "extraResources": [
-      {
-        "from": "save",
-        "to": "save",
-        "filter": [
-          "!**/*.db",
-          "!**/*.sqlite*",
-          "!**/db.json",
-          "!**/thumbnails/**",
-          "!**/.git/**",
-          "!**/node_modules/**",
-          "**/*"
-        ]
-      }
-    ],
+    "extraResources": [],
     "asar": true,
     "asarUnpack": [
       "node_modules/better-sqlite3/**/*"
@@ -74,7 +60,8 @@
       "perMachine": false,
       "allowElevation": true,
       "runAfterFinish": true,
-      "differentialPackage": true
+      "differentialPackage": true,
+      "include": "build/installer.nsh"
     },
     "mac": {
       "target": [
