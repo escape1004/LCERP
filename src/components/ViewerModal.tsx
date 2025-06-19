@@ -40,6 +40,15 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const [showControls, setShowControls] = useState(true);
   const controlsTimeoutRef = useRef<NodeJS.Timeout>();
 
+  // 이미지 확대/축소 및 패닝 상태 (압축파일/일반 이미지 공통)
+  const [imgScale, setImgScale] = useState(1);
+  const [imgOffset, setImgOffset] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panStart = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
+
+  // 이미지 컨테이너 ref
+  const imgContainerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (!isOpen || !filePath || !fileType) {
       setDataUrl(null);
@@ -222,6 +231,68 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     }
   };
 
+  // 파일이 바뀌면 확대/위치 초기화 (압축/일반 모두)
+  useEffect(() => {
+    setImgScale(1);
+    setImgOffset({ x: 0, y: 0 });
+  }, [filePath, fileType, currentArchiveIndex]);
+
+  // 휠로 확대/축소
+  const handleImgWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    let nextScale = imgScale - e.deltaY * 0.001;
+    nextScale = Math.max(1, Math.min(5, nextScale));
+    let nextOffset = imgOffset;
+    if (nextScale === 1) nextOffset = { x: 0, y: 0 };
+    else nextOffset = clampImgOffset(imgOffset, nextScale);
+    setImgScale(nextScale);
+    setImgOffset(nextOffset);
+  };
+
+  // 드래그로 패닝
+  const handleImgMouseDown = (e: React.MouseEvent) => {
+    if (imgScale === 1) return;
+    setIsPanning(true);
+    panStart.current = {
+      x: e.clientX,
+      y: e.clientY,
+      offsetX: imgOffset.x,
+      offsetY: imgOffset.y,
+    };
+  };
+
+  // 패닝 한계 계산 함수
+  function clampImgOffset(offset: { x: number; y: number }, scale: number): { x: number; y: number } {
+    if (!imgContainerRef.current) return offset;
+    const container = imgContainerRef.current;
+    const rect = container.getBoundingClientRect();
+    // 이미지 실제 크기 (컨테이너 기준)
+    const imgW = rect.width * scale;
+    const imgH = rect.height * scale;
+    const maxX = Math.max(0, (imgW - rect.width) / 2);
+    const maxY = Math.max(0, (imgH - rect.height) / 2);
+    return {
+      x: Math.max(-maxX, Math.min(maxX, offset.x)),
+      y: Math.max(-maxY, Math.min(maxY, offset.y)),
+    };
+  }
+
+  // 패닝 시 clamp 적용
+  const handleImgMouseMove = (e: React.MouseEvent) => {
+    if (!isPanning || !panStart.current) return;
+    const dx = e.clientX - panStart.current.x;
+    const dy = e.clientY - panStart.current.y;
+    const next = {
+      x: panStart.current.offsetX + dx,
+      y: panStart.current.offsetY + dy,
+    };
+    setImgOffset(clampImgOffset(next, imgScale));
+  };
+
+  const handleImgMouseUp = () => {
+    setIsPanning(false);
+  };
+
   if (!isOpen || !filePath || !fileType) return null;
 
   const currentFile = archiveFiles[currentArchiveIndex];
@@ -266,12 +337,28 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
             <>
               {/* Image Viewer */}
               {fileType === 'image' && dataUrl && (
-                <img
-                  src={dataUrl}
-                  alt="이미지 뷰어"
-                  className="max-w-full max-h-full object-contain rounded shadow-lg"
-                  draggable={false}
-                />
+                <div
+                  ref={imgContainerRef}
+                  className="w-full h-full flex items-center justify-center overflow-hidden"
+                  style={{ maxHeight: '80vh', maxWidth: '100%' }}
+                >
+                  <img
+                    src={dataUrl}
+                    alt="이미지 뷰어"
+                    className="max-w-full max-h-full object-contain rounded shadow-lg select-none"
+                    style={{
+                      transform: `scale(${imgScale}) translate(${imgOffset.x / imgScale}px, ${imgOffset.y / imgScale}px)`,
+                      cursor: imgScale > 1 ? (isPanning ? 'grabbing' : 'grab') : 'default',
+                      transition: isPanning ? 'none' : 'transform 0.2s',
+                    }}
+                    draggable={false}
+                    onWheel={handleImgWheel}
+                    onMouseDown={handleImgMouseDown}
+                    onMouseMove={handleImgMouseMove}
+                    onMouseUp={handleImgMouseUp}
+                    onMouseLeave={handleImgMouseUp}
+                  />
+                </div>
               )}
 
               {/* Video Player */}
@@ -413,9 +500,20 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                           <img
                             src={currentArchiveDataUrl}
                             alt={currentFile?.name || '압축 파일 이미지'}
-                            className="max-w-full max-h-full object-contain rounded shadow-lg block mx-auto"
-                            style={{ maxHeight: '80vh', maxWidth: '100%' }}
+                            className="max-w-full max-h-full object-contain rounded shadow-lg block mx-auto select-none"
+                            style={{
+                              maxHeight: '80vh',
+                              maxWidth: '100%',
+                              transform: `scale(${imgScale}) translate(${imgOffset.x / imgScale}px, ${imgOffset.y / imgScale}px)`,
+                              cursor: imgScale > 1 ? (isPanning ? 'grabbing' : 'grab') : 'default',
+                              transition: isPanning ? 'none' : 'transform 0.2s',
+                            }}
                             draggable={false}
+                            onWheel={handleImgWheel}
+                            onMouseDown={handleImgMouseDown}
+                            onMouseMove={handleImgMouseMove}
+                            onMouseUp={handleImgMouseUp}
+                            onMouseLeave={handleImgMouseUp}
                           />
                         ) : (
                           <div className="text-discord-muted">이미지를 로드할 수 없습니다.</div>
