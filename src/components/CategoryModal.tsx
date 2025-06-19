@@ -119,16 +119,17 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   const validateForm = async () => {
     const newErrors: Record<string, string> = {};
 
+    // 카테고리 이름 검사
     if (!formData.name.trim()) {
       newErrors.name = '카테고리 이름을 입력하세요.';
     }
 
-    // 최소 필드 개수 검사
+    // 필드 개수 검사
     if (formData.fields.length === 0) {
       newErrors.fields = '최소 1개의 필드가 필요합니다.';
     }
 
-    // Validate field names
+    // 필드 이름 검사
     formData.fields.forEach((field, index) => {
       if (!field.name.trim()) {
         newErrors[`field_${index}_name`] = '필드명을 입력하세요.';
@@ -187,17 +188,25 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     const newField: FieldDefinition = {
       id: Math.random().toString(36).substring(2),
       name: '',
-      type: 'text',
+      type: 'text', // 기본값으로 text 타입 설정
       required: false,
       unique: false,
       order: formData.fields.length,
     };
-    setFormData(prev => ({ ...prev, fields: [...prev.fields, newField] }));
+    setFormData(prev => {
+      const updated = { ...prev, fields: [...prev.fields, newField] };
+      setTimeout(() => { validateForm(); }, 0);
+      return updated;
+    });
   };
 
   const removeField = (index: number) => {
     const newFields = formData.fields.filter((_, i) => i !== index);
-    setFormData(prev => ({ ...prev, fields: newFields }));
+    setFormData(prev => {
+      const updated = { ...prev, fields: newFields };
+      setTimeout(() => { validateForm(); }, 0);
+      return updated;
+    });
   };
 
   const updateField = (index: number, updates: Partial<FieldDefinition>) => {
@@ -659,7 +668,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
           <Button 
             onClick={handleSubmit}
             className="bg-discord-accent hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={isValidating || Object.keys(errors).length > 0 || Object.keys(duplicateErrors).length > 0}
+            disabled={isValidating || !formData.name.trim() || formData.fields.length === 0}
           >
             {isValidating ? '검증 중...' : category ? '수정' : '생성'}
           </Button>
