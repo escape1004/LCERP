@@ -45,7 +45,7 @@ export function TitleBar() {
       {/* 앱 아이콘 & 타이틀 */}
       <div className="flex items-center px-3 space-x-2">
         <img 
-          src="/icon.png" 
+          src={"icon.png"} 
           alt="App Icon" 
           className="w-4 h-4" 
         />

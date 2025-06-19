@@ -12,6 +12,7 @@ const logStream = fs.createWriteStream(logPath, { flags: 'a' });
 
 // 데이터베이스 및 백업 경로 설정
 const isDev = process.env.VITE_DEV_SERVER_URL;
+const isPreview = process.env.ELECTRON === 'true' || process.env.npm_lifecycle_event === 'electron:preview';
 const projectRoot = isDev ? path.resolve(__dirname, '..') : process.resourcesPath;
 const dbPath = path.join(projectRoot, 'save', 'erp.db');
 const backupDir = path.join(app.getPath('userData'), 'backups');
@@ -46,9 +47,11 @@ function registerProtocol() {
   });
 }
 
-const iconPath = isDev
+const iconPath = (isDev || isPreview)
   ? path.join(__dirname, '..', 'resources', 'icon.ico')
   : path.join(process.resourcesPath, 'resources', 'icon.ico');
+
+console.log('iconPath:', iconPath); // 아이콘 경로 로그 출력
 
 // 썸네일 해시 생성 함수
 function getThumbnailHash(filePath) {
