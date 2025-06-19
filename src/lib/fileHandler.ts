@@ -1,4 +1,4 @@
-import { shell, app } from 'electron';
+import { shell } from 'electron';
 import sharp from 'sharp';
 import ffmpeg from 'fluent-ffmpeg';
 import AdmZip from 'adm-zip';
@@ -61,7 +61,7 @@ export function getThumbnailHash(filePath: string): string {
   return crypto.createHash('sha1').update(normalizedPath).digest('hex');
 }
 
-export async function generateThumbnail(filePath: string, appInstance = app): Promise<string | null> {
+export async function generateThumbnail(filePath: string): Promise<string | null> {
   // 파일 경로 검증
   if (!isValidFilePath(filePath)) {
     throw new Error('Invalid or unauthorized file path');
@@ -72,7 +72,7 @@ export async function generateThumbnail(filePath: string, appInstance = app): Pr
   }
 
   const fileType = getFileType(filePath);
-  const thumbnailDir = path.join(appInstance.getAppPath(), 'save', 'thumbnails');
+  const thumbnailDir = path.join('save', 'thumbnails');
   
   if (!fs.existsSync(thumbnailDir)) {
     fs.mkdirSync(thumbnailDir, { recursive: true });

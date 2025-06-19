@@ -3,9 +3,9 @@ import { Database } from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import { getThumbnailHash } from '../../lib/fileHandler';
+import { getThumbnailHash, getFileType } from '../../lib/fileHandler';
 
-let db: Database;
+let db: Database | undefined;
 
 // 썸네일 파일 삭제 함수
 const deleteThumbnail = (filePath: string) => {
@@ -110,17 +110,37 @@ const cleanupRelationReferences = (categoryId: string) => {
   }
 };
 
-export const registerCategoryHandlers = () => {
-  console.log('Registering category handlers...');
+// 빈 값을 null로 변환하는 함수
+const normalizeData = (data: any): any => {
+  if (typeof data === 'string') {
+    return data.trim() === '' ? null : data;
+  }
+  if (Array.isArray(data)) {
+    return data.map(normalizeData);
+  }
+  if (data && typeof data === 'object') {
+    return Object.fromEntries(
+      Object.entries(data).map(([key, value]) => [key, normalizeData(value)])
+    );
+  }
+  return data;
+};
 
-  ipcMain.handle('getCategories', async () => {
+export const registerCategoryHandlers = (database: Database) => {
+  console.log('=== Starting registerCategoryHandlers ===');
+  db = database;
+  console.log('=== Database assigned ===');
+
+  // Category handlers
+  console.log('=== Registering db:getCategories ===');
+  ipcMain.handle('db:getCategories', async () => {
     console.log('Getting categories...');
     const categories = db.prepare('SELECT * FROM categories ORDER BY order_num').all();
     console.log('Categories found:', { count: categories.length });
     return categories;
   });
 
-  ipcMain.handle('addCategory', async (_, category) => {
+  ipcMain.handle('db:addCategory', async (_, category) => {
     const id = uuidv4();
     const now = new Date().toISOString();
     
@@ -140,7 +160,7 @@ export const registerCategoryHandlers = () => {
     return id;
   });
 
-  ipcMain.handle('updateCategory', async (_, id, updates) => {
+  ipcMain.handle('db:updateCategory', async (_, id, updates) => {
     const now = new Date().toISOString();
     const fields = updates.fields ? JSON.stringify(updates.fields) : undefined;
     
@@ -177,7 +197,7 @@ export const registerCategoryHandlers = () => {
     db.prepare(query).run(...values);
   });
 
-  ipcMain.handle('deleteCategory', async (_, id) => {
+  ipcMain.handle('db:deleteCategory', async (_, id) => {
     console.log('카테고리 삭제 시작:', id);
     
     // 1. 관계형 데이터에서 참조 정리
@@ -212,5 +232,309 @@ export const registerCategoryHandlers = () => {
     };
   });
 
-  console.log('Category handlers registered successfully');
+  // Record handlers
+  ipcMain.handle('db:getRecords', async (_, categoryId) => {
+    if (!db) throw new Error('Database not initialized');
+    if (!categoryId) throw new Error('No categoryId provided');
+    const records = db.prepare('SELECT * FROM records WHERE categoryId = ?').all(categoryId);
+    return records.map(record => ({
+      ...record,
+      data: JSON.parse(record.data)
+    }));
+  });
+
+  ipcMain.handle('addRecord', async (_, record) => {
+    const { id, categoryId, data } = record;
+    const now = new Date().toISOString();
+    const normalizedData = normalizeData(data);
+    db.prepare(`
+      INSERT INTO records (id, categoryId, data, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(id, categoryId, JSON.stringify(normalizedData), now, now);
+    return id;
+  });
+
+  ipcMain.handle('updateRecord', async (_, id, data) => {
+    const now = new Date().toISOString();
+    const normalizedData = normalizeData(data);
+    db.prepare(`
+      UPDATE records
+      SET data = ?, updatedAt = ?
+      WHERE id = ?
+    `).run(JSON.stringify(normalizedData), now, id);
+  });
+
+  ipcMain.handle('deleteRecord', async (_, categoryId, id) => {
+    try {
+      console.log('레코드 삭제 시작:', { categoryId, id });
+      
+      // 1. 레코드 정보 가져오기 (삭제 전)
+      const record = db.prepare('SELECT data FROM records WHERE categoryId = ? AND id = ?').get(categoryId, id);
+      if (!record) {
+        throw new Error('Record not found');
+      }
+      
+      // 2. 레코드의 썸네일 정리
+      let thumbnailDeleted = false;
+      try {
+        const data = JSON.parse(record.data);
+        
+        // 카테고리 필드 정보 가져오기
+        const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(categoryId);
+        if (category) {
+          const fields = JSON.parse(category.fields);
+          const fileField = fields.find(f => f.type === 'file');
+          
+          if (fileField && data[fileField.id]) {
+            const filePath = data[fileField.id];
+            thumbnailDeleted = deleteThumbnail(filePath);
+          }
+        }
+      } catch (error) {
+        console.error('썸네일 정리 중 오류:', error);
+      }
+      
+      // 3. 레코드 삭제
+      db.prepare('DELETE FROM records WHERE categoryId = ? AND id = ?').run(categoryId, id);
+      
+      console.log(`레코드 삭제 완료: ${thumbnailDeleted ? '썸네일 정리됨' : '썸네일 없음'}`);
+      
+      return {
+        success: true,
+        thumbnailDeleted
+      };
+    } catch (error) {
+      console.error('레코드 삭제 중 오류:', error);
+      throw error;
+    }
+  });
+
+  // File system handlers
+  ipcMain.handle('openFileDialog', async () => {
+    const { dialog } = await import('electron');
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      title: '파일 선택'
+    });
+    return result;
+  });
+
+  ipcMain.handle('checkFileExists', async (_, filePath) => {
+    try {
+      const thumbnailDir = path.join(process.cwd(), 'save', 'thumbnails');
+      const hash = getThumbnailHash(filePath);
+      const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
+      return fs.existsSync(thumbnailPath);
+    } catch (e) {
+      return false;
+    }
+  });
+
+  ipcMain.handle('generateThumbnail', async (_, filePath) => {
+    try {
+      const { generateThumbnail } = await import('../../lib/fileHandler');
+      const thumbnailPath = await generateThumbnail(filePath);
+      return thumbnailPath;
+    } catch (error) {
+      return null;
+    }
+  });
+
+  ipcMain.handle('getFileDataUrl', async (_, filePath) => {
+    try {
+      if (!fs.existsSync(filePath)) {
+        console.error('[파일 존재하지 않음]', filePath);
+        return null;
+      }
+      
+      const data = fs.readFileSync(filePath);
+      const ext = path.extname(filePath).toLowerCase();
+      let mimeType = 'application/octet-stream';
+      
+      // MIME 타입 결정
+      if (['.jpg', '.jpeg'].includes(ext)) {
+        mimeType = 'image/jpeg';
+      } else if (ext === '.png') {
+        mimeType = 'image/png';
+      } else if (ext === '.gif') {
+        mimeType = 'image/gif';
+      } else if (ext === '.webp') {
+        mimeType = 'image/webp';
+      } else if (['.mp4', '.avi', '.mkv', '.mov'].includes(ext)) {
+        mimeType = `video/${ext.slice(1)}`;
+      }
+      
+      const dataUrl = `data:${mimeType};base64,${data.toString('base64')}`;
+      console.log('[파일 dataUrl 생성]', filePath, mimeType);
+      return dataUrl;
+    } catch (e) {
+      console.error('[파일 dataUrl 생성 에러]', e);
+      return null;
+    }
+  });
+
+  // Archive handlers
+  ipcMain.handle('getArchiveFiles', async (_, filePath) => {
+    try {
+      if (!fs.existsSync(filePath)) {
+        console.error('[압축 파일 존재하지 않음]', filePath);
+        return [];
+      }
+      
+      const ext = path.extname(filePath).toLowerCase();
+      if (ext === '.7z') {
+        console.error('[7z 파일은 현재 지원되지 않습니다]', filePath);
+        return [];
+      }
+      
+      const AdmZip = (await import('adm-zip')).default;
+      const zip = new AdmZip(filePath);
+      const entries = zip.getEntries();
+      
+      const files = entries.map(entry => ({
+        name: entry.entryName,
+        size: entry.header.size,
+        isDirectory: entry.isDirectory,
+        comment: entry.comment || ''
+      }));
+      
+      console.log('[압축 파일 목록 조회]', filePath, files.length);
+      return files;
+    } catch (e) {
+      console.error('[압축 파일 목록 조회 에러]', e);
+      return [];
+    }
+  });
+
+  ipcMain.handle('getArchiveFileDataUrl', async (_, filePath, fileName) => {
+    try {
+      if (!fs.existsSync(filePath)) {
+        console.error('[압축 파일 존재하지 않음]', filePath);
+        return null;
+      }
+      
+      const ext = path.extname(filePath).toLowerCase();
+      if (ext === '.7z') {
+        console.error('[7z 파일은 현재 지원되지 않습니다]', filePath);
+        return null;
+      }
+      
+      const AdmZip = (await import('adm-zip')).default;
+      const zip = new AdmZip(filePath);
+      const entry = zip.getEntry(fileName);
+      
+      if (!entry || entry.isDirectory) {
+        console.error('[압축 파일 내 파일을 찾을 수 없음]', fileName);
+        return null;
+      }
+      
+      const buffer = zip.readFile(entry);
+      const fileExt = path.extname(fileName).toLowerCase();
+      let mimeType = 'application/octet-stream';
+      
+      // MIME 타입 결정
+      if (['.jpg', '.jpeg'].includes(fileExt)) {
+        mimeType = 'image/jpeg';
+      } else if (fileExt === '.png') {
+        mimeType = 'image/png';
+      } else if (fileExt === '.gif') {
+        mimeType = 'image/gif';
+      } else if (fileExt === '.webp') {
+        mimeType = 'image/webp';
+      } else if (fileExt === '.txt') {
+        mimeType = 'text/plain';
+      }
+      
+      const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`;
+      console.log('[압축 파일 이미지 dataUrl 생성]', fileName, mimeType);
+      return dataUrl;
+    } catch (e) {
+      console.error('[압축 파일 이미지 dataUrl 생성 에러]', e);
+      return null;
+    }
+  });
+
+  // 압축파일 내 텍스트 파일 내용을 읽는 핸들러
+  ipcMain.handle('getArchiveFileText', async (_, filePath, fileName) => {
+    try {
+      if (!fs.existsSync(filePath)) {
+        console.error('[압축 파일 존재하지 않음]', filePath);
+        return null;
+      }
+      
+      const ext = path.extname(filePath).toLowerCase();
+      if (ext === '.7z') {
+        console.error('[7z 파일은 현재 지원되지 않습니다]', filePath);
+        return null;
+      }
+      
+      const AdmZip = (await import('adm-zip')).default;
+      const zip = new AdmZip(filePath);
+      const entry = zip.getEntry(fileName);
+      
+      if (!entry || entry.isDirectory) {
+        console.error('[압축 파일 내 파일을 찾을 수 없음]', fileName);
+        return null;
+      }
+      
+      const buffer = zip.readFile(entry);
+      const fileExt = path.extname(fileName).toLowerCase();
+      
+      // 텍스트 파일만 처리
+      if (fileExt === '.txt') {
+        const text = buffer.toString('utf8');
+        console.log('[압축 파일 텍스트 읽기]', fileName);
+        return text;
+      } else {
+        console.error('[텍스트 파일이 아님]', fileName);
+        return null;
+      }
+    } catch (e) {
+      console.error('[압축 파일 텍스트 읽기 에러]', e);
+      return null;
+    }
+  });
+
+  // Thumbnail handlers
+  ipcMain.handle('getThumbnailDataUrl', async (_, filePath) => {
+    try {
+      const thumbnailDir = path.join(process.cwd(), 'save', 'thumbnails');
+      const hash = getThumbnailHash(filePath);
+      const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
+
+      if (!fs.existsSync(thumbnailPath)) {
+        return null;
+      }
+
+      const data = fs.readFileSync(thumbnailPath);
+      const dataUrl = `data:image/jpeg;base64,${data.toString('base64')}`;
+      return dataUrl;
+    } catch (error) {
+      console.error('썸네일 dataUrl 생성 실패:', error);
+      return null;
+    }
+  });
+
+  // Shell handlers
+  ipcMain.handle('openExternal', async (_, url) => {
+    try {
+      const { shell } = await import('electron');
+      await shell.openExternal(url);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // File type handler
+  console.log('=== Registering db:getFileType ===');
+  ipcMain.handle('db:getFileType', async (_, filePath) => {
+    try {
+      return getFileType(filePath);
+    } catch (e) {
+      return 'other';
+    }
+  });
+
+  console.log('=== All handlers registered successfully ===');
 }; 

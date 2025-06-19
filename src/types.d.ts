@@ -24,8 +24,12 @@ export interface ElectronAPI {
   openFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
   generateThumbnail: (filePath: string) => Promise<string | null>;
   getThumbnailDataUrl: (filePath: string) => Promise<string | null>;
+  getFileDataUrl: (filePath: string) => Promise<string | null>;
+  getArchiveFiles: (filePath: string) => Promise<Array<{ name: string; size: number; isDirectory: boolean; comment: string }>>;
+  getArchiveFileDataUrl: (filePath: string, fileName: string) => Promise<string | null>;
+  getArchiveFileText: (filePath: string, fileName: string) => Promise<string | null>;
   openFileDialog: () => Promise<{ canceled: boolean; filePaths?: string[] }>;
-  getAppRoot: () => Promise<string>;
+  getFileType: (filePath: string) => Promise<'image' | 'video' | 'archive' | 'other'>;
 }
 
 declare global {

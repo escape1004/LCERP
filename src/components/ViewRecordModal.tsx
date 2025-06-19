@@ -4,6 +4,7 @@ import { useERPStore } from '../hooks/useERPStore';
 import { Category, DataRecord, FieldDefinition } from '../types';
 import { Button } from './ui/button';
 import { toast } from './ui/use-toast';
+import { ViewerModal } from './ViewerModal';
 
 interface ViewRecordModalProps {
   isOpen: boolean;
@@ -31,6 +32,9 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   const { categories, getCategoryRecords, selectCategory } = useERPStore();
 
   const [fileExists, setFileExists] = useState<boolean | null>(null);
+  const [viewerModalOpen, setViewerModalOpen] = useState(false);
+  const [viewerFilePath, setViewerFilePath] = useState<string>('');
+  const [viewerFileType, setViewerFileType] = useState<'image' | 'video' | 'archive' | null>(null);
 
   // Get parent categories path
   const getParentPath = useCallback((currentCategory: Category): Category[] => {
@@ -72,6 +76,24 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   }, [isOpen, filePath]);
 
   const canOpenFile = !!filePath && filePath !== '' && filePath !== '-' && fileExists !== false;
+
+  const handleThumbnailClick = async (filePath: string) => {
+    const fileType = await window.electronAPI.getFileType(filePath);
+    if (fileType === 'image' || fileType === 'video' || fileType === 'archive') {
+      setViewerFilePath(filePath);
+      setViewerFileType(fileType);
+      setViewerModalOpen(true);
+    } else {
+      // 지원되지 않는 파일 타입은 기존 방식으로 처리
+      window.electronAPI.openFile(filePath);
+    }
+  };
+
+  const handleViewerClose = () => {
+    setViewerModalOpen(false);
+    setViewerFilePath('');
+    setViewerFileType(null);
+  };
 
   const handleUrlClick = async (e: React.MouseEvent, url: string) => {
     e.preventDefault();
@@ -152,8 +174,8 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                   src={thumbnailDataUrl}
                   alt="썸네일"
                   className="w-[96px] h-[96px] object-contain rounded border border-gray-700 cursor-pointer hover:opacity-80"
-                  onClick={() => window.electronAPI.openFile(value)}
-                  title="썸네일 클릭 시 원본 파일 실행"
+                  onClick={() => handleThumbnailClick(value)}
+                  title="썸네일 클릭 시 뷰어 모달 열기"
                 />
                 {/* 파일 확장자 표시 */}
                 <div className="absolute bottom-1 right-1 bg-black bg-opacity-70 text-white text-xs px-1 py-0.5 rounded">
@@ -353,8 +375,8 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
               src={dataUrl}
               alt="썸네일"
               className="w-[320px] h-[320px] object-contain rounded-xl border border-gray-700 cursor-pointer hover:opacity-80 transition"
-              onClick={() => canOpenFile && window.electronAPI.openFile(filePath)}
-              title="썸네일 클릭 시 원본 파일 실행"
+              onClick={() => canOpenFile && handleThumbnailClick(filePath)}
+              title="썸네일 클릭 시 뷰어 모달 열기"
               style={{ maxWidth: 480, maxHeight: 480 }}
             />
             {/* 파일 확장자 표시 */}
@@ -519,6 +541,14 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
           </Button>
         </div>
       </div>
+      {viewerModalOpen && (
+        <ViewerModal
+          isOpen={viewerModalOpen}
+          onClose={handleViewerClose}
+          filePath={viewerFilePath}
+          fileType={viewerFileType}
+        />
+      )}
     </div>
   );
 };

@@ -6,6 +6,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { RecordModal } from './RecordModal';
 import { ViewRecordModal } from './ViewRecordModal';
+import { ViewerModal } from './ViewerModal';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { CategoryContent } from './CategoryContent';
 import { DatabaseViewer } from './DatabaseViewer';
@@ -76,7 +77,10 @@ const CategoryBreadcrumb = React.memo(({
 CategoryBreadcrumb.displayName = 'CategoryBreadcrumb';
 
 // 썸네일 렌더링 유틸
-const ThumbnailCell: React.FC<{ filePath: string | undefined }> = ({ filePath }) => {
+const ThumbnailCell: React.FC<{ 
+  filePath: string | undefined;
+  onThumbnailClick: (filePath: string) => void;
+}> = ({ filePath, onThumbnailClick }) => {
   const [dataUrl, setDataUrl] = React.useState<string | null>(null);
   React.useEffect(() => {
     let ignore = false;
@@ -102,7 +106,9 @@ const ThumbnailCell: React.FC<{ filePath: string | undefined }> = ({ filePath })
         <img 
           src={dataUrl} 
           alt="썸네일" 
-          style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 8, display: 'block', maxHeight: '100%', position: 'static', margin: 0, padding: 0 }} 
+          style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 8, display: 'block', maxHeight: '100%', position: 'static', margin: 0, padding: 0, cursor: 'pointer' }} 
+          onClick={() => filePath && onThumbnailClick(filePath)}
+          title="썸네일 클릭 시 뷰어 모달 열기"
         />
       ) : (
         <div style={{ width: 96, height: 96, background: '#222', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 36 }}>
@@ -231,6 +237,11 @@ export const MainContent: React.FC = () => {
   const [recordToDelete, setRecordToDelete] = useState<DataRecord | null>(null);
   const [isPageInputMode, setIsPageInputMode] = useState(false);
   const [pageInputValue, setPageInputValue] = useState('');
+
+  // 뷰어 모달 상태
+  const [viewerModalOpen, setViewerModalOpen] = useState(false);
+  const [viewerFilePath, setViewerFilePath] = useState<string>('');
+  const [viewerFileType, setViewerFileType] = useState<'image' | 'video' | 'archive' | null>(null);
 
   // Custom filtered records based on field-specific search
   const customFilteredRecords = useMemo(() => {
@@ -1065,7 +1076,17 @@ export const MainContent: React.FC = () => {
                         <tr key={record.id} className="hover:bg-discord-hover group">
                           {fileField && (
                             <td className="px-2 py-3 text-xs text-discord-text w-[104px] overflow-hidden relative">
-                              <ThumbnailCell filePath={record.data[fileField.id]} />
+                              <ThumbnailCell
+                                filePath={record.data[fileField.id]}
+                                onThumbnailClick={async (filePath) => {
+                                  const fileType = await window.electronAPI.getFileType(filePath);
+                                  if (fileType === 'image' || fileType === 'video' || fileType === 'archive') {
+                                    setViewerFilePath(filePath);
+                                    setViewerFileType(fileType);
+                                    setViewerModalOpen(true);
+                                  }
+                                }}
+                              />
                             </td>
                           )}
                           {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
@@ -1192,6 +1213,17 @@ export const MainContent: React.FC = () => {
             category={categoriesSafe.find(cat => cat.id === viewingCategory) || selectedCategorySafe}
             record={viewingRecord}
             onViewRecord={handleViewRelatedRecord}
+          />
+
+          <ViewerModal
+            isOpen={viewerModalOpen}
+            onClose={() => {
+              setViewerModalOpen(false);
+              setViewerFilePath('');
+              setViewerFileType(null);
+            }}
+            filePath={viewerFilePath}
+            fileType={viewerFileType}
           />
 
           {/* 커스텀 다이얼로그들 */}

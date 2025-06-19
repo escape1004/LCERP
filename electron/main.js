@@ -345,14 +345,18 @@ function checkDuplicateFields(categoryId, data, existingRecordId = null) {
 }
 
 // IPC 핸들러들
-ipcMain.handle('db:getCategories', () => {
-  const stmt = db.prepare('SELECT * FROM categories ORDER BY order_num');
-  const categories = stmt.all();
-  return categories.map(cat => ({
-    ...cat,
-    order: cat.order_num,
-    fields: JSON.parse(cat.fields)
-  }));
+ipcMain.handle('db:getCategories', async () => {
+  try {
+    const categories = db.prepare('SELECT * FROM categories ORDER BY order_num').all();
+    // fields를 배열로 변환
+    return categories.map(cat => ({
+      ...cat,
+      fields: JSON.parse(cat.fields)
+    }));
+  } catch (error) {
+    log('Error getting categories:', error);
+    throw error;
+  }
 });
 
 ipcMain.handle('getTables', () => {
@@ -448,32 +452,16 @@ ipcMain.handle('db:deleteCategory', async (_, id) => {
   };
 });
 
-ipcMain.handle('db:getRecords', (_, categoryId) => {
+ipcMain.handle('db:getRecords', async (_, categoryId) => {
   try {
-    const categoryExists = db.prepare('SELECT id FROM categories WHERE id = ?').get(categoryId);
-    if (!categoryExists) {
-      throw new Error(`Category not found: ${categoryId}`);
-    }
-
-    const stmt = db.prepare('SELECT * FROM records WHERE categoryId = ? ORDER BY createdAt DESC');
-    const records = stmt.all(categoryId);
-
-    return records.map(record => {
-      try {
-        const parsedData = JSON.parse(record.data);
-        return {
-          id: record.id,
-          categoryId: record.categoryId,
-          data: parsedData,
-          createdAt: record.createdAt,
-          updatedAt: record.updatedAt
-        };
-      } catch (parseError) {
-        throw new Error(`Failed to parse record data for record ${record.id}: ${parseError.message}`);
-      }
-    });
+    if (!categoryId) throw new Error('Category ID is required');
+    const records = db.prepare('SELECT * FROM records WHERE categoryId = ? ORDER BY createdAt DESC').all(categoryId);
+    return records.map(record => ({
+      ...record,
+      data: JSON.parse(record.data)
+    }));
   } catch (error) {
-    log('Error in getRecords:', error);
+    log('Error getting records:', error);
     throw error;
   }
 });
@@ -827,4 +815,121 @@ ipcMain.handle('openDbFile', () => {
 
 ipcMain.handle('getAppRoot', () => {
   return app.getAppPath();
+});
+
+// db:getFileType 핸들러 추가
+ipcMain.handle('db:getFileType', async (_, filePath) => {
+  try {
+    const { getFileType } = require('../dist/lib/fileHandler');
+    return getFileType(filePath);
+  } catch (e) {
+    log('Error getting file type:', e);
+    return 'other';
+  }
+});
+
+// getFileDataUrl 핸들러
+ipcMain.handle('getFileDataUrl', async (_, filePath) => {
+  try {
+    if (!fs.existsSync(filePath)) return null;
+    const data = fs.readFileSync(filePath);
+    const ext = path.extname(filePath).toLowerCase();
+    let mimeType = 'application/octet-stream';
+    if (['.jpg', '.jpeg'].includes(ext)) mimeType = 'image/jpeg';
+    else if (ext === '.png') mimeType = 'image/png';
+    else if (ext === '.gif') mimeType = 'image/gif';
+    else if (ext === '.webp') mimeType = 'image/webp';
+    else if (['.mp4', '.avi', '.mkv', '.mov'].includes(ext)) mimeType = `video/${ext.slice(1)}`;
+    return `data:${mimeType};base64,${data.toString('base64')}`;
+  } catch (e) {
+    log('Error in getFileDataUrl:', e);
+    return null;
+  }
+});
+
+// getArchiveFiles 핸들러
+ipcMain.handle('getArchiveFiles', async (_, filePath) => {
+  try {
+    if (!fs.existsSync(filePath)) return [];
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext === '.7z') return [];
+    const AdmZip = require('adm-zip');
+    const zip = new AdmZip(filePath);
+    const entries = zip.getEntries();
+    return entries.map(entry => ({
+      name: entry.entryName,
+      size: entry.header.size,
+      isDirectory: entry.isDirectory,
+      comment: entry.comment || ''
+    }));
+  } catch (e) {
+    log('Error in getArchiveFiles:', e);
+    return [];
+  }
+});
+
+// getArchiveFileDataUrl 핸들러
+ipcMain.handle('getArchiveFileDataUrl', async (_, filePath, fileName) => {
+  try {
+    if (!fs.existsSync(filePath)) return null;
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext === '.7z') return null;
+    const AdmZip = require('adm-zip');
+    const zip = new AdmZip(filePath);
+    const entry = zip.getEntry(fileName);
+    if (!entry || entry.isDirectory) return null;
+    const buffer = zip.readFile(entry);
+    const fileExt = path.extname(fileName).toLowerCase();
+    let mimeType = 'application/octet-stream';
+    if (['.jpg', '.jpeg'].includes(fileExt)) mimeType = 'image/jpeg';
+    else if (fileExt === '.png') mimeType = 'image/png';
+    else if (fileExt === '.gif') mimeType = 'image/gif';
+    else if (fileExt === '.webp') mimeType = 'image/webp';
+    else if (fileExt === '.txt') mimeType = 'text/plain';
+    return `data:${mimeType};base64,${buffer.toString('base64')}`;
+  } catch (e) {
+    log('Error in getArchiveFileDataUrl:', e);
+    return null;
+  }
+});
+
+// getArchiveFileText 핸들러
+ipcMain.handle('getArchiveFileText', async (_, filePath, fileName) => {
+  try {
+    if (!fs.existsSync(filePath)) {
+      log('[압축 파일 존재하지 않음]', filePath);
+      return null;
+    }
+    
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext === '.7z') {
+      log('[7z 파일은 현재 지원되지 않습니다]', filePath);
+      return null;
+    }
+    
+    const AdmZip = require('adm-zip');
+    const zip = new AdmZip(filePath);
+    const entry = zip.getEntry(fileName);
+    
+    if (!entry || entry.isDirectory) {
+      log('[압축 파일 내 파일을 찾을 수 없음]', fileName);
+      return null;
+    }
+    
+    const buffer = zip.readFile(entry);
+    const fileExt = path.extname(fileName).toLowerCase();
+    
+    // 텍스트 파일만 처리
+    if (fileExt === '.txt') {
+      const text = buffer.toString('utf8');
+      log('[압축 파일 텍스트 읽기]', fileName);
+      return text;
+    } else {
+      log('[텍스트 파일이 아님]', fileName);
+      return null;
+    }
+  } catch (e) {
+    log('[압축 파일 텍스트 읽기 에러]', e);
+    return null;
+  }
 }); 
