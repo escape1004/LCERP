@@ -868,15 +868,26 @@ ipcMain.handle('getArchiveFiles', async (_, filePath) => {
     if (!fs.existsSync(filePath)) return [];
     const ext = path.extname(filePath).toLowerCase();
     if (ext === '.7z') return [];
-    const AdmZip = require('adm-zip');
-    const zip = new AdmZip(filePath);
-    const entries = zip.getEntries();
-    return entries.map(entry => ({
-      name: entry.entryName,
-      size: entry.header.size,
-      isDirectory: entry.isDirectory,
-      comment: entry.comment || ''
-    }));
+    
+    // 대용량 파일을 위해 unzipper 스트리밍 방식 사용
+    const entries = [];
+    await new Promise((resolve, reject) => {
+      fs.createReadStream(filePath)
+        .pipe(unzipper.Parse())
+        .on('entry', function (entry) {
+          entries.push({
+            name: entry.path,
+            size: entry.vars.uncompressedSize,
+            isDirectory: entry.type === 'Directory',
+            comment: ''
+          });
+          entry.autodrain();
+        })
+        .on('close', resolve)
+        .on('error', reject);
+    });
+    
+    return entries;
   } catch (e) {
     log('Error in getArchiveFiles:', e);
     return [];
@@ -889,19 +900,38 @@ ipcMain.handle('getArchiveFileDataUrl', async (_, filePath, fileName) => {
     if (!fs.existsSync(filePath)) return null;
     const ext = path.extname(filePath).toLowerCase();
     if (ext === '.7z') return null;
-    const AdmZip = require('adm-zip');
-    const zip = new AdmZip(filePath);
-    const entry = zip.getEntry(fileName);
-    if (!entry || entry.isDirectory) return null;
-    const buffer = zip.readFile(entry);
-    const fileExt = path.extname(fileName).toLowerCase();
-    let mimeType = 'application/octet-stream';
-    if (['.jpg', '.jpeg'].includes(fileExt)) mimeType = 'image/jpeg';
-    else if (fileExt === '.png') mimeType = 'image/png';
-    else if (fileExt === '.gif') mimeType = 'image/gif';
-    else if (fileExt === '.webp') mimeType = 'image/webp';
-    else if (fileExt === '.txt') mimeType = 'text/plain';
-    return `data:${mimeType};base64,${buffer.toString('base64')}`;
+    
+    // 대용량 파일을 위해 unzipper 스트리밍 방식 사용
+    return new Promise((resolve, reject) => {
+      fs.createReadStream(filePath)
+        .pipe(unzipper.Parse())
+        .on('entry', function (entry) {
+          if (entry.path === fileName && entry.type === 'File') {
+            const chunks = [];
+            entry.on('data', chunk => chunks.push(chunk));
+            entry.on('end', () => {
+              try {
+                const buffer = Buffer.concat(chunks);
+                const fileExt = path.extname(fileName).toLowerCase();
+                let mimeType = 'application/octet-stream';
+                if (['.jpg', '.jpeg'].includes(fileExt)) mimeType = 'image/jpeg';
+                else if (fileExt === '.png') mimeType = 'image/png';
+                else if (fileExt === '.gif') mimeType = 'image/gif';
+                else if (fileExt === '.webp') mimeType = 'image/webp';
+                else if (fileExt === '.txt') mimeType = 'text/plain';
+                resolve(`data:${mimeType};base64,${buffer.toString('base64')}`);
+              } catch (err) {
+                reject(err);
+              }
+            });
+            entry.on('error', reject);
+          } else {
+            entry.autodrain();
+          }
+        })
+        .on('close', () => resolve(null))
+        .on('error', reject);
+    });
   } catch (e) {
     log('Error in getArchiveFileDataUrl:', e);
     return null;
@@ -922,27 +952,44 @@ ipcMain.handle('getArchiveFileText', async (_, filePath, fileName) => {
       return null;
     }
     
-    const AdmZip = require('adm-zip');
-    const zip = new AdmZip(filePath);
-    const entry = zip.getEntry(fileName);
-    
-    if (!entry || entry.isDirectory) {
-      log('[압축 파일 내 파일을 찾을 수 없음]', fileName);
-      return null;
-    }
-    
-    const buffer = zip.readFile(entry);
-    const fileExt = path.extname(fileName).toLowerCase();
-    
-    // 텍스트 파일만 처리
-    if (fileExt === '.txt') {
-      const text = buffer.toString('utf8');
-      log('[압축 파일 텍스트 읽기]', fileName);
-      return text;
-    } else {
-      log('[텍스트 파일이 아님]', fileName);
-      return null;
-    }
+    // 대용량 파일을 위해 unzipper 스트리밍 방식 사용
+    return new Promise((resolve, reject) => {
+      fs.createReadStream(filePath)
+        .pipe(unzipper.Parse())
+        .on('entry', function (entry) {
+          if (entry.path === fileName && entry.type === 'File') {
+            const fileExt = path.extname(fileName).toLowerCase();
+            
+            // 텍스트 파일만 처리
+            if (fileExt === '.txt') {
+              const chunks = [];
+              entry.on('data', chunk => chunks.push(chunk));
+              entry.on('end', () => {
+                try {
+                  const buffer = Buffer.concat(chunks);
+                  const text = buffer.toString('utf8');
+                  log('[압축 파일 텍스트 읽기]', fileName);
+                  resolve(text);
+                } catch (err) {
+                  reject(err);
+                }
+              });
+              entry.on('error', reject);
+            } else {
+              log('[텍스트 파일이 아님]', fileName);
+              entry.autodrain();
+              resolve(null);
+            }
+          } else {
+            entry.autodrain();
+          }
+        })
+        .on('close', () => resolve(null))
+        .on('error', (err) => {
+          log('[압축 파일 텍스트 읽기 에러]', err);
+          reject(err);
+        });
+    });
   } catch (e) {
     log('[압축 파일 텍스트 읽기 에러]', e);
     return null;
