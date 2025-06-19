@@ -80,19 +80,7 @@ export const registerRecordHandlers = () => {
     const normalizedData = normalizeValue(record.data);
     const stringifiedData = JSON.stringify(normalizedData);
     
-    // 파일 필드 썸네일 미리 생성
-    const categoryRow = db.prepare('SELECT fields FROM categories WHERE id = ?').get(record.categoryId);
-    if (categoryRow && categoryRow.fields) {
-      try {
-        const fields = JSON.parse(categoryRow.fields);
-        const fileField = fields.find((f: any) => f.type === 'file');
-        if (fileField && normalizedData[fileField.id]) {
-          await generateThumbnail(normalizedData[fileField.id]);
-        }
-      } catch (e) {
-        console.error('썸네일 생성 중 오류:', e);
-      }
-    }
+    // 썸네일 생성 제거 - 필요할 때만 생성하도록 변경
     
     db.prepare(`
       INSERT INTO records (id, categoryId, data, createdAt, updatedAt)
@@ -116,22 +104,7 @@ export const registerRecordHandlers = () => {
     const now = new Date().toISOString();
     const stringifiedData = JSON.stringify(data);
     
-    // 파일 필드 썸네일 미리 생성
-    const recordRow = db.prepare('SELECT categoryId FROM records WHERE id = ?').get(id);
-    if (recordRow && recordRow.categoryId) {
-      const categoryRow = db.prepare('SELECT fields FROM categories WHERE id = ?').get(recordRow.categoryId);
-      if (categoryRow && categoryRow.fields) {
-        try {
-          const fields = JSON.parse(categoryRow.fields);
-          const fileField = fields.find((f: any) => f.type === 'file');
-          if (fileField && data[fileField.id]) {
-            await generateThumbnail(data[fileField.id]);
-          }
-        } catch (e) {
-          console.error('썸네일 생성 중 오류:', e);
-        }
-      }
-    }
+    // 썸네일 생성 제거 - 필요할 때만 생성하도록 변경
     
     db.prepare(`
       UPDATE records 

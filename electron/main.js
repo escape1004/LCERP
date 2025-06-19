@@ -686,16 +686,29 @@ ipcMain.handle('generateThumbnail', async (_, filePath) => {
 ipcMain.handle('getThumbnailDataUrl', async (_, filePath) => {
   console.log('[IPC] getThumbnailDataUrl 호출됨:', filePath);
   try {
-    const result = await generateThumbnail(filePath);
-    if (!result) {
-      console.error('[IPC] getThumbnailDataUrl 썸네일 생성 실패');
-      return { success: false, error: '썸네일 생성 실패' };
+    // 썸네일 파일 경로 계산
+    const thumbnailDir = path.join(process.cwd(), 'thumbnails');
+    const thumbnailPath = path.join(thumbnailDir, `thumb_${path.basename(filePath)}.jpg`);
+    
+    // 썸네일이 이미 존재하는지 확인
+    if (!fs.existsSync(thumbnailPath)) {
+      console.log('[IPC] getThumbnailDataUrl 썸네일이 존재하지 않음, 생성 시작:', filePath);
+      // 썸네일이 없으면 생성
+      const result = await generateThumbnail(filePath);
+      if (!result) {
+        console.error('[IPC] getThumbnailDataUrl 썸네일 생성 실패');
+        return { success: false, error: '썸네일 생성 실패' };
+      }
+    } else {
+      console.log('[IPC] getThumbnailDataUrl 기존 썸네일 사용:', thumbnailPath);
     }
-    const ext = path.extname(result).toLowerCase();
+    
+    // 썸네일 파일을 base64로 변환
+    const ext = path.extname(thumbnailPath).toLowerCase();
     const mime = ext === '.png' ? 'image/png' : 'image/jpeg';
-    const buffer = fs.readFileSync(result);
+    const buffer = fs.readFileSync(thumbnailPath);
     const base64 = buffer.toString('base64');
-    console.log('[IPC] getThumbnailDataUrl 썸네일 생성 성공:', result);
+    console.log('[IPC] getThumbnailDataUrl 썸네일 반환 성공');
     return { success: true, dataUrl: `data:${mime};base64,${base64}` };
   } catch (e) {
     console.error('[IPC] getThumbnailDataUrl 에러:', e);

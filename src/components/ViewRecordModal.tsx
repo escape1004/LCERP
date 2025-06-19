@@ -100,7 +100,10 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   );
 
   const formatFieldValue = (field: FieldDefinition, value: any) => {
-    if (field.type === 'file' && value) {
+    // 파일 필드 특별 처리
+    if (field.type === 'file') {
+      if (!value || value === '' || value === '-') return '-';
+      
       const ext = value ? value.slice(value.lastIndexOf('.')).toLowerCase() : '';
       const [thumbnailDataUrl, setThumbnailDataUrl] = React.useState<string | null>(null);
       const [loading, setLoading] = React.useState(false);
@@ -198,7 +201,15 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
       );
     }
 
-    if (value === null || value === undefined || value === '') return '-';
+    // 빈 값 처리 - 레코드 리스트 테이블과 동일하게
+    if (value === null || value === undefined || value === '' || value === '-') {
+      return <span className="text-gray-500">-</span>;
+    }
+
+    // 배열이지만 비어있는 경우
+    if (Array.isArray(value) && value.length === 0) {
+      return <span className="text-gray-500">-</span>;
+    }
 
     const urlPattern = /^https?:\/\/.+/i;
 
