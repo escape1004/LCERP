@@ -87,11 +87,32 @@ const ThumbnailCell: React.FC<{ filePath: string | undefined }> = ({ filePath })
     }
     return () => { ignore = true; };
   }, [filePath]);
-  return dataUrl ? (
-    <img src={dataUrl} alt="썸네일" style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 8, display: 'block', maxHeight: '100%', position: 'static', margin: 0, padding: 0 }} />
-  ) : (
-    <div style={{ width: 96, height: 96, background: '#222', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 36 }}>
-      <span>🖼️</span>
+
+  // 파일 확장자 추출
+  const getFileExtension = (path: string) => {
+    const ext = path.slice(path.lastIndexOf('.')).toLowerCase();
+    return ext;
+  };
+
+  return (
+    <div className="relative">
+      {dataUrl ? (
+        <img 
+          src={dataUrl} 
+          alt="썸네일" 
+          style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 8, display: 'block', maxHeight: '100%', position: 'static', margin: 0, padding: 0 }} 
+        />
+      ) : (
+        <div style={{ width: 96, height: 96, background: '#222', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 36 }}>
+          <span>🖼️</span>
+        </div>
+      )}
+      {/* 파일 확장자 표시 */}
+      {filePath && (
+        <div className="absolute bottom-1 right-1 bg-black bg-opacity-70 text-white text-xs px-1 py-0.5 rounded">
+          {getFileExtension(filePath)}
+        </div>
+      )}
     </div>
   );
 };

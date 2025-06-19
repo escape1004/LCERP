@@ -144,13 +144,19 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
             {loading ? (
               <div className="w-[96px] h-[96px] bg-gray-800 flex items-center justify-center text-xs text-gray-400">로딩중...</div>
             ) : thumbnailDataUrl ? (
-              <img
-                src={thumbnailDataUrl}
-                alt="썸네일"
-                className="w-[96px] h-[96px] object-contain rounded border border-gray-700 cursor-pointer hover:opacity-80"
-                onClick={() => window.electronAPI.openFile(value)}
-                title="썸네일 클릭 시 원본 파일 실행"
-              />
+              <div className="relative">
+                <img
+                  src={thumbnailDataUrl}
+                  alt="썸네일"
+                  className="w-[96px] h-[96px] object-contain rounded border border-gray-700 cursor-pointer hover:opacity-80"
+                  onClick={() => window.electronAPI.openFile(value)}
+                  title="썸네일 클릭 시 원본 파일 실행"
+                />
+                {/* 파일 확장자 표시 */}
+                <div className="absolute bottom-1 right-1 bg-black bg-opacity-70 text-white text-xs px-1 py-0.5 rounded">
+                  {ext}
+                </div>
+              </div>
             ) : (
               <div className="w-[96px] h-[96px] bg-gray-900 flex items-center justify-center text-xs text-gray-500 border border-gray-700 rounded">썸네일 없음</div>
             )}
@@ -328,14 +334,20 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         {loading ? (
           <div className="w-[320px] h-[320px] bg-gray-800 flex items-center justify-center text-lg text-gray-400 rounded-xl border border-gray-700">로딩중...</div>
         ) : dataUrl ? (
-          <img
-            src={dataUrl}
-            alt="썸네일"
-            className="w-[320px] h-[320px] object-contain rounded-xl border border-gray-700 cursor-pointer hover:opacity-80 transition"
-            onClick={() => canOpenFile && window.electronAPI.openFile(filePath)}
-            title="썸네일 클릭 시 원본 파일 실행"
-            style={{ maxWidth: 480, maxHeight: 480 }}
-          />
+          <div className="relative">
+            <img
+              src={dataUrl}
+              alt="썸네일"
+              className="w-[320px] h-[320px] object-contain rounded-xl border border-gray-700 cursor-pointer hover:opacity-80 transition"
+              onClick={() => canOpenFile && window.electronAPI.openFile(filePath)}
+              title="썸네일 클릭 시 원본 파일 실행"
+              style={{ maxWidth: 480, maxHeight: 480 }}
+            />
+            {/* 파일 확장자 표시 */}
+            <div className="absolute bottom-2 right-2 bg-black bg-opacity-70 text-white text-sm px-2 py-1 rounded">
+              {ext}
+            </div>
+          </div>
         ) : (
           <div className="w-[320px] h-[320px] bg-gray-900 flex items-center justify-center text-lg text-gray-500 border border-gray-700 rounded-xl">썸네일 없음</div>
         )}
