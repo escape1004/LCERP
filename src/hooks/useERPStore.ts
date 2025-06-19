@@ -93,15 +93,21 @@ export const useERPStore = create<ERPStore>((set, get) => ({
   },
 
   reorderCategories: async (categories) => {
+    console.log('=== reorderCategories called ===', categories.map(c => ({ id: c.id, name: c.name, order: c.order })));
+    
+    // 로컬 상태를 즉시 업데이트 (깜빡거림 방지)
+    set({ categories });
+    
+    // DB 업데이트는 백그라운드에서 실행
     for (const [index, category] of categories.entries()) {
+      console.log(`Updating category ${category.name} with order_num: ${category.order}`);
       await window.electronAPI.updateCategory(category.id, {
         name: category.name,
         parentId: category.parentId,
         fields: category.fields,
-        order_num: index
+        order_num: category.order // 반드시 order 값을 order_num으로 저장
       });
     }
-    await get().loadCategories();
   },
 
   addRecord: async (recordData: NewRecord) => {

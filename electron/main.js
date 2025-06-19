@@ -240,6 +240,7 @@ ipcMain.handle('db:getCategories', () => {
   log('Categories found:', { count: categories.length });
   return categories.map(cat => ({
     ...cat,
+    order: cat.order_num,
     fields: JSON.parse(cat.fields)
   }));
 });
@@ -329,7 +330,7 @@ ipcMain.handle('db:updateCategory', (_, id, updates) => {
     updates.name,
     updates.parentId || null,
     JSON.stringify(updates.fields),
-    updates.order,
+    updates.order_num,
     new Date().toISOString(),
     id
   );

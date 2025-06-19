@@ -35,15 +35,26 @@ export const Sidebar: React.FC = () => {
 
   const handleDragEnd = (result: any) => {
     if (!result.destination) return;
+    const { source, destination } = result;
+    if (source.droppableId !== 'root-categories' || destination.droppableId !== 'root-categories') return;
 
-    const items = Array.from(categories);
-    const [reorderedItem] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reorderedItem);
+    const siblings = categories.filter(cat => !cat.parentId).sort((a, b) => a.order - b.order);
+    const [reorderedItem] = siblings.splice(source.index, 1);
+    siblings.splice(destination.index, 0, reorderedItem);
 
-    const reorderedCategories = items.map((item, index) => ({
-      ...item,
-      order: index,
-    }));
+    // 디버깅 로그
+    console.log('Root categories after reorder:', siblings.map(s => ({ id: s.id, name: s.name, order: s.order })));
+
+    const reorderedCategories = categories.map(cat => {
+      if (!cat.parentId) {
+        const newIndex = siblings.findIndex(sibling => sibling.id === cat.id);
+        return { ...cat, order: newIndex };
+      }
+      return cat;
+    });
+
+    // 디버깅 로그
+    console.log('reorderCategories 호출 (root):', reorderedCategories.map(c => ({ id: c.id, name: c.name, order: c.order })));
 
     reorderCategories(reorderedCategories);
   };
@@ -54,6 +65,65 @@ export const Sidebar: React.FC = () => {
   };
 
   const renderCategory = (category: Category, level = 0) => {
+    const subCategories = getSubCategories(category.id);
+    const isSelected = selectedCategoryId === category.id;
+    const showSubCategories = shouldShowSubCategories(category.id);
+
+    return (
+      <div key={category.id}>
+        <div
+          className={`flex items-center py-2 px-3 mb-1 rounded cursor-pointer transition-colors group ${
+            isSelected 
+              ? 'bg-discord-accent text-white' 
+              : 'hover:bg-discord-hover text-discord-text'
+          }`}
+          style={{ paddingLeft: `${12 + level * 12}px` }}
+          onMouseEnter={() => setHoveredCategory(category.id)}
+          onMouseLeave={() => setHoveredCategory(null)}
+          onClick={() => {
+            selectCategory(category.id);
+            setShowDbViewer(false);
+          }}
+        >
+          {level > 0 && (
+            <span className="mr-2 text-gray-400">└</span>
+          )}
+          
+          <span className="flex-1 text-sm font-medium truncate">
+            {category.name}
+          </span>
+          
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleEditCategory(category);
+            }}
+            className={`ml-2 p-1 rounded transition-opacity hover:bg-discord-bg ${
+              hoveredCategory === category.id || isSelected ? 'opacity-70 hover:opacity-100' : 'opacity-0'
+            }`}
+          >
+            <Settings size={14} />
+          </button>
+        </div>
+        
+        <AnimatePresence>
+          {showSubCategories && subCategories.length > 0 && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+              style={{ overflow: "hidden" }}
+            >
+              {subCategories.map(subCategory => renderCategory(subCategory, level + 1))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  };
+
+  const renderDraggableCategory = (category: Category, level = 0) => {
     const subCategories = getSubCategories(category.id);
     const isSelected = selectedCategoryId === category.id;
     const showSubCategories = shouldShowSubCategories(category.id);
@@ -165,7 +235,7 @@ export const Sidebar: React.FC = () => {
           </div>
 
           <DragDropContext onDragEnd={handleDragEnd}>
-            <Droppable droppableId="categories">
+            <Droppable droppableId="root-categories">
               {(provided) => (
                 <div {...provided.droppableProps} ref={provided.innerRef}>
                   {rootCategories.map((category, index) => (
@@ -180,7 +250,7 @@ export const Sidebar: React.FC = () => {
                           {...provided.draggableProps}
                           {...provided.dragHandleProps}
                         >
-                          {renderCategory(category)}
+                          {renderDraggableCategory(category)}
                         </div>
                       )}
                     </Draggable>
