@@ -43,6 +43,7 @@
           "!**/*.db",
           "!**/*.sqlite*",
           "!**/db.json",
+          "!**/thumbnails/**",
           "!**/.git/**",
           "!**/node_modules/**",
           "**/*"
