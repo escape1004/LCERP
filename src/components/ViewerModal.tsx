@@ -509,7 +509,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
         </div>
 
         {/* Content */}
-        <div className="flex-1 min-h-0 flex items-center justify-center p-4">
+        <div className="flex-1 min-h-0 flex items-center justify-center">
           {loading ? (
             <div className="flex items-center justify-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-discord-accent"></div>
@@ -646,13 +646,6 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                       >
                         {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
                       </button>
-                    </div>
-                    
-                    {/* 키보드 단축키 안내 */}
-                    <div className="text-white text-xs mt-2 opacity-70">
-                      <span className="mr-4">스페이스바: 재생/정지</span>
-                      <span className="mr-4">←→: 5초 이동</span>
-                      <span className="mr-4">↑↓: 볼륨 조절</span>
                     </div>
                   </div>
                 </div>

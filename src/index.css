@@ -172,3 +172,7 @@
   height: 6px;
   border: none;
 }
+
+[data-video-container]:focus {
+  outline: none;
+}
