@@ -230,6 +230,11 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      onClose();
+      return;
+    }
+    
     if (fileType === 'archive') {
       if (e.key === 'ArrowLeft') {
         handlePrevious();

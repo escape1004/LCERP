@@ -36,6 +36,23 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   const [viewerFilePath, setViewerFilePath] = useState<string>('');
   const [viewerFileType, setViewerFileType] = useState<'image' | 'video' | 'archive' | null>(null);
 
+  // ESC 키로 모달 닫기
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
   // Get parent categories path
   const getParentPath = useCallback((currentCategory: Category): Category[] => {
     const path: Category[] = [];

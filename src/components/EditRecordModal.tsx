@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Category, DataRecord } from '../types';
 import { useERPStore } from '../hooks/useERPStore';
 
@@ -16,6 +16,21 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({
   const { updateRecord } = useERPStore();
   const [formData, setFormData] = useState<Record<string, any>>(record.data);
   const [error, setError] = useState<string>('');
+
+  // ESC 키로 모달 닫기
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

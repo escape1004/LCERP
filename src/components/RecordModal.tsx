@@ -91,6 +91,23 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     }
   }, [isOpen]);
 
+  // ESC 키로 모달 닫기
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
   const validateForm = useCallback(() => {
     const newErrors: Record<string, string> = {};
     (category?.fields ?? []).forEach(field => {
