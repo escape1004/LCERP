@@ -46,27 +46,50 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     variant: 'info'
   });
 
+  // formData의 초기값을 useMemo로 계산
+  const initialFormData = React.useMemo(() => {
+    if (record && category) {
+      return { ...record.data };
+    } else if (category) {
+      const initialData: Record<string, any> = {};
+      category.fields.forEach(field => {
+        initialData[field.id] = field.type === 'checkbox' ? false : '';
+      });
+      return initialData;
+    }
+    return {};
+  }, [record, category]);
+
+  // isOpen이 true일 때만 formData를 초기화
+  useEffect(() => {
+    if (isOpen) {
+      setFormData(initialFormData);
+    }
+  }, [isOpen, initialFormData]);
+
   // Reset form data when modal opens/closes or record changes
   useEffect(() => {
-    if (record) {
+    if (isOpen && record && category) {
       setFormData({ ...record.data });
-    } else {
+    } else if (isOpen && category) {
+      // 새 레코드 추가 시, 모든 필드의 기본값 세팅
       const initialData: Record<string, any> = {};
-      (category?.fields ?? []).forEach(field => {
-        if (field.type === 'select' && field.multiple) {
-          initialData[field.id] = [];
-        } else if (field.type === 'checkbox') {
-          initialData[field.id] = false;
-        } else {
-          initialData[field.id] = '';
-        }
+      category.fields.forEach(field => {
+        initialData[field.id] = field.type === 'checkbox' ? false : '';
       });
       setFormData(initialData);
     }
     setErrors({});
     setDuplicateErrors({});
     setOpenComboboxes({});
-  }, [record, category]);
+  }, [isOpen, record, category]);
+
+  // 모달이 닫힐 때 formData를 초기화하여 이전 모달 상태가 남지 않도록 함
+  useEffect(() => {
+    if (!isOpen) {
+      setFormData({});
+    }
+  }, [isOpen]);
 
   const validateForm = useCallback(() => {
     const newErrors: Record<string, string> = {};
@@ -200,7 +223,12 @@ export const RecordModal: React.FC<RecordModalProps> = ({
   };
 
   const renderField = (field: FieldDefinition) => {
-    const value = formData[field.id] || (field.type === 'select' && field.multiple ? [] : field.type === 'checkbox' ? false : '');
+    const value =
+      field.type === 'select' && field.multiple
+        ? formData[field.id] ?? []
+        : field.type === 'checkbox'
+          ? formData[field.id] ?? false
+          : formData[field.id] ?? '';
     const hasError = !!errors[field.id];
     const hasDuplicateError = !!duplicateErrors[field.id];
     const inputClassName = cn(
@@ -713,7 +741,8 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     onClose();
   }, [selectCategory, onClose]);
 
-  if (!isOpen) return null;
+  // formData가 준비되지 않았으면 렌더링하지 않기
+  if (!isOpen || !formData || Object.keys(formData).length === 0) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
