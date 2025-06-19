@@ -34,6 +34,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   const [isValidating, setIsValidating] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // 카테고리가 변경될 때마다 레코드 로드
   useEffect(() => {
@@ -540,27 +541,45 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                         아래에 <span className="font-semibold">카테고리를 삭제하겠습니다</span>를 입력하세요.
                       </div>
                     </div>
+                    
+                    {isDeleting && (
+                      <div className="mb-4 p-4 bg-discord-sidebar rounded-lg border border-gray-600">
+                        <div className="flex items-center justify-center gap-3">
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-discord-accent"></div>
+                          <div className="text-discord-text text-sm">
+                            카테고리 삭제 중...
+                            <div className="text-discord-muted text-xs mt-1">
+                              썸네일 및 관계형 데이터 정리 중
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
                     <Input
                       type="text"
                       value={deleteInput}
                       onChange={e => setDeleteInput(e.target.value)}
                       className="w-full mb-3 bg-discord-sidebar border-gray-600 text-discord-text"
                       placeholder="카테고리를 삭제하겠습니다"
+                      disabled={isDeleting}
                     />
                     <div className="flex w-full gap-2">
                       <Button
                         variant="ghost"
                         className="flex-1 text-discord-text hover:bg-discord-hover"
                         onClick={() => { setShowDeleteConfirm(false); setDeleteInput(""); }}
+                        disabled={isDeleting}
                       >
                         취소
                       </Button>
                       <Button
                         variant="destructive"
                         className="flex-1 bg-discord-danger hover:bg-red-900 text-white disabled:bg-red-800 disabled:text-red-300 disabled:cursor-not-allowed"
-                        disabled={deleteInput !== "카테고리를 삭제하겠습니다"}
+                        disabled={deleteInput !== "카테고리를 삭제하겠습니다" || isDeleting}
                         onClick={async () => {
                           try {
+                            setIsDeleting(true);
                             const result = await useERPStore.getState().deleteCategory(category.id);
                             setShowDeleteConfirm(false);
                             setDeleteInput("");
@@ -583,10 +602,12 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                             onClose();
                           } catch (e) {
                             toast({ title: '카테고리 삭제 중 오류가 발생했습니다.', variant: 'destructive' });
+                          } finally {
+                            setIsDeleting(false);
                           }
                         }}
                       >
-                        삭제
+                        {isDeleting ? '삭제 중...' : '삭제'}
                       </Button>
                     </div>
                   </div>
