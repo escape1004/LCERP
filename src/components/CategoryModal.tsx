@@ -106,6 +106,11 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
       newErrors.name = '카테고리 이름을 입력하세요.';
     }
 
+    // 최소 필드 개수 검사
+    if (formData.fields.length === 0) {
+      newErrors.fields = '최소 1개의 필드가 필요합니다.';
+    }
+
     // Validate field names
     formData.fields.forEach((field, index) => {
       if (!field.name.trim()) {
@@ -317,196 +322,207 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                 </Button>
               </div>
 
+              {errors.fields && (
+                <p className="text-red-500 text-sm mb-4">{errors.fields}</p>
+              )}
+
               <DragDropContext onDragEnd={handleFieldDragEnd}>
                 <Droppable droppableId="fields">
                   {(provided) => (
                     <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-4">
-                      {formData.fields.map((field, index) => (
-                        <Draggable key={field.id} draggableId={field.id} index={index}>
-                          {(provided) => (
-                            <div
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              className="bg-discord-sidebar border border-gray-600 rounded-lg p-4"
-                            >
-                              <div className="flex flex-col gap-3">
-                                <div className="flex items-center gap-3">
-                                  <div {...provided.dragHandleProps} className="cursor-grab">
-                                    <GripVertical size={20} className="text-gray-500" />
+                      {formData.fields.length === 0 ? (
+                        <div className="text-center py-8 text-discord-muted border-2 border-dashed border-gray-600 rounded-lg">
+                          <p className="text-sm">필드를 추가해주세요</p>
+                          <p className="text-xs mt-1">최소 1개의 필드가 필요합니다</p>
+                        </div>
+                      ) : (
+                        formData.fields.map((field, index) => (
+                          <Draggable key={field.id} draggableId={field.id} index={index}>
+                            {(provided) => (
+                              <div
+                                ref={provided.innerRef}
+                                {...provided.draggableProps}
+                                className="bg-discord-sidebar border border-gray-600 rounded-lg p-4"
+                              >
+                                <div className="flex flex-col gap-3">
+                                  <div className="flex items-center gap-3">
+                                    <div {...provided.dragHandleProps} className="cursor-grab">
+                                      <GripVertical size={20} className="text-gray-500" />
+                                    </div>
+                                    <div className="flex-1 relative">
+                                      <Input
+                                        value={field.name}
+                                        onChange={(e) => updateField(index, { name: e.target.value })}
+                                        className="w-full bg-[#2b2d31] border-gray-600 text-gray-200"
+                                        placeholder="필드명을 입력하세요"
+                                      />
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => removeField(index)}
+                                      className="h-9 w-9 text-red-400 hover:bg-red-500/10"
+                                    >
+                                      <Trash2 size={16} />
+                                    </Button>
                                   </div>
-                                  <div className="flex-1 relative">
-                                    <Input
-                                      value={field.name}
-                                      onChange={(e) => updateField(index, { name: e.target.value })}
-                                      className="w-full bg-[#2b2d31] border-gray-600 text-gray-200"
-                                      placeholder="필드명을 입력하세요"
-                                    />
-                                  </div>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => removeField(index)}
-                                    className="h-9 w-9 text-red-400 hover:bg-red-500/10"
-                                  >
-                                    <Trash2 size={16} />
-                                  </Button>
-                                </div>
 
-                                <div className="space-y-4">
-                                  <div>
-                                    <Label className="text-sm text-gray-400 mb-2 block">필드 타입</Label>
-                                    <div className="flex items-center gap-3">
-                                      <Select
-                                        value={field.type}
-                                        onValueChange={(value) => updateField(index, { type: value as FieldDefinition['type'] })}
-                                      >
-                                        <SelectTrigger className="w-[200px] bg-[#2b2d31] border-gray-600 text-gray-200">
-                                          <SelectValue placeholder="필드 타입" />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-[#2b2d31] border-gray-600">
-                                          <SelectItem value="text">텍스트</SelectItem>
-                                          <SelectItem value="number">숫자</SelectItem>
-                                          <SelectItem value="date">날짜</SelectItem>
-                                          <SelectItem value="select">선택 목록</SelectItem>
-                                          <SelectItem value="relation">관계형</SelectItem>
-                                          <SelectItem value="file" disabled={formData.fields.some((f, i) => f.type === 'file' && i !== index)}>파일</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                      <div className="flex items-center gap-4 ml-auto">
-                                        <div className="flex items-center gap-2">
-                                          <Checkbox
-                                            id={`required-${field.id}`}
-                                            checked={field.required}
-                                            onCheckedChange={(checked) => updateField(index, { required: checked as boolean })}
-                                          />
-                                          <label htmlFor={`required-${field.id}`} className="text-sm text-gray-300">
-                                            필수값
-                                          </label>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          <Checkbox
-                                            id={`unique-${field.id}`}
-                                            checked={field.unique}
-                                            onCheckedChange={(checked) => updateField(index, { unique: checked as boolean })}
-                                          />
-                                          <label htmlFor={`unique-${field.id}`} className="text-sm text-gray-300">
-                                            중복 불가
-                                          </label>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          <Checkbox
-                                            id={`hidden-${field.id}`}
-                                            checked={field.hidden}
-                                            onCheckedChange={(checked) => updateField(index, { hidden: checked as boolean })}
-                                          />
-                                          <label htmlFor={`hidden-${field.id}`} className="text-sm text-gray-300">
-                                            미노출(리스트 숨김)
-                                          </label>
-                                        </div>
-                                        {(field.type === 'select' || field.type === 'relation') && (
+                                  <div className="space-y-4">
+                                    <div>
+                                      <Label className="text-sm text-gray-400 mb-2 block">필드 타입</Label>
+                                      <div className="flex items-center gap-3">
+                                        <Select
+                                          value={field.type}
+                                          onValueChange={(value) => updateField(index, { type: value as FieldDefinition['type'] })}
+                                        >
+                                          <SelectTrigger className="w-[200px] bg-[#2b2d31] border-gray-600 text-gray-200">
+                                            <SelectValue placeholder="필드 타입" />
+                                          </SelectTrigger>
+                                          <SelectContent className="bg-[#2b2d31] border-gray-600">
+                                            <SelectItem value="text">텍스트</SelectItem>
+                                            <SelectItem value="number">숫자</SelectItem>
+                                            <SelectItem value="date">날짜</SelectItem>
+                                            <SelectItem value="select">선택 목록</SelectItem>
+                                            <SelectItem value="relation">관계형</SelectItem>
+                                            <SelectItem value="file" disabled={formData.fields.some((f, i) => f.type === 'file' && i !== index)}>파일</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                        <div className="flex items-center gap-4 ml-auto">
                                           <div className="flex items-center gap-2">
                                             <Checkbox
-                                              id={`multiple-${field.id}`}
-                                              checked={field.multiple}
-                                              onCheckedChange={(checked) => updateField(index, { multiple: checked as boolean })}
+                                              id={`required-${field.id}`}
+                                              checked={field.required}
+                                              onCheckedChange={(checked) => updateField(index, { required: checked as boolean })}
                                             />
-                                            <label htmlFor={`multiple-${field.id}`} className="text-sm text-gray-300">
-                                              다중 선택
+                                            <label htmlFor={`required-${field.id}`} className="text-sm text-gray-300">
+                                              필수값
                                             </label>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            <Checkbox
+                                              id={`unique-${field.id}`}
+                                              checked={field.unique}
+                                              onCheckedChange={(checked) => updateField(index, { unique: checked as boolean })}
+                                            />
+                                            <label htmlFor={`unique-${field.id}`} className="text-sm text-gray-300">
+                                              중복 불가
+                                            </label>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            <Checkbox
+                                              id={`hidden-${field.id}`}
+                                              checked={field.hidden}
+                                              onCheckedChange={(checked) => updateField(index, { hidden: checked as boolean })}
+                                            />
+                                            <label htmlFor={`hidden-${field.id}`} className="text-sm text-gray-300">
+                                              미노출(리스트 숨김)
+                                            </label>
+                                          </div>
+                                          {(field.type === 'select' || field.type === 'relation') && (
+                                            <div className="flex items-center gap-2">
+                                              <Checkbox
+                                                id={`multiple-${field.id}`}
+                                                checked={field.multiple}
+                                                onCheckedChange={(checked) => updateField(index, { multiple: checked as boolean })}
+                                              />
+                                              <label htmlFor={`multiple-${field.id}`} className="text-sm text-gray-300">
+                                                다중 선택
+                                              </label>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {field.type === 'select' && (
+                                      <div>
+                                        <Label className="text-sm text-gray-400 mb-2 block">옵션 목록</Label>
+                                        <div className="space-y-2">
+                                          <div className="flex flex-wrap gap-2">
+                                            {field.options?.map((option, optionIndex) => (
+                                              <div key={optionIndex} className="flex items-center bg-[#2b2d31] rounded">
+                                                <Input
+                                                  value={option}
+                                                  onChange={(e) => {
+                                                    const newOptions = [...(field.options || [])];
+                                                    newOptions[optionIndex] = e.target.value;
+                                                    updateField(index, { options: newOptions });
+                                                  }}
+                                                  className="h-10 px-3 w-full bg-[#2b2d31] border-gray-600 text-gray-200"
+                                                />
+                                                <Button
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  onClick={() => {
+                                                    const newOptions = field.options?.filter((_, i) => i !== optionIndex);
+                                                    updateField(index, { options: newOptions });
+                                                  }}
+                                                  className="h-10 w-10 bg-discord-sidebar text-gray-400 hover:text-gray-200 hover:bg-discord-sidebar"
+                                                >
+                                                  <X size={14} />
+                                                </Button>
+                                              </div>
+                                            ))}
+                                            <Button
+                                              onClick={() => updateField(index, { 
+                                                options: [...(field.options || []), ''] 
+                                              })}
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-8 px-2 text-gray-400 hover:text-gray-200"
+                                            >
+                                              + 옵션 추가
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {field.type === 'relation' && (
+                                      <div className="space-y-2">
+                                        <Label className="text-sm text-gray-400">관련 카테고리</Label>
+                                        <Select
+                                          value={field.relationCategoryId || ''}
+                                          onValueChange={(value) => updateField(index, { relationCategoryId: value })}
+                                        >
+                                          <SelectTrigger className="w-full bg-[#2b2d31] border-gray-600 text-gray-200">
+                                            <SelectValue placeholder="카테고리를 선택하세요" />
+                                          </SelectTrigger>
+                                          <SelectContent className="bg-[#2b2d31] border-gray-600">
+                                            {categories.map((cat) => (
+                                              <SelectItem key={cat.id} value={cat.id}>
+                                                {getCategoryPath(cat).join(' / ')}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                        {field.relationCategoryId && (
+                                          <div className="space-y-1">
+                                            <Label className="text-sm text-gray-400">라벨 필드(선택 목록에 표시될 필드)</Label>
+                                            <Select
+                                              value={field.displayFieldId || ''}
+                                              onValueChange={(value) => updateField(index, { displayFieldId: value })}
+                                            >
+                                              <SelectTrigger className="w-full bg-[#2b2d31] border-gray-600 text-gray-200">
+                                                <SelectValue placeholder="필드 선택" />
+                                              </SelectTrigger>
+                                              <SelectContent className="bg-[#2b2d31] border-gray-600">
+                                                {(categories.find(cat => cat.id === field.relationCategoryId)?.fields.filter(f => f.required) || []).map(f => (
+                                                  <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                                                ))}
+                                              </SelectContent>
+                                            </Select>
                                           </div>
                                         )}
                                       </div>
-                                    </div>
+                                    )}
                                   </div>
-
-                                  {field.type === 'select' && (
-                                    <div>
-                                      <Label className="text-sm text-gray-400 mb-2 block">옵션 목록</Label>
-                                      <div className="space-y-2">
-                                        <div className="flex flex-wrap gap-2">
-                                          {field.options?.map((option, optionIndex) => (
-                                            <div key={optionIndex} className="flex items-center bg-[#2b2d31] rounded">
-                                              <Input
-                                                value={option}
-                                                onChange={(e) => {
-                                                  const newOptions = [...(field.options || [])];
-                                                  newOptions[optionIndex] = e.target.value;
-                                                  updateField(index, { options: newOptions });
-                                                }}
-                                                className="h-10 px-3 w-full bg-[#2b2d31] border-gray-600 text-gray-200"
-                                              />
-                                              <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => {
-                                                  const newOptions = field.options?.filter((_, i) => i !== optionIndex);
-                                                  updateField(index, { options: newOptions });
-                                                }}
-                                                className="h-10 w-10 bg-discord-sidebar text-gray-400 hover:text-gray-200 hover:bg-discord-sidebar"
-                                              >
-                                                <X size={14} />
-                                              </Button>
-                                            </div>
-                                          ))}
-                                          <Button
-                                            onClick={() => updateField(index, { 
-                                              options: [...(field.options || []), ''] 
-                                            })}
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-8 px-2 text-gray-400 hover:text-gray-200"
-                                          >
-                                            + 옵션 추가
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {field.type === 'relation' && (
-                                    <div className="space-y-2">
-                                      <Label className="text-sm text-gray-400">관련 카테고리</Label>
-                                      <Select
-                                        value={field.relationCategoryId || ''}
-                                        onValueChange={(value) => updateField(index, { relationCategoryId: value })}
-                                      >
-                                        <SelectTrigger className="w-full bg-[#2b2d31] border-gray-600 text-gray-200">
-                                          <SelectValue placeholder="카테고리를 선택하세요" />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-[#2b2d31] border-gray-600">
-                                          {categories.map((cat) => (
-                                            <SelectItem key={cat.id} value={cat.id}>
-                                              {getCategoryPath(cat).join(' / ')}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                      {field.relationCategoryId && (
-                                        <div className="space-y-1">
-                                          <Label className="text-sm text-gray-400">라벨 필드(선택 목록에 표시될 필드)</Label>
-                                          <Select
-                                            value={field.displayFieldId || ''}
-                                            onValueChange={(value) => updateField(index, { displayFieldId: value })}
-                                          >
-                                            <SelectTrigger className="w-full bg-[#2b2d31] border-gray-600 text-gray-200">
-                                              <SelectValue placeholder="필드 선택" />
-                                            </SelectTrigger>
-                                            <SelectContent className="bg-[#2b2d31] border-gray-600">
-                                              {(categories.find(cat => cat.id === field.relationCategoryId)?.fields.filter(f => f.required) || []).map(f => (
-                                                <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
-                                              ))}
-                                            </SelectContent>
-                                          </Select>
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
                                 </div>
                               </div>
-                            </div>
-                          )}
-                        </Draggable>
-                      ))}
+                            )}
+                          </Draggable>
+                        ))
+                      )}
                       {provided.placeholder}
                     </div>
                   )}
