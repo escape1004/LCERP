@@ -885,10 +885,6 @@ export const MainContent: React.FC = () => {
                     </span>
                   )}
                 </h1>
-                <p className="text-sm text-discord-muted mt-2">
-                  전체 {sortedRecords.length}개 항목
-                  {searchTerm && ` (검색 결과: ${sortedRecords.length}개)`}
-                </p>
               </div>
               <div className="flex gap-3">
                 <div className="relative">
@@ -982,7 +978,7 @@ export const MainContent: React.FC = () => {
                 </SelectTrigger>
                 <SelectContent className="bg-discord-sidebar border-gray-600">
                   <SelectItem value="all">전체 필드</SelectItem>
-                  {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
+                  {selectedCategorySafe?.fields.filter(f => !f.hidden && f.type !== 'checkbox').map(field => (
                     <SelectItem key={field.id} value={field.id}>
                       {field.name}
                     </SelectItem>
