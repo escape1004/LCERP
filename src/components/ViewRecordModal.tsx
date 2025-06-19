@@ -423,7 +423,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                   <h3 className="text-sm font-semibold text-discord-muted uppercase tracking-wide mb-2">
                     {field.name}
                   </h3>
-                  <div className="text-discord-text">
+                  <div className="text-discord-text text-sm">
                     {/* 파일 필드는 상세 정보에서 썸네일 대신 경로 복사 버튼만 */}
                     {field.type === 'file' && record.data[field.id] ? (
                       <button

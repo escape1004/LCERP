@@ -32,6 +32,8 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [duplicateErrors, setDuplicateErrors] = useState<Record<string, string>>({});
   const [isValidating, setIsValidating] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteInput, setDeleteInput] = useState("");
 
   // 카테고리가 변경될 때마다 레코드 로드
   useEffect(() => {
@@ -514,7 +516,68 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-700">
+        <div className="flex items-end justify-end gap-3 p-6 border-t border-gray-700">
+          {category && (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="text-red-400 text-xs px-2 py-1 mr-auto hover:underline hover:text-red-500"
+              >
+                카테고리 삭제
+              </button>
+              {showDeleteConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+                  <div className="bg-discord-bg rounded-lg p-6 w-full max-w-md border border-gray-700 flex flex-col items-center">
+                    <div className="mb-6 text-center text-discord-text">
+                      <div className="text-base font-medium mb-2">
+                        정말로 이 카테고리를 삭제하시겠습니까?
+                      </div>
+                      <div className="text-red-400 font-semibold mb-2">
+                        이 작업은 되돌릴 수 없습니다.
+                      </div>
+                      <div className="text-discord-muted text-sm">
+                        아래에 <span className="font-semibold">카테고리를 삭제하겠습니다</span>를 입력하세요.
+                      </div>
+                    </div>
+                    <Input
+                      type="text"
+                      value={deleteInput}
+                      onChange={e => setDeleteInput(e.target.value)}
+                      className="w-full mb-3 bg-discord-sidebar border-gray-600 text-discord-text"
+                      placeholder="카테고리를 삭제하겠습니다"
+                    />
+                    <div className="flex w-full gap-2">
+                      <Button
+                        variant="ghost"
+                        className="flex-1 text-discord-text hover:bg-discord-hover"
+                        onClick={() => { setShowDeleteConfirm(false); setDeleteInput(""); }}
+                      >
+                        취소
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        className="flex-1 bg-discord-danger hover:bg-red-900 text-white disabled:bg-red-800 disabled:text-red-300 disabled:cursor-not-allowed"
+                        disabled={deleteInput !== "카테고리를 삭제하겠습니다"}
+                        onClick={async () => {
+                          try {
+                            await useERPStore.getState().deleteCategory(category.id);
+                            setShowDeleteConfirm(false);
+                            setDeleteInput("");
+                            onClose();
+                          } catch (e) {
+                            toast({ title: '카테고리 삭제 중 오류가 발생했습니다.', variant: 'destructive' });
+                          }
+                        }}
+                      >
+                        삭제
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
           <Button 
             variant="ghost" 
             onClick={onClose}

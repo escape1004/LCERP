@@ -287,7 +287,7 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
       <div className="p-6 border-b border-gray-700">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-discord-text">
+            <h1 className="text-xl font-bold text-discord-text">
               {selectedCategory.name}
               {selectedCategory.parentId && (
                 <span className="text-sm font-normal text-discord-muted ml-2">

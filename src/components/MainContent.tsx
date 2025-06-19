@@ -785,7 +785,7 @@ export const MainContent: React.FC = () => {
           <div className="shrink-0 p-6 border-b border-gray-700">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h1 className="text-2xl font-bold text-discord-text">
+                <h1 className="text-xl font-bold text-discord-text">
                   {selectedCategorySafe?.name}
                   {selectedCategorySafe?.parentId && (
                     <span className="text-sm font-normal text-discord-muted ml-2">
