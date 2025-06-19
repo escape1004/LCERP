@@ -21,6 +21,7 @@ import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { ConfirmDialog } from './ui/confirm-dialog';
 import { AlertDialog } from './ui/alert-dialog';
+import { CategoryModal } from './CategoryModal';
 
 // Custom event type
 declare global {
@@ -856,9 +857,28 @@ export const MainContent: React.FC = () => {
     setPageInputValue(currentPage.toString());
   };
 
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+
   // 렌더링 시 카테고리 없을 때 안내 메시지
   if (!categoriesSafe || categoriesSafe.length === 0) {
-    return <div className="flex items-center justify-center h-full text-discord-muted">카테고리가 없습니다. 새로 추가해보세요.</div>;
+    return (
+      <div className="relative flex-1 h-full">
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="text-center">
+            <h3 className="text-lg font-semibold text-discord-text mb-2">카테고리가 없습니다</h3>
+            <p className="text-discord-muted mb-4">첫 번째 카테고리를 추가해보세요.</p>
+            <Button
+              className="bg-discord-accent hover:bg-blue-600"
+              onClick={() => setIsCategoryModalOpen(true)}
+            >
+              <Plus size={16} className="mr-2" />
+              카테고리 추가하기
+            </Button>
+          </div>
+        </div>
+        <CategoryModal isOpen={isCategoryModalOpen} onClose={() => setIsCategoryModalOpen(false)} />
+      </div>
+    );
   }
 
   // 파일 필드 존재 여부
