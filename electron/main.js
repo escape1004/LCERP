@@ -4,6 +4,7 @@ const Database = require('better-sqlite3');
 const fs = require('fs');
 const crypto = require('crypto');
 const { generateThumbnail } = require('../dist/lib/fileHandler');
+const unzipper = require('unzipper');
 
 // 로그 파일 설정
 const logPath = path.join(app.getPath('userData'), 'app.log');
@@ -757,24 +758,38 @@ ipcMain.handle('generateThumbnail', async (_, filePath) => {
           .on('error', reject);
       });
     } else if (isArchive) {
-      const zip = new AdmZip(normalizedPath);
-      const zipEntries = zip.getEntries();
-      const imageEntry = zipEntries.find(entry => 
-        /\.(jpg|jpeg|png|gif)$/i.test(entry.entryName)
-      );
-      
-      if (imageEntry) {
-        const buffer = zip.readFile(imageEntry);
-        if (buffer) {
-          await sharp(buffer)
-            .resize(400, 400, { fit: 'contain' })
-            .toFile(thumbnailPath);
-        } else {
-          return null;
-        }
-      } else {
-        return null;
-      }
+      // 스트리밍 방식으로 첫 이미지 추출
+      let found = false;
+      await new Promise((resolve, reject) => {
+        fs.createReadStream(normalizedPath)
+          .pipe(unzipper.Parse())
+          .on('entry', async function (entry) {
+            const fileName = entry.path;
+            if (/\.(jpg|jpeg|png|gif|webp)$/i.test(fileName) && !found) {
+              found = true;
+              const chunks = [];
+              entry.on('data', chunk => chunks.push(chunk));
+              entry.on('end', async () => {
+                const buffer = Buffer.concat(chunks);
+                try {
+                  await sharp(buffer)
+                    .resize(400, 400, { fit: 'contain' })
+                    .toFile(thumbnailPath);
+                  resolve();
+                } catch (err) {
+                  reject(err);
+                }
+              });
+            } else {
+              entry.autodrain();
+            }
+          })
+          .on('close', () => {
+            if (!found) resolve();
+          })
+          .on('error', reject);
+      });
+      if (!found) return null;
     }
     
     return thumbnailPath;
