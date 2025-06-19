@@ -29,7 +29,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(() => {
     const savedVolume = localStorage.getItem('videoVolume');
-    return savedVolume ? parseFloat(savedVolume) : 1;
+    return savedVolume ? parseFloat(savedVolume) : 0.5;
   });
   const [isMuted, setIsMuted] = useState(() => {
     const savedMuted = localStorage.getItem('videoMuted');
@@ -39,6 +39,10 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const controlsTimeoutRef = useRef<NodeJS.Timeout>();
+  
+  // 재생바 관련 상태 추가
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
 
   // 일반 이미지 상태 및 핸들러
   const [imgScale, setImgScale] = useState(1);
@@ -96,6 +100,24 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     localStorage.setItem('videoMuted', JSON.stringify(isMuted));
   }, [isMuted]);
 
+  // 동영상 볼륨 설정
+  useEffect(() => {
+    if (videoRef.current && fileType === 'video') {
+      videoRef.current.volume = isMuted ? 0 : volume;
+      videoRef.current.muted = isMuted;
+    }
+  }, [volume, isMuted, fileType]);
+
+  // 동영상 플레이어 포커스 설정
+  useEffect(() => {
+    if (fileType === 'video' && isOpen) {
+      const videoContainer = document.querySelector('[data-video-container]') as HTMLElement;
+      if (videoContainer) {
+        videoContainer.focus();
+      }
+    }
+  }, [fileType, isOpen]);
+
   // 비디오 이벤트 핸들러
   const handlePlayPause = () => {
     if (videoRef.current) {
@@ -144,6 +166,10 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   };
 
   const handleVideoClick = () => {
+    // 재생/정지 토글
+    handlePlayPause();
+    
+    // 컨트롤 표시
     setShowControls(true);
     if (controlsTimeoutRef.current) {
       clearTimeout(controlsTimeoutRef.current);
@@ -161,6 +187,36 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     controlsTimeoutRef.current = setTimeout(() => {
       setShowControls(false);
     }, 3000);
+  };
+
+  // 재생바 관련 핸들러 추가
+  const handleTimeUpdate = () => {
+    if (videoRef.current) {
+      setCurrentTime(videoRef.current.currentTime);
+    }
+  };
+
+  const handleLoadedMetadata = () => {
+    if (videoRef.current) {
+      setDuration(videoRef.current.duration);
+      videoRef.current.volume = isMuted ? 0 : volume;
+      videoRef.current.muted = isMuted;
+      videoRef.current.loop = isLooping;
+    }
+  };
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newTime = parseFloat(e.target.value);
+    setCurrentTime(newTime);
+    if (videoRef.current) {
+      videoRef.current.currentTime = newTime;
+    }
+  };
+
+  const formatTime = (time: number) => {
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
   // 전체화면 상태 감지
@@ -233,6 +289,42 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     if (e.key === 'Escape') {
       onClose();
       return;
+    }
+    
+    // 동영상 플레이어 키보드 단축키
+    if (fileType === 'video') {
+      switch (e.key) {
+        case ' ':
+          e.preventDefault();
+          handlePlayPause();
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          if (videoRef.current) {
+            const newTime = Math.max(0, videoRef.current.currentTime - 5);
+            videoRef.current.currentTime = newTime;
+            setCurrentTime(newTime);
+          }
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          if (videoRef.current) {
+            const newTime = Math.min(duration, videoRef.current.currentTime + 5);
+            videoRef.current.currentTime = newTime;
+            setCurrentTime(newTime);
+          }
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          const newVolumeUp = Math.min(1, volume + 0.05);
+          handleVolumeChange(newVolumeUp);
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          const newVolumeDown = Math.max(0, volume - 0.05);
+          handleVolumeChange(newVolumeDown);
+          break;
+      }
     }
     
     if (fileType === 'archive') {
@@ -472,6 +564,9 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                   className="relative w-full h-full flex items-center justify-center"
                   onMouseMove={handleMouseMove}
                   onMouseLeave={() => setShowControls(false)}
+                  onKeyDown={handleKeyDown}
+                  tabIndex={0}
+                  data-video-container
                 >
                   <video
                     ref={videoRef}
@@ -479,19 +574,31 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                     className="max-w-full max-h-[80vh] h-full object-contain bg-black"
                     onPlay={() => setIsPlaying(true)}
                     onPause={() => setIsPlaying(false)}
-                    onLoadedMetadata={() => {
-                      if (videoRef.current) {
-                        videoRef.current.volume = isMuted ? 0 : volume;
-                        videoRef.current.muted = isMuted;
-                        videoRef.current.loop = isLooping;
-                      }
-                    }}
+                    onLoadedMetadata={handleLoadedMetadata}
+                    onTimeUpdate={handleTimeUpdate}
                     onClick={handleVideoClick}
                     autoPlay
                   />
                   
                   {/* 커스텀 컨트롤 */}
                   <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+                    {/* 재생바 */}
+                    <div className="mb-4">
+                      <input
+                        type="range"
+                        min="0"
+                        max={duration || 0}
+                        step="0.1"
+                        value={currentTime}
+                        onChange={handleSeek}
+                        className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer video-progress"
+                      />
+                      <div className="flex justify-between text-white text-xs mt-1">
+                        <span>{formatTime(currentTime)}</span>
+                        <span>{formatTime(duration)}</span>
+                      </div>
+                    </div>
+                    
                     <div className="flex items-center gap-4">
                       {/* 재생/정지 버튼 */}
                       <button
@@ -539,6 +646,13 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                       >
                         {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
                       </button>
+                    </div>
+                    
+                    {/* 키보드 단축키 안내 */}
+                    <div className="text-white text-xs mt-2 opacity-70">
+                      <span className="mr-4">스페이스바: 재생/정지</span>
+                      <span className="mr-4">←→: 5초 이동</span>
+                      <span className="mr-4">↑↓: 볼륨 조절</span>
                     </div>
                   </div>
                 </div>
