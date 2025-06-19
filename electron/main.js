@@ -466,7 +466,7 @@ ipcMain.handle('db:getRecords', async (_, categoryId) => {
   }
 });
 
-ipcMain.handle('db:addRecord', async (_, record) => {
+ipcMain.handle('addRecord', async (_, record) => {
   try {
     if (!record || typeof record !== 'object') {
       throw new Error('Record must be an object');
@@ -513,7 +513,7 @@ ipcMain.handle('db:addRecord', async (_, record) => {
   }
 });
 
-ipcMain.handle('db:updateRecord', async (_, id, data) => {
+ipcMain.handle('updateRecord', async (_, id, data) => {
   try {
     const record = db.prepare('SELECT categoryId FROM records WHERE id = ?').get(id);
     if (!record) {
@@ -548,7 +548,7 @@ ipcMain.handle('db:updateRecord', async (_, id, data) => {
   }
 });
 
-ipcMain.handle('db:deleteRecord', async (_, id) => {
+ipcMain.handle('deleteRecord', async (_, id) => {
   try {
     const record = db.prepare('SELECT categoryId, data FROM records WHERE id = ?').get(id);
     if (!record) {

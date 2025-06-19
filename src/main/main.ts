@@ -3,6 +3,8 @@ import path from 'path';
 import Database from 'better-sqlite3';
 import fs from 'fs';
 import { getThumbnailHash } from '../lib/fileHandler';
+import { registerRecordHandlers } from './ipc/record';
+import { registerCategoryHandlers } from './ipc/category';
 
 const isDevelopment = process.env.NODE_ENV === 'development';
 
@@ -111,6 +113,9 @@ app.whenReady().then(() => {
     
     console.log('=== All handlers registered successfully ===');
     
+    // 카테고리/레코드 핸들러 등록
+    registerCategoryHandlers(db);
+    registerRecordHandlers(db);
   } else {
     console.error('=== Database is null, cannot register handlers ===');
   }

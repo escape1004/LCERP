@@ -95,10 +95,11 @@ const normalizeValue = (value: any): any => {
   return value;
 };
 
-export const registerRecordHandlers = () => {
+export const registerRecordHandlers = (database: Database) => {
+  db = database;
   console.log('Registering record handlers...');
 
-  ipcMain.handle('getRecords', async (_, categoryId) => {
+  ipcMain.handle('db:getRecords', async (_, categoryId) => {
     if (!categoryId) {
       throw new Error('Category not found: ' + categoryId);
     }
@@ -118,7 +119,7 @@ export const registerRecordHandlers = () => {
     }));
   });
 
-  ipcMain.handle('addRecord', async (_, record) => {
+  ipcMain.handle('db:addRecord', async (_, record) => {
     console.log('=== Adding Record to Database ===');
     console.log('Record to add:', record);
     
@@ -145,7 +146,7 @@ export const registerRecordHandlers = () => {
     return id;
   });
 
-  ipcMain.handle('updateRecord', async (_, id, data) => {
+  ipcMain.handle('db:updateRecord', async (_, id, data) => {
     console.log('=== Updating Record in Database ===');
     console.log('Record ID:', id);
     console.log('Data to update:', data);
@@ -162,7 +163,7 @@ export const registerRecordHandlers = () => {
     `).run(stringifiedData, now, id);
   });
 
-  ipcMain.handle('deleteRecord', async (_, categoryId, id) => {
+  ipcMain.handle('db:deleteRecord', async (_, categoryId, id) => {
     console.log('레코드 삭제 시작:', { categoryId, id });
     
     // 1. 레코드의 썸네일 정리
