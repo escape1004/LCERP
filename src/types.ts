@@ -80,8 +80,8 @@ export interface ElectronAPI {
   checkDuplicate: (categoryId: string, fieldId: string, value: any, recordId?: string) => Promise<{ isDuplicate: boolean }>;
   send: (channel: string, ...args: any[]) => void;
   openFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
-  generateThumbnail: (filePath: string) => Promise<{ success: boolean; thumbnailPath?: string; error?: string }>;
-  getThumbnailDataUrl: (filePath: string) => Promise<{ success: boolean; dataUrl?: string; error?: string }>;
+  generateThumbnail: (filePath: string) => Promise<string | null>;
+  getThumbnailDataUrl: (filePath: string) => Promise<string | null>;
 }
 
 // DB 뷰어 관련 타입

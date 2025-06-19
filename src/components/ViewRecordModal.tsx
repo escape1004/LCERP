@@ -116,12 +116,12 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
           window.electronAPI.getThumbnailDataUrl(value)
             .then(res => {
               if (!ignore) {
-                if (res.success && res.dataUrl) {
-                  setThumbnailDataUrl(res.dataUrl);
+                if (res) {
+                  setThumbnailDataUrl(res);
                   setError(null);
                 } else {
                   setThumbnailDataUrl(null);
-                  setError(res.error || '썸네일 생성 실패');
+                  setError(null);
                 }
                 setLoading(false);
               }
@@ -313,12 +313,12 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
       setLoading(true);
       window.electronAPI.getThumbnailDataUrl(filePath)
         .then(res => {
-          if (res.success && res.dataUrl) {
-            setDataUrl(res.dataUrl);
+          if (res) {
+            setDataUrl(res);
             setError(null);
           } else {
             setDataUrl(null);
-            setError(res.error || '썸네일 생성 실패');
+            setError(null);
           }
           setLoading(false);
         })
@@ -371,11 +371,11 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
             setRegenLoading(true);
             try {
               const res = await window.electronAPI.generateThumbnail(filePath);
-              if (res.success) {
+              if (res) {
                 toast({ title: '썸네일이 재생성되었습니다.' });
                 reloadThumbnail();
               } else {
-                toast({ title: '썸네일 재생성 실패', description: res.error || '', variant: 'destructive' });
+                toast({ title: '썸네일 재생성 실패', description: '', variant: 'destructive' });
               }
             } catch (e) {
               toast({ title: '썸네일 재생성 실패', description: String(e), variant: 'destructive' });

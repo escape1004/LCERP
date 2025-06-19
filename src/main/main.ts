@@ -262,9 +262,9 @@ ipcMain.handle('checkFileExists', async (_, filePath) => {
 ipcMain.handle('generateThumbnail', async (_, filePath) => {
   try {
     const thumbnailPath = await generateThumbnail(filePath);
-    return { success: !!thumbnailPath, thumbnailPath };
+    return thumbnailPath;
   } catch (error) {
-    return { success: false, error: String(error) };
+    return null;
   }
 });
 
@@ -274,11 +274,11 @@ ipcMain.handle('getThumbnailDataUrl', async (_, filePath) => {
   const thumbnailDir = path.join(process.cwd(), 'thumbnails');
   const thumbnailPath = path.join(thumbnailDir, `thumb_${path.basename(filePath)}.jpg`);
   if (!fs.existsSync(thumbnailPath)) {
-    return { success: false, error: '썸네일 없음' };
+    return null;
   }
   const data = fs.readFileSync(thumbnailPath);
   const dataUrl = `data:image/jpeg;base64,${data.toString('base64')}`;
-  return { success: true, dataUrl };
+  return dataUrl;
 });
 
 console.log("=== Electron __dirname ===", __dirname);

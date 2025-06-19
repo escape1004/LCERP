@@ -82,7 +82,7 @@ const ThumbnailCell: React.FC<{ filePath: string | undefined }> = ({ filePath })
     let ignore = false;
     if (filePath) {
       window.electronAPI.getThumbnailDataUrl(filePath).then(res => {
-        if (!ignore) setDataUrl(res.success ? res.dataUrl || null : null);
+        if (!ignore) setDataUrl(res);
       });
     } else {
       setDataUrl(null);
