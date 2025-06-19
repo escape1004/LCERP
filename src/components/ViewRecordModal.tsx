@@ -6,6 +6,13 @@ import { Button } from './ui/button';
 import { toast } from './ui/use-toast';
 import { ViewerModal } from './ViewerModal';
 
+// 전역 이벤트 타입 정의
+declare global {
+  interface WindowEventMap {
+    'thumbnail:regenerated': CustomEvent<{ filePath: string }>;
+  }
+}
+
 interface ViewRecordModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -417,6 +424,12 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
               if (res) {
                 toast({ title: '썸네일이 재생성되었습니다.' });
                 reloadThumbnail();
+                
+                // 전역 이벤트 발생 - 레코드 리스트의 썸네일도 업데이트
+                window.dispatchEvent(new CustomEvent('thumbnail:regenerated', {
+                  detail: { filePath }
+                }));
+                
                 if (categoryId) {
                   await loadRecords(categoryId);
                 }
