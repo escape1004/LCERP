@@ -47,6 +47,8 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
     variant: 'info'
   });
   const [recordToDelete, setRecordToDelete] = useState<DataRecord | null>(null);
+  const [isPageInputMode, setIsPageInputMode] = useState(false);
+  const [pageInputValue, setPageInputValue] = useState('');
 
   const isEmpty = (v: any): boolean => {
     // null, undefined 체크
@@ -301,6 +303,35 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
     return displayValue || '-';
   };
 
+  const handlePageInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const pageNumber = parseInt(pageInputValue);
+      if (pageNumber >= 1 && pageNumber <= totalPages) {
+        setCurrentPage(pageNumber);
+        setIsPageInputMode(false);
+        setPageInputValue('');
+      }
+    } else if (e.key === 'Escape') {
+      setIsPageInputMode(false);
+      setPageInputValue('');
+    }
+  };
+
+  const handlePageInputBlur = () => {
+    const pageNumber = parseInt(pageInputValue);
+    if (pageNumber >= 1 && pageNumber <= totalPages) {
+      setCurrentPage(pageNumber);
+    }
+    setIsPageInputMode(false);
+    setPageInputValue('');
+  };
+
+  const handlePageNumberClick = () => {
+    setIsPageInputMode(true);
+    setPageInputValue(currentPage.toString());
+  };
+
   return (
     <div className="flex-1 flex flex-col bg-discord-bg">
       {/* Header */}
@@ -540,9 +571,29 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
                 >
                   이전
                 </Button>
-                <span className="flex items-center px-3 text-sm text-discord-text">
-                  {currentPage} / {Math.max(totalPages, 1)}
-                </span>
+                {isPageInputMode ? (
+                  <div className="flex items-center gap-1">
+                    <Input
+                      type="number"
+                      value={pageInputValue}
+                      onChange={(e) => setPageInputValue(e.target.value)}
+                      onKeyDown={handlePageInputKeyDown}
+                      onBlur={handlePageInputBlur}
+                      className="w-16 h-8 text-sm text-center bg-discord-sidebar border-gray-600 text-discord-text [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      min={1}
+                      max={totalPages}
+                      autoFocus
+                    />
+                    <span className="text-sm text-discord-text">/ {Math.max(totalPages, 1)}</span>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handlePageNumberClick}
+                    className="flex items-center px-3 text-sm text-discord-text hover:bg-discord-hover rounded cursor-pointer"
+                  >
+                    {currentPage} / {Math.max(totalPages, 1)}
+                  </button>
+                )}
                 <Button
                   size="sm"
                   variant="outline"
