@@ -381,6 +381,21 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                   {/* 파일 내용 영역 */}
                   <div className="flex-1 flex flex-col h-full">
                     <div className="flex-1 flex items-center justify-center relative overflow-auto">
+                      {/* 좌/우 투명 클릭 영역 */}
+                      {currentFileExt !== 'txt' && (
+                        <>
+                          <div
+                            className="absolute top-0 left-0 h-full w-1/2 z-10 cursor-pointer"
+                            style={{ background: 'transparent' }}
+                            onClick={handlePrevious}
+                          />
+                          <div
+                            className="absolute top-0 right-0 h-full w-1/2 z-10 cursor-pointer"
+                            style={{ background: 'transparent' }}
+                            onClick={handleNext}
+                          />
+                        </>
+                      )}
                       {currentFileExt === 'txt' ? (
                         // 텍스트 파일 표시
                         <div className="w-full h-full bg-discord-bg text-discord-text p-4 overflow-auto">
