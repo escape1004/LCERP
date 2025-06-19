@@ -16,12 +16,10 @@ const deleteThumbnail = (filePath: string) => {
     
     if (fs.existsSync(thumbnailPath)) {
       fs.unlinkSync(thumbnailPath);
-      console.log('썸네일 삭제됨:', thumbnailPath);
       return true;
     }
     return false;
   } catch (error) {
-    console.error('썸네일 삭제 실패:', error);
     return false;
   }
 };
@@ -49,7 +47,6 @@ const cleanupThumbnailForRecord = (categoryId: string, recordId: string) => {
     
     return false;
   } catch (error) {
-    console.error('레코드 썸네일 정리 중 오류:', error);
     return false;
   }
 };
@@ -97,7 +94,6 @@ const normalizeValue = (value: any): any => {
 
 export const registerRecordHandlers = (database: Database) => {
   db = database;
-  console.log('Registering record handlers...');
 
   ipcMain.handle('db:getRecords', async (_, categoryId) => {
     if (!categoryId) {
@@ -120,9 +116,6 @@ export const registerRecordHandlers = (database: Database) => {
   });
 
   ipcMain.handle('db:addRecord', async (_, record) => {
-    console.log('=== Adding Record to Database ===');
-    console.log('Record to add:', record);
-    
     const id = uuidv4();
     const now = new Date().toISOString();
     
@@ -147,10 +140,6 @@ export const registerRecordHandlers = (database: Database) => {
   });
 
   ipcMain.handle('db:updateRecord', async (_, id, data) => {
-    console.log('=== Updating Record in Database ===');
-    console.log('Record ID:', id);
-    console.log('Data to update:', data);
-    
     const now = new Date().toISOString();
     const stringifiedData = JSON.stringify(data);
     
@@ -164,21 +153,15 @@ export const registerRecordHandlers = (database: Database) => {
   });
 
   ipcMain.handle('db:deleteRecord', async (_, categoryId, id) => {
-    console.log('레코드 삭제 시작:', { categoryId, id });
-    
     // 1. 레코드의 썸네일 정리
     const thumbnailDeleted = cleanupThumbnailForRecord(categoryId, id);
     
     // 2. 레코드 삭제
     db.prepare('DELETE FROM records WHERE categoryId = ? AND id = ?').run(categoryId, id);
     
-    console.log(`레코드 삭제 완료: ${thumbnailDeleted ? '썸네일 정리됨' : '썸네일 없음'}`);
-    
     return {
       success: true,
       thumbnailDeleted
     };
   });
-
-  console.log('Record handlers registered successfully');
 }; 

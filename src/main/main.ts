@@ -69,7 +69,6 @@ const initializeDatabase = () => {
 };
 
 app.whenReady().then(() => {
-  console.log('=== App is ready ===');
   initializeDatabase();
   console.log('=== Database initialized ===');
   if (db) {
@@ -121,7 +120,6 @@ app.whenReady().then(() => {
   }
   
   mainWindow = createWindow();
-  console.log('=== Main window created ===');
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -137,7 +135,4 @@ app.on('window-all-closed', () => {
     }
     app.quit();
   }
-});
-
-console.log("=== Electron __dirname ===", __dirname);
-console.log("=== preload path ===", path.join(__dirname, '../dist/preload.js')); 
+}); 

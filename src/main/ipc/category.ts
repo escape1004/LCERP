@@ -16,12 +16,10 @@ const deleteThumbnail = (filePath: string) => {
     
     if (fs.existsSync(thumbnailPath)) {
       fs.unlinkSync(thumbnailPath);
-      console.log('썸네일 삭제됨:', thumbnailPath);
       return true;
     }
     return false;
   } catch (error) {
-    console.error('썸네일 삭제 실패:', error);
     return false;
   }
 };
@@ -50,10 +48,8 @@ const cleanupThumbnailsForCategory = (categoryId: string) => {
       }
     });
     
-    console.log(`카테고리 ${categoryId}에서 ${deletedCount}개 썸네일 정리됨`);
     return deletedCount;
   } catch (error) {
-    console.error('썸네일 정리 중 오류:', error);
     return 0;
   }
 };
@@ -102,10 +98,8 @@ const cleanupRelationReferences = (categoryId: string) => {
       }
     });
     
-    console.log(`관계형 참조 정리 완료: ${updatedCount}개 레코드 업데이트됨`);
     return updatedCount;
   } catch (error) {
-    console.error('관계형 참조 정리 중 오류:', error);
     return 0;
   }
 };
@@ -127,16 +121,11 @@ const normalizeData = (data: any): any => {
 };
 
 export const registerCategoryHandlers = (database: Database) => {
-  console.log('=== Starting registerCategoryHandlers ===');
   db = database;
-  console.log('=== Database assigned ===');
 
   // Category handlers
-  console.log('=== Registering db:getCategories ===');
   ipcMain.handle('db:getCategories', async () => {
-    console.log('Getting categories...');
     const categories = db.prepare('SELECT * FROM categories ORDER BY order_num').all();
-    console.log('Categories found:', { count: categories.length });
     return categories;
   });
 
@@ -198,7 +187,6 @@ export const registerCategoryHandlers = (database: Database) => {
   });
 
   ipcMain.handle('db:deleteCategory', async (_, id) => {
-    console.log('카테고리 삭제 시작:', id);
     
     // 1. 관계형 데이터에서 참조 정리
     const relationCleanupCount = cleanupRelationReferences(id);
@@ -222,8 +210,6 @@ export const registerCategoryHandlers = (database: Database) => {
     
     // 6. 카테고리 삭제
     db.prepare('DELETE FROM categories WHERE id = ?').run(id);
-    
-    console.log(`카테고리 삭제 완료: ${totalThumbnailCount}개 썸네일 정리, ${relationCleanupCount}개 관계형 참조 정리`);
     
     return {
       success: true,
@@ -266,7 +252,6 @@ export const registerCategoryHandlers = (database: Database) => {
 
   ipcMain.handle('deleteRecord', async (_, categoryId, id) => {
     try {
-      console.log('레코드 삭제 시작:', { categoryId, id });
       
       // 1. 레코드 정보 가져오기 (삭제 전)
       const record = db.prepare('SELECT data FROM records WHERE categoryId = ? AND id = ?').get(categoryId, id);
@@ -291,20 +276,16 @@ export const registerCategoryHandlers = (database: Database) => {
           }
         }
       } catch (error) {
-        console.error('썸네일 정리 중 오류:', error);
       }
       
       // 3. 레코드 삭제
       db.prepare('DELETE FROM records WHERE categoryId = ? AND id = ?').run(categoryId, id);
-      
-      console.log(`레코드 삭제 완료: ${thumbnailDeleted ? '썸네일 정리됨' : '썸네일 없음'}`);
       
       return {
         success: true,
         thumbnailDeleted
       };
     } catch (error) {
-      console.error('레코드 삭제 중 오류:', error);
       throw error;
     }
   });
@@ -343,7 +324,6 @@ export const registerCategoryHandlers = (database: Database) => {
   ipcMain.handle('getFileDataUrl', async (_, filePath) => {
     try {
       if (!fs.existsSync(filePath)) {
-        console.error('[파일 존재하지 않음]', filePath);
         return null;
       }
       
@@ -365,10 +345,8 @@ export const registerCategoryHandlers = (database: Database) => {
       }
       
       const dataUrl = `data:${mimeType};base64,${data.toString('base64')}`;
-      console.log('[파일 dataUrl 생성]', filePath, mimeType);
       return dataUrl;
     } catch (e) {
-      console.error('[파일 dataUrl 생성 에러]', e);
       return null;
     }
   });
@@ -377,13 +355,11 @@ export const registerCategoryHandlers = (database: Database) => {
   ipcMain.handle('getArchiveFiles', async (_, filePath) => {
     try {
       if (!fs.existsSync(filePath)) {
-        console.error('[압축 파일 존재하지 않음]', filePath);
         return [];
       }
       
       const ext = path.extname(filePath).toLowerCase();
       if (ext === '.7z') {
-        console.error('[7z 파일은 현재 지원되지 않습니다]', filePath);
         return [];
       }
       
@@ -398,10 +374,8 @@ export const registerCategoryHandlers = (database: Database) => {
         comment: entry.comment || ''
       }));
       
-      console.log('[압축 파일 목록 조회]', filePath, files.length);
       return files;
     } catch (e) {
-      console.error('[압축 파일 목록 조회 에러]', e);
       return [];
     }
   });
@@ -409,13 +383,11 @@ export const registerCategoryHandlers = (database: Database) => {
   ipcMain.handle('getArchiveFileDataUrl', async (_, filePath, fileName) => {
     try {
       if (!fs.existsSync(filePath)) {
-        console.error('[압축 파일 존재하지 않음]', filePath);
         return null;
       }
       
       const ext = path.extname(filePath).toLowerCase();
       if (ext === '.7z') {
-        console.error('[7z 파일은 현재 지원되지 않습니다]', filePath);
         return null;
       }
       
@@ -424,7 +396,6 @@ export const registerCategoryHandlers = (database: Database) => {
       const entry = zip.getEntry(fileName);
       
       if (!entry || entry.isDirectory) {
-        console.error('[압축 파일 내 파일을 찾을 수 없음]', fileName);
         return null;
       }
       
@@ -446,10 +417,8 @@ export const registerCategoryHandlers = (database: Database) => {
       }
       
       const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`;
-      console.log('[압축 파일 이미지 dataUrl 생성]', fileName, mimeType);
       return dataUrl;
     } catch (e) {
-      console.error('[압축 파일 이미지 dataUrl 생성 에러]', e);
       return null;
     }
   });
@@ -458,13 +427,11 @@ export const registerCategoryHandlers = (database: Database) => {
   ipcMain.handle('getArchiveFileText', async (_, filePath, fileName) => {
     try {
       if (!fs.existsSync(filePath)) {
-        console.error('[압축 파일 존재하지 않음]', filePath);
         return null;
       }
       
       const ext = path.extname(filePath).toLowerCase();
       if (ext === '.7z') {
-        console.error('[7z 파일은 현재 지원되지 않습니다]', filePath);
         return null;
       }
       
@@ -473,7 +440,6 @@ export const registerCategoryHandlers = (database: Database) => {
       const entry = zip.getEntry(fileName);
       
       if (!entry || entry.isDirectory) {
-        console.error('[압축 파일 내 파일을 찾을 수 없음]', fileName);
         return null;
       }
       
@@ -483,14 +449,11 @@ export const registerCategoryHandlers = (database: Database) => {
       // 텍스트 파일만 처리
       if (fileExt === '.txt') {
         const text = buffer.toString('utf8');
-        console.log('[압축 파일 텍스트 읽기]', fileName);
         return text;
       } else {
-        console.error('[텍스트 파일이 아님]', fileName);
         return null;
       }
     } catch (e) {
-      console.error('[압축 파일 텍스트 읽기 에러]', e);
       return null;
     }
   });
@@ -510,7 +473,6 @@ export const registerCategoryHandlers = (database: Database) => {
       const dataUrl = `data:image/jpeg;base64,${data.toString('base64')}`;
       return dataUrl;
     } catch (error) {
-      console.error('썸네일 dataUrl 생성 실패:', error);
       return null;
     }
   });
@@ -527,7 +489,6 @@ export const registerCategoryHandlers = (database: Database) => {
   });
 
   // File type handler
-  console.log('=== Registering db:getFileType ===');
   ipcMain.handle('db:getFileType', async (_, filePath) => {
     try {
       return getFileType(filePath);
@@ -535,6 +496,4 @@ export const registerCategoryHandlers = (database: Database) => {
       return 'other';
     }
   });
-
-  console.log('=== All handlers registered successfully ===');
 }; 

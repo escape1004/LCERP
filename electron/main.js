@@ -31,7 +31,6 @@ if (!fs.existsSync(backupDir)) {
 function log(message, data = '') {
   const timestamp = new Date().toISOString();
   const logMessage = `${timestamp} - ${message} ${data ? JSON.stringify(data) : ''}\n`;
-  console.log(logMessage);
   logStream.write(logMessage);
 }
 
@@ -50,8 +49,6 @@ function registerProtocol() {
 const iconPath = (isDev || isPreview)
   ? path.join(__dirname, '..', 'resources', 'icon.ico')
   : path.join(process.resourcesPath, 'resources', 'icon.ico');
-
-console.log('iconPath:', iconPath); // 아이콘 경로 로그 출력
 
 // 썸네일 해시 생성 함수
 function getThumbnailHash(filePath) {

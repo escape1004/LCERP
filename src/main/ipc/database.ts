@@ -22,7 +22,6 @@ const loadConfig = () => {
       const savedConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       config = { ...config, ...savedConfig };
     }
-    console.log('Loaded config:', config);
   } catch (error) {
     console.error('Failed to load config:', error);
   }
@@ -32,7 +31,6 @@ const loadConfig = () => {
 const saveConfig = () => {
   try {
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-    console.log('Saved config:', config);
   } catch (error) {
     console.error('Failed to save config:', error);
   }
@@ -89,8 +87,6 @@ let backupInterval = setInterval(backupDatabase, config.backupInterval);
 backupDatabase();
 
 export const registerDatabaseHandlers = () => {
-  console.log('Registering database handlers...'); // 디버깅용 로그
-
   // Database APIs
   ipcMain.handle('getTables', async () => {
     const tables = db.prepare(`
@@ -111,7 +107,6 @@ export const registerDatabaseHandlers = () => {
   });
 
   ipcMain.handle('getDbPath', () => {
-    console.log('getDbPath called, returning:', config.dbPath);
     return config.dbPath;
   });
 
@@ -142,7 +137,6 @@ export const registerDatabaseHandlers = () => {
 
   // Configuration APIs
   ipcMain.handle('getConfig', () => {
-    console.log('getConfig called, returning:', config);
     return {
       dbPath: config.dbPath,
       backupDir: config.backupDir,
@@ -229,6 +223,4 @@ export const registerDatabaseHandlers = () => {
       return { success: false, error: error.message };
     }
   });
-
-  console.log('Database handlers registered successfully'); // 디버깅용 로그
 }; 

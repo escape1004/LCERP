@@ -6,11 +6,10 @@ import * as path from 'path';
 import * as fs from 'fs';
 import crypto from 'crypto';
 const ffmpegStatic = require('ffmpeg-static');
-console.log('ffmpeg-static:', ffmpegStatic, fs.existsSync(ffmpegStatic));
+
+// ffmpeg 경로 설정
 if (ffmpegStatic && fs.existsSync(ffmpegStatic)) {
   ffmpeg.setFfmpegPath(ffmpegStatic);
-} else {
-  throw new Error('ffmpeg-static 바이너리 경로를 찾을 수 없습니다: ' + ffmpegStatic);
 }
 
 interface FileInfo {
@@ -50,7 +49,6 @@ function isValidFilePath(filePath: string): boolean {
     
     return allowedExts.includes(ext);
   } catch (error) {
-    console.error('Error validating file path:', error);
     return false;
   }
 }
@@ -79,7 +77,6 @@ export async function generateThumbnail(filePath: string): Promise<string | null
   }
 
   const hash = getThumbnailHash(filePath);
-  console.log('[썸네일 생성용 해시]', filePath, hash);
   const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
 
   try {
@@ -101,7 +98,6 @@ export async function generateThumbnail(filePath: string): Promise<string | null
             })
             .on('end', () => resolve(thumbnailPath))
             .on('error', (err) => {
-              console.error('ffmpeg 썸네일 생성 에러:', err, '파일:', filePath);
               reject(err);
             });
         });
@@ -121,7 +117,6 @@ export async function generateThumbnail(filePath: string): Promise<string | null
               .toFile(thumbnailPath);
             return thumbnailPath;
           } else {
-            console.error('압축파일에서 이미지를 읽지 못함:', imageEntry.entryName);
             return null;
           }
         }
@@ -131,7 +126,6 @@ export async function generateThumbnail(filePath: string): Promise<string | null
         return null;
     }
   } catch (error) {
-    console.error('Error generating thumbnail:', error, '파일:', filePath);
     return null;
   }
 }
@@ -160,7 +154,6 @@ export async function openFile(filePath: string): Promise<void> {
   try {
     await shell.openPath(filePath);
   } catch (error) {
-    console.error('Error opening file:', error);
     throw error;
   }
 } 

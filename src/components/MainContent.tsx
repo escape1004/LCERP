@@ -644,7 +644,7 @@ export const MainContent: React.FC = () => {
         const requiredFields = fields.filter(f => f.required);
         let successCount = 0;
         let failCount = 0;
-        let failRows: number[] = [];
+        const failRows: number[] = [];
         for (let i = 0; i < data.length; i++) {
           const row = data[i] as Record<string, any>;
           // 필수값 누락 체크
@@ -752,7 +752,7 @@ export const MainContent: React.FC = () => {
       const requiredFields = fields.filter(f => f.required);
       let successCount = 0;
       let failCount = 0;
-      let failRows: number[] = [];
+      const failRows: number[] = [];
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i] as any[];
         const rowObj: Record<string, any> = {};
