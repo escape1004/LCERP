@@ -49,7 +49,11 @@ const iconPath = isDev
   ? path.join(__dirname, '..', 'resources', 'icon.ico')
   : path.join(__dirname, '..', 'dist', 'icon.ico');
 
-console.log('ICON PATH:', iconPath, fs.existsSync(iconPath));
+// 썸네일 해시 생성 함수
+function getThumbnailHash(filePath) {
+  const normalizedPath = filePath.trim().replace(/\\/g, '/').toLowerCase();
+  return crypto.createHash('sha1').update(normalizedPath).digest('hex');
+}
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -94,16 +98,6 @@ function createWindow() {
     });
   }
 
-  // 디버깅을 위한 추가 이벤트 리스너
-  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-    console.error('Failed to load:', {
-      errorCode,
-      errorDescription,
-      resourcePath: path.join(__dirname, '..', 'dist', 'index.html'),
-      exists: fs.existsSync(path.join(__dirname, '..', 'dist', 'index.html'))
-    });
-  });
-
   // 창 상태 변경 이벤트 처리
   mainWindow.on('maximize', () => {
     mainWindow.webContents.send('window-state-change', { maximized: true });
@@ -133,31 +127,17 @@ function createWindow() {
 }
 
 // 데이터베이스 연결 설정
-log('Database path:', JSON.stringify(dbPath));
-
-const db = new Database(dbPath, {
-  verbose: log
-});
+const db = new Database(dbPath, { verbose: log });
 
 // SQLite 설정
 db.exec('PRAGMA encoding = "UTF-8"');
 db.exec('PRAGMA foreign_keys = ON');
 db.exec('PRAGMA journal_mode = WAL');
 
-// 데이터베이스 연결 확인
-log('Database connection established');
-log('Database pragma settings:', {
-  encoding: db.prepare('PRAGMA encoding').get().encoding,
-  foreign_keys: db.prepare('PRAGMA foreign_keys').get().foreign_keys,
-  journal_mode: db.prepare('PRAGMA journal_mode').get().journal_mode
-});
-
 // 데이터베이스 테이블 생성
 function initializeDatabase() {
-  log('Initializing database...');
   try {
     // 카테고리 테이블
-    log('Creating categories table...');
     db.exec(`
       CREATE TABLE IF NOT EXISTS categories (
         id TEXT PRIMARY KEY,
@@ -170,10 +150,8 @@ function initializeDatabase() {
         FOREIGN KEY (parentId) REFERENCES categories(id)
       )
     `);
-    log('Categories table created successfully');
 
     // 레코드 테이블
-    log('Creating records table...');
     db.exec(`
       CREATE TABLE IF NOT EXISTS records (
         id TEXT PRIMARY KEY,
@@ -184,11 +162,6 @@ function initializeDatabase() {
         FOREIGN KEY (categoryId) REFERENCES categories(id)
       )
     `);
-    log('Records table created successfully');
-
-    // 테이블 확인
-    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
-    log('Available tables:', tables);
 
     // 임시 카테고리 자동 추가 (없을 때만)
     const catCount = db.prepare('SELECT COUNT(*) as count FROM categories').get().count;
@@ -207,7 +180,6 @@ function initializeDatabase() {
         new Date().toISOString(),
         new Date().toISOString()
       );
-      log('임시 카테고리 추가됨');
     }
   } catch (error) {
     log('Error initializing database:', error);
@@ -216,7 +188,7 @@ function initializeDatabase() {
 }
 
 app.whenReady().then(() => {
-  registerProtocol();  // 프로토콜 등록
+  registerProtocol();
   initializeDatabase();
   createWindow();
 
@@ -232,12 +204,150 @@ app.on('window-all-closed', () => {
   }
 });
 
-// IPC 핸들러 설정
+// 유틸리티 함수들
+function generateUUID() {
+  return crypto.randomUUID();
+}
+
+// 썸네일 파일 삭제 함수
+const deleteThumbnail = (filePath) => {
+  try {
+    const thumbnailDir = path.join(app.getAppPath(), 'save', 'thumbnails');
+    const hash = getThumbnailHash(filePath);
+    const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
+    
+    if (fs.existsSync(thumbnailPath)) {
+      fs.unlinkSync(thumbnailPath);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    log('썸네일 삭제 실패:', error);
+    return false;
+  }
+};
+
+// 카테고리의 모든 레코드에서 썸네일 정리
+const cleanupThumbnailsForCategory = (categoryId) => {
+  try {
+    const records = db.prepare('SELECT data FROM records WHERE categoryId = ?').all(categoryId);
+    let deletedCount = 0;
+    
+    records.forEach(record => {
+      const data = JSON.parse(record.data);
+      const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(categoryId);
+      if (!category) return;
+      
+      const fields = JSON.parse(category.fields);
+      const fileField = fields.find(f => f.type === 'file');
+      
+      if (fileField && data[fileField.id]) {
+        const filePath = data[fileField.id];
+        if (deleteThumbnail(filePath)) {
+          deletedCount++;
+        }
+      }
+    });
+    
+    return deletedCount;
+  } catch (error) {
+    log('썸네일 정리 중 오류:', error);
+    return 0;
+  }
+};
+
+// 관계형 데이터에서 참조 정리
+const cleanupRelationReferences = (categoryId) => {
+  try {
+    const allCategories = db.prepare('SELECT id, fields FROM categories').all();
+    let updatedCount = 0;
+    
+    allCategories.forEach(cat => {
+      const fields = JSON.parse(cat.fields);
+      const relationFields = fields.filter(f => f.type === 'relation' && f.relationCategoryId === categoryId);
+      
+      if (relationFields.length > 0) {
+        const records = db.prepare('SELECT id, data FROM records WHERE categoryId = ?').all(cat.id);
+        
+        records.forEach(record => {
+          const data = JSON.parse(record.data);
+          let hasChanges = false;
+          
+          relationFields.forEach(field => {
+            const value = data[field.id];
+            
+            if (field.multiple && Array.isArray(value)) {
+              const filteredValue = value.filter(id => id !== categoryId);
+              if (filteredValue.length !== value.length) {
+                data[field.id] = filteredValue;
+                hasChanges = true;
+              }
+            } else if (value === categoryId) {
+              data[field.id] = null;
+              hasChanges = true;
+            }
+          });
+          
+          if (hasChanges) {
+            db.prepare('UPDATE records SET data = ? WHERE id = ?').run(JSON.stringify(data), record.id);
+            updatedCount++;
+          }
+        });
+      }
+    });
+    
+    return updatedCount;
+  } catch (error) {
+    log('관계형 참조 정리 중 오류:', error);
+    return 0;
+  }
+};
+
+// 중복 체크 함수
+function checkDuplicateFields(categoryId, data, existingRecordId = null) {
+  const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(categoryId);
+  if (!category) {
+    throw new Error(`Category not found: ${categoryId}`);
+  }
+
+  const fields = JSON.parse(category.fields);
+  const uniqueFields = fields.filter(field => field.unique);
+
+  if (uniqueFields.length === 0) {
+    return true;
+  }
+
+  for (const field of uniqueFields) {
+    const fieldValue = data[field.id];
+    if (fieldValue === undefined || fieldValue === null || fieldValue === '') {
+      continue;
+    }
+
+    let query = `
+      SELECT id FROM records 
+      WHERE categoryId = ? 
+      AND json_extract(data, '$.${field.id}') = ?
+    `;
+    let params = [categoryId, String(fieldValue)];
+
+    if (existingRecordId) {
+      query += ' AND id != ?';
+      params.push(existingRecordId);
+    }
+
+    const duplicate = db.prepare(query).get(...params);
+    if (duplicate) {
+      throw new Error(`중복된 값이 존재합니다: ${field.name}`);
+    }
+  }
+
+  return true;
+}
+
+// IPC 핸들러들
 ipcMain.handle('db:getCategories', () => {
-  log('Getting categories...');
   const stmt = db.prepare('SELECT * FROM categories ORDER BY order_num');
   const categories = stmt.all();
-  log('Categories found:', { count: categories.length });
   return categories.map(cat => ({
     ...cat,
     order: cat.order_num,
@@ -245,15 +355,11 @@ ipcMain.handle('db:getCategories', () => {
   }));
 });
 
-// DB 뷰어를 위한 핸들러 추가
-ipcMain.handle('getTables', (event) => {
-  // db:getTables와 동일하게 동작
-  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
-  return tables;
+ipcMain.handle('getTables', () => {
+  return db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
 });
 
 ipcMain.handle('getTableData', (event, tableName) => {
-  // db:getTableData와 동일하게 동작
   const validTables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
   if (!validTables.some(t => t.name === tableName)) {
     throw new Error('Invalid table name');
@@ -261,24 +367,15 @@ ipcMain.handle('getTableData', (event, tableName) => {
   const stmt = db.prepare(`SELECT * FROM ${tableName} LIMIT 1000`);
   const rows = stmt.all();
   const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
-  return {
-    columns,
-    rows,
-    total: rows.length
-  };
+  return { columns, rows, total: rows.length };
 });
 
-// DB 파일 경로 가져오기
-ipcMain.handle('db:getPath', () => {
-  return dbPath;
-});
+ipcMain.handle('db:getPath', () => dbPath);
 
-// DB 파일 열기
 ipcMain.handle('db:openFile', () => {
   shell.showItemInFolder(dbPath);
 });
 
-// URL 열기 핸들러 추가
 ipcMain.handle('shell:openExternal', async (_, url) => {
   try {
     await shell.openExternal(url);
@@ -289,17 +386,11 @@ ipcMain.handle('shell:openExternal', async (_, url) => {
   }
 });
 
-function generateUUID() {
-  return crypto.randomUUID();
-}
-
 ipcMain.handle('db:addCategory', async (_, category) => {
-  console.log('IPC: Received addCategory request:', category);
   const id = generateUUID();
   const now = new Date().toISOString();
   
   try {
-    console.log('IPC: Inserting category into database');
     db.prepare(`
       INSERT INTO categories (id, name, parentId, fields, order_num, createdAt, updatedAt)
       VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -312,10 +403,9 @@ ipcMain.handle('db:addCategory', async (_, category) => {
       now,
       now
     );
-    console.log('IPC: Category inserted successfully:', id);
     return id;
   } catch (error) {
-    console.error('IPC: Error adding category:', error);
+    log('Error adding category:', error);
     throw error;
   }
 });
@@ -336,115 +426,8 @@ ipcMain.handle('db:updateCategory', (_, id, updates) => {
   );
 });
 
-// 썸네일 파일 삭제 함수
-const deleteThumbnail = (filePath) => {
-  try {
-    const thumbnailDir = path.join(process.cwd(), 'thumbnails');
-    const thumbnailPath = path.join(thumbnailDir, `thumb_${path.basename(filePath)}.jpg`);
-    
-    if (fs.existsSync(thumbnailPath)) {
-      fs.unlinkSync(thumbnailPath);
-      console.log('썸네일 삭제됨:', thumbnailPath);
-      return true;
-    }
-    return false;
-  } catch (error) {
-    console.error('썸네일 삭제 실패:', error);
-    return false;
-  }
-};
-
-// 카테고리의 모든 레코드에서 썸네일 정리
-const cleanupThumbnailsForCategory = (categoryId) => {
-  try {
-    const records = db.prepare('SELECT data FROM records WHERE categoryId = ?').all(categoryId);
-    let deletedCount = 0;
-    
-    records.forEach(record => {
-      const data = JSON.parse(record.data);
-      
-      // 파일 필드 찾기
-      const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(categoryId);
-      if (!category) return;
-      
-      const fields = JSON.parse(category.fields);
-      const fileField = fields.find(f => f.type === 'file');
-      
-      if (fileField && data[fileField.id]) {
-        const filePath = data[fileField.id];
-        if (deleteThumbnail(filePath)) {
-          deletedCount++;
-        }
-      }
-    });
-    
-    console.log(`카테고리 ${categoryId}에서 ${deletedCount}개 썸네일 정리됨`);
-    return deletedCount;
-  } catch (error) {
-    console.error('썸네일 정리 중 오류:', error);
-    return 0;
-  }
-};
-
-// 관계형 데이터에서 참조 정리
-const cleanupRelationReferences = (categoryId) => {
-  try {
-    // 모든 카테고리를 가져와서 relation 필드 확인
-    const allCategories = db.prepare('SELECT id, fields FROM categories').all();
-    let updatedCount = 0;
-    
-    allCategories.forEach(cat => {
-      const fields = JSON.parse(cat.fields);
-      const relationFields = fields.filter(f => f.type === 'relation' && f.relationCategoryId === categoryId);
-      
-      if (relationFields.length > 0) {
-        // 해당 카테고리의 모든 레코드 확인
-        const records = db.prepare('SELECT id, data FROM records WHERE categoryId = ?').all(cat.id);
-        
-        records.forEach(record => {
-          const data = JSON.parse(record.data);
-          let hasChanges = false;
-          
-          relationFields.forEach(field => {
-            const value = data[field.id];
-            
-            if (field.multiple && Array.isArray(value)) {
-              // 다중 선택인 경우 해당 카테고리 ID 제거
-              const filteredValue = value.filter(id => id !== categoryId);
-              if (filteredValue.length !== value.length) {
-                data[field.id] = filteredValue;
-                hasChanges = true;
-              }
-            } else if (value === categoryId) {
-              // 단일 선택인 경우 null로 설정
-              data[field.id] = null;
-              hasChanges = true;
-            }
-          });
-          
-          if (hasChanges) {
-            db.prepare('UPDATE records SET data = ? WHERE id = ?').run(JSON.stringify(data), record.id);
-            updatedCount++;
-          }
-        });
-      }
-    });
-    
-    console.log(`관계형 참조 정리 완료: ${updatedCount}개 레코드 업데이트됨`);
-    return updatedCount;
-  } catch (error) {
-    console.error('관계형 참조 정리 중 오류:', error);
-    return 0;
-  }
-};
-
 ipcMain.handle('db:deleteCategory', async (_, id) => {
-  console.log('카테고리 삭제 시작:', id);
-  
-  // 1. 관계형 데이터에서 참조 정리
   const relationCleanupCount = cleanupRelationReferences(id);
-  
-  // 2. 하위 카테고리들의 썸네일 정리 및 삭제
   const childCategories = db.prepare('SELECT id FROM categories WHERE parentId = ?').all(id);
   let totalThumbnailCount = 0;
   
@@ -452,19 +435,11 @@ ipcMain.handle('db:deleteCategory', async (_, id) => {
     totalThumbnailCount += cleanupThumbnailsForCategory(child.id);
   });
   
-  // 3. 현재 카테고리의 썸네일 정리
   totalThumbnailCount += cleanupThumbnailsForCategory(id);
   
-  // 4. 하위 카테고리 먼저 삭제
   db.prepare('DELETE FROM categories WHERE parentId = ?').run(id);
-  
-  // 5. 카테고리에 속한 레코드 삭제
   db.prepare('DELETE FROM records WHERE categoryId = ?').run(id);
-  
-  // 6. 카테고리 삭제
   db.prepare('DELETE FROM categories WHERE id = ?').run(id);
-  
-  console.log(`카테고리 삭제 완료: ${totalThumbnailCount}개 썸네일 정리, ${relationCleanupCount}개 관계형 참조 정리`);
   
   return {
     success: true,
@@ -473,44 +448,19 @@ ipcMain.handle('db:deleteCategory', async (_, id) => {
   };
 });
 
-// 레코드 조회 핸들러
 ipcMain.handle('db:getRecords', (_, categoryId) => {
   try {
-    log('Getting records for category:', { categoryId });
-    
-    // 카테고리 존재 여부 확인
     const categoryExists = db.prepare('SELECT id FROM categories WHERE id = ?').get(categoryId);
     if (!categoryExists) {
-      log('Category not found when getting records:', { categoryId });
       throw new Error(`Category not found: ${categoryId}`);
     }
 
-    // 레코드 조회 쿼리 준비
     const stmt = db.prepare('SELECT * FROM records WHERE categoryId = ? ORDER BY createdAt DESC');
-    log('Executing records query for category:', { categoryId });
-    
-    // 레코드 조회 실행
     const records = stmt.all(categoryId);
-    log('Raw records found:', { 
-      count: records.length,
-      categoryId: categoryId,
-      firstRecord: records[0] ? {
-        id: records[0].id,
-        data: records[0].data,
-        dataLength: records[0].data ? records[0].data.length : 0
-      } : null
-    });
 
-    // 레코드 데이터 파싱
-    const parsedRecords = records.map(record => {
+    return records.map(record => {
       try {
         const parsedData = JSON.parse(record.data);
-        log('Successfully parsed record data:', {
-          recordId: record.id,
-          dataKeys: Object.keys(parsedData),
-          rawData: record.data,
-          parsedData
-        });
         return {
           id: record.id,
           categoryId: record.categoryId,
@@ -519,90 +469,17 @@ ipcMain.handle('db:getRecords', (_, categoryId) => {
           updatedAt: record.updatedAt
         };
       } catch (parseError) {
-        log('Error parsing record data:', {
-          recordId: record.id,
-          error: parseError.message,
-          rawData: record.data
-        });
         throw new Error(`Failed to parse record data for record ${record.id}: ${parseError.message}`);
       }
     });
-
-    log('Successfully processed records:', {
-      count: parsedRecords.length,
-      categoryId: categoryId,
-      records: parsedRecords
-    });
-
-    return parsedRecords;
   } catch (error) {
-    log('Error in getRecords:', {
-      message: error.message,
-      categoryId: categoryId,
-      stack: error.stack
-    });
+    log('Error in getRecords:', error);
     throw error;
   }
 });
 
-// 중복 체크 함수
-function checkDuplicateFields(categoryId, data, existingRecordId = null) {
-  log('Checking duplicate fields:', { categoryId, data, existingRecordId });
-  
-  // 카테고리 필드 정보 가져오기
-  const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(categoryId);
-  if (!category) {
-    throw new Error(`Category not found: ${categoryId}`);
-  }
-
-  const fields = JSON.parse(category.fields);
-  const uniqueFields = fields.filter(field => field.unique);
-
-  // 중복 체크가 필요한 필드가 없으면 통과
-  if (uniqueFields.length === 0) {
-    return true;
-  }
-
-  // 각 unique 필드에 대해 중복 검사
-  for (const field of uniqueFields) {
-    const fieldValue = data[field.id];
-    if (fieldValue === undefined || fieldValue === null || fieldValue === '') {
-      continue; // 빈 값은 중복 체크 제외
-    }
-
-    // 중복 검사 쿼리 준비
-    let query = `
-      SELECT id FROM records 
-      WHERE categoryId = ? 
-      AND json_extract(data, '$.${field.id}') = ?
-    `;
-    let params = [categoryId, String(fieldValue)];
-
-    // 수정 시에는 자기 자신 제외
-    if (existingRecordId) {
-      query += ' AND id != ?';
-      params.push(existingRecordId);
-    }
-
-    const duplicate = db.prepare(query).get(...params);
-    if (duplicate) {
-      throw new Error(`중복된 값이 존재합니다: ${field.name}`);
-    }
-  }
-
-  return true;
-}
-
-// 레코드 추가 핸들러 수정
 ipcMain.handle('db:addRecord', async (_, record) => {
   try {
-    log('Adding record - Raw Input:', {
-      id: record.id,
-      categoryId: record.categoryId,
-      data: record.data
-    });
-    
-    // 입력 유효성 검사
     if (!record || typeof record !== 'object') {
       throw new Error('Record must be an object');
     }
@@ -611,7 +488,6 @@ ipcMain.handle('db:addRecord', async (_, record) => {
       throw new Error('Missing required fields');
     }
 
-    // 중복 체크
     await checkDuplicateFields(record.categoryId, record.data);
 
     const stmt = db.prepare(`
@@ -620,7 +496,7 @@ ipcMain.handle('db:addRecord', async (_, record) => {
     `);
     
     const now = new Date().toISOString();
-    const result = stmt.run(
+    stmt.run(
       record.id,
       record.categoryId,
       JSON.stringify(record.data),
@@ -628,7 +504,20 @@ ipcMain.handle('db:addRecord', async (_, record) => {
       now
     );
 
-    log('Record added successfully:', { id: record.id });
+    // 파일 필드가 있으면 썸네일 자동 생성
+    try {
+      const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(record.categoryId);
+      if (category) {
+        const fields = JSON.parse(category.fields);
+        const fileField = fields.find(f => f.type === 'file');
+        if (fileField && record.data[fileField.id]) {
+          await generateThumbnail(record.data[fileField.id]);
+        }
+      }
+    } catch (thumbnailError) {
+      log('Error generating thumbnail for new record:', thumbnailError);
+    }
+
     return record.id;
   } catch (error) {
     log('Error in addRecord:', error);
@@ -636,16 +525,13 @@ ipcMain.handle('db:addRecord', async (_, record) => {
   }
 });
 
-// 레코드 수정 핸들러 수정
 ipcMain.handle('db:updateRecord', async (_, id, data) => {
   try {
-    // 레코드 정보 가져오기
     const record = db.prepare('SELECT categoryId FROM records WHERE id = ?').get(id);
     if (!record) {
       throw new Error('Record not found');
     }
 
-    // 중복 체크 (자기 자신 제외)
     await checkDuplicateFields(record.categoryId, data, id);
 
     const stmt = db.prepare(`
@@ -655,7 +541,19 @@ ipcMain.handle('db:updateRecord', async (_, id, data) => {
     `);
     stmt.run(JSON.stringify(data), new Date().toISOString(), id);
     
-    log('Record updated successfully:', { id });
+    // 파일 필드가 있으면 썸네일 자동 생성
+    try {
+      const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(record.categoryId);
+      if (category) {
+        const fields = JSON.parse(category.fields);
+        const fileField = fields.find(f => f.type === 'file');
+        if (fileField && data[fileField.id]) {
+          await generateThumbnail(data[fileField.id]);
+        }
+      }
+    } catch (thumbnailError) {
+      log('Error generating thumbnail for updated record:', thumbnailError);
+    }
   } catch (error) {
     log('Error in updateRecord:', error);
     throw error;
@@ -664,58 +562,42 @@ ipcMain.handle('db:updateRecord', async (_, id, data) => {
 
 ipcMain.handle('db:deleteRecord', async (_, id) => {
   try {
-    console.log('레코드 삭제 시작:', id);
-    
-    // 1. 레코드 정보 가져오기 (삭제 전)
     const record = db.prepare('SELECT categoryId, data FROM records WHERE id = ?').get(id);
     if (!record) {
       throw new Error('Record not found');
     }
     
-    // 2. 레코드의 썸네일 정리
     let thumbnailDeleted = false;
     try {
       const data = JSON.parse(record.data);
-      
-      // 카테고리 필드 정보 가져오기
       const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(record.categoryId);
       if (category) {
         const fields = JSON.parse(category.fields);
         const fileField = fields.find(f => f.type === 'file');
         
         if (fileField && data[fileField.id]) {
-          const filePath = data[fileField.id];
-          thumbnailDeleted = deleteThumbnail(filePath);
+          thumbnailDeleted = deleteThumbnail(data[fileField.id]);
         }
       }
     } catch (error) {
-      console.error('썸네일 정리 중 오류:', error);
+      log('썸네일 정리 중 오류:', error);
     }
     
-    // 3. 레코드 삭제
-    const stmt = db.prepare('DELETE FROM records WHERE id = ?');
-    stmt.run(id);
+    db.prepare('DELETE FROM records WHERE id = ?').run(id);
     
-    console.log(`레코드 삭제 완료: ${thumbnailDeleted ? '썸네일 정리됨' : '썸네일 없음'}`);
-    
-    return {
-      success: true,
-      thumbnailDeleted
-    };
+    return { success: true, thumbnailDeleted };
   } catch (error) {
-    console.error('레코드 삭제 중 오류:', error);
+    log('Error in deleteRecord:', error);
     throw error;
   }
 });
 
-// 설정 관련 IPC 핸들러
 ipcMain.handle('getConfig', () => {
-  const config = {
+  return {
     dbPath: dbPath,
     backupDir: backupDir,
-    backupInterval: 60 // 기본값: 60분
+    backupInterval: 60
   };
-  return config;
 });
 
 ipcMain.handle('setDbPath', async () => {
@@ -740,11 +622,9 @@ ipcMain.handle('setBackupDir', async () => {
 });
 
 ipcMain.handle('setBackupInterval', (event, minutes) => {
-  // TODO: 백업 주기 설정 로직 구현
   return { success: true };
 });
 
-// 백업 관련 IPC 핸들러
 ipcMain.handle('backupDatabase', () => {
   try {
     const backupDir = path.join(app.getPath('userData'), 'backups');
@@ -769,10 +649,8 @@ ipcMain.handle('openBackupLocation', () => {
   return { success: true };
 });
 
-// 실시간 중복 체크 핸들러
 ipcMain.handle('db:checkDuplicate', async (_, categoryId, fieldId, value, recordId = null) => {
   try {
-    // 카테고리 필드 정보 가져오기
     const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(categoryId);
     if (!category) {
       throw new Error(`Category not found: ${categoryId}`);
@@ -785,12 +663,10 @@ ipcMain.handle('db:checkDuplicate', async (_, categoryId, fieldId, value, record
       return { isDuplicate: false };
     }
 
-    // 빈 값은 중복 체크 제외
     if (value === undefined || value === null || value === '') {
       return { isDuplicate: false };
     }
 
-    // 중복 검사 쿼리 준비
     let query = `
       SELECT id FROM records 
       WHERE categoryId = ? 
@@ -798,7 +674,6 @@ ipcMain.handle('db:checkDuplicate', async (_, categoryId, fieldId, value, record
     `;
     let params = [categoryId, String(value)];
 
-    // 수정 시에는 자기 자신 제외
     if (recordId) {
       query += ' AND id != ?';
       params.push(recordId);
@@ -813,25 +688,20 @@ ipcMain.handle('db:checkDuplicate', async (_, categoryId, fieldId, value, record
 });
 
 ipcMain.handle('openFileDialog', async () => {
-  const result = await dialog.showOpenDialog({
+  return await dialog.showOpenDialog({
     properties: ['openFile'],
     title: '파일 선택'
   });
-  return result;
 });
 
 ipcMain.handle('openFile', async (_, filePath) => {
-  console.log('[IPC] openFile called with:', filePath);
   if (!filePath) {
-    console.log('[IPC] openFile: 파일 경로 없음');
     return { success: false, error: '파일 경로 없음' };
   }
   try {
-    const result = await shell.openPath(filePath);
-    console.log('[IPC] openFile: shell.openPath result:', result);
+    await shell.openPath(filePath);
     return { success: true };
   } catch (e) {
-    console.log('[IPC] openFile: error:', e);
     return { success: false, error: e.message };
   }
 });
@@ -845,45 +715,116 @@ ipcMain.handle('checkFileExists', async (_, filePath) => {
 });
 
 ipcMain.handle('generateThumbnail', async (_, filePath) => {
-  console.log('[IPC] generateThumbnail 호출됨:', filePath);
   try {
-    const result = await generateThumbnail(filePath);
-    console.log('[IPC] generateThumbnail 결과:', result);
-    return result;
+    let normalizedPath = filePath;
+    
+    if (!path.isAbsolute(filePath)) {
+      normalizedPath = path.join(app.getAppPath(), filePath);
+    }
+    
+    if (!fs.existsSync(normalizedPath)) {
+      return null;
+    }
+    
+    const sharp = require('sharp');
+    const ffmpeg = require('fluent-ffmpeg');
+    const AdmZip = require('adm-zip');
+    const ffmpegStatic = require('ffmpeg-static');
+    
+    if (ffmpegStatic && fs.existsSync(ffmpegStatic)) {
+      ffmpeg.setFfmpegPath(ffmpegStatic);
+    }
+    
+    const ext = path.extname(normalizedPath).toLowerCase();
+    const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext);
+    const isVideo = ['.mp4', '.avi', '.mkv', '.mov'].includes(ext);
+    const isArchive = ['.zip', '.7z'].includes(ext);
+    
+    if (!isImage && !isVideo && !isArchive) {
+      return null;
+    }
+    
+    const thumbnailDir = path.join(app.getAppPath(), 'save', 'thumbnails');
+    if (!fs.existsSync(thumbnailDir)) {
+      fs.mkdirSync(thumbnailDir, { recursive: true });
+    }
+    
+    const hash = getThumbnailHash(normalizedPath);
+    const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
+    
+    if (isImage) {
+      await sharp(normalizedPath)
+        .resize(400, 400, { fit: 'contain' })
+        .toFile(thumbnailPath);
+    } else if (isVideo) {
+      await new Promise((resolve, reject) => {
+        ffmpeg(normalizedPath)
+          .screenshots({
+            timestamps: ['00:00:01'],
+            filename: path.basename(thumbnailPath),
+            folder: thumbnailDir,
+            size: '400x400'
+          })
+          .on('end', resolve)
+          .on('error', reject);
+      });
+    } else if (isArchive) {
+      const zip = new AdmZip(normalizedPath);
+      const zipEntries = zip.getEntries();
+      const imageEntry = zipEntries.find(entry => 
+        /\.(jpg|jpeg|png|gif)$/i.test(entry.entryName)
+      );
+      
+      if (imageEntry) {
+        const buffer = zip.readFile(imageEntry);
+        if (buffer) {
+          await sharp(buffer)
+            .resize(400, 400, { fit: 'contain' })
+            .toFile(thumbnailPath);
+        } else {
+          return null;
+        }
+      } else {
+        return null;
+      }
+    }
+    
+    return thumbnailPath;
   } catch (e) {
-    console.error('[IPC] generateThumbnail 에러:', e);
+    log('Error generating thumbnail:', e);
     return null;
   }
 });
 
 ipcMain.handle('getThumbnailDataUrl', async (_, filePath) => {
-  console.log('[IPC] getThumbnailDataUrl 호출됨:', filePath);
   try {
-    // 썸네일 파일 경로 계산
-    const thumbnailDir = path.join(process.cwd(), 'thumbnails');
-    const thumbnailPath = path.join(thumbnailDir, `thumb_${path.basename(filePath)}.jpg`);
+    let normalizedPath = filePath;
     
-    // 썸네일이 존재하는지 확인 - 없으면 null 반환
+    if (!path.isAbsolute(filePath)) {
+      normalizedPath = path.join(app.getAppPath(), filePath);
+    }
+    
+    const thumbnailDir = path.join(app.getAppPath(), 'save', 'thumbnails');
+    const hash = getThumbnailHash(normalizedPath);
+    const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
+    
     if (!fs.existsSync(thumbnailPath)) {
-      console.log('[IPC] getThumbnailDataUrl 썸네일이 존재하지 않음:', filePath);
       return null;
     }
     
-    console.log('[IPC] getThumbnailDataUrl 기존 썸네일 사용:', thumbnailPath);
-    
-    // 썸네일 파일을 base64로 변환
-    const ext = path.extname(thumbnailPath).toLowerCase();
-    const mime = ext === '.png' ? 'image/png' : 'image/jpeg';
     const buffer = fs.readFileSync(thumbnailPath);
     const base64 = buffer.toString('base64');
-    console.log('[IPC] getThumbnailDataUrl 썸네일 반환 성공');
-    return `data:${mime};base64,${base64}`;
+    return `data:image/jpeg;base64,${base64}`;
   } catch (e) {
-    console.error('[IPC] getThumbnailDataUrl 에러:', e);
+    log('Error getting thumbnail data URL:', e);
     return null;
   }
 });
 
 ipcMain.handle('openDbFile', () => {
   shell.showItemInFolder(dbPath);
+});
+
+ipcMain.handle('getAppRoot', () => {
+  return app.getAppPath();
 }); 

@@ -26,6 +26,9 @@ const electronAPI = {
   backupDatabase: () => ipcRenderer.invoke('backupDatabase'),
   setDbPath: () => ipcRenderer.invoke('setDbPath'),
   setBackupDir: () => ipcRenderer.invoke('setBackupDir'),
+  setBackupInterval: (minutes: number) => ipcRenderer.invoke('setBackupInterval', minutes),
+  checkDuplicate: (categoryId: string, fieldId: string, value: any, recordId?: string) => ipcRenderer.invoke('db:checkDuplicate', categoryId, fieldId, value, recordId),
+  getAppRoot: () => ipcRenderer.invoke('getAppRoot'),
 } as const;
 
 // API를 window 객체에 노출

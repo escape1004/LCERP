@@ -1,9 +1,10 @@
-import { shell } from 'electron';
+import { shell, app } from 'electron';
 import sharp from 'sharp';
 import ffmpeg from 'fluent-ffmpeg';
 import AdmZip from 'adm-zip';
 import * as path from 'path';
 import * as fs from 'fs';
+import crypto from 'crypto';
 const ffmpegStatic = require('ffmpeg-static');
 console.log('ffmpeg-static:', ffmpegStatic, fs.existsSync(ffmpegStatic));
 if (ffmpegStatic && fs.existsSync(ffmpegStatic)) {
@@ -54,7 +55,13 @@ function isValidFilePath(filePath: string): boolean {
   }
 }
 
-export async function generateThumbnail(filePath: string): Promise<string | null> {
+export function getThumbnailHash(filePath: string): string {
+  // 경로 표준화: 앞뒤 공백 제거, \를 /로 통일, 소문자 변환
+  const normalizedPath = filePath.trim().replace(/\\/g, '/').toLowerCase();
+  return crypto.createHash('sha1').update(normalizedPath).digest('hex');
+}
+
+export async function generateThumbnail(filePath: string, appInstance = app): Promise<string | null> {
   // 파일 경로 검증
   if (!isValidFilePath(filePath)) {
     throw new Error('Invalid or unauthorized file path');
@@ -65,13 +72,15 @@ export async function generateThumbnail(filePath: string): Promise<string | null
   }
 
   const fileType = getFileType(filePath);
-  const thumbnailDir = path.join(process.cwd(), 'thumbnails');
+  const thumbnailDir = path.join(appInstance.getAppPath(), 'save', 'thumbnails');
   
   if (!fs.existsSync(thumbnailDir)) {
-    fs.mkdirSync(thumbnailDir);
+    fs.mkdirSync(thumbnailDir, { recursive: true });
   }
 
-  const thumbnailPath = path.join(thumbnailDir, `thumb_${path.basename(filePath)}.jpg`);
+  const hash = getThumbnailHash(filePath);
+  console.log('[썸네일 생성용 해시]', filePath, hash);
+  const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
 
   try {
     switch (fileType) {

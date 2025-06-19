@@ -695,16 +695,31 @@ export const RecordModal: React.FC<RecordModalProps> = ({
             />
             <Button
               type="button"
-              onClick={() => {
-                // 웹 환경에서 파일 선택
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.onchange = (e: any) => {
-                  if (e.target.files && e.target.files[0]) {
-                    updateFieldValue(field.id, e.target.files[0].path || e.target.files[0].name);
+              onClick={async () => {
+                try {
+                  // Electron 환경에서는 네이티브 파일 다이얼로그 사용
+                  const result = await window.electronAPI.openFileDialog();
+                  if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+                    return;
                   }
-                };
-                input.click();
+                  
+                  const selectedPath = result.filePaths[0];
+                  
+                  // 절대 경로를 상대 경로로 변환
+                  // 앱 루트 디렉토리를 기준으로 상대 경로 계산
+                  const appRoot = await window.electronAPI.getAppRoot();
+                  let relativePath = selectedPath;
+                  
+                  // 앱 루트 디렉토리 내부의 파일인 경우 상대 경로로 변환
+                  if (selectedPath.startsWith(appRoot)) {
+                    relativePath = selectedPath.substring(appRoot.length + 1); // +1 for path separator
+                  }
+                  
+                  updateFieldValue(field.id, relativePath);
+                } catch (error) {
+                  console.error('파일 선택 중 오류:', error);
+                  showAlert('오류', '파일 선택 중 오류가 발생했습니다.', 'error');
+                }
               }}
               className="bg-discord-accent hover:bg-blue-600"
             >

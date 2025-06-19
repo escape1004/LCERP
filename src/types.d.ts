@@ -24,6 +24,8 @@ export interface ElectronAPI {
   openFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
   generateThumbnail: (filePath: string) => Promise<string | null>;
   getThumbnailDataUrl: (filePath: string) => Promise<string | null>;
+  openFileDialog: () => Promise<{ canceled: boolean; filePaths?: string[] }>;
+  getAppRoot: () => Promise<string>;
 }
 
 declare global {
@@ -50,9 +52,13 @@ export interface Field {
   id: string;
   name: string;
   type: 'text' | 'number' | 'select' | 'relation' | 'date' | 'file' | 'checkbox';
+  required: boolean;
+  unique: boolean;
+  order: number;
   multiple?: boolean;
   options?: string[];
   relationCategoryId?: string;
+  displayFieldId?: string;
 }
 
 export interface DataRecord {

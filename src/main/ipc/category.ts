@@ -3,14 +3,16 @@ import { Database } from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
+import { getThumbnailHash } from '../../lib/fileHandler';
 
 let db: Database;
 
 // 썸네일 파일 삭제 함수
 const deleteThumbnail = (filePath: string) => {
   try {
-    const thumbnailDir = path.join(process.cwd(), 'thumbnails');
-    const thumbnailPath = path.join(thumbnailDir, `thumb_${path.basename(filePath)}.jpg`);
+    const thumbnailDir = path.join(process.cwd(), 'save', 'thumbnails');
+    const hash = getThumbnailHash(filePath);
+    const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
     
     if (fs.existsSync(thumbnailPath)) {
       fs.unlinkSync(thumbnailPath);

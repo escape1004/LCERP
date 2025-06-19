@@ -5,7 +5,7 @@ import { registerRecordHandlers } from './ipc/record';
 import { registerDatabaseHandlers } from './ipc/database';
 import Database from 'better-sqlite3';
 import fs from 'fs';
-import { generateThumbnail } from '../lib/fileHandler';
+import { generateThumbnail, getFileType, openFile, getThumbnailHash } from '../lib/fileHandler';
 
 const isDevelopment = process.env.NODE_ENV === 'development';
 
@@ -183,9 +183,9 @@ ipcMain.handle('updateRecord', async (_, id, data) => {
 // 썸네일 파일 삭제 함수
 const deleteThumbnail = (filePath: string) => {
   try {
-    const thumbnailDir = path.join(process.cwd(), 'thumbnails');
-    const thumbnailPath = path.join(thumbnailDir, `thumb_${path.basename(filePath)}.jpg`);
-    
+    const thumbnailDir = path.join(app.getAppPath(), 'save', 'thumbnails');
+    const hash = getThumbnailHash(filePath);
+    const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
     if (fs.existsSync(thumbnailPath)) {
       fs.unlinkSync(thumbnailPath);
       console.log('썸네일 삭제됨:', thumbnailPath);
@@ -253,7 +253,10 @@ ipcMain.handle('openFileDialog', async () => {
 
 ipcMain.handle('checkFileExists', async (_, filePath) => {
   try {
-    return fs.existsSync(filePath);
+    const thumbnailDir = path.join(app.getAppPath(), 'save', 'thumbnails');
+    const hash = getThumbnailHash(filePath);
+    const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
+    return fs.existsSync(thumbnailPath);
   } catch (e) {
     return false;
   }
@@ -261,7 +264,7 @@ ipcMain.handle('checkFileExists', async (_, filePath) => {
 
 ipcMain.handle('generateThumbnail', async (_, filePath) => {
   try {
-    const thumbnailPath = await generateThumbnail(filePath);
+    const thumbnailPath = await generateThumbnail(filePath, app);
     return thumbnailPath;
   } catch (error) {
     return null;
@@ -269,16 +272,28 @@ ipcMain.handle('generateThumbnail', async (_, filePath) => {
 });
 
 ipcMain.handle('getThumbnailDataUrl', async (_, filePath) => {
-  const path = require('path');
   const fs = require('fs');
-  const thumbnailDir = path.join(process.cwd(), 'thumbnails');
-  const thumbnailPath = path.join(thumbnailDir, `thumb_${path.basename(filePath)}.jpg`);
-  if (!fs.existsSync(thumbnailPath)) {
+  const thumbnailDir = path.join(app.getAppPath(), 'save', 'thumbnails');
+  const hash = getThumbnailHash(filePath);
+  console.log('[썸네일 조회용 해시]', filePath, hash);
+  const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
+  try {
+    console.log('[썸네일 폴더 경로]', thumbnailDir);
+    console.log('[찾으려는 썸네일 파일]', `thumb_${hash}.jpg`);
+    console.log('[폴더 내 실제 파일들]', fs.readdirSync(thumbnailDir));
+    console.log('[파일 존재 여부]', fs.existsSync(thumbnailPath));
+    if (!fs.existsSync(thumbnailPath)) {
+      console.log('[썸네일이 존재하지 않음]', thumbnailPath);
+      return null;
+    }
+    const data = fs.readFileSync(thumbnailPath);
+    const dataUrl = `data:image/jpeg;base64,${data.toString('base64')}`;
+    console.log('[썸네일 dataUrl 길이]', dataUrl.length);
+    return dataUrl;
+  } catch (e) {
+    console.error('[썸네일 조회 에러]', e);
     return null;
   }
-  const data = fs.readFileSync(thumbnailPath);
-  const dataUrl = `data:image/jpeg;base64,${data.toString('base64')}`;
-  return dataUrl;
 });
 
 console.log("=== Electron __dirname ===", __dirname);
