@@ -18,6 +18,8 @@ import {
 } from "./ui/tooltip";
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+import { ConfirmDialog } from './ui/confirm-dialog';
+import { AlertDialog } from './ui/alert-dialog';
 
 // Custom event type
 declare global {
@@ -215,6 +217,18 @@ export const MainContent: React.FC = () => {
   const [csvDropdownOpen, setCsvDropdownOpen] = useState(false);
   const csvInputRef = useRef<HTMLInputElement | null>(null);
   const excelInputRef = useRef<HTMLInputElement | null>(null);
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+  const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
+  const [alertDialogProps, setAlertDialogProps] = useState<{
+    title: string;
+    message: string;
+    variant: 'error' | 'warning' | 'info' | 'success';
+  }>({
+    title: '',
+    message: '',
+    variant: 'info'
+  });
+  const [recordToDelete, setRecordToDelete] = useState<DataRecord | null>(null);
 
   // Custom filtered records based on field-specific search
   const customFilteredRecords = useMemo(() => {
@@ -298,9 +312,20 @@ export const MainContent: React.FC = () => {
   };
 
   const handleDelete = (record: DataRecord) => {
-    if (window.confirm('이 항목을 삭제하시겠습니까?')) {
-      deleteRecord(record.id);
+    setRecordToDelete(record);
+    setIsConfirmDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (recordToDelete) {
+      deleteRecord(recordToDelete.id);
+      setRecordToDelete(null);
     }
+  };
+
+  const showAlert = (title: string, message: string, variant: 'error' | 'warning' | 'info' | 'success' = 'info') => {
+    setAlertDialogProps({ title, message, variant });
+    setIsAlertDialogOpen(true);
   };
 
   const exportToCSV = () => {
@@ -1109,6 +1134,29 @@ export const MainContent: React.FC = () => {
             category={categoriesSafe.find(cat => cat.id === viewingCategory) || selectedCategorySafe}
             record={viewingRecord}
             onViewRecord={handleViewRelatedRecord}
+          />
+
+          {/* 커스텀 다이얼로그들 */}
+          <ConfirmDialog
+            isOpen={isConfirmDialogOpen}
+            onClose={() => {
+              setIsConfirmDialogOpen(false);
+              setRecordToDelete(null);
+            }}
+            onConfirm={confirmDelete}
+            title="레코드 삭제"
+            message="이 항목을 삭제하시겠습니까?"
+            confirmText="삭제"
+            cancelText="취소"
+            variant="danger"
+          />
+
+          <AlertDialog
+            isOpen={isAlertDialogOpen}
+            onClose={() => setIsAlertDialogOpen(false)}
+            title={alertDialogProps.title}
+            message={alertDialogProps.message}
+            variant={alertDialogProps.variant}
           />
         </div>
       )}

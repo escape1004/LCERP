@@ -9,12 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Category, DataRecord } from '../types';
 import type { ElectronAPI } from '../types/electron';
 import { LinkIcon } from 'lucide-react';
-
-declare global {
-  interface Window {
-    electronAPI: ElectronAPI;
-  }
-}
+import { ConfirmDialog } from './ui/confirm-dialog';
+import { AlertDialog } from './ui/alert-dialog';
 
 interface CategoryContentProps {
   categoryId: string | null;
@@ -39,6 +35,18 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
   const [editingRecord, setEditingRecord] = useState<DataRecord | null>(null);
   const [viewingRecord, setViewingRecord] = useState<DataRecord | null>(null);
   const [viewingCategory, setViewingCategory] = useState<string>('');
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+  const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
+  const [alertDialogProps, setAlertDialogProps] = useState<{
+    title: string;
+    message: string;
+    variant: 'error' | 'warning' | 'info' | 'success';
+  }>({
+    title: '',
+    message: '',
+    variant: 'info'
+  });
+  const [recordToDelete, setRecordToDelete] = useState<DataRecord | null>(null);
 
   const isEmpty = (v: any): boolean => {
     // null, undefined 체크
@@ -202,17 +210,29 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
   };
 
   const handleDelete = async (record: DataRecord) => {
-    if (window.confirm('정말 삭제하시겠습니까?')) {
+    setRecordToDelete(record);
+    setIsConfirmDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (recordToDelete) {
       try {
-        await window.electronAPI.deleteRecord(categoryId, record.id);
-        const updatedRecords = records[categoryId].filter(r => r.id !== record.id);
+        await window.electronAPI.deleteRecord(recordToDelete.id);
+        const updatedRecords = records[categoryId!].filter(r => r.id !== recordToDelete.id);
         if (updatedRecords.length === 0 && currentPage > 1) {
           setCurrentPage(currentPage - 1);
         }
       } catch (error) {
         console.error('Failed to delete record:', error);
+        showAlert('오류', '레코드 삭제 중 오류가 발생했습니다.', 'error');
       }
+      setRecordToDelete(null);
     }
+  };
+
+  const showAlert = (title: string, message: string, variant: 'error' | 'warning' | 'info' | 'success' = 'info') => {
+    setAlertDialogProps({ title, message, variant });
+    setIsAlertDialogOpen(true);
   };
 
   const exportToCSV = async () => {
@@ -558,6 +578,29 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
         }}
         category={categories.find(cat => cat.id === viewingCategory) || selectedCategory}
         record={viewingRecord}
+      />
+
+      {/* 커스텀 다이얼로그들 */}
+      <ConfirmDialog
+        isOpen={isConfirmDialogOpen}
+        onClose={() => {
+          setIsConfirmDialogOpen(false);
+          setRecordToDelete(null);
+        }}
+        onConfirm={confirmDelete}
+        title="레코드 삭제"
+        message="정말 삭제하시겠습니까?"
+        confirmText="삭제"
+        cancelText="취소"
+        variant="danger"
+      />
+
+      <AlertDialog
+        isOpen={isAlertDialogOpen}
+        onClose={() => setIsAlertDialogOpen(false)}
+        title={alertDialogProps.title}
+        message={alertDialogProps.message}
+        variant={alertDialogProps.variant}
       />
     </div>
   );

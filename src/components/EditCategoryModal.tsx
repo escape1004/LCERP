@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Plus, Trash2, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Trash2, X, ChevronRight } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Checkbox } from './ui/checkbox';
@@ -14,12 +14,14 @@ import { Category, FieldDefinition, NewCategory } from '../types';
 import { useERPStore } from '../hooks/useERPStore';
 import { v4 as uuidv4 } from 'uuid';
 import { nanoid } from 'nanoid';
+import { AlertDialog } from './ui/alert-dialog';
 
 interface FieldEditorProps {
   field: FieldDefinition;
   onChange: (field: FieldDefinition) => void;
   onDelete: () => void;
   categories: Category[];
+  onShowAlert?: (title: string, message: string, variant: 'error' | 'warning' | 'info' | 'success') => void;
 }
 
 interface EditCategoryModalProps {
@@ -28,22 +30,18 @@ interface EditCategoryModalProps {
   category?: Category;
 }
 
-const FieldEditor: React.FC<FieldEditorProps> = ({ field, onChange, onDelete, categories }) => {
-  console.log('FieldEditor rendering with field:', JSON.stringify(field, null, 2));
-
+const FieldEditor: React.FC<FieldEditorProps> = ({ field, onChange, onDelete, categories, onShowAlert }) => {
   const handleRequiredChange = (checked: boolean) => {
-    console.log('Required change:', { checked });
     onChange({ ...field, required: checked });
   };
 
   const handleUniqueChange = (checked: boolean) => {
-    console.log('Unique change:', { checked });
     onChange({ ...field, unique: checked });
   };
 
   return (
-    <div className="space-y-4 p-4 bg-discord-dark rounded-lg">
-      <div className="flex items-center gap-4">
+    <div className="border border-gray-600 rounded-lg p-4 space-y-4">
+      <div className="flex items-center gap-2">
         <Input
           placeholder="필드 이름"
           value={field.name}
@@ -54,7 +52,7 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, onChange, onDelete, ca
           value={field.type}
           onValueChange={(value) => {
             if (value === 'file' && categories.some(cat => cat.fields.some(f => f.type === 'file' && f.id !== field.id))) {
-              alert('파일 필드는 한 개만 추가할 수 있습니다.');
+              onShowAlert?.('제한', '파일 필드는 한 개만 추가할 수 있습니다.', 'warning');
               return;
             }
             onChange({ ...field, type: value as FieldDefinition['type'] });
@@ -246,6 +244,16 @@ export const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
     category?.fields || []
   );
   const [error, setError] = useState('');
+  const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
+  const [alertDialogProps, setAlertDialogProps] = useState<{
+    title: string;
+    message: string;
+    variant: 'error' | 'warning' | 'info' | 'success';
+  }>({
+    title: '',
+    message: '',
+    variant: 'info'
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -325,76 +333,93 @@ export const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
     setFields(fields.filter((_, i) => i !== index));
   };
 
+  const showAlert = (title: string, message: string, variant: 'error' | 'warning' | 'info' | 'success' = 'info') => {
+    setAlertDialogProps({ title, message, variant });
+    setIsAlertDialogOpen(true);
+  };
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-discord-bg rounded-lg w-full max-w-3xl max-h-[90vh] overflow-hidden">
-        <div className="p-6 border-b border-gray-700">
-          <h2 className="text-xl font-bold text-discord-text">
-            {category ? '카테고리 수정' : '새 카테고리 추가'}
-          </h2>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto max-h-[calc(90vh-200px)]">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-discord-text">
-              카테고리 이름
-            </label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="카테고리 이름을 입력하세요"
-            />
+    <>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-discord-bg rounded-lg w-full max-w-3xl max-h-[90vh] overflow-hidden">
+          <div className="p-6 border-b border-gray-700">
+            <h2 className="text-xl font-bold text-discord-text">
+              {category ? '카테고리 수정' : '새 카테고리 추가'}
+            </h2>
           </div>
 
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-discord-text">필드</h3>
-              <Button
-                type="button"
-                onClick={handleAddField}
-                className="bg-discord-accent hover:bg-discord-accent/80"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                필드 추가
-              </Button>
+          <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-discord-text">
+                카테고리 이름
+              </label>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="카테고리 이름을 입력하세요"
+              />
             </div>
 
             <div className="space-y-4">
-              {fields.map((field, index) => (
-                <FieldEditor
-                  key={field.id}
-                  field={field}
-                  onChange={(updatedField) => handleFieldChange(index, updatedField)}
-                  onDelete={() => deleteField(index)}
-                  categories={categories.filter(cat => cat.id !== category?.id)}
-                />
-              ))}
-            </div>
-          </div>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-discord-text">필드</h3>
+                <Button
+                  type="button"
+                  onClick={handleAddField}
+                  className="bg-discord-accent hover:bg-discord-accent/80"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  필드 추가
+                </Button>
+              </div>
 
-          {error && (
-            <div className="text-red-500 text-sm">
-              {error}
+              <div className="space-y-4">
+                {fields.map((field, index) => (
+                  <FieldEditor
+                    key={field.id}
+                    field={field}
+                    onChange={(updatedField) => handleFieldChange(index, updatedField)}
+                    onDelete={() => deleteField(index)}
+                    categories={categories.filter(cat => cat.id !== category?.id)}
+                    onShowAlert={showAlert}
+                  />
+                ))}
+              </div>
             </div>
-          )}
 
-          <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={onClose}
-            >
-              취소
-            </Button>
-            <Button type="submit">
-              {category ? '저장' : '추가'}
-            </Button>
-          </div>
-        </form>
+            {error && (
+              <div className="text-red-500 text-sm">
+                {error}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={onClose}
+              >
+                취소
+              </Button>
+              <Button type="submit">
+                {category ? '저장' : '추가'}
+              </Button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+
+      {/* 커스텀 알럿 다이얼로그 */}
+      <AlertDialog
+        isOpen={isAlertDialogOpen}
+        onClose={() => setIsAlertDialogOpen(false)}
+        title={alertDialogProps.title}
+        message={alertDialogProps.message}
+        variant={alertDialogProps.variant}
+      />
+    </>
   );
 };
 

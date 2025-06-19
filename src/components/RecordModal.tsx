@@ -11,6 +11,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { cn } from '../lib/utils';
 import { toast } from './ui/use-toast';
+import { AlertDialog } from './ui/alert-dialog';
 
 interface RecordModalProps {
   isOpen: boolean;
@@ -33,6 +34,16 @@ export const RecordModal: React.FC<RecordModalProps> = ({
   const [isDuplicateChecking, setIsDuplicateChecking] = useState(false);
   const [pendingDuplicateChecks, setPendingDuplicateChecks] = useState<Set<string>>(new Set());
   const [openComboboxes, setOpenComboboxes] = useState<Record<string, boolean>>({});
+  const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
+  const [alertDialogProps, setAlertDialogProps] = useState<{
+    title: string;
+    message: string;
+    variant: 'error' | 'warning' | 'info' | 'success';
+  }>({
+    title: '',
+    message: '',
+    variant: 'info'
+  });
 
   // Reset form data when modal opens/closes or record changes
   useEffect(() => {
@@ -105,14 +116,19 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     }
   }, [category, record?.id, checkDuplicate, pendingDuplicateChecks]);
 
+  const showAlert = (title: string, message: string, variant: 'error' | 'warning' | 'info' | 'success' = 'info') => {
+    setAlertDialogProps({ title, message, variant });
+    setIsAlertDialogOpen(true);
+  };
+
   const handleSubmit = async () => {
     if (!category) {
-      alert('카테고리를 먼저 선택하세요.');
+      showAlert('오류', '카테고리를 먼저 선택하세요.', 'error');
       return;
     }
     const isValid = validateForm();
     if (!isValid) {
-      alert('필수 입력 항목을 모두 입력해주세요.');
+      showAlert('오류', '필수 입력 항목을 모두 입력해주세요.', 'error');
       return;
     }
     try {
@@ -132,7 +148,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
       onClose();
     } catch (error) {
       console.error('레코드 저장 중 오류 발생:', error);
-      alert('항목을 저장하는 중 오류가 발생했습니다. 다시 시도해주세요.');
+      showAlert('오류', '항목을 저장하는 중 오류가 발생했습니다. 다시 시도해주세요.', 'error');
     } finally {
       setIsValidating(false);
     }
@@ -639,24 +655,16 @@ export const RecordModal: React.FC<RecordModalProps> = ({
             />
             <Button
               type="button"
-              onClick={async () => {
-                // Electron 환경에서는 경로, 웹 환경에서는 파일명만 표시될 수 있음
-                if (window.electronAPI) {
-                  const result = await window.electronAPI.openFileDialog();
-                  if (result && result.filePaths && result.filePaths[0]) {
-                    updateFieldValue(field.id, result.filePaths[0]);
+              onClick={() => {
+                // 웹 환경에서 파일 선택
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.onchange = (e: any) => {
+                  if (e.target.files && e.target.files[0]) {
+                    updateFieldValue(field.id, e.target.files[0].path || e.target.files[0].name);
                   }
-                } else {
-                  // fallback: input[type=file] 사용 (웹 환경)
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.onchange = (e: any) => {
-                    if (e.target.files && e.target.files[0]) {
-                      updateFieldValue(field.id, e.target.files[0].path || e.target.files[0].name);
-                    }
-                  };
-                  input.click();
-                }
+                };
+                input.click();
               }}
               className="bg-discord-accent hover:bg-blue-600"
             >
@@ -774,6 +782,15 @@ export const RecordModal: React.FC<RecordModalProps> = ({
           </Button>
         </div>
       </div>
+      
+      {/* 커스텀 알럿 다이얼로그 */}
+      <AlertDialog
+        isOpen={isAlertDialogOpen}
+        onClose={() => setIsAlertDialogOpen(false)}
+        title={alertDialogProps.title}
+        message={alertDialogProps.message}
+        variant={alertDialogProps.variant}
+      />
     </div>
   );
 };

@@ -2,48 +2,48 @@ import React from 'react';
 import { Button } from './button';
 import { X } from 'lucide-react';
 
-interface AlertDialogProps {
+interface ConfirmDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  onConfirm: () => void;
   title: string;
   message: string;
-  variant?: 'error' | 'warning' | 'info' | 'success';
+  confirmText?: string;
+  cancelText?: string;
+  variant?: 'danger' | 'warning' | 'info';
 }
 
-export const AlertDialog: React.FC<AlertDialogProps> = ({
+export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   isOpen,
   onClose,
+  onConfirm,
   title,
   message,
+  confirmText = '확인',
+  cancelText = '취소',
   variant = 'info'
 }) => {
   if (!isOpen) return null;
 
   const getVariantStyles = () => {
     switch (variant) {
-      case 'error':
+      case 'danger':
         return {
-          icon: '❌',
-          titleClass: 'text-red-400',
-          buttonClass: 'bg-red-600 hover:bg-red-700 text-white'
+          icon: '⚠️',
+          confirmButtonClass: 'bg-red-600 hover:bg-red-700 text-white',
+          titleClass: 'text-red-400'
         };
       case 'warning':
         return {
           icon: '⚠️',
-          titleClass: 'text-yellow-400',
-          buttonClass: 'bg-yellow-600 hover:bg-yellow-700 text-white'
-        };
-      case 'success':
-        return {
-          icon: '✅',
-          titleClass: 'text-green-400',
-          buttonClass: 'bg-green-600 hover:bg-green-700 text-white'
+          confirmButtonClass: 'bg-yellow-600 hover:bg-yellow-700 text-white',
+          titleClass: 'text-yellow-400'
         };
       default:
         return {
           icon: 'ℹ️',
-          titleClass: 'text-blue-400',
-          buttonClass: 'bg-discord-accent hover:bg-blue-600 text-white'
+          confirmButtonClass: 'bg-discord-accent hover:bg-blue-600 text-white',
+          titleClass: 'text-discord-text'
         };
     }
   };
@@ -77,15 +77,25 @@ export const AlertDialog: React.FC<AlertDialogProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end p-4 border-t border-gray-700">
+        <div className="flex items-center justify-end gap-3 p-4 border-t border-gray-700">
           <Button
+            variant="ghost"
             onClick={onClose}
-            className={styles.buttonClass}
+            className="text-discord-text hover:bg-discord-hover"
           >
-            확인
+            {cancelText}
+          </Button>
+          <Button
+            onClick={() => {
+              onConfirm();
+              onClose();
+            }}
+            className={styles.confirmButtonClass}
+          >
+            {confirmText}
           </Button>
         </div>
       </div>
     </div>
   );
-};
+}; 
