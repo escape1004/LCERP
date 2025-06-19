@@ -662,9 +662,50 @@ ipcMain.handle('db:updateRecord', async (_, id, data) => {
   }
 });
 
-ipcMain.handle('db:deleteRecord', (_, id) => {
-  const stmt = db.prepare('DELETE FROM records WHERE id = ?');
-  stmt.run(id);
+ipcMain.handle('db:deleteRecord', async (_, id) => {
+  try {
+    console.log('레코드 삭제 시작:', id);
+    
+    // 1. 레코드 정보 가져오기 (삭제 전)
+    const record = db.prepare('SELECT categoryId, data FROM records WHERE id = ?').get(id);
+    if (!record) {
+      throw new Error('Record not found');
+    }
+    
+    // 2. 레코드의 썸네일 정리
+    let thumbnailDeleted = false;
+    try {
+      const data = JSON.parse(record.data);
+      
+      // 카테고리 필드 정보 가져오기
+      const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(record.categoryId);
+      if (category) {
+        const fields = JSON.parse(category.fields);
+        const fileField = fields.find(f => f.type === 'file');
+        
+        if (fileField && data[fileField.id]) {
+          const filePath = data[fileField.id];
+          thumbnailDeleted = deleteThumbnail(filePath);
+        }
+      }
+    } catch (error) {
+      console.error('썸네일 정리 중 오류:', error);
+    }
+    
+    // 3. 레코드 삭제
+    const stmt = db.prepare('DELETE FROM records WHERE id = ?');
+    stmt.run(id);
+    
+    console.log(`레코드 삭제 완료: ${thumbnailDeleted ? '썸네일 정리됨' : '썸네일 없음'}`);
+    
+    return {
+      success: true,
+      thumbnailDeleted
+    };
+  } catch (error) {
+    console.error('레코드 삭제 중 오류:', error);
+    throw error;
+  }
 });
 
 // 설정 관련 IPC 핸들러

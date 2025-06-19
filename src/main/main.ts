@@ -180,8 +180,67 @@ ipcMain.handle('updateRecord', async (_, id, data) => {
   `).run(JSON.stringify(normalizedData), now, id);
 });
 
+// 썸네일 파일 삭제 함수
+const deleteThumbnail = (filePath: string) => {
+  try {
+    const thumbnailDir = path.join(process.cwd(), 'thumbnails');
+    const thumbnailPath = path.join(thumbnailDir, `thumb_${path.basename(filePath)}.jpg`);
+    
+    if (fs.existsSync(thumbnailPath)) {
+      fs.unlinkSync(thumbnailPath);
+      console.log('썸네일 삭제됨:', thumbnailPath);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('썸네일 삭제 실패:', error);
+    return false;
+  }
+};
+
 ipcMain.handle('deleteRecord', async (_, categoryId, id) => {
-  db.prepare('DELETE FROM records WHERE categoryId = ? AND id = ?').run(categoryId, id);
+  try {
+    console.log('레코드 삭제 시작:', { categoryId, id });
+    
+    // 1. 레코드 정보 가져오기 (삭제 전)
+    const record = db.prepare('SELECT data FROM records WHERE categoryId = ? AND id = ?').get(categoryId, id);
+    if (!record) {
+      throw new Error('Record not found');
+    }
+    
+    // 2. 레코드의 썸네일 정리
+    let thumbnailDeleted = false;
+    try {
+      const data = JSON.parse(record.data);
+      
+      // 카테고리 필드 정보 가져오기
+      const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(categoryId);
+      if (category) {
+        const fields = JSON.parse(category.fields);
+        const fileField = fields.find(f => f.type === 'file');
+        
+        if (fileField && data[fileField.id]) {
+          const filePath = data[fileField.id];
+          thumbnailDeleted = deleteThumbnail(filePath);
+        }
+      }
+    } catch (error) {
+      console.error('썸네일 정리 중 오류:', error);
+    }
+    
+    // 3. 레코드 삭제
+    db.prepare('DELETE FROM records WHERE categoryId = ? AND id = ?').run(categoryId, id);
+    
+    console.log(`레코드 삭제 완료: ${thumbnailDeleted ? '썸네일 정리됨' : '썸네일 없음'}`);
+    
+    return {
+      success: true,
+      thumbnailDeleted
+    };
+  } catch (error) {
+    console.error('레코드 삭제 중 오류:', error);
+    throw error;
+  }
 });
 
 ipcMain.handle('openFileDialog', async () => {

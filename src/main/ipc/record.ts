@@ -1,9 +1,57 @@
 import { ipcMain } from 'electron';
 import { Database } from 'better-sqlite3';
+import path from 'path';
+import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { generateThumbnail } from '../../lib/fileHandler';
 
 let db: Database;
+
+// 썸네일 파일 삭제 함수
+const deleteThumbnail = (filePath: string) => {
+  try {
+    const thumbnailDir = path.join(process.cwd(), 'thumbnails');
+    const thumbnailPath = path.join(thumbnailDir, `thumb_${path.basename(filePath)}.jpg`);
+    
+    if (fs.existsSync(thumbnailPath)) {
+      fs.unlinkSync(thumbnailPath);
+      console.log('썸네일 삭제됨:', thumbnailPath);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('썸네일 삭제 실패:', error);
+    return false;
+  }
+};
+
+// 레코드의 썸네일 정리
+const cleanupThumbnailForRecord = (categoryId: string, recordId: string) => {
+  try {
+    // 레코드 데이터 가져오기
+    const record = db.prepare('SELECT data FROM records WHERE categoryId = ? AND id = ?').get(categoryId, recordId);
+    if (!record) return false;
+    
+    const data = JSON.parse(record.data);
+    
+    // 카테고리 필드 정보 가져오기
+    const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(categoryId);
+    if (!category) return false;
+    
+    const fields = JSON.parse(category.fields);
+    const fileField = fields.find((f: any) => f.type === 'file');
+    
+    if (fileField && data[fileField.id]) {
+      const filePath = data[fileField.id];
+      return deleteThumbnail(filePath);
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('레코드 썸네일 정리 중 오류:', error);
+    return false;
+  }
+};
 
 // 빈 값을 표준화하는 함수
 const normalizeValue = (value: any): any => {
@@ -114,7 +162,20 @@ export const registerRecordHandlers = () => {
   });
 
   ipcMain.handle('deleteRecord', async (_, categoryId, id) => {
+    console.log('레코드 삭제 시작:', { categoryId, id });
+    
+    // 1. 레코드의 썸네일 정리
+    const thumbnailDeleted = cleanupThumbnailForRecord(categoryId, id);
+    
+    // 2. 레코드 삭제
     db.prepare('DELETE FROM records WHERE categoryId = ? AND id = ?').run(categoryId, id);
+    
+    console.log(`레코드 삭제 완료: ${thumbnailDeleted ? '썸네일 정리됨' : '썸네일 없음'}`);
+    
+    return {
+      success: true,
+      thumbnailDeleted
+    };
   });
 
   console.log('Record handlers registered successfully');
