@@ -14,7 +14,7 @@ interface ERPStore {
   loadRecords: (categoryId: string) => Promise<void>;
   addCategory: (category: NewCategory) => Promise<string>;
   updateCategory: (id: string, updates: Partial<NewCategory>) => Promise<void>;
-  deleteCategory: (id: string) => Promise<void>;
+  deleteCategory: (id: string) => Promise<{ success: boolean; thumbnailCleanupCount: number; relationCleanupCount: number }>;
   reorderCategories: (categories: Category[]) => Promise<void>;
   addRecord: (record: NewRecord) => Promise<string>;
   updateRecord: (id: string, data: Record<string, any>) => Promise<void>;
@@ -81,7 +81,7 @@ export const useERPStore = create<ERPStore>((set, get) => ({
   },
 
   deleteCategory: async (id) => {
-    await window.electronAPI.deleteCategory(id);
+    const result = await window.electronAPI.deleteCategory(id);
     await get().loadCategories();
     set(state => {
       const { [id]: _, ...remainingRecords } = state.records;
@@ -90,6 +90,7 @@ export const useERPStore = create<ERPStore>((set, get) => ({
         records: remainingRecords
       };
     });
+    return result;
   },
 
   reorderCategories: async (categories) => {

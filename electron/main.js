@@ -336,9 +336,141 @@ ipcMain.handle('db:updateCategory', (_, id, updates) => {
   );
 });
 
-ipcMain.handle('db:deleteCategory', (_, id) => {
-  const stmt = db.prepare('DELETE FROM categories WHERE id = ?');
-  stmt.run(id);
+// 썸네일 파일 삭제 함수
+const deleteThumbnail = (filePath) => {
+  try {
+    const thumbnailDir = path.join(process.cwd(), 'thumbnails');
+    const thumbnailPath = path.join(thumbnailDir, `thumb_${path.basename(filePath)}.jpg`);
+    
+    if (fs.existsSync(thumbnailPath)) {
+      fs.unlinkSync(thumbnailPath);
+      console.log('썸네일 삭제됨:', thumbnailPath);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('썸네일 삭제 실패:', error);
+    return false;
+  }
+};
+
+// 카테고리의 모든 레코드에서 썸네일 정리
+const cleanupThumbnailsForCategory = (categoryId) => {
+  try {
+    const records = db.prepare('SELECT data FROM records WHERE categoryId = ?').all(categoryId);
+    let deletedCount = 0;
+    
+    records.forEach(record => {
+      const data = JSON.parse(record.data);
+      
+      // 파일 필드 찾기
+      const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(categoryId);
+      if (!category) return;
+      
+      const fields = JSON.parse(category.fields);
+      const fileField = fields.find(f => f.type === 'file');
+      
+      if (fileField && data[fileField.id]) {
+        const filePath = data[fileField.id];
+        if (deleteThumbnail(filePath)) {
+          deletedCount++;
+        }
+      }
+    });
+    
+    console.log(`카테고리 ${categoryId}에서 ${deletedCount}개 썸네일 정리됨`);
+    return deletedCount;
+  } catch (error) {
+    console.error('썸네일 정리 중 오류:', error);
+    return 0;
+  }
+};
+
+// 관계형 데이터에서 참조 정리
+const cleanupRelationReferences = (categoryId) => {
+  try {
+    // 모든 카테고리를 가져와서 relation 필드 확인
+    const allCategories = db.prepare('SELECT id, fields FROM categories').all();
+    let updatedCount = 0;
+    
+    allCategories.forEach(cat => {
+      const fields = JSON.parse(cat.fields);
+      const relationFields = fields.filter(f => f.type === 'relation' && f.relationCategoryId === categoryId);
+      
+      if (relationFields.length > 0) {
+        // 해당 카테고리의 모든 레코드 확인
+        const records = db.prepare('SELECT id, data FROM records WHERE categoryId = ?').all(cat.id);
+        
+        records.forEach(record => {
+          const data = JSON.parse(record.data);
+          let hasChanges = false;
+          
+          relationFields.forEach(field => {
+            const value = data[field.id];
+            
+            if (field.multiple && Array.isArray(value)) {
+              // 다중 선택인 경우 해당 카테고리 ID 제거
+              const filteredValue = value.filter(id => id !== categoryId);
+              if (filteredValue.length !== value.length) {
+                data[field.id] = filteredValue;
+                hasChanges = true;
+              }
+            } else if (value === categoryId) {
+              // 단일 선택인 경우 null로 설정
+              data[field.id] = null;
+              hasChanges = true;
+            }
+          });
+          
+          if (hasChanges) {
+            db.prepare('UPDATE records SET data = ? WHERE id = ?').run(JSON.stringify(data), record.id);
+            updatedCount++;
+          }
+        });
+      }
+    });
+    
+    console.log(`관계형 참조 정리 완료: ${updatedCount}개 레코드 업데이트됨`);
+    return updatedCount;
+  } catch (error) {
+    console.error('관계형 참조 정리 중 오류:', error);
+    return 0;
+  }
+};
+
+ipcMain.handle('db:deleteCategory', async (_, id) => {
+  console.log('카테고리 삭제 시작:', id);
+  
+  // 1. 관계형 데이터에서 참조 정리
+  const relationCleanupCount = cleanupRelationReferences(id);
+  
+  // 2. 하위 카테고리들의 썸네일 정리 및 삭제
+  const childCategories = db.prepare('SELECT id FROM categories WHERE parentId = ?').all(id);
+  let totalThumbnailCount = 0;
+  
+  childCategories.forEach(child => {
+    totalThumbnailCount += cleanupThumbnailsForCategory(child.id);
+  });
+  
+  // 3. 현재 카테고리의 썸네일 정리
+  totalThumbnailCount += cleanupThumbnailsForCategory(id);
+  
+  // 4. 하위 카테고리 먼저 삭제
+  db.prepare('DELETE FROM categories WHERE parentId = ?').run(id);
+  
+  // 5. 카테고리에 속한 레코드 삭제
+  db.prepare('DELETE FROM records WHERE categoryId = ?').run(id);
+  
+  // 6. 카테고리 삭제
+  db.prepare('DELETE FROM categories WHERE id = ?').run(id);
+  
+  console.log(`카테고리 삭제 완료: ${totalThumbnailCount}개 썸네일 정리, ${relationCleanupCount}개 관계형 참조 정리`);
+  
+  return {
+    success: true,
+    thumbnailCleanupCount: totalThumbnailCount,
+    relationCleanupCount: relationCleanupCount
+  };
 });
 
 // 레코드 조회 핸들러

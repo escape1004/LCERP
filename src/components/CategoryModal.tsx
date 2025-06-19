@@ -561,9 +561,25 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                         disabled={deleteInput !== "카테고리를 삭제하겠습니다"}
                         onClick={async () => {
                           try {
-                            await useERPStore.getState().deleteCategory(category.id);
+                            const result = await useERPStore.getState().deleteCategory(category.id);
                             setShowDeleteConfirm(false);
                             setDeleteInput("");
+                            
+                            // 삭제 결과 피드백
+                            let message = '카테고리가 삭제되었습니다.';
+                            if (result.thumbnailCleanupCount > 0) {
+                              message += `\n${result.thumbnailCleanupCount}개 썸네일 파일이 정리되었습니다.`;
+                            }
+                            if (result.relationCleanupCount > 0) {
+                              message += `\n${result.relationCleanupCount}개 관계형 참조가 정리되었습니다.`;
+                            }
+                            
+                            toast({ 
+                              title: '카테고리 삭제 완료', 
+                              description: message,
+                              duration: 5000
+                            });
+                            
                             onClose();
                           } catch (e) {
                             toast({ title: '카테고리 삭제 중 오류가 발생했습니다.', variant: 'destructive' });
