@@ -48,7 +48,7 @@ function registerProtocol() {
 
 const iconPath = isDev
   ? path.join(__dirname, '..', 'resources', 'icon.ico')
-  : path.join(__dirname, '..', 'dist', 'icon.ico');
+  : path.join(process.resourcesPath, 'resources', 'icon.ico');
 
 // 썸네일 해시 생성 함수
 function getThumbnailHash(filePath) {
