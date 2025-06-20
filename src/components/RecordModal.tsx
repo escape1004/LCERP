@@ -13,6 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { cn } from '../lib/utils';
 import { toast } from './ui/use-toast';
 import { AlertDialog } from './ui/alert-dialog';
+import { DatePicker } from './ui/date-picker';
 
 interface RecordModalProps {
   isOpen: boolean;
@@ -282,11 +283,11 @@ export const RecordModal: React.FC<RecordModalProps> = ({
       case 'date':
         return (
           <div className="space-y-1">
-            <Input
-              type="date"
+            <DatePicker
               value={value}
-              onChange={(e) => updateFieldValue(field.id, e.target.value)}
+              onChange={(dateValue) => updateFieldValue(field.id, dateValue)}
               className={inputClassName}
+              placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
             />
             {renderError()}
           </div>

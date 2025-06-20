@@ -30,8 +30,9 @@ export interface ElectronAPI {
   setBackupInterval: (minutes: number) => Promise<{ success: boolean }>;
   
   // File dialog methods
-  openFileDialog: () => Promise<{ filePaths: string[] }>;
-  
+  openFileDialog: () => Promise<{ canceled: boolean; filePaths: string[] }>;
+  getAppRoot: () => Promise<string>;
+
   // Utility methods
   openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
   
@@ -45,4 +46,4 @@ declare global {
   }
 }
 
-export {}; 
+export {};

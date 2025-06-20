@@ -1,0 +1,1 @@
+Cursor.exe         pid: 12664  type: File           E40: E:\Software\local-erp\dist-electron\win-unpacked\resources\app.asar
