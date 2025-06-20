@@ -332,6 +332,16 @@ function checkDuplicateFields(categoryId, data, existingRecordId = null) {
 }
 
 // IPC 핸들러들
+ipcMain.handle('openExternal', async (_, url) => {
+  try {
+    await shell.openExternal(url);
+    return { success: true };
+  } catch (error) {
+    log('Error opening external URL:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('db:getCategories', async () => {
   try {
     const categories = db.prepare('SELECT * FROM categories ORDER BY order_num').all();

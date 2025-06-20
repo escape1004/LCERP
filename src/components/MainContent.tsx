@@ -456,11 +456,23 @@ export const MainContent: React.FC = () => {
   );
 
   const formatFieldValue = (field: FieldDefinition, value: any, recordId: string) => {
-    if (value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0)) {
-      return '-';
+    if (value === null || value === undefined || (Array.isArray(value) && value.length === 0)) {
+      return <span className="text-discord-muted">-</span>;
     }
 
+    // URL 자동 감지 및 렌더링
+    if (typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'))) {
+      return renderUrl(value, 30);
+    }
+    
     switch (field.type) {
+      case 'text': {
+        const strValue = String(value);
+        if (strValue.length > 50) {
+          return <span className="text-discord-text">{strValue.substring(0, 50)}...</span>;
+        }
+        return <span className="text-discord-text">{strValue}</span>;
+      }
       case 'date':
         return new Date(value).toLocaleDateString();
       
