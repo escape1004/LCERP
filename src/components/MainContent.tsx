@@ -212,7 +212,7 @@ export const MainContent: React.FC = () => {
     }
   }, [selectedCategoryId, categoriesSafe, selectCategory, showDbViewer]);
 
-  // F5 키 새로고침 기능
+  // F5 키 새로고침 기능 및 Ctrl+F 검색창 포커스
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F5' && selectedCategoryId) {
@@ -222,6 +222,9 @@ export const MainContent: React.FC = () => {
           title: "새로고침 완료",
           description: "레코드 목록이 새로고침되었습니다.",
         });
+      } else if (e.ctrlKey && e.key === 'f') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
       }
     };
 
@@ -243,6 +246,7 @@ export const MainContent: React.FC = () => {
   const [csvDropdownOpen, setCsvDropdownOpen] = useState(false);
   const csvInputRef = useRef<HTMLInputElement | null>(null);
   const excelInputRef = useRef<HTMLInputElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
   const [alertDialogProps, setAlertDialogProps] = useState<{
@@ -1062,6 +1066,7 @@ export const MainContent: React.FC = () => {
               <div className="relative flex-1">
                 <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-discord-muted" />
                 <Input
+                  ref={searchInputRef}
                   placeholder={searchField === 'all' ? '전체 검색...' : `${selectedCategorySafe?.fields.find(f => f.id === searchField)?.name || ''} 검색...`}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
