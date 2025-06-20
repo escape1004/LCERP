@@ -212,6 +212,25 @@ export const MainContent: React.FC = () => {
     }
   }, [selectedCategoryId, categoriesSafe, selectCategory, showDbViewer]);
 
+  // F5 키 새로고침 기능
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F5' && selectedCategoryId) {
+        e.preventDefault();
+        loadRecords(selectedCategoryId);
+        toast({
+          title: "새로고침 완료",
+          description: "레코드 목록이 새로고침되었습니다.",
+        });
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedCategoryId, loadRecords]);
+
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<DataRecord | null>(null);
