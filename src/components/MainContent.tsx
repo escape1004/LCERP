@@ -276,15 +276,18 @@ export const MainContent: React.FC = () => {
     
     return currentRecordsSafe.filter((record) => {
       if (searchField === 'all') {
-        return Object.values(record.data).some((value) =>
-          String(value).toLowerCase().includes(searchTerm.toLowerCase())
-        );
+        // 테이블에 보이는 필드만 검색 (hidden이 아닌 필드)
+        const visibleFields = selectedCategorySafe?.fields.filter(f => !f.hidden) || [];
+        return visibleFields.some((field) => {
+          const value = record.data[field.id];
+          return String(value || '').toLowerCase().includes(searchTerm.toLowerCase());
+        });
       } else {
         const fieldValue = record.data[searchField];
         return String(fieldValue || '').toLowerCase().includes(searchTerm.toLowerCase());
       }
     });
-  }, [selectedCategoryId, searchTerm, searchField, currentRecordsSafe]);
+  }, [selectedCategoryId, searchTerm, searchField, currentRecordsSafe, selectedCategorySafe]);
 
   // Sorting
   const sortedRecords = useMemo(() => {
