@@ -479,7 +479,17 @@ export const MainContent: React.FC = () => {
   );
 
   const formatFieldValue = (field: FieldDefinition, value: any, recordId: string) => {
-    if (value === null || value === undefined || (Array.isArray(value) && value.length === 0)) {
+    // 공통 빈 값 처리 함수
+    const isEmptyValue = (val: any): boolean => {
+      if (val === null || val === undefined) return true;
+      if (typeof val === 'string' && val.trim() === '') return true;
+      if (Array.isArray(val) && val.length === 0) return true;
+      if (typeof val === 'object' && Object.keys(val).length === 0) return true;
+      return false;
+    };
+
+    // 빈 값이면 "-" 표시
+    if (isEmptyValue(value)) {
       return <span className="text-discord-muted">-</span>;
     }
 
@@ -495,6 +505,13 @@ export const MainContent: React.FC = () => {
           return <span className="text-discord-text">{strValue.substring(0, 50)}...</span>;
         }
         return <span className="text-discord-text">{strValue}</span>;
+      }
+      case 'number': {
+        const numValue = String(value);
+        if (numValue.length > 20) {
+          return <span className="text-discord-text">{numValue.substring(0, 20)}...</span>;
+        }
+        return <span className="text-discord-text">{numValue}</span>;
       }
       case 'date':
         return format(new Date(value), "yyyy-MM-dd");
@@ -549,10 +566,7 @@ export const MainContent: React.FC = () => {
             </div>
           );
         }
-        // 단일 선택 필드: 빈 값 처리
-        if (value === null || value === undefined || value === '') {
-          return <span className="text-discord-muted">-</span>;
-        }
+        // 단일 선택 필드
         return String(value);
       
       case 'relation':
@@ -621,11 +635,6 @@ export const MainContent: React.FC = () => {
           );
         } else {
           // 단일 선택 필드는 일반 텍스트로 표시
-          // 빈 값 처리
-          if (value === null || value === undefined || value === '') {
-            return <span className="text-discord-muted">-</span>;
-          }
-          
           const relatedRecord = relatedRecords.find(r => r.id === value);
           if (!relatedRecord) return String(value);
           
@@ -642,8 +651,15 @@ export const MainContent: React.FC = () => {
           );
         }
       
+      case 'file':
+        return (
+          <span className="text-discord-text text-xs">
+            {String(value)}
+          </span>
+        );
+      
       default:
-        return String(value || '-');
+        return String(value);
     }
   };
 
