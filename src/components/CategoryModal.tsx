@@ -129,10 +129,16 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
       newErrors.fields = '최소 1개의 필드가 필요합니다.';
     }
 
-    // 필드 이름 검사
+    // 필드 이름 및 관계형 필드 검사
     formData.fields.forEach((field, index) => {
       if (!field.name.trim()) {
         newErrors[`field_${index}_name`] = '필드명을 입력하세요.';
+      }
+      if (field.type === 'relation' && !field.relationCategoryId) {
+        newErrors[`field_${index}_relation`] = '관계 카테고리를 선택해야 합니다.';
+      }
+      if (field.type === 'relation' && field.relationCategoryId && !field.displayFieldId) {
+        newErrors[`field_${index}_displayField`] = '라벨 필드를 선택해야 합니다.';
       }
     });
 
@@ -509,36 +515,85 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                       <div className="space-y-2">
                                         <Label className="text-sm text-gray-400">관련 카테고리</Label>
                                         <Select
-                                          value={field.relationCategoryId || ''}
-                                          onValueChange={(value) => updateField(index, { relationCategoryId: value })}
+                                          value={field.relationCategoryId}
+                                          onValueChange={(value) => {
+                                            updateField(index, { relationCategoryId: value });
+                                            if (errors[`field_${index}_relation`]) {
+                                              setErrors(prev => {
+                                                const newErrors = { ...prev };
+                                                delete newErrors[`field_${index}_relation`];
+                                                return newErrors;
+                                              });
+                                            }
+                                          }}
                                         >
                                           <SelectTrigger className="w-full bg-[#2b2d31] border-gray-600 text-gray-200">
-                                            <SelectValue placeholder="카테고리를 선택하세요" />
+                                            <SelectValue placeholder="관계 카테고리 선택" />
                                           </SelectTrigger>
                                           <SelectContent className="bg-[#2b2d31] border-gray-600">
-                                            {categories.map((cat) => (
-                                              <SelectItem key={cat.id} value={cat.id}>
-                                                {getCategoryPath(cat).join(' / ')}
-                                              </SelectItem>
-                                            ))}
+                                            {(() => {
+                                              const selectableCategories = categories.filter(c => c.id !== category?.id);
+                                              if (selectableCategories.length === 0) {
+                                                return (
+                                                  <div className="px-4 py-2 text-sm text-center text-gray-500">
+                                                    선택할 카테고리가 없습니다.
+                                                  </div>
+                                                );
+                                              }
+                                              return selectableCategories.map((cat) => (
+                                                <SelectItem key={cat.id} value={cat.id}>
+                                                  {getCategoryPath(cat).join(' > ')}
+                                                </SelectItem>
+                                              ));
+                                            })()}
                                           </SelectContent>
                                         </Select>
+                                        {errors[`field_${index}_relation`] && (
+                                          <p className="text-red-500 text-sm mt-1">
+                                            {errors[`field_${index}_relation`]}
+                                          </p>
+                                        )}
                                         {field.relationCategoryId && (
                                           <div className="space-y-1">
                                             <Label className="text-sm text-gray-400">라벨 필드(선택 목록에 표시될 필드)</Label>
                                             <Select
                                               value={field.displayFieldId || ''}
-                                              onValueChange={(value) => updateField(index, { displayFieldId: value })}
+                                              onValueChange={(value) => {
+                                                updateField(index, { displayFieldId: value });
+                                                if (errors[`field_${index}_displayField`]) {
+                                                  setErrors(prev => {
+                                                    const newErrors = { ...prev };
+                                                    delete newErrors[`field_${index}_displayField`];
+                                                    return newErrors;
+                                                  });
+                                                }
+                                              }}
                                             >
                                               <SelectTrigger className="w-full bg-[#2b2d31] border-gray-600 text-gray-200">
                                                 <SelectValue placeholder="필드 선택" />
                                               </SelectTrigger>
                                               <SelectContent className="bg-[#2b2d31] border-gray-600">
-                                                {(categories.find(cat => cat.id === field.relationCategoryId)?.fields.filter(f => f.required) || []).map(f => (
-                                                  <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
-                                                ))}
+                                                {(() => {
+                                                  const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
+                                                  const selectableFields = (relatedCategory?.fields || []).filter(f => f.required);
+                                                  if (selectableFields.length === 0) {
+                                                    return (
+                                                      <div className="px-4 py-2 text-sm text-center text-gray-500">
+                                                        선택할 수 있는 필수 필드가 없습니다.
+                                                      </div>
+                                                    );
+                                                  }
+                                                  return selectableFields.map(f => (
+                                                    <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                                                  ));
+                                                })()}
                                               </SelectContent>
                                             </Select>
+                                            {errors[`field_${index}_displayField`] && (
+                                              <p className="text-red-500 text-sm mt-1">
+                                                {errors[`field_${index}_displayField`]}
+                                              </p>
+                                            )}
                                           </div>
                                         )}
                                       </div>
@@ -668,7 +723,13 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
           <Button 
             onClick={handleSubmit}
             className="bg-discord-accent hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={isValidating || !formData.name.trim() || formData.fields.length === 0}
+            disabled={
+              isValidating || 
+              !formData.name.trim() || 
+              formData.fields.length === 0 ||
+              formData.fields.some(f => f.type === 'relation' && !f.relationCategoryId) ||
+              formData.fields.some(f => f.type === 'relation' && f.relationCategoryId && !f.displayFieldId)
+            }
           >
             {isValidating ? '검증 중...' : category ? '수정' : '생성'}
           </Button>
