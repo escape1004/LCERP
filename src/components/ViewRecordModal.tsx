@@ -5,6 +5,7 @@ import { Category, DataRecord, FieldDefinition } from '../types';
 import { Button } from './ui/button';
 import { toast } from './ui/use-toast';
 import { ViewerModal } from './ViewerModal';
+import { format } from "date-fns";
 
 // 전역 이벤트 타입 정의
 declare global {
@@ -536,13 +537,13 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                 <div>
                   <span className="text-discord-muted">생성일:</span>
                   <div className="text-discord-text">
-                    {new Date(record.createdAt).toLocaleString()}
+                    {format(new Date(record.createdAt), "yyyy-MM-dd HH:mm:ss")}
                   </div>
                 </div>
                 <div>
                   <span className="text-discord-muted">수정일:</span>
                   <div className="text-discord-text">
-                    {new Date(record.updatedAt).toLocaleString()}
+                    {format(new Date(record.updatedAt), "yyyy-MM-dd HH:mm:ss")}
                   </div>
                 </div>
               </div>

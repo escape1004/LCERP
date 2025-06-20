@@ -22,6 +22,7 @@ import * as XLSX from 'xlsx';
 import { ConfirmDialog } from './ui/confirm-dialog';
 import { AlertDialog } from './ui/alert-dialog';
 import { CategoryModal } from './CategoryModal';
+import { format } from "date-fns";
 
 // Custom event type
 declare global {
@@ -419,8 +420,7 @@ export const MainContent: React.FC = () => {
           
           // Handle dates
           if (field.type === 'date' && value) {
-            const date = new Date(value);
-            return `"${date.toLocaleDateString()} ${date.toLocaleTimeString()}"`;
+            return `"${format(new Date(value), "yyyy-MM-dd")}"`;
           }
           
           // Handle other types
@@ -432,8 +432,8 @@ export const MainContent: React.FC = () => {
           const stringValue = String(value).replace(/"/g, '""');
           return `"${stringValue}"`;
         }),
-        new Date(record.createdAt).toLocaleString(),
-        new Date(record.updatedAt).toLocaleString()
+        format(new Date(record.createdAt), "yyyy-MM-dd HH:mm:ss"),
+        format(new Date(record.updatedAt), "yyyy-MM-dd HH:mm:ss")
       ].join(','))
     ].join('\n');
 
@@ -497,7 +497,7 @@ export const MainContent: React.FC = () => {
         return <span className="text-discord-text">{strValue}</span>;
       }
       case 'date':
-        return new Date(value).toLocaleDateString();
+        return format(new Date(value), "yyyy-MM-dd");
       
       case 'checkbox':
         return value ? <Check className="w-5 h-5 text-discord-accent" /> : <X className="w-5 h-5 text-discord-danger" />;
@@ -770,8 +770,8 @@ export const MainContent: React.FC = () => {
     const data = sortedRecords.map(record => [
       record.id,
       ...selectedCategorySafe.fields.filter(f => !f.hidden).map(field => record.data[field.id]),
-      new Date(record.createdAt).toLocaleString(),
-      new Date(record.updatedAt).toLocaleString()
+      format(new Date(record.createdAt), "yyyy-MM-dd HH:mm:ss"),
+      format(new Date(record.updatedAt), "yyyy-MM-dd HH:mm:ss")
     ]);
     const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
     const wb = XLSX.utils.book_new();
