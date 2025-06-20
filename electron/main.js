@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, protocol, dialog, shell } = require('electron');
 const path = require('path');
+const os = require('os');
 const Database = require('better-sqlite3');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -13,13 +14,16 @@ const logStream = fs.createWriteStream(logPath, { flags: 'a' });
 // 데이터베이스 및 백업 경로 설정
 const isDev = process.env.VITE_DEV_SERVER_URL;
 const isPreview = process.env.ELECTRON === 'true' || process.env.npm_lifecycle_event === 'electron:preview';
-const projectRoot = isDev ? path.resolve(__dirname, '..') : process.resourcesPath;
-const dbPath = path.join(projectRoot, 'save', 'erp.db');
-const backupDir = path.join(app.getPath('userData'), 'backups');
+
+// 개발 환경에서는 프로젝트 루트의 save 폴더 사용, 빌드된 앱에서는 Local 경로 사용 (용량 제한 없음)
+const projectRoot = isDev ? path.resolve(__dirname, '..') : path.join(os.homedir(), 'AppData', 'Local');
+const appDataDir = path.join(projectRoot, isDev ? 'save' : 'Local ERP');
+const dbPath = path.join(appDataDir, 'erp.db');
+const backupDir = path.join(path.join(os.homedir(), 'AppData', 'Local'), 'backups');
 
 // save 폴더가 없으면 생성
-if (!fs.existsSync(path.dirname(dbPath))) {
-  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+if (!fs.existsSync(appDataDir)) {
+  fs.mkdirSync(appDataDir, { recursive: true });
 }
 
 // 백업 폴더가 없으면 생성
@@ -194,8 +198,8 @@ function generateUUID() {
 // 썸네일 파일 삭제 함수
 const deleteThumbnail = (filePath) => {
   try {
-    // 빌드된 버전에서는 process.resourcesPath 사용
-    const thumbnailDir = path.join(process.resourcesPath, 'save', 'thumbnails');
+    // appDataDir 사용
+    const thumbnailDir = path.join(appDataDir, 'thumbnails');
     const hash = getThumbnailHash(filePath);
     const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
     
@@ -490,7 +494,8 @@ ipcMain.handle('addRecord', async (_, record) => {
           // 직접 썸네일 생성 로직 구현
           let normalizedPath = filePath;
           if (!path.isAbsolute(filePath)) {
-            normalizedPath = path.join(process.resourcesPath, filePath);
+            // appDataDir 사용
+            normalizedPath = path.join(appDataDir, filePath);
           }
           
           if (fs.existsSync(normalizedPath)) {
@@ -499,8 +504,41 @@ ipcMain.handle('addRecord', async (_, record) => {
             const AdmZip = require('adm-zip');
             const ffmpegStatic = require('ffmpeg-static');
             
-            if (ffmpegStatic && fs.existsSync(ffmpegStatic)) {
-              ffmpeg.setFfmpegPath(ffmpegStatic);
+            // ffmpeg 경로 설정 - 빌드된 버전에서는 app.asar.unpacked 내부 경로 사용
+            let ffmpegPath = ffmpegStatic;
+            
+            // 빌드된 앱에서 ffmpeg 경로 찾기
+            if (!isDev && !isPreview) {
+              // 1. app.asar.unpacked 내부의 ffmpeg-static 경로 시도
+              const unpackedPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffmpeg-static');
+              if (fs.existsSync(unpackedPath)) {
+                const ffmpegBinPath = path.join(unpackedPath, 'ffmpeg.exe');
+                if (fs.existsSync(ffmpegBinPath)) {
+                  ffmpegPath = ffmpegBinPath;
+                  log('빌드된 앱에서 ffmpeg 경로 찾음 (asarUnpack):', ffmpegPath);
+                }
+              }
+              
+              // 2. extraResources 경로 시도
+              if (!fs.existsSync(ffmpegPath)) {
+                const extraResourcePath = path.join(process.resourcesPath, 'ffmpeg-static');
+                if (fs.existsSync(extraResourcePath)) {
+                  const ffmpegBinPath = path.join(extraResourcePath, 'ffmpeg.exe');
+                  if (fs.existsSync(ffmpegBinPath)) {
+                    ffmpegPath = ffmpegBinPath;
+                    log('빌드된 앱에서 ffmpeg 경로 찾음 (extraResources):', ffmpegPath);
+                  }
+                }
+              }
+            }
+            
+            if (ffmpegPath && fs.existsSync(ffmpegPath)) {
+              ffmpeg.setFfmpegPath(ffmpegPath);
+              log('ffmpeg 경로 설정됨:', ffmpegPath);
+            } else {
+              log('ffmpeg-static 경로를 찾을 수 없음:', ffmpegPath);
+              // ffmpeg를 찾을 수 없는 경우 썸네일 생성 실패
+              return null;
             }
             
             const ext = path.extname(normalizedPath).toLowerCase();
@@ -509,19 +547,22 @@ ipcMain.handle('addRecord', async (_, record) => {
             const isArchive = ['.zip', '.7z'].includes(ext);
             
             if (isImage || isVideo || isArchive) {
-              const thumbnailDir = path.join(process.resourcesPath, 'save', 'thumbnails');
+              const thumbnailDir = path.join(appDataDir, 'thumbnails');
               if (!fs.existsSync(thumbnailDir)) {
                 fs.mkdirSync(thumbnailDir, { recursive: true });
+                log('썸네일 디렉토리 생성됨:', thumbnailDir);
               }
               
               const hash = getThumbnailHash(normalizedPath);
               const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
               
+              log('썸네일 생성 시작:', { filePath: normalizedPath, thumbnailPath, fileType: isImage ? 'image' : isVideo ? 'video' : 'archive' });
+              
               if (isImage) {
                 await sharp(normalizedPath)
                   .resize(400, 400, { fit: 'contain' })
                   .toFile(thumbnailPath);
-                log('레코드 생성 시 이미지 썸네일 생성 완료:', thumbnailPath);
+                log('이미지 썸네일 생성 완료:', thumbnailPath);
               } else if (isVideo) {
                 await new Promise((resolve, reject) => {
                   ffmpeg(normalizedPath)
@@ -532,15 +573,16 @@ ipcMain.handle('addRecord', async (_, record) => {
                       size: '400x400'
                     })
                     .on('end', () => {
-                      log('레코드 생성 시 비디오 썸네일 생성 완료:', thumbnailPath);
+                      log('비디오 썸네일 생성 완료:', thumbnailPath);
                       resolve();
                     })
                     .on('error', (err) => {
-                      log('레코드 생성 시 비디오 썸네일 생성 실패:', err);
+                      log('비디오 썸네일 생성 실패:', err);
                       reject(err);
                     });
                 });
               } else if (isArchive) {
+                // 스트리밍 방식으로 첫 이미지 추출
                 let found = false;
                 await new Promise((resolve, reject) => {
                   fs.createReadStream(normalizedPath)
@@ -557,10 +599,10 @@ ipcMain.handle('addRecord', async (_, record) => {
                             await sharp(buffer)
                               .resize(400, 400, { fit: 'contain' })
                               .toFile(thumbnailPath);
-                            log('레코드 생성 시 아카이브 썸네일 생성 완료:', thumbnailPath);
+                            log('아카이브 썸네일 생성 완료:', thumbnailPath);
                             resolve();
                           } catch (err) {
-                            log('레코드 생성 시 아카이브 썸네일 생성 실패:', err);
+                            log('아카이브 썸네일 생성 실패:', err);
                             reject(err);
                           }
                         });
@@ -570,15 +612,16 @@ ipcMain.handle('addRecord', async (_, record) => {
                     })
                     .on('close', () => {
                       if (!found) {
-                        log('레코드 생성 시 아카이브에서 이미지를 찾을 수 없음');
+                        log('아카이브에서 이미지를 찾을 수 없음');
                         resolve();
                       }
                     })
                     .on('error', (err) => {
-                      log('레코드 생성 시 아카이브 처리 실패:', err);
+                      log('아카이브 처리 실패:', err);
                       reject(err);
                     });
                 });
+                if (!found) return null;
               }
             }
           } else {
@@ -626,7 +669,8 @@ ipcMain.handle('updateRecord', async (_, id, data) => {
           // 직접 썸네일 생성 로직 구현
           let normalizedPath = filePath;
           if (!path.isAbsolute(filePath)) {
-            normalizedPath = path.join(process.resourcesPath, filePath);
+            // appDataDir 사용
+            normalizedPath = path.join(appDataDir, filePath);
           }
           
           if (fs.existsSync(normalizedPath)) {
@@ -635,8 +679,41 @@ ipcMain.handle('updateRecord', async (_, id, data) => {
             const AdmZip = require('adm-zip');
             const ffmpegStatic = require('ffmpeg-static');
             
-            if (ffmpegStatic && fs.existsSync(ffmpegStatic)) {
-              ffmpeg.setFfmpegPath(ffmpegStatic);
+            // ffmpeg 경로 설정 - 빌드된 버전에서는 app.asar.unpacked 내부 경로 사용
+            let ffmpegPath = ffmpegStatic;
+            
+            // 빌드된 앱에서 ffmpeg 경로 찾기
+            if (!isDev && !isPreview) {
+              // 1. app.asar.unpacked 내부의 ffmpeg-static 경로 시도
+              const unpackedPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffmpeg-static');
+              if (fs.existsSync(unpackedPath)) {
+                const ffmpegBinPath = path.join(unpackedPath, 'ffmpeg.exe');
+                if (fs.existsSync(ffmpegBinPath)) {
+                  ffmpegPath = ffmpegBinPath;
+                  log('빌드된 앱에서 ffmpeg 경로 찾음 (asarUnpack):', ffmpegPath);
+                }
+              }
+              
+              // 2. extraResources 경로 시도
+              if (!fs.existsSync(ffmpegPath)) {
+                const extraResourcePath = path.join(process.resourcesPath, 'ffmpeg-static');
+                if (fs.existsSync(extraResourcePath)) {
+                  const ffmpegBinPath = path.join(extraResourcePath, 'ffmpeg.exe');
+                  if (fs.existsSync(ffmpegBinPath)) {
+                    ffmpegPath = ffmpegBinPath;
+                    log('빌드된 앱에서 ffmpeg 경로 찾음 (extraResources):', ffmpegPath);
+                  }
+                }
+              }
+            }
+            
+            if (ffmpegPath && fs.existsSync(ffmpegPath)) {
+              ffmpeg.setFfmpegPath(ffmpegPath);
+              log('ffmpeg 경로 설정됨:', ffmpegPath);
+            } else {
+              log('ffmpeg-static 경로를 찾을 수 없음:', ffmpegPath);
+              // ffmpeg를 찾을 수 없는 경우 썸네일 생성 실패
+              return null;
             }
             
             const ext = path.extname(normalizedPath).toLowerCase();
@@ -645,7 +722,7 @@ ipcMain.handle('updateRecord', async (_, id, data) => {
             const isArchive = ['.zip', '.7z'].includes(ext);
             
             if (isImage || isVideo || isArchive) {
-              const thumbnailDir = path.join(process.resourcesPath, 'save', 'thumbnails');
+              const thumbnailDir = path.join(appDataDir, 'thumbnails');
               if (!fs.existsSync(thumbnailDir)) {
                 fs.mkdirSync(thumbnailDir, { recursive: true });
               }
@@ -653,11 +730,13 @@ ipcMain.handle('updateRecord', async (_, id, data) => {
               const hash = getThumbnailHash(normalizedPath);
               const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
               
+              log('썸네일 생성 시작:', { filePath: normalizedPath, thumbnailPath, fileType: isImage ? 'image' : isVideo ? 'video' : 'archive' });
+              
               if (isImage) {
                 await sharp(normalizedPath)
                   .resize(400, 400, { fit: 'contain' })
                   .toFile(thumbnailPath);
-                log('레코드 업데이트 시 이미지 썸네일 생성 완료:', thumbnailPath);
+                log('이미지 썸네일 생성 완료:', thumbnailPath);
               } else if (isVideo) {
                 await new Promise((resolve, reject) => {
                   ffmpeg(normalizedPath)
@@ -668,15 +747,16 @@ ipcMain.handle('updateRecord', async (_, id, data) => {
                       size: '400x400'
                     })
                     .on('end', () => {
-                      log('레코드 업데이트 시 비디오 썸네일 생성 완료:', thumbnailPath);
+                      log('비디오 썸네일 생성 완료:', thumbnailPath);
                       resolve();
                     })
                     .on('error', (err) => {
-                      log('레코드 업데이트 시 비디오 썸네일 생성 실패:', err);
+                      log('비디오 썸네일 생성 실패:', err);
                       reject(err);
                     });
                 });
               } else if (isArchive) {
+                // 스트리밍 방식으로 첫 이미지 추출
                 let found = false;
                 await new Promise((resolve, reject) => {
                   fs.createReadStream(normalizedPath)
@@ -693,10 +773,10 @@ ipcMain.handle('updateRecord', async (_, id, data) => {
                             await sharp(buffer)
                               .resize(400, 400, { fit: 'contain' })
                               .toFile(thumbnailPath);
-                            log('레코드 업데이트 시 아카이브 썸네일 생성 완료:', thumbnailPath);
+                            log('아카이브 썸네일 생성 완료:', thumbnailPath);
                             resolve();
                           } catch (err) {
-                            log('레코드 업데이트 시 아카이브 썸네일 생성 실패:', err);
+                            log('아카이브 썸네일 생성 실패:', err);
                             reject(err);
                           }
                         });
@@ -706,15 +786,16 @@ ipcMain.handle('updateRecord', async (_, id, data) => {
                     })
                     .on('close', () => {
                       if (!found) {
-                        log('레코드 업데이트 시 아카이브에서 이미지를 찾을 수 없음');
+                        log('아카이브에서 이미지를 찾을 수 없음');
                         resolve();
                       }
                     })
                     .on('error', (err) => {
-                      log('레코드 업데이트 시 아카이브 처리 실패:', err);
+                      log('아카이브 처리 실패:', err);
                       reject(err);
                     });
                 });
+                if (!found) return null;
               }
             }
           } else {
@@ -798,7 +879,7 @@ ipcMain.handle('setBackupInterval', (event, minutes) => {
 
 ipcMain.handle('backupDatabase', () => {
   try {
-    const backupDir = path.join(app.getPath('userData'), 'backups');
+    const backupDir = path.join(path.join(os.homedir(), 'AppData', 'Local'), 'backups');
     if (!fs.existsSync(backupDir)) {
       fs.mkdirSync(backupDir, { recursive: true });
     }
@@ -815,7 +896,7 @@ ipcMain.handle('backupDatabase', () => {
 });
 
 ipcMain.handle('openBackupLocation', () => {
-  const backupDir = path.join(app.getPath('userData'), 'backups');
+  const backupDir = path.join(path.join(os.homedir(), 'AppData', 'Local'), 'backups');
   shell.openPath(backupDir);
   return { success: true };
 });
@@ -890,8 +971,8 @@ ipcMain.handle('generateThumbnail', async (_, filePath) => {
     let normalizedPath = filePath;
     
     if (!path.isAbsolute(filePath)) {
-      // 빌드된 버전에서는 process.resourcesPath 사용
-      normalizedPath = path.join(process.resourcesPath, filePath);
+      // appDataDir 사용
+      normalizedPath = path.join(appDataDir, filePath);
     }
     
     if (!fs.existsSync(normalizedPath)) {
@@ -905,11 +986,40 @@ ipcMain.handle('generateThumbnail', async (_, filePath) => {
     const ffmpegStatic = require('ffmpeg-static');
     
     // ffmpeg 경로 설정 - 빌드된 버전에서는 app.asar.unpacked 내부 경로 사용
-    if (ffmpegStatic && fs.existsSync(ffmpegStatic)) {
-      ffmpeg.setFfmpegPath(ffmpegStatic);
-      log('ffmpeg 경로 설정됨:', ffmpegStatic);
+    let ffmpegPath = ffmpegStatic;
+    
+    // 빌드된 앱에서 ffmpeg 경로 찾기
+    if (!isDev && !isPreview) {
+      // 1. app.asar.unpacked 내부의 ffmpeg-static 경로 시도
+      const unpackedPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffmpeg-static');
+      if (fs.existsSync(unpackedPath)) {
+        const ffmpegBinPath = path.join(unpackedPath, 'ffmpeg.exe');
+        if (fs.existsSync(ffmpegBinPath)) {
+          ffmpegPath = ffmpegBinPath;
+          log('빌드된 앱에서 ffmpeg 경로 찾음 (asarUnpack):', ffmpegPath);
+        }
+      }
+      
+      // 2. extraResources 경로 시도
+      if (!fs.existsSync(ffmpegPath)) {
+        const extraResourcePath = path.join(process.resourcesPath, 'ffmpeg-static');
+        if (fs.existsSync(extraResourcePath)) {
+          const ffmpegBinPath = path.join(extraResourcePath, 'ffmpeg.exe');
+          if (fs.existsSync(ffmpegBinPath)) {
+            ffmpegPath = ffmpegBinPath;
+            log('빌드된 앱에서 ffmpeg 경로 찾음 (extraResources):', ffmpegPath);
+          }
+        }
+      }
+    }
+    
+    if (ffmpegPath && fs.existsSync(ffmpegPath)) {
+      ffmpeg.setFfmpegPath(ffmpegPath);
+      log('ffmpeg 경로 설정됨:', ffmpegPath);
     } else {
-      log('ffmpeg-static 경로를 찾을 수 없음:', ffmpegStatic);
+      log('ffmpeg-static 경로를 찾을 수 없음:', ffmpegPath);
+      // ffmpeg를 찾을 수 없는 경우 썸네일 생성 실패
+      return null;
     }
     
     const ext = path.extname(normalizedPath).toLowerCase();
@@ -922,8 +1032,8 @@ ipcMain.handle('generateThumbnail', async (_, filePath) => {
       return null;
     }
     
-    // 빌드된 버전에서는 process.resourcesPath 사용
-    const thumbnailDir = path.join(process.resourcesPath, 'save', 'thumbnails');
+    // appDataDir 사용
+    const thumbnailDir = path.join(appDataDir, 'thumbnails');
     if (!fs.existsSync(thumbnailDir)) {
       fs.mkdirSync(thumbnailDir, { recursive: true });
       log('썸네일 디렉토리 생성됨:', thumbnailDir);
@@ -1012,12 +1122,12 @@ ipcMain.handle('getThumbnailDataUrl', async (_, filePath) => {
     let normalizedPath = filePath;
     
     if (!path.isAbsolute(filePath)) {
-      // 빌드된 버전에서는 process.resourcesPath 사용
-      normalizedPath = path.join(process.resourcesPath, filePath);
+      // appDataDir 사용
+      normalizedPath = path.join(appDataDir, filePath);
     }
     
-    // 빌드된 버전에서는 process.resourcesPath 사용
-    const thumbnailDir = path.join(process.resourcesPath, 'save', 'thumbnails');
+    // appDataDir 사용
+    const thumbnailDir = path.join(appDataDir, 'thumbnails');
     const hash = getThumbnailHash(normalizedPath);
     const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
     
@@ -1205,4 +1315,4 @@ ipcMain.handle('getArchiveFileText', async (_, filePath, fileName) => {
     log('[압축 파일 텍스트 읽기 에러]', e);
     return null;
   }
-}); 
+});

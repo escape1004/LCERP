@@ -27,7 +27,6 @@ import { CategoryModal } from './CategoryModal';
 declare global {
   interface WindowEventMap {
     'erp:categoryChange': CustomEvent<{ categoryId: string }>;
-    'thumbnail:regenerated': CustomEvent<{ filePath: string }>;
   }
 }
 
@@ -84,41 +83,16 @@ const ThumbnailCell: React.FC<{
   onThumbnailClick: (filePath: string) => void;
 }> = ({ filePath, onThumbnailClick }) => {
   const [dataUrl, setDataUrl] = React.useState<string | null>(null);
-  const [refreshKey, setRefreshKey] = React.useState(0);
-  
-  const loadThumbnail = React.useCallback(() => {
+  React.useEffect(() => {
+    let ignore = false;
     if (filePath) {
       window.electronAPI.getThumbnailDataUrl(filePath).then(res => {
-        setDataUrl(res);
+        if (!ignore) setDataUrl(res);
       });
     } else {
       setDataUrl(null);
     }
-  }, [filePath]);
-
-  React.useEffect(() => {
-    loadThumbnail();
-  }, [loadThumbnail, refreshKey]);
-
-  // 썸네일 재생성 완료 이벤트 리스너
-  React.useEffect(() => {
-    if (!filePath) return;
-
-    const handleThumbnailRegenerated = (event: CustomEvent) => {
-      if (event.detail.filePath === filePath) {
-        // 약간의 지연을 두어 파일 시스템에 썸네일이 완전히 저장된 후 로드
-        setTimeout(() => {
-          setRefreshKey(prev => prev + 1);
-        }, 100);
-      }
-    };
-
-    // 커스텀 이벤트 리스너 등록
-    window.addEventListener('thumbnail:regenerated', handleThumbnailRegenerated as EventListener);
-    
-    return () => {
-      window.removeEventListener('thumbnail:regenerated', handleThumbnailRegenerated as EventListener);
-    };
+    return () => { ignore = true; };
   }, [filePath]);
 
   // 파일 확장자 추출
