@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Search, Check, ChevronsUpDown, ChevronRight, CheckCircle2, XCircle } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import type { Category, DataRecord, FieldDefinition, NewRecord } from '../types';
@@ -46,6 +46,9 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     message: '',
     variant: 'info'
   });
+
+  // 첫 번째 필드에 포커스하기 위한 ref
+  const firstFieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement>(null);
 
   // formData의 초기값을 useMemo로 계산
   const initialFormData = React.useMemo(() => {
@@ -108,6 +111,18 @@ export const RecordModal: React.FC<RecordModalProps> = ({
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen, onClose]);
+
+  // 모달이 열릴 때 첫 번째 필드에 포커스
+  useEffect(() => {
+    if (isOpen && category?.fields?.length > 0) {
+      // 약간의 지연을 두어 모달이 완전히 렌더링된 후 포커스
+      setTimeout(() => {
+        if (firstFieldRef.current) {
+          firstFieldRef.current.focus();
+        }
+      }, 200);
+    }
+  }, [isOpen, category]);
 
   const validateForm = useCallback(() => {
     const newErrors: Record<string, string> = {};
@@ -240,7 +255,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     }));
   };
 
-  const renderField = (field: FieldDefinition) => {
+  const renderField = (field: FieldDefinition, isFirstField: boolean = false) => {
     const value =
       field.type === 'select' && field.multiple
         ? formData[field.id] ?? []
@@ -275,6 +290,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
               value={value}
               onChange={(e) => updateFieldValue(field.id, e.target.value)}
               className={inputClassName}
+              ref={isFirstField ? firstFieldRef as React.Ref<HTMLInputElement> : undefined}
             />
             {renderError()}
           </div>
@@ -305,6 +321,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                   ? "bg-discord-accent hover:bg-blue-600 border-0 text-white" 
                   : "bg-discord-danger hover:bg-red-900 border-0 text-white"
               )}
+              ref={isFirstField ? firstFieldRef as React.Ref<HTMLButtonElement> : undefined}
             >
               {value ? (
                 <Check className="w-6 h-6" />
@@ -869,14 +886,14 @@ export const RecordModal: React.FC<RecordModalProps> = ({
 
         <div className="min-h-0 flex-1 overflow-y-auto p-6">
           <div className="space-y-4">
-            {(category?.fields ?? []).sort((a, b) => a.order - b.order).map(field => (
+            {(category?.fields ?? []).sort((a, b) => a.order - b.order).map((field, index) => (
               <div key={field.id} className="space-y-2">
                 <Label className="text-sm font-medium text-discord-text">
                   {field.name}
                   {field.required && <span className="text-red-500 ml-1">*</span>}
                   {field.unique && <span className="text-gray-400 ml-1 text-xs">(중복 불가)</span>}
                 </Label>
-                {renderField(field)}
+                {renderField(field, index === 0)}
               </div>
             ))}
             {(!category || (category?.fields?.length === 0)) && (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, GripVertical, Plus, Trash2 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { useERPStore } from '../hooks/useERPStore';
@@ -35,6 +35,9 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  // 카테고리 이름 입력 필드 ref
+  const categoryNameRef = useRef<HTMLInputElement>(null);
 
   // ESC 키로 모달 닫기
   useEffect(() => {
@@ -52,6 +55,16 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen, onClose]);
+
+  // 모달이 열릴 때 첫 번째 필드에 포커스
+  useEffect(() => {
+    if (isOpen && categoryNameRef.current) {
+      // 약간의 지연을 두어 모달이 완전히 렌더링된 후 포커스
+      setTimeout(() => {
+        categoryNameRef.current?.focus();
+      }, 100);
+    }
+  }, [isOpen]);
 
   // 카테고리가 변경될 때마다 레코드 로드
   useEffect(() => {
@@ -307,6 +320,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                 className={`mt-2 bg-discord-sidebar border-gray-600 text-discord-text ${
                   errors.name ? 'border-red-500' : ''
                 }`}
+                ref={categoryNameRef}
               />
               {errors.name && (
                 <p className="text-red-500 text-sm mt-1">{errors.name}</p>
