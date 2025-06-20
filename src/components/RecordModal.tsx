@@ -344,24 +344,38 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                       onPaste={(e) => {
                         e.preventDefault();
                         const pastedText = e.clipboardData.getData('text');
-                        const pastedValue = pastedText.trim();
+                        const pastedValues = pastedText.split(',').map(v => v.trim()).filter(v => v);
                         
-                        // 기존 옵션에 있는 값인지 확인
-                        const matchingOption = field.options?.find(opt => 
-                          opt.toLowerCase() === pastedValue.toLowerCase()
-                        );
+                        // 기존 옵션에 있는 값들 찾기
+                        const validOptions = field.options?.filter(opt => 
+                          pastedValues.some(v => opt.toLowerCase() === v.toLowerCase())
+                        ) || [];
                         
-                        if (matchingOption) {
-                          updateFieldValue(field.id, matchingOption);
-                          toggleCombobox(field.id);
-                          toast({
-                            title: "값이 선택됨",
-                            description: `"${matchingOption}"이 선택되었습니다.`,
-                          });
+                        if (validOptions.length > 0) {
+                          const currentValues = Array.isArray(value) ? value : [];
+                          const newValues = [...new Set([...currentValues, ...validOptions])];
+                          updateFieldValue(field.id, newValues);
+                          
+                          // 유효하지 않은 값이 있었다면 상세한 알림
+                          const invalidValues = pastedValues.filter(v => 
+                            !field.options?.some(opt => opt.toLowerCase() === v.toLowerCase())
+                          );
+                          if (invalidValues.length > 0) {
+                            toast({
+                              title: "일부 값이 무시됨",
+                              description: `다음 값들이 유효하지 않아 제외되었습니다: ${invalidValues.join(', ')}`,
+                              variant: "destructive",
+                            });
+                          } else {
+                            toast({
+                              title: "값이 추가됨",
+                              description: `${validOptions.length}개의 값이 추가되었습니다.`,
+                            });
+                          }
                         } else {
                           toast({
                             title: "유효하지 않은 값",
-                            description: `"${pastedValue}"는 유효한 옵션이 아닙니다.`,
+                            description: `붙여넣은 모든 값이 유효하지 않습니다: ${pastedValues.join(', ')}`,
                             variant: "destructive",
                           });
                         }
