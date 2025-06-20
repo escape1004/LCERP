@@ -526,6 +526,10 @@ export const MainContent: React.FC = () => {
             </div>
           );
         }
+        // 단일 선택 필드: 빈 값 처리
+        if (value === null || value === undefined || value === '') {
+          return <span className="text-discord-muted">-</span>;
+        }
         return String(value);
       
       case 'relation':
