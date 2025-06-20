@@ -598,6 +598,11 @@ export const MainContent: React.FC = () => {
           );
         } else {
           // 단일 선택 필드는 일반 텍스트로 표시
+          // 빈 값 처리
+          if (value === null || value === undefined || value === '') {
+            return <span className="text-discord-muted">-</span>;
+          }
+          
           const relatedRecord = relatedRecords.find(r => r.id === value);
           if (!relatedRecord) return String(value);
           
