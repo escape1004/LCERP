@@ -67,6 +67,18 @@ export function DatePicker({ value, onChange, className, placeholder }: DatePick
       return;
     }
 
+    // YYYY. MM 형식 처리 (월까지만 입력된 경우)
+    const yyyyMmMatch = inputValue.match(/^(\d{4})\.\s*(\d{1,2})$/);
+    if (yyyyMmMatch) {
+      const [, yearStr, monthStr] = yyyyMmMatch;
+      const year = parseInt(yearStr, 10);
+      const month = parseInt(monthStr, 10);
+      if (year >= 1900 && year <= 2100 && month >= 1 && month <= 12) {
+        onChange(`${year}-${month.toString().padStart(2, '0')}`);
+        return;
+      }
+    }
+
     // YY-MM-DD 형식을 먼저 수동으로 처리
     const yyMmDdMatch = inputValue.match(/^(\d{2})-(\d{1,2})-(\d{1,2})$/);
     if (yyMmDdMatch) {

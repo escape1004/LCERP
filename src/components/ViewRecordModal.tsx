@@ -261,8 +261,15 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
     const urlPattern = /^https?:\/\/.+/i;
 
     switch (field.type) {
-      case 'date':
-        return new Date(value).toLocaleDateString();
+      case 'number':
+        return String(value);
+      
+      case 'date': {
+        if (typeof value === 'string' && /^\d{4}-\d{2}$/.test(value)) {
+          return format(new Date(value), "yyyy-MM");
+        }
+        return format(new Date(value), "yyyy-MM-dd");
+      }
       
       case 'checkbox':
         return value ? <Check className="w-5 h-5 text-discord-accent" /> : <X className="w-5 h-5 text-discord-danger" />;
