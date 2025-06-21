@@ -1250,6 +1250,7 @@ ipcMain.handle('getArchiveFileDataUrl', async (_, filePath, fileName) => {
                 else if (fileExt === '.gif') mimeType = 'image/gif';
                 else if (fileExt === '.webp') mimeType = 'image/webp';
                 else if (fileExt === '.txt') mimeType = 'text/plain';
+                else if (['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'].includes(fileExt)) mimeType = `video/${fileExt.slice(1)}`;
                 resolve(`data:${mimeType};base64,${buffer.toString('base64')}`);
               } catch (err) {
                 reject(err);

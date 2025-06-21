@@ -414,6 +414,8 @@ export const registerCategoryHandlers = (database: Database) => {
         mimeType = 'image/webp';
       } else if (fileExt === '.txt') {
         mimeType = 'text/plain';
+      } else if (['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'].includes(fileExt)) {
+        mimeType = `video/${fileExt.slice(1)}`;
       }
       
       const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`;
