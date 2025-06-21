@@ -968,6 +968,30 @@ export const MainContent: React.FC = () => {
 
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
 
+  // 중복 불가 필드의 중복 여부를 체크하는 함수
+  const checkDuplicateField = useCallback((field: FieldDefinition, recordId: string, value: any): boolean => {
+    if (!field.unique || !value || value === '' || value === null || value === undefined) {
+      return false;
+    }
+
+    const records = getCategoryRecords(selectedCategorySafe?.id || '');
+    const duplicateCount = records.filter(record => 
+      record.id !== recordId && 
+      record.data[field.id] === value
+    ).length;
+
+    return duplicateCount > 0;
+  }, [selectedCategorySafe?.id, getCategoryRecords]);
+
+  // 레코드의 중복 필드가 있는지 체크하는 함수
+  const hasDuplicateFields = useCallback((record: DataRecord): boolean => {
+    if (!selectedCategorySafe) return false;
+    
+    return selectedCategorySafe.fields.some(field => 
+      field.unique && checkDuplicateField(field, record.id, record.data[field.id])
+    );
+  }, [selectedCategorySafe, checkDuplicateField]);
+
   // 렌더링 시 카테고리 없을 때 안내 메시지
   if (!categoriesSafe || categoriesSafe.length === 0) {
     return (
@@ -1203,7 +1227,14 @@ export const MainContent: React.FC = () => {
                     </thead>
                     <tbody>
                       {paginatedRecords.map((record) => (
-                        <tr key={record.id} className="hover:bg-discord-hover group">
+                        <tr key={record.id} className={`hover:bg-discord-hover group ${
+                          hasDuplicateFields(record) ? 'bg-red-900/20 border-l-4 border-red-500' : ''
+                        }`}
+                        title={
+                          hasDuplicateFields(record)
+                            ? '이 레코드에는 중복 불가 필드의 중복된 값이 있습니다'
+                            : ''
+                        }>
                           {fileField && (
                             <td className="px-2 py-3 text-xs text-discord-text w-[112px] overflow-hidden relative">
                               <ThumbnailCell
@@ -1220,10 +1251,19 @@ export const MainContent: React.FC = () => {
                             </td>
                           )}
                           {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
-                            <td key={field.id} className={
+                            <td key={field.id} className={`${
                               field.type === 'checkbox'
                                 ? 'min-w-[40px] max-w-[160px] px-2 py-3 text-xs text-discord-text text-left'
                                 : 'px-2 py-3 text-xs text-discord-text'
+                            } ${
+                              field.unique && checkDuplicateField(field, record.id, record.data[field.id])
+                                ? 'bg-red-500/20'
+                                : ''
+                            }`}
+                            title={
+                              field.unique && checkDuplicateField(field, record.id, record.data[field.id])
+                                ? `${field.name} 필드의 값이 중복됩니다 (중복 불가 설정)`
+                                : ''
                             }>
                               {formatFieldValue(field, record.data[field.id], record.id)}
                             </td>
