@@ -265,8 +265,6 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         return String(value);
       
       case 'text':
-        return String(value);
-      
       case 'longtext':
         return (
           <div className="whitespace-pre-wrap text-discord-text break-words overflow-wrap-anywhere">

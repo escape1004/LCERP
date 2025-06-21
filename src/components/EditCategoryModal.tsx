@@ -249,7 +249,11 @@ export const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
   const { categories, addCategory, updateCategory } = useERPStore();
   const [name, setName] = useState(category?.name || '');
   const [fields, setFields] = useState<FieldDefinition[]>(
-    category?.fields || []
+    category ? JSON.parse(JSON.stringify(category.fields)) : []
+  );
+  const [initialName, setInitialName] = useState(category?.name || '');
+  const [initialFields, setInitialFields] = useState<FieldDefinition[]>(
+    category ? JSON.parse(JSON.stringify(category.fields)) : []
   );
   const [error, setError] = useState('');
   const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
@@ -273,15 +277,30 @@ export const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
 
     if (isOpen) {
       document.addEventListener('keydown', handleKeyDown);
+      setName(category?.name || '');
+      setFields(category ? JSON.parse(JSON.stringify(category.fields)) : []);
+      setInitialName(category?.name || '');
+      setInitialFields(
+        category ? JSON.parse(JSON.stringify(category.fields)) : []
+      );
+      setError('');
     }
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, category]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const isDirty = name !== initialName || JSON.stringify(fields) !== JSON.stringify(initialFields);
+
+    if (!isDirty) {
+      onClose();
+      return;
+    }
+
     setError('');
 
     try {
@@ -330,7 +349,6 @@ export const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
 
       onClose();
     } catch (error) {
-      console.error('Error saving category:', error);
       setError(error instanceof Error ? error.message : '저장 중 오류가 발생했습니다.');
     }
   };

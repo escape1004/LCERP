@@ -502,13 +502,7 @@ export const MainContent: React.FC = () => {
     }
     
     switch (field.type) {
-      case 'text': {
-        const strValue = String(value);
-        if (strValue.length > 50) {
-          return <span className="text-discord-text">{strValue.substring(0, 50)}...</span>;
-        }
-        return <span className="text-discord-text">{strValue}</span>;
-      }
+      case 'text':
       case 'longtext': {
         const strValue = String(value);
         return (

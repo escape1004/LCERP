@@ -29,12 +29,14 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     parentId: undefined,
     fields: [] as FieldDefinition[],
   });
+  const [initialFormData, setInitialFormData] = useState(formData);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [duplicateErrors, setDuplicateErrors] = useState<Record<string, string>>({});
   const [isValidating, setIsValidating] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
   
   // 카테고리 이름 입력 필드 ref
   const categoryNameRef = useRef<HTMLInputElement>(null);
@@ -75,21 +77,34 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
 
   useEffect(() => {
     if (category) {
-      setFormData({
+      const categoryData = {
         name: category.name,
         parentId: category.parentId,
         fields: category.fields,
-      });
+      };
+      setFormData(JSON.parse(JSON.stringify(categoryData)));
+      setInitialFormData(JSON.parse(JSON.stringify(categoryData)));
     } else {
-      setFormData({
+      const initialData = {
         name: '',
         parentId: undefined,
         fields: [],
-      });
+      };
+      setFormData(initialData);
+      setInitialFormData(initialData);
     }
     setErrors({});
     setDuplicateErrors({});
+    setIsDirty(false);
   }, [category, isOpen]);
+
+  // formData가 변경될 때마다 isDirty 상태 업데이트
+  useEffect(() => {
+    if (isOpen) {
+      const dirty = JSON.stringify(formData) !== JSON.stringify(initialFormData);
+      setIsDirty(dirty);
+    }
+  }, [formData, initialFormData, isOpen]);
 
   const checkDuplicateValues = async () => {
     if (!category) return true;
@@ -98,7 +113,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
       const records = getCategoryRecords(category.id);
       const newDuplicateErrors: Record<string, string> = {};
 
-      category.fields.forEach(field => {
+      formData.fields.forEach(field => {
         if (field.unique) {
           const values = records.map(record => record.data[field.id]);
           const duplicates = values.filter((value, index) => 
@@ -160,27 +175,29 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     // 중복 체크
     const duplicatesValid = await checkDuplicateValues();
     
-    return Object.keys(newErrors).length === 0 && duplicatesValid;
+    const finalValidationResult = Object.keys(newErrors).length === 0 && duplicatesValid;
+    return finalValidationResult;
   };
 
   const handleSubmit = async () => {
-    console.log('handleSubmit called');
+    if (!isDirty) {
+      onClose();
+      return;
+    }
+    
     if (isValidating) return;
     
     const isValid = await validateForm();
-    console.log('Form validation result:', isValid);
     if (!isValid) return;
 
     try {
       if (category) {
-        console.log('Updating category:', category.id);
         updateCategory(category.id, {
           name: formData.name,
           parentId: formData.parentId,
           fields: formData.fields,
         });
       } else {
-        console.log('Creating new category:', formData);
         const now = new Date().toISOString();
         const newCategory: NewCategory = {
           name: formData.name,
@@ -195,7 +212,6 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
 
       onClose();
     } catch (error) {
-      console.error('Error in handleSubmit:', error);
       toast({
         title: '카테고리 저장 중 오류가 발생했습니다.',
         variant: 'destructive',
@@ -332,10 +348,12 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
               <Label className="text-discord-text font-medium">상위 카테고리</Label>
               <Select
                 value={formData.parentId || 'none'}
-                onValueChange={(value) => setFormData(prev => ({ 
-                  ...prev, 
-                  parentId: value === 'none' ? undefined : value 
-                }))}
+                onValueChange={(value) => {
+                  setFormData(prev => ({ 
+                    ...prev, 
+                    parentId: value === 'none' ? undefined : value 
+                  }));
+                }}
               >
                 <SelectTrigger className="mt-2 bg-discord-sidebar border-gray-600 text-gray-200">
                   <SelectValue placeholder="상위 카테고리 선택 (선택사항)" />
@@ -613,6 +631,12 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                         )}
                                       </div>
                                     )}
+
+                                    {duplicateErrors[field.id] && (
+                                      <p className="text-red-500 text-sm mt-2">
+                                        {duplicateErrors[field.id]}
+                                      </p>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -740,6 +764,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
             className="bg-discord-accent hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={
               isValidating || 
+              !isDirty ||
               !formData.name.trim() || 
               formData.fields.length === 0 ||
               formData.fields.some(f => !f.name.trim()) ||
