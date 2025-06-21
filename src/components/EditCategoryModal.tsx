@@ -428,7 +428,15 @@ export const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
               >
                 취소
               </Button>
-              <Button type="submit">
+              <Button 
+                type="submit"
+                disabled={
+                  !name.trim() || 
+                  fields.length === 0 ||
+                  fields.some(f => !f.name.trim())
+                }
+                className="disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 {category ? '저장' : '추가'}
               </Button>
             </div>

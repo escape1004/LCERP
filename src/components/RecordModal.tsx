@@ -281,11 +281,46 @@ export const RecordModal: React.FC<RecordModalProps> = ({
 
     switch (field.type) {
       case 'text':
+        return (
+          <div className="space-y-1">
+            <Input
+              type="text"
+              placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
+              value={value}
+              onChange={(e) => updateFieldValue(field.id, e.target.value)}
+              className={inputClassName}
+              ref={isFirstField ? firstFieldRef as React.Ref<HTMLInputElement> : undefined}
+            />
+            {renderError()}
+          </div>
+        );
+
+      case 'longtext':
+        return (
+          <div className="space-y-1">
+            <textarea
+              placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
+              value={value}
+              onChange={(e) => updateFieldValue(field.id, e.target.value)}
+              className={cn(
+                "flex w-full rounded-md border px-3 py-2 text-sm shadow-sm transition-colors",
+                "placeholder:text-gray-500",
+                "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                "disabled:cursor-not-allowed disabled:opacity-50",
+                "min-h-[100px] resize-y",
+                inputClassName
+              )}
+              ref={isFirstField ? firstFieldRef as React.Ref<HTMLTextAreaElement> : undefined}
+            />
+            {renderError()}
+          </div>
+        );
+
       case 'number':
         return (
           <div className="space-y-1">
             <Input
-              type={field.type === 'number' ? 'number' : 'text'}
+              type="number"
               placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
               value={value}
               onChange={(e) => updateFieldValue(field.id, e.target.value)}

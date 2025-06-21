@@ -264,6 +264,16 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
       case 'number':
         return String(value);
       
+      case 'text':
+        return String(value);
+      
+      case 'longtext':
+        return (
+          <div className="whitespace-pre-wrap text-discord-text break-words overflow-wrap-anywhere">
+            {String(value)}
+          </div>
+        );
+      
       case 'date': {
         if (typeof value === 'string' && /^\d{4}-\d{2}$/.test(value)) {
           return format(new Date(value), "yyyy-MM");

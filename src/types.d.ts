@@ -55,7 +55,7 @@ export interface Category {
 export interface Field {
   id: string;
   name: string;
-  type: 'text' | 'number' | 'select' | 'relation' | 'date' | 'file' | 'checkbox';
+  type: 'text' | 'number' | 'select' | 'relation' | 'date' | 'file' | 'checkbox' | 'longtext';
   required: boolean;
   unique: boolean;
   order: number;

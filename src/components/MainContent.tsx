@@ -509,6 +509,14 @@ export const MainContent: React.FC = () => {
         }
         return <span className="text-discord-text">{strValue}</span>;
       }
+      case 'longtext': {
+        const strValue = String(value);
+        return (
+          <div className="text-discord-text truncate max-w-full" title={strValue}>
+            {strValue}
+          </div>
+        );
+      }
       case 'number': {
         const numValue = String(value);
         if (numValue.length > 20) {

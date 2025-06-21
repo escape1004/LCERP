@@ -426,6 +426,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                           </SelectTrigger>
                                           <SelectContent className="bg-[#2b2d31] border-gray-600">
                                             <SelectItem value="text">텍스트</SelectItem>
+                                            <SelectItem value="longtext">긴 텍스트</SelectItem>
                                             <SelectItem value="number">숫자</SelectItem>
                                             <SelectItem value="date">날짜</SelectItem>
                                             <SelectItem value="select">선택 목록</SelectItem>
@@ -741,6 +742,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
               isValidating || 
               !formData.name.trim() || 
               formData.fields.length === 0 ||
+              formData.fields.some(f => !f.name.trim()) ||
               formData.fields.some(f => f.type === 'relation' && !f.relationCategoryId) ||
               formData.fields.some(f => f.type === 'relation' && f.relationCategoryId && !f.displayFieldId)
             }
