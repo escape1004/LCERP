@@ -61,6 +61,11 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   // 이미지 컨테이너 ref
   const imgContainerRef = useRef<HTMLDivElement>(null);
 
+  // 상태 추가 (useState)
+  const [imgRotation, setImgRotation] = useState(0); // 이미지 회전 각도
+  const [videoRotation, setVideoRotation] = useState(0); // 동영상 회전 각도
+  const [archiveImgRotation, setArchiveImgRotation] = useState(0); // 압축 이미지 회전 각도
+
   useEffect(() => {
     if (!isOpen || !filePath || !fileType) {
       setDataUrl(null);
@@ -336,10 +341,13 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     }
   };
 
-  // 파일이 바뀌면 확대/위치 초기화 (압축/일반 모두)
+  // 파일이 바뀌면 확대/위치/회전 초기화 (압축/일반 모두)
   useEffect(() => {
     setImgScale(1);
     setImgOffset({ x: 0, y: 0 });
+    setImgRotation(0);
+    setVideoRotation(0);
+    setArchiveImgRotation(0);
   }, [filePath, fileType, currentArchiveIndex]);
 
   // 일반 이미지 휠 확대/축소
@@ -509,7 +517,35 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
         </div>
 
         {/* Content */}
-        <div className="flex-1 min-h-0 flex items-center justify-center">
+        <div className="flex-1 min-h-0 flex items-center justify-center relative">
+          {/* 회전 버튼: 바디 영역 우측 상단에 fixed 배치 */}
+          {((fileType === 'image') || (fileType === 'video') || (fileType === 'archive' && currentFileExt !== 'txt')) && (
+            <div className="absolute top-4 right-4 z-20 flex gap-2">
+              <button
+                onClick={() => {
+                  if (fileType === 'image') setImgRotation((r) => (r - 90) % 360);
+                  else if (fileType === 'video') setVideoRotation((r) => (r - 90) % 360);
+                  else if (fileType === 'archive' && currentFileExt !== 'txt') setArchiveImgRotation((r) => (r - 90) % 360);
+                }}
+                className="p-2 rounded bg-black/70 text-white hover:bg-black/90 transition-colors backdrop-blur-sm"
+                title="왼쪽으로 90도 회전"
+              >
+                <RotateCcw size={20} />
+              </button>
+              <button
+                onClick={() => {
+                  if (fileType === 'image') setImgRotation((r) => (r + 90) % 360);
+                  else if (fileType === 'video') setVideoRotation((r) => (r + 90) % 360);
+                  else if (fileType === 'archive' && currentFileExt !== 'txt') setArchiveImgRotation((r) => (r + 90) % 360);
+                }}
+                className="p-2 rounded bg-black/70 text-white hover:bg-black/90 transition-colors backdrop-blur-sm"
+                title="오른쪽으로 90도 회전"
+              >
+                <RotateCcw size={20} style={{ transform: 'scaleX(-1)' }} />
+              </button>
+            </div>
+          )}
+          
           {loading ? (
             <div className="flex items-center justify-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-discord-accent"></div>
@@ -518,67 +554,76 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
             <>
               {/* Image Viewer */}
               {fileType === 'image' && dataUrl && (
-                <div
-                  ref={imgContainerRef}
-                  className="w-full h-full flex items-center justify-center"
-                  style={{ 
-                    maxHeight: '80vh', 
-                    maxWidth: '100%',
-                    overflow: imgScale > 1 ? 'hidden' : 'visible'
-                  }}
-                >
-                  <img
-                    src={dataUrl}
-                    alt="이미지 뷰어"
-                    className="max-w-full max-h-full object-contain rounded shadow-lg select-none"
-                    style={{
-                      transform: `scale(${imgScale}) translate(${imgOffset.x / imgScale}px, ${imgOffset.y / imgScale}px)`,
-                      cursor: imgScale > 1 ? (isPanning ? 'grabbing' : 'grab') : 'default',
-                      transition: isPanning ? 'none' : 'transform 0.2s',
+                <div className="w-full h-full flex flex-col items-center justify-center">
+                  <div
+                    ref={imgContainerRef}
+                    className="flex-1 w-full h-full flex items-center justify-center"
+                    style={{ 
+                      maxHeight: '80vh', 
+                      maxWidth: '100%',
+                      overflow: imgScale > 1 ? 'hidden' : 'visible'
                     }}
-                    draggable={false}
-                    ref={imgRef}
-                    onMouseDown={(e) => {
-                      e.stopPropagation();
-                      handleImgMouseDown(e);
-                    }}
-                    onMouseMove={(e) => {
-                      e.stopPropagation();
-                      handleImgMouseMove(e);
-                    }}
-                    onMouseUp={(e) => {
-                      e.stopPropagation();
-                      handleImgMouseUp();
-                    }}
-                    onMouseLeave={(e) => {
-                      e.stopPropagation();
-                      handleImgMouseUp();
-                    }}
-                  />
+                  >
+                    <img
+                      src={dataUrl}
+                      alt="이미지 뷰어"
+                      className="max-w-full max-h-full object-contain rounded shadow-lg select-none"
+                      style={{
+                        transform: `scale(${imgScale}) translate(${imgOffset.x / imgScale}px, ${imgOffset.y / imgScale}px) rotate(${imgRotation}deg)`,
+                        cursor: imgScale > 1 ? (isPanning ? 'grabbing' : 'grab') : 'default',
+                        transition: isPanning ? 'none' : 'transform 0.2s',
+                      }}
+                      draggable={false}
+                      ref={imgRef}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        handleImgMouseDown(e);
+                      }}
+                      onMouseMove={(e) => {
+                        e.stopPropagation();
+                        handleImgMouseMove(e);
+                      }}
+                      onMouseUp={(e) => {
+                        e.stopPropagation();
+                        handleImgMouseUp();
+                      }}
+                      onMouseLeave={(e) => {
+                        e.stopPropagation();
+                        handleImgMouseUp();
+                      }}
+                    />
+                  </div>
                 </div>
               )}
 
               {/* Video Player */}
               {fileType === 'video' && dataUrl && (
                 <div 
-                  className="relative w-full h-full flex items-center justify-center"
+                  className="relative w-full h-full flex flex-col items-center justify-center"
                   onMouseMove={handleMouseMove}
                   onMouseLeave={() => setShowControls(false)}
                   onKeyDown={handleKeyDown}
                   tabIndex={0}
                   data-video-container
                 >
-                  <video
-                    ref={videoRef}
-                    src={dataUrl}
-                    className="max-w-full max-h-[80vh] h-full object-contain bg-black"
-                    onPlay={() => setIsPlaying(true)}
-                    onPause={() => setIsPlaying(false)}
-                    onLoadedMetadata={handleLoadedMetadata}
-                    onTimeUpdate={handleTimeUpdate}
-                    onClick={handleVideoClick}
-                    autoPlay
-                  />
+                  <div className="flex-1 w-full h-full flex items-center justify-center">
+                    <div style={{ 
+                      transform: `rotate(${videoRotation}deg)`,
+                      transition: 'transform 0.2s'
+                    }}>
+                      <video
+                        ref={videoRef}
+                        src={dataUrl}
+                        className="max-w-full max-h-[80vh] h-full object-contain bg-black"
+                        onPlay={() => setIsPlaying(true)}
+                        onPause={() => setIsPlaying(false)}
+                        onLoadedMetadata={handleLoadedMetadata}
+                        onTimeUpdate={handleTimeUpdate}
+                        onClick={handleVideoClick}
+                        autoPlay
+                      />
+                    </div>
+                  </div>
                   
                   {/* 커스텀 컨트롤 */}
                   <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
@@ -726,36 +771,38 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                       ) : (
                         // 이미지 파일 표시
                         currentArchiveDataUrl ? (
-                          <img
-                            src={currentArchiveDataUrl}
-                            alt={currentFile?.name || '압축 파일 이미지'}
-                            className="max-w-full max-h-full object-contain rounded shadow-lg block mx-auto select-none"
-                            style={{
-                              maxHeight: '80vh',
-                              maxWidth: '100%',
-                              transform: `scale(${archiveImgScale}) translate(${archiveImgOffset.x / archiveImgScale}px, ${archiveImgOffset.y / archiveImgScale}px)`,
-                              cursor: archiveImgScale > 1 ? (archiveIsPanning ? 'grabbing' : 'grab') : 'default',
-                              transition: archiveIsPanning ? 'none' : 'transform 0.2s',
-                            }}
-                            draggable={false}
-                            ref={archiveImgRef}
-                            onMouseDown={(e) => {
-                              e.stopPropagation();
-                              handleArchiveImgMouseDown(e);
-                            }}
-                            onMouseMove={(e) => {
-                              e.stopPropagation();
-                              handleArchiveImgMouseMove(e);
-                            }}
-                            onMouseUp={(e) => {
-                              e.stopPropagation();
-                              handleArchiveImgMouseUp();
-                            }}
-                            onMouseLeave={(e) => {
-                              e.stopPropagation();
-                              handleArchiveImgMouseUp();
-                            }}
-                          />
+                          <div className="flex flex-col items-center w-full">
+                            <img
+                              src={currentArchiveDataUrl}
+                              alt={currentFile?.name || '압축 파일 이미지'}
+                              className="max-w-full max-h-full object-contain rounded shadow-lg block mx-auto select-none"
+                              style={{
+                                maxHeight: '80vh',
+                                maxWidth: '100%',
+                                transform: `scale(${archiveImgScale}) translate(${archiveImgOffset.x / archiveImgScale}px, ${archiveImgOffset.y / archiveImgScale}px) rotate(${archiveImgRotation}deg)`,
+                                cursor: archiveImgScale > 1 ? (archiveIsPanning ? 'grabbing' : 'grab') : 'default',
+                                transition: archiveIsPanning ? 'none' : 'transform 0.2s',
+                              }}
+                              draggable={false}
+                              ref={archiveImgRef}
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                                handleArchiveImgMouseDown(e);
+                              }}
+                              onMouseMove={(e) => {
+                                e.stopPropagation();
+                                handleArchiveImgMouseMove(e);
+                              }}
+                              onMouseUp={(e) => {
+                                e.stopPropagation();
+                                handleArchiveImgMouseUp();
+                              }}
+                              onMouseLeave={(e) => {
+                                e.stopPropagation();
+                                handleArchiveImgMouseUp();
+                              }}
+                            />
+                          </div>
                         ) : (
                           <div className="text-discord-muted">이미지를 로드할 수 없습니다.</div>
                         )
