@@ -1,20 +1,21 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import { NewCategory, CategoryUpdate, NewRecord, ElectronAPI } from '../types.d';
 
 // API 정의
-const electronAPI = {
-  getTables: () => ipcRenderer.invoke('getTables'),
-  getTableData: (tableName: string) => ipcRenderer.invoke('getTableData', tableName),
-  getDbPath: () => ipcRenderer.invoke('getDbPath'),
-  openDbFile: () => ipcRenderer.invoke('openDbFile'),
+const api: ElectronAPI = {
+  getTables: () => ipcRenderer.invoke('db:getTables'),
+  getTableData: (tableName: string) => ipcRenderer.invoke('db:getTableData', tableName),
+  getDbPath: () => ipcRenderer.invoke('db:getPath'),
+  openDbFile: () => ipcRenderer.invoke('db:openFile'),
   getCategories: () => ipcRenderer.invoke('db:getCategories'),
   getRecords: (categoryId: string) => ipcRenderer.invoke('db:getRecords', categoryId),
-  addCategory: (category: any) => ipcRenderer.invoke('db:addCategory', category),
-  updateCategory: (id: string, category: any) => ipcRenderer.invoke('db:updateCategory', id, category),
+  addCategory: (category: NewCategory) => ipcRenderer.invoke('db:addCategory', category),
+  updateCategory: (id: string, updates: CategoryUpdate) => ipcRenderer.invoke('db:updateCategory', id, updates),
   deleteCategory: (id: string) => ipcRenderer.invoke('db:deleteCategory', id),
-  addRecord: (record: any) => ipcRenderer.invoke('addRecord', record),
-  updateRecord: (id: string, data: any) => ipcRenderer.invoke('updateRecord', id, data),
-  deleteRecord: (categoryId: string, id: string) => ipcRenderer.invoke('deleteRecord', categoryId, id),
-  openExternal: (url: string) => ipcRenderer.invoke('openExternal', url),
+  addRecord: (record: NewRecord) => ipcRenderer.invoke('db:addRecord', record),
+  updateRecord: (id: string, data: Record<string, any>) => ipcRenderer.invoke('db:updateRecord', id, data),
+  deleteRecord: (id: string) => ipcRenderer.invoke('db:deleteRecord', id),
+  openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
   openFileDialog: () => ipcRenderer.invoke('openFileDialog'),
   send: (channel: string, ...args: any[]) => ipcRenderer.send(channel, ...args),
   openFile: (filePath: string) => ipcRenderer.invoke('openFile', filePath),
@@ -22,6 +23,8 @@ const electronAPI = {
   generateThumbnail: (filePath: string) => ipcRenderer.invoke('generateThumbnail', filePath),
   getThumbnailDataUrl: (filePath: string) => ipcRenderer.invoke('getThumbnailDataUrl', filePath),
   getFileDataUrl: (filePath: string) => ipcRenderer.invoke('getFileDataUrl', filePath),
+  getVideoBlobUrl: (filePath: string) => ipcRenderer.invoke('getVideoBlobUrl', filePath),
+  getVideoStream: (filePath: string) => ipcRenderer.invoke('getVideoStream', filePath),
   getArchiveFiles: (filePath: string) => ipcRenderer.invoke('getArchiveFiles', filePath),
   getArchiveFileDataUrl: (filePath: string, fileName: string) => ipcRenderer.invoke('getArchiveFileDataUrl', filePath, fileName),
   getArchiveFileText: (filePath: string, fileName: string) => ipcRenderer.invoke('getArchiveFileText', filePath, fileName),
@@ -31,13 +34,13 @@ const electronAPI = {
   setDbPath: () => ipcRenderer.invoke('setDbPath'),
   setBackupDir: () => ipcRenderer.invoke('setBackupDir'),
   setBackupInterval: (minutes: number) => ipcRenderer.invoke('setBackupInterval', minutes),
-  checkDuplicate: (categoryId: string, fieldId: string, value: any, recordId?: string) => ipcRenderer.invoke('checkDuplicate', categoryId, fieldId, value, recordId),
+  checkDuplicate: (categoryId: string, fieldId: string, value: any, recordId?: string) => ipcRenderer.invoke('db:checkDuplicate', categoryId, fieldId, value, recordId),
   getAppRoot: () => ipcRenderer.invoke('getAppRoot'),
   getFileType: (filePath: string) => ipcRenderer.invoke('db:getFileType', filePath),
+  getFileSize: (filePath: string) => ipcRenderer.invoke('getFileSize', filePath),
+  getVideoServerPort: () => ipcRenderer.invoke('getVideoServerPort'),
+  deleteThumbnail: (filePath: string) => ipcRenderer.invoke('deleteThumbnail', filePath),
 } as const;
 
 // API를 window 객체에 노출
-contextBridge.exposeInMainWorld('electronAPI', electronAPI);
-
-// TypeScript 타입 체크를 위한 export
-export type ElectronAPI = typeof electronAPI; 
+contextBridge.exposeInMainWorld('electronAPI', api); 

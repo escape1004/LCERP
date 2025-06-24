@@ -7,6 +7,57 @@ import { toast } from './ui/use-toast';
 import { ViewerModal } from './ViewerModal';
 import { format } from "date-fns";
 
+// 해시태그 파싱 유틸리티 함수
+const parseHashtags = (text: string): { hashtags: string[]; plainText: string } => {
+  const hashtagRegex = /#(\S+)/g;
+  const hashtags: string[] = [];
+  let match;
+  
+  // 해시태그 추출
+  while ((match = hashtagRegex.exec(text)) !== null) {
+    hashtags.push(match[1]);
+  }
+  
+  // 해시태그를 제거한 일반 텍스트
+  const plainText = text.replace(hashtagRegex, '').trim();
+  
+  return { hashtags, plainText };
+};
+
+// 해시태그를 태그로 변환하는 함수
+const renderTextWithHashtags = (text: string) => {
+  const hashtagRegex = /#(\S+)/g;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+  
+  while ((match = hashtagRegex.exec(text)) !== null) {
+    // 해시태그 이전 텍스트
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    
+    // 해시태그를 태그로 변환
+    parts.push(
+      <span
+        key={match.index}
+        className="inline-block px-2 py-0.5 text-xs rounded bg-gray-600/20 text-gray-400 mr-1"
+      >
+        #{match[1]}
+      </span>
+    );
+    
+    lastIndex = match.index + match[0].length;
+  }
+  
+  // 마지막 해시태그 이후 텍스트
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+  
+  return parts;
+};
+
 // 전역 이벤트 타입 정의
 declare global {
   interface WindowEventMap {
@@ -91,6 +142,18 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
           setFileExists(exists);
           if (!exists) {
             toast({ title: '원본 파일이 존재하지 않습니다.', variant: 'destructive' });
+            // 파일이 존재하지 않으면 썸네일도 삭제
+            window.electronAPI.deleteThumbnail(filePath).then(deleted => {
+              if (deleted) {
+                console.log('썸네일이 삭제되었습니다:', filePath);
+                // 전역 이벤트 발생 - 레코드 리스트의 썸네일도 업데이트
+                window.dispatchEvent(new CustomEvent('thumbnail:regenerated', {
+                  detail: { filePath }
+                }));
+              }
+            }).catch(error => {
+              console.error('썸네일 삭제 실패:', error);
+            });
           }
         }
       });
@@ -265,12 +328,21 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         return String(value);
       
       case 'text':
-      case 'longtext':
+      case 'longtext': {
+        const strValue = String(value);
+        const { hashtags, plainText } = parseHashtags(strValue);
+        
+        // URL 자동 감지 및 렌더링
+        if (urlPattern.test(strValue)) {
+          return renderUrl(strValue);
+        }
+        
         return (
           <div className="whitespace-pre-wrap text-discord-text break-words overflow-wrap-anywhere">
-            {String(value)}
+            {renderTextWithHashtags(strValue)}
           </div>
         );
+      }
       
       case 'date': {
         if (typeof value === 'string' && /^\d{4}-\d{2}$/.test(value)) {

@@ -25,11 +25,17 @@ export interface ElectronAPI {
   generateThumbnail: (filePath: string) => Promise<string | null>;
   getThumbnailDataUrl: (filePath: string) => Promise<string | null>;
   getFileDataUrl: (filePath: string) => Promise<string | null>;
+  getVideoStream: (filePath: string) => Promise<string | null>;
   getArchiveFiles: (filePath: string) => Promise<Array<{ name: string; size: number; isDirectory: boolean; comment: string }>>;
   getArchiveFileDataUrl: (filePath: string, fileName: string) => Promise<string | null>;
   getArchiveFileText: (filePath: string, fileName: string) => Promise<string | null>;
   openFileDialog: () => Promise<{ canceled: boolean; filePaths?: string[] }>;
   getFileType: (filePath: string) => Promise<'image' | 'video' | 'archive' | 'other'>;
+  getAppRoot: () => Promise<string>;
+  getVideoBlobUrl: (filePath: string) => Promise<{ base64: string; mimeType: string } | null>;
+  getVideoServerPort: () => Promise<number>;
+  getFileSize: (filePath: string) => Promise<{ success: boolean; size?: string; error?: string }>;
+  deleteThumbnail: (filePath: string) => Promise<boolean>;
 }
 
 declare global {

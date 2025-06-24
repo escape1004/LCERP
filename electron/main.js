@@ -6,6 +6,8 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { generateThumbnail } = require('../dist/lib/fileHandler');
 const unzipper = require('unzipper');
+const url = require('url');
+const http = require('http');
 
 // 로그 파일 설정
 const logPath = path.join(app.getPath('userData'), 'app.log');
@@ -80,13 +82,14 @@ function createWindow() {
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          "default-src 'self' 'unsafe-inline' data:;",
-          "script-src 'self' 'unsafe-inline' 'unsafe-eval';",
-          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;",
-          "img-src 'self' data: https:;",
-          "font-src 'self' data: https://fonts.gstatic.com;",
+          "default-src 'self' 'unsafe-inline' data: localvideo: http://localhost:17345; " +
+          "media-src 'self' data: localvideo: http://localhost:17345; " +
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+          "img-src 'self' data: https:; " +
+          "font-src 'self' data: https://fonts.gstatic.com; " +
           "connect-src 'self' ws: wss:;"
-        ].join(' ')
+        ]
       }
     });
   });
@@ -173,10 +176,120 @@ function initializeDatabase() {
   }
 }
 
+let videoServerPort = 17345;
+globalThis.videoServerPort = videoServerPort;
+function startVideoHttpServer() {
+  const server = http.createServer((req, res) => {
+    const urlObj = new URL(req.url, `http://localhost:${videoServerPort}`);
+    if (urlObj.pathname === '/video') {
+      let filePath = decodeURIComponent(urlObj.searchParams.get('path') || '');
+      let resolvedPath = filePath;
+      if (!path.isAbsolute(filePath)) {
+        resolvedPath = path.join(appDataDir, filePath);
+      }
+      const ext = path.extname(resolvedPath).toLowerCase();
+      const isVideo = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'].includes(ext);
+      if (!isVideo || !fs.existsSync(resolvedPath)) {
+        res.writeHead(404);
+        res.end('Not found');
+        return;
+      }
+      // Range 헤더 지원
+      const stat = fs.statSync(resolvedPath);
+      const fileSize = stat.size;
+      const range = req.headers.range;
+      const mimeTypes = {
+        '.mp4': 'video/mp4',
+        '.webm': 'video/webm',
+        '.ogg': 'video/ogg',
+        '.avi': 'video/x-msvideo',
+        '.mkv': 'video/x-matroska',
+        '.mov': 'video/quicktime',
+        '.wmv': 'video/x-ms-wmv',
+        '.flv': 'video/x-flv'
+      };
+      const mimeType = mimeTypes[ext] || 'application/octet-stream';
+      if (range) {
+        const parts = range.replace(/bytes=/, '').split('-');
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        const chunkSize = (end - start) + 1;
+        const file = fs.createReadStream(resolvedPath, { start, end });
+        res.writeHead(206, {
+          'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+          'Accept-Ranges': 'bytes',
+          'Content-Length': chunkSize,
+          'Content-Type': mimeType
+        });
+        file.pipe(res);
+      } else {
+        res.writeHead(200, {
+          'Content-Length': fileSize,
+          'Content-Type': mimeType
+        });
+        fs.createReadStream(resolvedPath).pipe(res);
+      }
+    } else {
+      res.writeHead(404);
+      res.end('Not found');
+    }
+  });
+  server.listen(videoServerPort, () => {
+    globalThis.videoServerPort = videoServerPort;
+  });
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      videoServerPort++;
+      startVideoHttpServer();
+    } else {
+      throw err;
+    }
+  });
+}
+
 app.whenReady().then(() => {
   registerProtocol();
   initializeDatabase();
   createWindow();
+  startVideoHttpServer();
+
+  // 동영상 스트리밍용 커스텀 프로토콜 등록
+  protocol.registerStreamProtocol('localvideo', (request, callback) => {
+    try {
+      const parsedUrl = new URL(request.url);
+      const filePath = decodeURIComponent(parsedUrl.searchParams.get('path') || '');
+      let resolvedPath = filePath;
+      if (!path.isAbsolute(filePath)) {
+        resolvedPath = path.join(appDataDir, filePath);
+      }
+      const ext = path.extname(resolvedPath).toLowerCase();
+      const isVideo = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'].includes(ext);
+
+      if (!isVideo || !fs.existsSync(resolvedPath)) {
+        callback({ statusCode: 404 });
+        return;
+      }
+      // 확장자별 MIME 타입 매핑
+      const mimeTypes = {
+        '.mp4': 'video/mp4',
+        '.webm': 'video/webm',
+        '.ogg': 'video/ogg',
+        '.avi': 'video/x-msvideo',
+        '.mkv': 'video/x-matroska',
+        '.mov': 'video/quicktime',
+        '.wmv': 'video/x-ms-wmv',
+        '.flv': 'video/x-flv'
+      };
+      const mimeType = mimeTypes[ext] || 'application/octet-stream';
+      callback({
+        statusCode: 200,
+        headers: { 'Content-Type': mimeType },
+        data: fs.createReadStream(resolvedPath)
+      });
+    } catch (e) {
+      callback({ statusCode: 500 });
+    }
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -356,11 +469,11 @@ ipcMain.handle('db:getCategories', async () => {
   }
 });
 
-ipcMain.handle('getTables', () => {
+ipcMain.handle('db:getTables', () => {
   return db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
 });
 
-ipcMain.handle('getTableData', (event, tableName) => {
+ipcMain.handle('db:getTableData', (event, tableName) => {
   const validTables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
   if (!validTables.some(t => t.name === tableName)) {
     throw new Error('Invalid table name');
@@ -411,246 +524,7 @@ ipcMain.handle('db:addCategory', async (_, category) => {
   }
 });
 
-ipcMain.handle('db:updateCategory', (_, id, updates) => {
-  const stmt = db.prepare(`
-    UPDATE categories
-    SET name = ?, parentId = ?, fields = ?, order_num = ?, updatedAt = ?
-    WHERE id = ?
-  `);
-  stmt.run(
-    updates.name,
-    updates.parentId || null,
-    JSON.stringify(updates.fields),
-    updates.order_num,
-    new Date().toISOString(),
-    id
-  );
-});
-
-ipcMain.handle('db:deleteCategory', async (_, id) => {
-  const relationCleanupCount = cleanupRelationReferences(id);
-  const childCategories = db.prepare('SELECT id FROM categories WHERE parentId = ?').all(id);
-  let totalThumbnailCount = 0;
-  
-  childCategories.forEach(child => {
-    totalThumbnailCount += cleanupThumbnailsForCategory(child.id);
-  });
-  
-  totalThumbnailCount += cleanupThumbnailsForCategory(id);
-  
-  db.prepare('DELETE FROM categories WHERE parentId = ?').run(id);
-  db.prepare('DELETE FROM records WHERE categoryId = ?').run(id);
-  db.prepare('DELETE FROM categories WHERE id = ?').run(id);
-  
-  return {
-    success: true,
-    thumbnailCleanupCount: totalThumbnailCount,
-    relationCleanupCount: relationCleanupCount
-  };
-});
-
-ipcMain.handle('db:getRecords', async (_, categoryId) => {
-  try {
-    if (!categoryId) throw new Error('Category ID is required');
-    const records = db.prepare('SELECT * FROM records WHERE categoryId = ? ORDER BY createdAt DESC').all(categoryId);
-    return records.map(record => ({
-      ...record,
-      data: JSON.parse(record.data)
-    }));
-  } catch (error) {
-    log('Error getting records:', error);
-    throw error;
-  }
-});
-
-ipcMain.handle('addRecord', async (_, record) => {
-  try {
-    if (!record || typeof record !== 'object') {
-      throw new Error('Record must be an object');
-    }
-
-    if (!record.categoryId || !record.data) {
-      throw new Error('Missing required fields');
-    }
-
-    await checkDuplicateFields(record.categoryId, record.data);
-
-    const recordId = record.id || crypto.randomUUID();
-
-    const stmt = db.prepare(`
-      INSERT INTO records (id, categoryId, data, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?)
-    `);
-    
-    const now = new Date().toISOString();
-    stmt.run(
-      recordId,
-      record.categoryId,
-      JSON.stringify(record.data),
-      record.createdAt || now,
-      record.updatedAt || now
-    );
-
-    // 파일 필드가 있으면 썸네일 자동 생성
-    try {
-      const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(record.categoryId);
-      if (category) {
-        const fields = JSON.parse(category.fields);
-        const fileField = fields.find(f => f.type === 'file');
-        if (fileField && record.data[fileField.id]) {
-          const filePath = record.data[fileField.id];
-          log('레코드 생성 시 썸네일 생성 시작:', filePath);
-          
-          // 직접 썸네일 생성 로직 구현
-          let normalizedPath = filePath;
-          if (!path.isAbsolute(filePath)) {
-            // appDataDir 사용
-            normalizedPath = path.join(appDataDir, filePath);
-          }
-          
-          if (fs.existsSync(normalizedPath)) {
-            const sharp = require('sharp');
-            const ffmpeg = require('fluent-ffmpeg');
-            const AdmZip = require('adm-zip');
-            const ffmpegStatic = require('ffmpeg-static');
-            
-            // ffmpeg 경로 설정 - 빌드된 버전에서는 app.asar.unpacked 내부 경로 사용
-            let ffmpegPath = ffmpegStatic;
-            
-            // 빌드된 앱에서 ffmpeg 경로 찾기
-            if (!isDev && !isPreview) {
-              // 1. app.asar.unpacked 내부의 ffmpeg-static 경로 시도
-              const unpackedPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffmpeg-static');
-              if (fs.existsSync(unpackedPath)) {
-                const ffmpegBinPath = path.join(unpackedPath, 'ffmpeg.exe');
-                if (fs.existsSync(ffmpegBinPath)) {
-                  ffmpegPath = ffmpegBinPath;
-                  log('빌드된 앱에서 ffmpeg 경로 찾음 (asarUnpack):', ffmpegPath);
-                }
-              }
-              
-              // 2. extraResources 경로 시도
-              if (!fs.existsSync(ffmpegPath)) {
-                const extraResourcePath = path.join(process.resourcesPath, 'ffmpeg-static');
-                if (fs.existsSync(extraResourcePath)) {
-                  const ffmpegBinPath = path.join(extraResourcePath, 'ffmpeg.exe');
-                  if (fs.existsSync(ffmpegBinPath)) {
-                    ffmpegPath = ffmpegBinPath;
-                    log('빌드된 앱에서 ffmpeg 경로 찾음 (extraResources):', ffmpegPath);
-                  }
-                }
-              }
-            }
-            
-            if (ffmpegPath && fs.existsSync(ffmpegPath)) {
-              ffmpeg.setFfmpegPath(ffmpegPath);
-              log('ffmpeg 경로 설정됨:', ffmpegPath);
-            } else {
-              log('ffmpeg-static 경로를 찾을 수 없음:', ffmpegPath);
-              // ffmpeg를 찾을 수 없는 경우 썸네일 생성 실패
-              return null;
-            }
-            
-            const ext = path.extname(normalizedPath).toLowerCase();
-            const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext);
-            const isVideo = ['.mp4', '.avi', '.mkv', '.mov'].includes(ext);
-            const isArchive = ['.zip', '.7z'].includes(ext);
-            
-            if (isImage || isVideo || isArchive) {
-              const thumbnailDir = path.join(appDataDir, 'thumbnails');
-              if (!fs.existsSync(thumbnailDir)) {
-                fs.mkdirSync(thumbnailDir, { recursive: true });
-                log('썸네일 디렉토리 생성됨:', thumbnailDir);
-              }
-              
-              const hash = getThumbnailHash(normalizedPath);
-              const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
-              
-              log('썸네일 생성 시작:', { filePath: normalizedPath, thumbnailPath, fileType: isImage ? 'image' : isVideo ? 'video' : 'archive' });
-              
-              if (isImage) {
-                await sharp(normalizedPath)
-                  .resize(400, 400, { fit: 'contain' })
-                  .toFile(thumbnailPath);
-                log('이미지 썸네일 생성 완료:', thumbnailPath);
-              } else if (isVideo) {
-                await new Promise((resolve, reject) => {
-                  ffmpeg(normalizedPath)
-                    .screenshots({
-                      timestamps: ['00:00:01'],
-                      filename: path.basename(thumbnailPath),
-                      folder: thumbnailDir,
-                      size: '400x400'
-                    })
-                    .on('end', () => {
-                      log('비디오 썸네일 생성 완료:', thumbnailPath);
-                      resolve();
-                    })
-                    .on('error', (err) => {
-                      log('비디오 썸네일 생성 실패:', err);
-                      reject(err);
-                    });
-                });
-              } else if (isArchive) {
-                // 스트리밍 방식으로 첫 이미지 추출
-                let found = false;
-                await new Promise((resolve, reject) => {
-                  fs.createReadStream(normalizedPath)
-                    .pipe(unzipper.Parse())
-                    .on('entry', async function (entry) {
-                      const fileName = entry.path;
-                      if (/\.(jpg|jpeg|png|gif|webp)$/i.test(fileName) && !found) {
-                        found = true;
-                        const chunks = [];
-                        entry.on('data', chunk => chunks.push(chunk));
-                        entry.on('end', async () => {
-                          const buffer = Buffer.concat(chunks);
-                          try {
-                            await sharp(buffer)
-                              .resize(400, 400, { fit: 'contain' })
-                              .toFile(thumbnailPath);
-                            log('아카이브 썸네일 생성 완료:', thumbnailPath);
-                            resolve();
-                          } catch (err) {
-                            log('아카이브 썸네일 생성 실패:', err);
-                            reject(err);
-                          }
-                        });
-                      } else {
-                        entry.autodrain();
-                      }
-                    })
-                    .on('close', () => {
-                      if (!found) {
-                        log('아카이브에서 이미지를 찾을 수 없음');
-                        resolve();
-                      }
-                    })
-                    .on('error', (err) => {
-                      log('아카이브 처리 실패:', err);
-                      reject(err);
-                    });
-                });
-                if (!found) return null;
-              }
-            }
-          } else {
-            log('레코드 생성 시 파일이 존재하지 않음:', normalizedPath);
-          }
-        }
-      }
-    } catch (thumbnailError) {
-      log('Error generating thumbnail for new record:', thumbnailError);
-    }
-
-    return recordId;
-  } catch (error) {
-    log('Error in addRecord:', error);
-    throw error;
-  }
-});
-
-ipcMain.handle('updateRecord', async (_, id, data) => {
+async function handleUpdateRecord(_, id, data) {
   try {
     const record = db.prepare('SELECT categoryId FROM records WHERE id = ?').get(id);
     if (!record) {
@@ -816,38 +690,90 @@ ipcMain.handle('updateRecord', async (_, id, data) => {
     } catch (thumbnailError) {
       log('Error generating thumbnail for updated record:', thumbnailError);
     }
+    return { success: true };
   } catch (error) {
     log('Error in updateRecord:', error);
     throw error;
   }
+}
+ipcMain.handle('updateRecord', handleUpdateRecord);
+ipcMain.handle('db:updateRecord', handleUpdateRecord);
+
+ipcMain.handle('db:deleteCategory', async (_, id) => {
+  const relationCleanupCount = cleanupRelationReferences(id);
+  const childCategories = db.prepare('SELECT id FROM categories WHERE parentId = ?').all(id);
+  let totalThumbnailCount = 0;
+  
+  childCategories.forEach(child => {
+    totalThumbnailCount += cleanupThumbnailsForCategory(child.id);
+  });
+  
+  totalThumbnailCount += cleanupThumbnailsForCategory(id);
+  
+  db.prepare('DELETE FROM categories WHERE parentId = ?').run(id);
+  db.prepare('DELETE FROM records WHERE categoryId = ?').run(id);
+  db.prepare('DELETE FROM categories WHERE id = ?').run(id);
+  
+  return {
+    success: true,
+    thumbnailCleanupCount: totalThumbnailCount,
+    relationCleanupCount: relationCleanupCount
+  };
 });
 
-ipcMain.handle('deleteRecord', async (_, id) => {
+ipcMain.handle('db:getRecords', async (_, categoryId) => {
+  try {
+    if (!categoryId) throw new Error('Category ID is required');
+    const records = db.prepare('SELECT * FROM records WHERE categoryId = ? ORDER BY createdAt DESC').all(categoryId);
+    return records.map(record => ({
+      ...record,
+      data: JSON.parse(record.data)
+    }));
+  } catch (error) {
+    log('Error getting records:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('db:addRecord', async (_, record) => {
+  try {
+    if (!record || typeof record !== 'object') {
+      throw new Error('Record must be an object');
+    }
+    if (!record.categoryId || !record.data) {
+      throw new Error('Missing required fields');
+    }
+    await checkDuplicateFields(record.categoryId, record.data);
+    const recordId = record.id || crypto.randomUUID();
+    const stmt = db.prepare(`
+      INSERT INTO records (id, categoryId, data, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    const now = new Date().toISOString();
+    stmt.run(
+      recordId,
+      record.categoryId,
+      JSON.stringify(record.data),
+      record.createdAt || now,
+      record.updatedAt || now
+    );
+    // 썸네일 생성 등 부가 로직 필요시 추가
+    return recordId;
+  } catch (error) {
+    log('Error in addRecord:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('db:deleteRecord', async (_, id) => {
   try {
     const record = db.prepare('SELECT categoryId, data FROM records WHERE id = ?').get(id);
     if (!record) {
       throw new Error('Record not found');
     }
-    
-    let thumbnailDeleted = false;
-    try {
-      const data = JSON.parse(record.data);
-      const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(record.categoryId);
-      if (category) {
-        const fields = JSON.parse(category.fields);
-        const fileField = fields.find(f => f.type === 'file');
-        
-        if (fileField && data[fileField.id]) {
-          thumbnailDeleted = deleteThumbnail(data[fileField.id]);
-        }
-      }
-    } catch (error) {
-      log('썸네일 정리 중 오류:', error);
-    }
-    
+    // 썸네일 삭제 등 부가 로직 필요시 추가
     db.prepare('DELETE FROM records WHERE id = ?').run(id);
-    
-    return { success: true, thumbnailDeleted };
+    return { success: true };
   } catch (error) {
     log('Error in deleteRecord:', error);
     throw error;
@@ -1178,17 +1104,57 @@ ipcMain.handle('db:getFileType', async (_, filePath) => {
 ipcMain.handle('getFileDataUrl', async (_, filePath) => {
   try {
     if (!fs.existsSync(filePath)) return null;
-    const data = fs.readFileSync(filePath);
+    
     const ext = path.extname(filePath).toLowerCase();
+    const isVideo = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'].includes(ext);
+    
+    // 동영상 파일이고 크기가 50MB 이상인 경우 스트리밍 방식 사용
+    if (isVideo) {
+      const stats = fs.statSync(filePath);
+      const fileSizeInMB = stats.size / (1024 * 1024);
+      
+      if (fileSizeInMB > 50) {
+        log('대용량 동영상 파일 감지, 스트리밍 방식 사용:', { filePath, sizeMB: fileSizeInMB });
+        return 'stream'; // 스트리밍 방식 사용을 나타내는 특별한 값
+      }
+    }
+    
+    // 일반 파일 처리
+    const data = fs.readFileSync(filePath);
     let mimeType = 'application/octet-stream';
     if (['.jpg', '.jpeg'].includes(ext)) mimeType = 'image/jpeg';
     else if (ext === '.png') mimeType = 'image/png';
     else if (ext === '.gif') mimeType = 'image/gif';
     else if (ext === '.webp') mimeType = 'image/webp';
-    else if (['.mp4', '.avi', '.mkv', '.mov'].includes(ext)) mimeType = `video/${ext.slice(1)}`;
+    else if (isVideo) mimeType = `video/${ext.slice(1)}`;
     return `data:${mimeType};base64,${data.toString('base64')}`;
   } catch (e) {
     log('Error in getFileDataUrl:', e);
+    return null;
+  }
+});
+
+// getVideoBlobUrl 핸들러 (대용량 동영상 Blob 방식)
+ipcMain.handle('getVideoBlobUrl', async (_, filePath) => {
+  try {
+    if (!fs.existsSync(filePath)) return null;
+    const ext = path.extname(filePath).toLowerCase();
+    const isVideo = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'].includes(ext);
+    if (!isVideo) return null;
+    const stats = fs.statSync(filePath);
+    const fileSizeInMB = stats.size / (1024 * 1024);
+    // 50MB 이상만 Blob 방식으로 처리
+    if (fileSizeInMB > 50) {
+      const data = fs.readFileSync(filePath);
+      // base64 인코딩
+      return {
+        base64: data.toString('base64'),
+        mimeType: `video/${ext.slice(1)}`
+      };
+    }
+    return null;
+  } catch (e) {
+    log('Error in getVideoBlobUrl:', e);
     return null;
   }
 });
@@ -1325,5 +1291,58 @@ ipcMain.handle('getArchiveFileText', async (_, filePath, fileName) => {
   } catch (e) {
     log('[압축 파일 텍스트 읽기 에러]', e);
     return null;
+  }
+});
+
+ipcMain.handle('db:updateCategory', (event, id, updates) => {
+  const stmt = db.prepare(`
+    UPDATE categories
+    SET name = ?, parentId = ?, fields = ?, order_num = ?, updatedAt = ?
+    WHERE id = ?
+  `);
+  stmt.run(
+    updates.name,
+    updates.parentId || null,
+    JSON.stringify(updates.fields),
+    updates.order_num,
+    new Date().toISOString(),
+    id
+  );
+  return { success: true };
+});
+
+ipcMain.handle('getVideoServerPort', () => {
+  return globalThis.videoServerPort;
+});
+
+ipcMain.handle('getFileSize', async (_, filePath) => {
+  try {
+    if (!fs.existsSync(filePath)) {
+      return { success: false, error: 'File not found' };
+    }
+    const stats = fs.statSync(filePath);
+    const bytes = stats.size;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    const size = (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + sizes[i];
+    return { success: true, size };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+});
+
+// 썸네일 삭제 IPC 핸들러 등록
+ipcMain.handle('deleteThumbnail', async (_, filePath) => {
+  try {
+    const thumbnailDir = path.join(process.cwd(), 'save', 'thumbnails');
+    const hash = getThumbnailHash(filePath);
+    const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
+    if (fs.existsSync(thumbnailPath)) {
+      fs.unlinkSync(thumbnailPath);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    return false;
   }
 });

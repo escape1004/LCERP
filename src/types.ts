@@ -63,10 +63,4 @@ export interface TableData {
   columns: string[];
   rows: any[];
   total: number;
-}
-
-declare global {
-  interface Window {
-    electronAPI: ElectronAPI;
-  }
 } 

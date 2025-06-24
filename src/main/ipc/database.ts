@@ -1,7 +1,8 @@
 import { ipcMain, shell, app, dialog } from 'electron';
-import { Database } from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
+
+const Database = require('better-sqlite3');
 
 // 설정 파일 경로
 const configPath = path.join(app.getPath('userData'), 'config.json');

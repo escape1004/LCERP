@@ -13,6 +13,7 @@ const api = {
   getConfig: () => ipcRenderer.invoke('db:getConfig'),
   setBackupInterval: (minutes: number) => ipcRenderer.invoke('db:setBackupInterval', minutes),
   send: (channel: string, ...args: any[]) => ipcRenderer.send(channel, ...args),
+  deleteThumbnail: (filePath: string) => ipcRenderer.invoke('deleteThumbnail', filePath),
 };
 
 // API를 window 객체에 노출

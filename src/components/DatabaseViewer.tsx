@@ -28,6 +28,7 @@ export const DatabaseViewer: React.FC = () => {
   const [dbPath, setDbPath] = useState<string>('');
   const [config, setConfig] = useState<Config | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [fileSize, setFileSize] = useState<string>('');
   const { toast } = useToast();
   const { selectCategory } = useERPStore();
 
@@ -123,8 +124,25 @@ export const DatabaseViewer: React.FC = () => {
         backupDir: config.backupDir,
         backupInterval: String(Math.max(1, config.backupInterval)),
       });
+      
+      // 파일 용량 가져오기
+      await loadFileSize(config.dbPath);
     } catch (error) {
       handleApiError(error, '설정을 불러오는데 실패했습니다.');
+    }
+  };
+
+  const loadFileSize = async (filePath: string) => {
+    try {
+      const result = await window.electronAPI.getFileSize(filePath);
+      if (result.success) {
+        setFileSize(result.size);
+      } else {
+        setFileSize('');
+      }
+    } catch (error) {
+      // 파일 용량 가져오기 실패는 무시
+      setFileSize('');
     }
   };
 
@@ -190,7 +208,14 @@ export const DatabaseViewer: React.FC = () => {
       {/* Header */}
       <div className="shrink-0 p-6 space-y-4 border-b border-gray-700">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">데이터베이스 뷰어</h1>
+          <div className="flex items-end">
+            <h1 className="text-xl font-bold text-discord-text">데이터베이스</h1>
+            {fileSize && (
+              <span className="ml-2 text-sm text-discord-muted flex items-center">
+                ({fileSize})
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <Button 
               variant="outline" 

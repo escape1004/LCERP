@@ -24,10 +24,62 @@ import { AlertDialog } from './ui/alert-dialog';
 import { CategoryModal } from './CategoryModal';
 import { format } from "date-fns";
 
-// Custom event type
+// 해시태그 파싱 유틸리티 함수
+const parseHashtags = (text: string): { hashtags: string[]; plainText: string } => {
+  const hashtagRegex = /#(\S+)/g;
+  const hashtags: string[] = [];
+  let match;
+  
+  // 해시태그 추출
+  while ((match = hashtagRegex.exec(text)) !== null) {
+    hashtags.push(match[1]);
+  }
+  
+  // 해시태그를 제거한 일반 텍스트
+  const plainText = text.replace(hashtagRegex, '').trim();
+  
+  return { hashtags, plainText };
+};
+
+// 해시태그를 태그로 변환하는 함수
+const renderTextWithHashtags = (text: string) => {
+  const hashtagRegex = /#(\S+)/g;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+  
+  while ((match = hashtagRegex.exec(text)) !== null) {
+    // 해시태그 이전 텍스트
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    
+    // 해시태그를 태그로 변환
+    parts.push(
+      <span
+        key={match.index}
+        className="inline-block px-2 py-0.5 text-xs rounded bg-gray-600/20 text-gray-400 mr-1"
+      >
+        #{match[1]}
+      </span>
+    );
+    
+    lastIndex = match.index + match[0].length;
+  }
+  
+  // 마지막 해시태그 이후 텍스트
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+  
+  return parts;
+};
+
+// 전역 이벤트 타입 정의
 declare global {
   interface WindowEventMap {
     'erp:categoryChange': CustomEvent<{ categoryId: string }>;
+    'thumbnail:regenerated': CustomEvent<{ filePath: string }>;
   }
 }
 
@@ -56,7 +108,7 @@ const CategoryBreadcrumb = React.memo(({
   const categoryPath = useMemo(() => getCategoryPath(category), [category, getCategoryPath]);
 
   return (
-    <div className="flex items-center gap-1 text-sm text-discord-muted">
+    <div className="flex items-center gap-1 text-sm text-discord-muted mt-1">
       {categoryPath.map((cat, index) => (
         <React.Fragment key={cat.id}>
           {index > 0 && <ChevronRight size={14} className="text-discord-muted" />}
@@ -64,7 +116,7 @@ const CategoryBreadcrumb = React.memo(({
             onClick={() => onCategoryClick(cat.id)}
             className={`hover:text-discord-text ${
               index === categoryPath.length - 1 
-                ? 'text-discord-text' 
+                ? 'text-discord-text font-semibold' 
                 : 'hover:underline'
             }`}
           >
@@ -84,6 +136,7 @@ const ThumbnailCell: React.FC<{
   onThumbnailClick: (filePath: string) => void;
 }> = ({ filePath, onThumbnailClick }) => {
   const [dataUrl, setDataUrl] = React.useState<string | null>(null);
+  
   React.useEffect(() => {
     let ignore = false;
     if (filePath) {
@@ -94,6 +147,25 @@ const ThumbnailCell: React.FC<{
       setDataUrl(null);
     }
     return () => { ignore = true; };
+  }, [filePath]);
+
+  // 썸네일 삭제 이벤트 감지하여 캐시 초기화
+  React.useEffect(() => {
+    const handleThumbnailRegenerated = (event: CustomEvent<{ filePath: string }>) => {
+      if (filePath && event.detail.filePath === filePath) {
+        // 해당 파일의 썸네일이 변경되었으므로 캐시 초기화
+        setDataUrl(null);
+        // 새로운 썸네일 데이터 다시 로드
+        window.electronAPI.getThumbnailDataUrl(filePath).then(res => {
+          setDataUrl(res);
+        });
+      }
+    };
+
+    window.addEventListener('thumbnail:regenerated', handleThumbnailRegenerated as EventListener);
+    return () => {
+      window.removeEventListener('thumbnail:regenerated', handleThumbnailRegenerated as EventListener);
+    };
   }, [filePath]);
 
   // 파일 확장자 추출
@@ -181,9 +253,8 @@ export const MainContent: React.FC = () => {
   useEffect(() => {
     setSearchField('all');
     setCurrentPage(1); // Reset pagination when category changes
-    if (sortField === '__refCount') {
-      setSortField('');
-    }
+    setSortField(''); // Reset sort field when category changes
+    setSortDirection('asc'); // Reset sort direction when category changes
   }, [selectedCategoryId, setCurrentPage]);
 
   // Load related records when category changes
@@ -233,6 +304,17 @@ export const MainContent: React.FC = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
+  }, [selectedCategoryId, loadRecords]);
+
+  // 썸네일 생성/삭제 시 레코드 리스트 강제 리로드
+  useEffect(() => {
+    const handler = () => {
+      if (selectedCategoryId) {
+        loadRecords(selectedCategoryId);
+      }
+    };
+    window.addEventListener('thumbnail:regenerated', handler);
+    return () => window.removeEventListener('thumbnail:regenerated', handler);
   }, [selectedCategoryId, loadRecords]);
 
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
@@ -468,19 +550,6 @@ export const MainContent: React.FC = () => {
     }
   };
 
-  const renderUrl = (url: string, maxLength: number) => (
-    <button
-      type="button"
-      onClick={(e) => handleUrlClick(e, url)}
-      className="text-discord-accent hover:underline flex items-center gap-1 text-left w-full"
-    >
-      <span className="truncate">
-        {url.length > maxLength ? url.substring(0, maxLength) + '...' : url}
-      </span>
-      <ExternalLink size={14} className="flex-shrink-0" />
-    </button>
-  );
-
   const formatFieldValue = (field: FieldDefinition, value: any, recordId: string) => {
     // 공통 빈 값 처리 함수
     const isEmptyValue = (val: any): boolean => {
@@ -505,9 +574,11 @@ export const MainContent: React.FC = () => {
       case 'text':
       case 'longtext': {
         const strValue = String(value);
+        const { hashtags, plainText } = parseHashtags(strValue);
+        
         return (
           <div className="text-discord-text truncate max-w-full" title={strValue}>
-            {strValue}
+            {renderTextWithHashtags(strValue)}
           </div>
         );
       }
@@ -1011,6 +1082,19 @@ export const MainContent: React.FC = () => {
   // 파일 필드 존재 여부
   const fileField = selectedCategorySafe?.fields.find(f => f.type === 'file');
 
+  const renderUrl = (url: string, maxLength: number) => (
+    <button
+      type="button"
+      onClick={(e) => handleUrlClick(e, url)}
+      className="text-discord-accent hover:underline flex items-center gap-1 text-left w-full"
+    >
+      <span className="truncate">
+        {url.length > maxLength ? url.substring(0, maxLength) + '...' : url}
+      </span>
+      <ExternalLink size={14} className="flex-shrink-0" />
+    </button>
+  );
+
   return (
     <div className="flex-1 h-full flex flex-col bg-discord-bg">
       {showDbViewer ? (
@@ -1023,26 +1107,36 @@ export const MainContent: React.FC = () => {
           <div className="shrink-0 p-6 border-b border-gray-700">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h1 className="text-xl font-bold text-discord-text">
-                  {selectedCategorySafe?.name}
+                <div className="flex items-end">
+                  <h1 className="text-xl font-bold text-discord-text">
+                    {selectedCategorySafe?.name}
+                  </h1>
                   {selectedCategorySafe?.parentId && (
-                    <span className="text-sm font-normal text-discord-muted ml-2">
+                    <span className="ml-2 text-sm text-discord-muted flex items-center">
                       (
-                      {getParentPath(selectedCategorySafe).map((cat, index, array) => (
-                        <React.Fragment key={cat.id}>
-                          <button
-                            onClick={() => handleCategoryClick(cat.id)}
-                            className="hover:text-discord-text hover:underline"
-                          >
-                            {cat.name}
-                          </button>
-                          {index < array.length - 1 && " > "}
-                        </React.Fragment>
-                      ))}
+                      {(() => {
+                        const parentPath = getParentPath(selectedCategorySafe);
+                        return (
+                          <>
+                            {parentPath.map((cat, idx) => (
+                              <React.Fragment key={cat.id}>
+                                <button
+                                  onClick={() => handleCategoryClick(cat.id)}
+                                  className="hover:text-discord-text hover:underline"
+                                >
+                                  {cat.name}
+                                </button>
+                                <ChevronRight size={14} className="mx-1 text-discord-muted" />
+                              </React.Fragment>
+                            ))}
+                            <span className="text-discord-muted font-semibold">{selectedCategorySafe.name}</span>
+                          </>
+                        );
+                      })()}
                       )
                     </span>
                   )}
-                </h1>
+                </div>
               </div>
               <div className="flex gap-3">
                 <div className="relative">

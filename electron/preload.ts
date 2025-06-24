@@ -44,6 +44,16 @@ const api: ElectronAPI = {
   getThumbnailDataUrl: (filePath: string) => ipcRenderer.invoke('getThumbnailDataUrl', filePath),
   openFileDialog: () => ipcRenderer.invoke('openFileDialog'),
   getAppRoot: () => ipcRenderer.invoke('getAppRoot'),
+  getFileDataUrl: (filePath: string) => ipcRenderer.invoke('getFileDataUrl', filePath),
+  getVideoStream: (filePath: string) => ipcRenderer.invoke('getVideoStream', filePath),
+  getArchiveFiles: (filePath: string) => ipcRenderer.invoke('getArchiveFiles', filePath),
+  getArchiveFileDataUrl: (filePath: string, fileName: string) => ipcRenderer.invoke('getArchiveFileDataUrl', filePath, fileName),
+  getArchiveFileText: (filePath: string, fileName: string) => ipcRenderer.invoke('getArchiveFileText', filePath, fileName),
+  getFileType: (filePath: string) => ipcRenderer.invoke('db:getFileType', filePath),
+  getVideoServerPort: () => ipcRenderer.invoke('getVideoServerPort'),
+  getVideoBlobUrl: (filePath: string) => ipcRenderer.invoke('getVideoBlobUrl', filePath),
+  getFileSize: (filePath: string) => ipcRenderer.invoke('getFileSize', filePath),
+  deleteThumbnail: (filePath: string) => ipcRenderer.invoke('deleteThumbnail', filePath),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api); 

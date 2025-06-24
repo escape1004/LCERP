@@ -1,13 +1,13 @@
 {
   "name": "local-erp",
   "private": true,
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Local ERP System for Business Management",
   "author": "Escape",
   "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && vite build --mode preload",
+    "build": "npm run build:main && vite build && vite build --mode preload",
     "build:dev": "tsc && vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
@@ -21,7 +21,8 @@
     "postinstall": "electron-builder install-app-deps",
     "preload:watch": "vite build --mode preload --watch",
     "build:lib": "tsc --project tsconfig.build.json",
-    "postbuild": "copy /Y \"dist\\preload.js\" \"electron\\preload.js\" && npm run build:lib"
+    "postbuild": "copy /Y \"dist\\preload.js\" \"electron\\preload.js\" && npm run build:lib",
+    "build:main": "tsc --project tsconfig.main.json"
   },
   "build": {
     "appId": "com.escape.local-erp",
@@ -151,6 +152,7 @@
     "@eslint/js": "^9.9.0",
     "@tailwindcss/typography": "^0.5.15",
     "@types/adm-zip": "^0.5.7",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/fluent-ffmpeg": "^2.1.27",
     "@types/node": "^22.5.5",
     "@types/react": "^18.3.3",

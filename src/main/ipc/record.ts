@@ -3,7 +3,8 @@ import { Database } from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import { generateThumbnail, getThumbnailHash } from '../../lib/fileHandler';
+
+const { generateThumbnail, getThumbnailHash } = require('../../lib/fileHandler');
 
 let db: Database;
 
@@ -24,17 +25,133 @@ const deleteThumbnail = (filePath: string) => {
   }
 };
 
+// 썸네일 생성 함수
+const generateThumbnailForFile = async (filePath: string) => {
+  try {
+    console.log('썸네일 생성 시작:', filePath);
+    
+    // 직접 썸네일 생성 로직 구현
+    let normalizedPath = filePath;
+    if (!path.isAbsolute(filePath)) {
+      normalizedPath = path.join(process.cwd(), 'save', filePath);
+    }
+    
+    if (!fs.existsSync(normalizedPath)) {
+      console.log('파일이 존재하지 않음:', normalizedPath);
+      return;
+    }
+    
+    const sharp = require('sharp');
+    const ffmpeg = require('fluent-ffmpeg');
+    const ffmpegStatic = require('ffmpeg-static');
+    
+    // ffmpeg 경로 설정
+    let ffmpegPath = ffmpegStatic;
+    if (ffmpegPath && fs.existsSync(ffmpegPath)) {
+      ffmpeg.setFfmpegPath(ffmpegPath);
+    }
+    
+    const ext = path.extname(normalizedPath).toLowerCase();
+    const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext);
+    const isVideo = ['.mp4', '.avi', '.mkv', '.mov'].includes(ext);
+    const isArchive = ['.zip', '.7z'].includes(ext);
+    
+    if (!isImage && !isVideo && !isArchive) {
+      console.log('지원하지 않는 파일 형식:', ext);
+      return;
+    }
+    
+    const thumbnailDir = path.join(process.cwd(), 'save', 'thumbnails');
+    if (!fs.existsSync(thumbnailDir)) {
+      fs.mkdirSync(thumbnailDir, { recursive: true });
+    }
+    
+    const hash = getThumbnailHash(normalizedPath);
+    const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
+    
+    console.log('썸네일 생성 시작:', { filePath: normalizedPath, thumbnailPath, fileType: isImage ? 'image' : isVideo ? 'video' : 'archive' });
+    
+    if (isImage) {
+      await sharp(normalizedPath)
+        .resize(400, 400, { fit: 'contain' })
+        .toFile(thumbnailPath);
+      console.log('이미지 썸네일 생성 완료:', thumbnailPath);
+    } else if (isVideo) {
+      await new Promise((resolve, reject) => {
+        ffmpeg(normalizedPath)
+          .screenshots({
+            timestamps: ['00:00:01'],
+            filename: path.basename(thumbnailPath),
+            folder: thumbnailDir,
+            size: '400x400'
+          })
+          .on('end', () => {
+            console.log('비디오 썸네일 생성 완료:', thumbnailPath);
+            resolve(null);
+          })
+          .on('error', (err: any) => {
+            console.log('비디오 썸네일 생성 실패:', err);
+            reject(err);
+          });
+      });
+    } else if (isArchive) {
+      // 스트리밍 방식으로 첫 이미지 추출
+      const unzipper = require('unzipper');
+      let found = false;
+      await new Promise((resolve, reject) => {
+        fs.createReadStream(normalizedPath)
+          .pipe(unzipper.Parse())
+          .on('entry', async function (entry: any) {
+            const fileName = entry.path;
+            if (/\.(jpg|jpeg|png|gif|webp)$/i.test(fileName) && !found) {
+              found = true;
+              const chunks: Buffer[] = [];
+              entry.on('data', (chunk: Buffer) => chunks.push(chunk));
+              entry.on('end', async () => {
+                const buffer = Buffer.concat(chunks);
+                try {
+                  await sharp(buffer)
+                    .resize(400, 400, { fit: 'contain' })
+                    .toFile(thumbnailPath);
+                  console.log('아카이브 썸네일 생성 완료:', thumbnailPath);
+                  resolve(null);
+                } catch (err) {
+                  console.log('아카이브 썸네일 생성 실패:', err);
+                  reject(err);
+                }
+              });
+            } else {
+              entry.autodrain();
+            }
+          })
+          .on('close', () => {
+            if (!found) {
+              console.log('아카이브에서 이미지를 찾을 수 없음');
+              resolve(null);
+            }
+          })
+          .on('error', (err: any) => {
+            console.log('아카이브 처리 실패:', err);
+            reject(err);
+          });
+      });
+    }
+  } catch (error) {
+    console.error('썸네일 생성 중 오류:', error);
+  }
+};
+
 // 레코드의 썸네일 정리
 const cleanupThumbnailForRecord = (categoryId: string, recordId: string) => {
   try {
     // 레코드 데이터 가져오기
-    const record = db.prepare('SELECT data FROM records WHERE categoryId = ? AND id = ?').get(categoryId, recordId);
+    const record = db.prepare('SELECT data FROM records WHERE categoryId = ? AND id = ?').get(categoryId, recordId) as {data: string} | undefined;
     if (!record) return false;
     
     const data = JSON.parse(record.data);
     
     // 카테고리 필드 정보 가져오기
-    const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(categoryId);
+    const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(categoryId) as {fields: string} | undefined;
     if (!category) return false;
     
     const fields = JSON.parse(category.fields);
@@ -96,19 +213,9 @@ export const registerRecordHandlers = (database: Database) => {
   db = database;
 
   ipcMain.handle('db:getRecords', async (_, categoryId) => {
-    if (!categoryId) {
-      throw new Error('Category not found: ' + categoryId);
-    }
-
-    // 카테고리 존재 여부 확인
-    const category = db.prepare('SELECT id FROM categories WHERE id = ?').get(categoryId);
-    if (!category) {
-      throw new Error('Category not found: ' + categoryId);
-    }
-
-    const records = db.prepare('SELECT * FROM records WHERE categoryId = ?').all(categoryId);
-    
-    // JSON 파싱 및 빈 값 처리
+    if (!db) throw new Error('Database not initialized');
+    if (!categoryId) throw new Error('No categoryId provided');
+    const records = db.prepare('SELECT * FROM records WHERE categoryId = ?').all(categoryId) as Array<{id: string, categoryId: string, data: string, createdAt: string, updatedAt: string}>;
     return records.map(record => ({
       ...record,
       data: JSON.parse(record.data, (key, value) => normalizeValue(value))
@@ -123,8 +230,6 @@ export const registerRecordHandlers = (database: Database) => {
     const normalizedData = normalizeValue(record.data);
     const stringifiedData = JSON.stringify(normalizedData);
     
-    // 썸네일 생성 제거 - 필요할 때만 생성하도록 변경
-    
     db.prepare(`
       INSERT INTO records (id, categoryId, data, createdAt, updatedAt)
       VALUES (?, ?, ?, ?, ?)
@@ -136,6 +241,24 @@ export const registerRecordHandlers = (database: Database) => {
       now
     );
 
+    // 파일 필드가 있으면 썸네일 자동 생성
+    try {
+      const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(record.categoryId) as {fields: string} | undefined;
+      if (category) {
+        const fields = JSON.parse(category.fields);
+        const fileField = fields.find((f: any) => f.type === 'file');
+        if (fileField && normalizedData[fileField.id]) {
+          const filePath = normalizedData[fileField.id];
+          console.log('레코드 등록 시 썸네일 생성 시작:', filePath);
+          
+          await generateThumbnailForFile(filePath);
+        }
+      }
+    } catch (error) {
+      console.error('썸네일 생성 중 오류:', error);
+      // 썸네일 생성 실패는 레코드 등록을 막지 않음
+    }
+
     return id;
   });
 
@@ -143,13 +266,32 @@ export const registerRecordHandlers = (database: Database) => {
     const now = new Date().toISOString();
     const stringifiedData = JSON.stringify(data);
     
-    // 썸네일 생성 제거 - 필요할 때만 생성하도록 변경
-    
     db.prepare(`
       UPDATE records 
       SET data = ?, updatedAt = ?
       WHERE id = ?
     `).run(stringifiedData, now, id);
+
+    // 파일 필드가 있으면 썸네일 자동 생성
+    try {
+      const record = db.prepare('SELECT categoryId FROM records WHERE id = ?').get(id) as {categoryId: string} | undefined;
+      if (record) {
+        const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(record.categoryId) as {fields: string} | undefined;
+        if (category) {
+          const fields = JSON.parse(category.fields);
+          const fileField = fields.find((f: any) => f.type === 'file');
+          if (fileField && data[fileField.id]) {
+            const filePath = data[fileField.id];
+            console.log('레코드 업데이트 시 썸네일 생성 시작:', filePath);
+            
+            await generateThumbnailForFile(filePath);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('썸네일 생성 중 오류:', error);
+      // 썸네일 생성 실패는 레코드 업데이트를 막지 않음
+    }
   });
 
   ipcMain.handle('db:deleteRecord', async (_, categoryId, id) => {
@@ -163,5 +305,9 @@ export const registerRecordHandlers = (database: Database) => {
       success: true,
       thumbnailDeleted
     };
+  });
+
+  ipcMain.handle('deleteThumbnail', async (_, filePath) => {
+    return deleteThumbnail(filePath);
   });
 }; 
