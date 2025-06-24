@@ -434,7 +434,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                       }}
                     />
                     <CommandList className="max-h-[200px] overflow-y-auto">
-                      <CommandEmpty className="py-2 text-sm text-discord-muted">항목을 찾을 수 없습니다.</CommandEmpty>
+                      <CommandEmpty className="py-2 pl-3 text-sm text-discord-muted">항목을 찾을 수 없습니다.</CommandEmpty>
                       <CommandGroup>
                         {field.options?.map((option) => (
                           <CommandItem
@@ -536,7 +536,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                       }}
                     />
                     <CommandList className="text-discord-text">
-                      <CommandEmpty className="py-2 text-sm text-discord-muted">항목을 찾을 수 없습니다.</CommandEmpty>
+                      <CommandEmpty className="py-2 pl-3 text-sm text-discord-muted">항목을 찾을 수 없습니다.</CommandEmpty>
                       <CommandGroup>
                         <CommandItem
                           value=""
@@ -656,7 +656,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                       }}
                     />
                     <CommandList className="max-h-[200px] overflow-y-auto">
-                      <CommandEmpty className="py-2 text-sm text-discord-muted">항목을 찾을 수 없습니다.</CommandEmpty>
+                      <CommandEmpty className="py-2 pl-3 text-sm text-discord-muted">항목을 찾을 수 없습니다.</CommandEmpty>
                       <CommandGroup>
                         {relatedRecords.map((record) => (
                           <CommandItem
@@ -762,7 +762,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                       }}
                     />
                     <CommandList className="text-discord-text">
-                      <CommandEmpty className="py-2 text-sm text-discord-muted">항목을 찾을 수 없습니다.</CommandEmpty>
+                      <CommandEmpty className="py-2 pl-3 text-sm text-discord-muted">항목을 찾을 수 없습니다.</CommandEmpty>
                       <CommandGroup>
                         <CommandItem
                           value=""
