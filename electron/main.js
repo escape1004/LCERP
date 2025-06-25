@@ -353,42 +353,17 @@ async function generateThumbnail(filePath) {
     const ffmpegStatic = require('ffmpeg-static');
     const ffprobeStatic = require('ffprobe-static');
     
-    // ffmpeg 경로 설정 - 빌드된 버전에서는 app.asar.unpacked 내부 경로 사용
-    let ffmpegPath = ffmpegStatic;
-    
-    // 빌드된 앱에서 ffmpeg 경로 찾기
-    if (!isDev && !isPreview) {
-      // 1. app.asar.unpacked 내부의 ffmpeg-static 경로 시도
-      const unpackedPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffmpeg-static');
-      if (fs.existsSync(unpackedPath)) {
-        const ffmpegBinPath = path.join(unpackedPath, 'ffmpeg.exe');
-        if (fs.existsSync(ffmpegBinPath)) {
-          ffmpegPath = ffmpegBinPath;
-          log('빌드된 앱에서 ffmpeg 경로 찾음 (asarUnpack):', ffmpegPath);
-        }
-      }
-      
-      // 2. extraResources 경로 시도
-      if (!fs.existsSync(ffmpegPath)) {
-        const extraResourcePath = path.join(process.resourcesPath, 'ffmpeg-static');
-        if (fs.existsSync(extraResourcePath)) {
-          const ffmpegBinPath = path.join(extraResourcePath, 'ffmpeg.exe');
-          if (fs.existsSync(ffmpegBinPath)) {
-            ffmpegPath = ffmpegBinPath;
-            log('빌드된 앱에서 ffmpeg 경로 찾음 (extraResources):', ffmpegPath);
-          }
-        }
-      }
-    }
-    
-    if (ffmpegPath && fs.existsSync(ffmpegPath)) {
-      ffmpeg.setFfmpegPath(ffmpegPath);
-      log('ffmpeg 경로 설정됨:', ffmpegPath);
-    } else {
-      log('ffmpeg-static 경로를 찾을 수 없음:', ffmpegPath);
-      // ffmpeg를 찾을 수 없는 경우 썸네일 생성 실패
+    // ffmpeg/ffprobe 경로를 resources 폴더의 경로로만 강제 지정
+    const ffmpegPath = path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe');
+    const ffprobePath = path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe');
+    console.log('ffmpegPath:', ffmpegPath);
+    console.log('ffprobePath:', ffprobePath);
+    if (!fs.existsSync(ffmpegPath) || !fs.existsSync(ffprobePath)) {
+      log('ffmpeg/ffprobe 경로를 찾을 수 없음', { ffmpegPath, ffprobePath });
       return null;
     }
+    ffmpeg.setFfmpegPath(ffmpegPath);
+    ffmpeg.setFfprobePath(ffprobePath);
     
     const ext = path.extname(normalizedPath).toLowerCase();
     const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext);
@@ -704,50 +679,17 @@ async function handleUpdateRecord(_, id, data) {
         const path = require('path');
         const fs = require('fs');
         
-        // ffmpeg-static 경로 설정 (인스톨러 버전 대응)
-        let ffmpegPath = ffmpegStatic;
-        
-        // 인스톨러 버전에서는 resources 폴더에서 찾기
-        const possiblePaths = [
-          ffmpegStatic,
-          path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe'),
-          path.join(__dirname, '..', 'resources', 'ffmpeg-static', 'ffmpeg.exe'),
-          path.join(process.cwd(), 'resources', 'ffmpeg-static', 'ffmpeg.exe'),
-          path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe')
-        ];
-        
-        for (const possiblePath of possiblePaths) {
-          if (fs.existsSync(possiblePath)) {
-            ffmpegPath = possiblePath;
-            break;
-          }
+        // ffmpeg/ffprobe 경로를 resources 폴더의 경로로만 강제 지정
+        const ffmpegPath = path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe');
+        const ffprobePath = path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe');
+        console.log('ffmpegPath:', ffmpegPath);
+        console.log('ffprobePath:', ffprobePath);
+        if (!fs.existsSync(ffmpegPath) || !fs.existsSync(ffprobePath)) {
+          log('ffmpeg/ffprobe 경로를 찾을 수 없음', { ffmpegPath, ffprobePath });
+          return null;
         }
-        
-        // ffprobe-static 경로 설정 (인스톨러 버전 대응)
-        let ffprobePath = ffprobeStatic.path;
-        
-        // 인스톨러 버전에서는 extraResources에서 찾기
-        const possibleFfprobePaths = [
-          ffprobeStatic.path,
-          path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
-          path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
-          path.join(__dirname, '..', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
-          path.join(process.cwd(), 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe')
-        ];
-        
-        for (const possiblePath of possibleFfprobePaths) {
-          if (fs.existsSync(possiblePath)) {
-            ffprobePath = possiblePath;
-            break;
-          }
-        }
-        
-        if (ffmpegPath && fs.existsSync(ffmpegPath)) {
-          ffmpeg.setFfmpegPath(ffmpegPath);
-        }
-        if (ffprobePath && fs.existsSync(ffprobePath)) {
-          ffmpeg.setFfprobePath(ffprobePath);
-        }
+        ffmpeg.setFfmpegPath(ffmpegPath);
+        ffmpeg.setFfprobePath(ffprobePath);
         
         duration = await new Promise((resolve) => {
           ffmpeg.ffprobe(fileField, (err, metadata) => {
@@ -771,20 +713,27 @@ async function handleUpdateRecord(_, id, data) {
       id
     );
     
-    // 파일 필드가 있으면 썸네일 자동 생성
+    // 파일 필드가 있으면 썸네일 자동 생성 (파일 경로가 변경된 경우에만)
     try {
       const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(record.categoryId);
       if (category) {
         const fields = JSON.parse(category.fields);
         const fileField = fields.find(f => f.type === 'file');
         if (fileField && data[fileField.id]) {
-          const filePath = data[fileField.id];
-          log('레코드 업데이트 시 썸네일 생성 시작:', filePath);
-          
-          // 썸네일 생성
-          const thumbnailResult = await generateThumbnail(filePath);
-          if (thumbnailResult) {
-            log('썸네일 생성 완료:', thumbnailResult);
+          // 이전 파일 경로와 비교
+          const prevRecord = db.prepare('SELECT data FROM records WHERE id = ?').get(id);
+          const prevData = prevRecord ? JSON.parse(prevRecord.data) : {};
+          const prevFilePath = prevData[fileField.id];
+          const newFilePath = data[fileField.id];
+          if (newFilePath !== prevFilePath) {
+            log('레코드 업데이트 시 썸네일 생성 시작(파일 경로 변경):', newFilePath);
+            // 썸네일 생성
+            const thumbnailResult = await generateThumbnail(newFilePath);
+            if (thumbnailResult) {
+              log('썸네일 생성 완료:', thumbnailResult);
+            }
+          } else {
+            log('레코드 업데이트: 파일 경로 동일, 썸네일 재생성 생략');
           }
         }
       }
@@ -864,50 +813,17 @@ ipcMain.handle('db:addRecord', async (_, record) => {
         const path = require('path');
         const fs = require('fs');
         
-        // ffmpeg-static 경로 설정 (인스톨러 버전 대응)
-        let ffmpegPath = ffmpegStatic;
-        
-        // 인스톨러 버전에서는 resources 폴더에서 찾기
-        const possiblePaths = [
-          ffmpegStatic,
-          path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe'),
-          path.join(__dirname, '..', 'resources', 'ffmpeg-static', 'ffmpeg.exe'),
-          path.join(process.cwd(), 'resources', 'ffmpeg-static', 'ffmpeg.exe'),
-          path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe')
-        ];
-        
-        for (const possiblePath of possiblePaths) {
-          if (fs.existsSync(possiblePath)) {
-            ffmpegPath = possiblePath;
-            break;
-          }
+        // ffmpeg/ffprobe 경로를 resources 폴더의 경로로만 강제 지정
+        const ffmpegPath = path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe');
+        const ffprobePath = path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe');
+        console.log('ffmpegPath:', ffmpegPath);
+        console.log('ffprobePath:', ffprobePath);
+        if (!fs.existsSync(ffmpegPath) || !fs.existsSync(ffprobePath)) {
+          log('ffmpeg/ffprobe 경로를 찾을 수 없음', { ffmpegPath, ffprobePath });
+          return null;
         }
-        
-        // ffprobe-static 경로 설정 (인스톨러 버전 대응)
-        let ffprobePath = ffprobeStatic.path;
-        
-        // 인스톨러 버전에서는 extraResources에서 찾기
-        const possibleFfprobePaths = [
-          ffprobeStatic.path,
-          path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
-          path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
-          path.join(__dirname, '..', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
-          path.join(process.cwd(), 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe')
-        ];
-        
-        for (const possiblePath of possibleFfprobePaths) {
-          if (fs.existsSync(possiblePath)) {
-            ffprobePath = possiblePath;
-            break;
-          }
-        }
-        
-        if (ffmpegPath && fs.existsSync(ffmpegPath)) {
-          ffmpeg.setFfmpegPath(ffmpegPath);
-        }
-        if (ffprobePath && fs.existsSync(ffprobePath)) {
-          ffmpeg.setFfprobePath(ffprobePath);
-        }
+        ffmpeg.setFfmpegPath(ffmpegPath);
+        ffmpeg.setFfprobePath(ffprobePath);
         
         duration = await new Promise((resolve) => {
           ffmpeg.ffprobe(fileField, (err, metadata) => {
@@ -1425,28 +1341,17 @@ ipcMain.handle('generateThumbnailWithTime', async (_, filePath, timestampSec) =>
       return null;
     }
     
-    // ffmpeg-static 경로 설정 (인스톨러 버전 대응)
-    let ffmpegPath = ffmpegStatic;
-    
-    // 인스톨러 버전에서는 resources 폴더에서 찾기
-    const possiblePaths = [
-      ffmpegStatic,
-      path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe'),
-      path.join(__dirname, '..', 'resources', 'ffmpeg-static', 'ffmpeg.exe'),
-      path.join(process.cwd(), 'resources', 'ffmpeg-static', 'ffmpeg.exe'),
-      path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe')
-    ];
-    
-    for (const possiblePath of possiblePaths) {
-      if (fs.existsSync(possiblePath)) {
-        ffmpegPath = possiblePath;
-        break;
-      }
+    // ffmpeg/ffprobe 경로를 resources 폴더의 경로로만 강제 지정
+    const ffmpegPath = path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe');
+    const ffprobePath = path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe');
+    console.log('ffmpegPath:', ffmpegPath);
+    console.log('ffprobePath:', ffprobePath);
+    if (!fs.existsSync(ffmpegPath) || !fs.existsSync(ffprobePath)) {
+      log('ffmpeg/ffprobe 경로를 찾을 수 없음', { ffmpegPath, ffprobePath });
+      return null;
     }
-    
-    if (ffmpegPath && fs.existsSync(ffmpegPath)) {
-      ffmpeg.setFfmpegPath(ffmpegPath);
-    }
+    ffmpeg.setFfmpegPath(ffmpegPath);
+    ffmpeg.setFfprobePath(ffprobePath);
     
     const ext = path.extname(normalizedPath).toLowerCase();
     const isVideo = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'].includes(ext);
@@ -1505,68 +1410,17 @@ ipcMain.handle('getVideoDuration', async (_, filePath) => {
     }
     console.log('파일 존재 확인됨');
     
-    // ffmpeg-static 경로 설정 (인스톨러 버전 대응)
-    let ffmpegPath = ffmpegStatic;
-    console.log('기본 ffmpeg 경로:', ffmpegPath);
-    
-    // 인스톨러 버전에서는 resources 폴더에서 찾기
-    const possibleFfmpegPaths = [
-      ffmpegStatic,
-      path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe'),
-      path.join(__dirname, '..', 'resources', 'ffmpeg-static', 'ffmpeg.exe'),
-      path.join(process.cwd(), 'resources', 'ffmpeg-static', 'ffmpeg.exe'),
-      path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe')
-    ];
-    
-    for (const possiblePath of possibleFfmpegPaths) {
-      console.log('ffmpeg 경로 확인 중:', possiblePath);
-      if (fs.existsSync(possiblePath)) {
-        ffmpegPath = possiblePath;
-        console.log('ffmpeg 경로 찾음:', ffmpegPath);
-        break;
-      }
-    }
-    
-    // ffprobe-static 경로 설정 (인스톨러 버전 대응)
-    let ffprobePath = ffprobeStatic.path;
-    console.log('기본 ffprobe 경로:', ffprobePath);
-    
-    // 인스톨러 버전에서는 extraResources에서 찾기
-    const possibleFfprobePaths = [
-      ffprobeStatic.path,
-      path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
-      path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
-      path.join(__dirname, '..', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
-      path.join(process.cwd(), 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe')
-    ];
-    
-    for (const possiblePath of possibleFfprobePaths) {
-      console.log('ffprobe 경로 확인 중:', possiblePath);
-      if (fs.existsSync(possiblePath)) {
-        ffprobePath = possiblePath;
-        console.log('ffprobe 경로 찾음:', ffprobePath);
-        break;
-      }
-    }
-    
-    console.log('최종 ffmpeg 경로:', ffmpegPath);
-    console.log('최종 ffprobe 경로:', ffprobePath);
-    
-    if (ffmpegPath && fs.existsSync(ffmpegPath)) {
-      ffmpeg.setFfmpegPath(ffmpegPath);
-      console.log('ffmpeg 경로 설정됨:', ffmpegPath);
-    } else {
-      console.log('ffmpeg-static 경로를 찾을 수 없음');
+    // ffmpeg/ffprobe 경로를 resources 폴더의 경로로만 강제 지정
+    const ffmpegPath = path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe');
+    const ffprobePath = path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe');
+    console.log('ffmpegPath:', ffmpegPath);
+    console.log('ffprobePath:', ffprobePath);
+    if (!fs.existsSync(ffmpegPath) || !fs.existsSync(ffprobePath)) {
+      log('ffmpeg/ffprobe 경로를 찾을 수 없음', { ffmpegPath, ffprobePath });
       return null;
     }
-    
-    if (ffprobePath && fs.existsSync(ffprobePath)) {
-      ffmpeg.setFfprobePath(ffprobePath);
-      console.log('ffprobe 경로 설정됨:', ffprobePath);
-    } else {
-      console.log('ffprobe-static 경로를 찾을 수 없음');
-      return null;
-    }
+    ffmpeg.setFfmpegPath(ffmpegPath);
+    ffmpeg.setFfprobePath(ffprobePath);
     
     return await new Promise((resolve, reject) => {
       console.log('ffprobe 실행 시작');
