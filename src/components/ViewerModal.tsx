@@ -674,6 +674,16 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     };
   }
 
+  // 모달이 열릴 때 포커스 설정
+  useEffect(() => {
+    if (isOpen) {
+      const modalContainer = document.querySelector('[data-modal-container]') as HTMLElement;
+      if (modalContainer) {
+        modalContainer.focus();
+      }
+    }
+  }, [isOpen]);
+
   if (!isOpen || !filePath || !fileType) return null;
 
   const currentFile = archiveFiles[currentArchiveIndex];
@@ -685,6 +695,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/95"
       onKeyDown={handleKeyDown}
       tabIndex={0}
+      data-modal-container
     >
       <div className="relative bg-discord-bg rounded-lg shadow-2xl w-[95vw] h-[95vh] flex flex-col">
         {/* Header */}
