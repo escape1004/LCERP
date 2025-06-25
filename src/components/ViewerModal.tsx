@@ -87,7 +87,15 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     if (fileType === 'image' || fileType === 'video') {
       setLoading(true);
       window.electronAPI.getFileDataUrl(filePath).then((url) => {
-        setDataUrl(url);
+        if (fileType === 'video' && url === 'stream') {
+          // 스트리밍 서버 URL로 연결
+          // filePath에 한글/공백 등 특수문자 있을 수 있으므로 encodeURIComponent 적용
+          const port = (window as any).videoServerPort || 17345;
+          const streamUrl = `http://localhost:${port}/video?path=${encodeURIComponent(filePath)}`;
+          setDataUrl(streamUrl);
+        } else {
+          setDataUrl(url);
+        }
         setLoading(false);
       });
     } else if (fileType === 'archive') {
