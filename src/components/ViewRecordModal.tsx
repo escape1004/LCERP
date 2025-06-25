@@ -552,7 +552,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
           <div className="w-[320px] h-[320px] bg-gray-900 flex items-center justify-center text-lg text-gray-500 border border-gray-700 rounded-xl">썸네일 없음</div>
         )}
         {/* 시간 입력/슬라이더 부분만 분기 */}
-        {isVideo && (
+        {isVideo && fileExists === true && (
           <div className="flex items-center gap-2 mt-2">
             {(!effectiveDuration || effectiveDuration === 0)
               ? <div className="text-xs text-gray-500">동영상 길이 불러오는 중...</div>
