@@ -351,6 +351,7 @@ async function generateThumbnail(filePath) {
     const ffmpeg = require('fluent-ffmpeg');
     const AdmZip = require('adm-zip');
     const ffmpegStatic = require('ffmpeg-static');
+    const ffprobeStatic = require('ffprobe-static');
     
     // ffmpeg 경로 설정 - 빌드된 버전에서는 app.asar.unpacked 내부 경로 사용
     let ffmpegPath = ffmpegStatic;
@@ -725,13 +726,13 @@ async function handleUpdateRecord(_, id, data) {
         // ffprobe-static 경로 설정 (인스톨러 버전 대응)
         let ffprobePath = ffprobeStatic.path;
         
-        // 인스톨러 버전에서는 app.asar.unpacked에서 찾기
+        // 인스톨러 버전에서는 extraResources에서 찾기
         const possibleFfprobePaths = [
           ffprobeStatic.path,
+          path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
           path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
           path.join(__dirname, '..', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
-          path.join(process.cwd(), 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
-          path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe')
+          path.join(process.cwd(), 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe')
         ];
         
         for (const possiblePath of possibleFfprobePaths) {
@@ -885,13 +886,13 @@ ipcMain.handle('db:addRecord', async (_, record) => {
         // ffprobe-static 경로 설정 (인스톨러 버전 대응)
         let ffprobePath = ffprobeStatic.path;
         
-        // 인스톨러 버전에서는 app.asar.unpacked에서 찾기
+        // 인스톨러 버전에서는 extraResources에서 찾기
         const possibleFfprobePaths = [
           ffprobeStatic.path,
+          path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
           path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
           path.join(__dirname, '..', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
-          path.join(process.cwd(), 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
-          path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe')
+          path.join(process.cwd(), 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe')
         ];
         
         for (const possiblePath of possibleFfprobePaths) {
@@ -1530,13 +1531,13 @@ ipcMain.handle('getVideoDuration', async (_, filePath) => {
     let ffprobePath = ffprobeStatic.path;
     console.log('기본 ffprobe 경로:', ffprobePath);
     
-    // 인스톨러 버전에서는 app.asar.unpacked에서 찾기
+    // 인스톨러 버전에서는 extraResources에서 찾기
     const possibleFfprobePaths = [
       ffprobeStatic.path,
+      path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
       path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
       path.join(__dirname, '..', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
-      path.join(process.cwd(), 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
-      path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe')
+      path.join(process.cwd(), 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe')
     ];
     
     for (const possiblePath of possibleFfprobePaths) {
