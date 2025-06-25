@@ -698,8 +698,54 @@ async function handleUpdateRecord(_, id, data) {
     if (fileField && (!duration || duration === null)) {
       try {
         const ffmpeg = require('fluent-ffmpeg');
+        const ffmpegStatic = require('ffmpeg-static');
         const ffprobeStatic = require('ffprobe-static');
-        ffmpeg.setFfprobePath(ffprobeStatic.path);
+        const path = require('path');
+        const fs = require('fs');
+        
+        // ffmpeg-static 경로 설정 (인스톨러 버전 대응)
+        let ffmpegPath = ffmpegStatic;
+        if (process.env.NODE_ENV === 'production') {
+          const possiblePaths = [
+            ffmpegStatic,
+            path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe'),
+            path.join(__dirname, '..', 'resources', 'ffmpeg-static', 'ffmpeg.exe'),
+            path.join(process.cwd(), 'resources', 'ffmpeg-static', 'ffmpeg.exe')
+          ];
+          
+          for (const possiblePath of possiblePaths) {
+            if (fs.existsSync(possiblePath)) {
+              ffmpegPath = possiblePath;
+              break;
+            }
+          }
+        }
+        
+        // ffprobe-static 경로 설정 (인스톨러 버전 대응)
+        let ffprobePath = ffprobeStatic.path;
+        if (process.env.NODE_ENV === 'production') {
+          const possiblePaths = [
+            ffprobeStatic.path,
+            path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+            path.join(__dirname, '..', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+            path.join(process.cwd(), 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe')
+          ];
+          
+          for (const possiblePath of possiblePaths) {
+            if (fs.existsSync(possiblePath)) {
+              ffprobePath = possiblePath;
+              break;
+            }
+          }
+        }
+        
+        if (ffmpegPath && fs.existsSync(ffmpegPath)) {
+          ffmpeg.setFfmpegPath(ffmpegPath);
+        }
+        if (ffprobePath && fs.existsSync(ffprobePath)) {
+          ffmpeg.setFfprobePath(ffprobePath);
+        }
+        
         duration = await new Promise((resolve) => {
           ffmpeg.ffprobe(fileField, (err, metadata) => {
             if (err || !metadata || !metadata.format || !metadata.format.duration) return resolve(null);
@@ -810,8 +856,54 @@ ipcMain.handle('db:addRecord', async (_, record) => {
     if (fileField) {
       try {
         const ffmpeg = require('fluent-ffmpeg');
+        const ffmpegStatic = require('ffmpeg-static');
         const ffprobeStatic = require('ffprobe-static');
-        ffmpeg.setFfprobePath(ffprobeStatic.path);
+        const path = require('path');
+        const fs = require('fs');
+        
+        // ffmpeg-static 경로 설정 (인스톨러 버전 대응)
+        let ffmpegPath = ffmpegStatic;
+        if (process.env.NODE_ENV === 'production') {
+          const possiblePaths = [
+            ffmpegStatic,
+            path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe'),
+            path.join(__dirname, '..', 'resources', 'ffmpeg-static', 'ffmpeg.exe'),
+            path.join(process.cwd(), 'resources', 'ffmpeg-static', 'ffmpeg.exe')
+          ];
+          
+          for (const possiblePath of possiblePaths) {
+            if (fs.existsSync(possiblePath)) {
+              ffmpegPath = possiblePath;
+              break;
+            }
+          }
+        }
+        
+        // ffprobe-static 경로 설정 (인스톨러 버전 대응)
+        let ffprobePath = ffprobeStatic.path;
+        if (process.env.NODE_ENV === 'production') {
+          const possiblePaths = [
+            ffprobeStatic.path,
+            path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+            path.join(__dirname, '..', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+            path.join(process.cwd(), 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe')
+          ];
+          
+          for (const possiblePath of possiblePaths) {
+            if (fs.existsSync(possiblePath)) {
+              ffprobePath = possiblePath;
+              break;
+            }
+          }
+        }
+        
+        if (ffmpegPath && fs.existsSync(ffmpegPath)) {
+          ffmpeg.setFfmpegPath(ffmpegPath);
+        }
+        if (ffprobePath && fs.existsSync(ffprobePath)) {
+          ffmpeg.setFfprobePath(ffprobePath);
+        }
+        
         duration = await new Promise((resolve) => {
           ffmpeg.ffprobe(fileField, (err, metadata) => {
             if (err || !metadata || !metadata.format || !metadata.format.duration) return resolve(null);
@@ -1327,10 +1419,30 @@ ipcMain.handle('generateThumbnailWithTime', async (_, filePath, timestampSec) =>
     if (!fs.existsSync(normalizedPath)) {
       return null;
     }
+    
+    // ffmpeg-static 경로 설정 (인스톨러 버전 대응)
     let ffmpegPath = ffmpegStatic;
+    if (process.env.NODE_ENV === 'production') {
+      // 인스톨러 버전에서는 resources 폴더에서 찾기
+      const possiblePaths = [
+        ffmpegStatic,
+        path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe'),
+        path.join(__dirname, '..', 'resources', 'ffmpeg-static', 'ffmpeg.exe'),
+        path.join(process.cwd(), 'resources', 'ffmpeg-static', 'ffmpeg.exe')
+      ];
+      
+      for (const possiblePath of possiblePaths) {
+        if (fs.existsSync(possiblePath)) {
+          ffmpegPath = possiblePath;
+          break;
+        }
+      }
+    }
+    
     if (ffmpegPath && fs.existsSync(ffmpegPath)) {
       ffmpeg.setFfmpegPath(ffmpegPath);
     }
+    
     const ext = path.extname(normalizedPath).toLowerCase();
     const isVideo = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'].includes(ext);
     if (!isVideo) return null;
@@ -1387,22 +1499,64 @@ ipcMain.handle('getVideoDuration', async (_, filePath) => {
       return null;
     }
     console.log('파일 존재 확인됨');
+    
+    // ffmpeg-static 경로 설정 (인스톨러 버전 대응)
     let ffmpegPath = ffmpegStatic;
+    if (process.env.NODE_ENV === 'production') {
+      // 인스톨러 버전에서는 resources 폴더에서 찾기
+      const possiblePaths = [
+        ffmpegStatic,
+        path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe'),
+        path.join(__dirname, '..', 'resources', 'ffmpeg-static', 'ffmpeg.exe'),
+        path.join(process.cwd(), 'resources', 'ffmpeg-static', 'ffmpeg.exe')
+      ];
+      
+      for (const possiblePath of possiblePaths) {
+        if (fs.existsSync(possiblePath)) {
+          ffmpegPath = possiblePath;
+          console.log('ffmpeg 경로 찾음:', ffmpegPath);
+          break;
+        }
+      }
+    }
+    
+    // ffprobe-static 경로 설정 (인스톨러 버전 대응)
     let ffprobePath = ffprobeStatic.path;
+    if (process.env.NODE_ENV === 'production') {
+      // 인스톨러 버전에서는 app.asar.unpacked에서 찾기
+      const possiblePaths = [
+        ffprobeStatic.path,
+        path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+        path.join(__dirname, '..', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+        path.join(process.cwd(), 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe')
+      ];
+      
+      for (const possiblePath of possiblePaths) {
+        if (fs.existsSync(possiblePath)) {
+          ffprobePath = possiblePath;
+          console.log('ffprobe 경로 찾음:', ffprobePath);
+          break;
+        }
+      }
+    }
+    
     console.log('ffmpeg-static 경로:', ffmpegPath);
     console.log('ffprobe-static 경로:', ffprobePath);
+    
     if (ffmpegPath && fs.existsSync(ffmpegPath)) {
       ffmpeg.setFfmpegPath(ffmpegPath);
       console.log('ffmpeg 경로 설정됨:', ffmpegPath);
     } else {
       console.log('ffmpeg-static 경로를 찾을 수 없음');
     }
+    
     if (ffprobePath && fs.existsSync(ffprobePath)) {
       ffmpeg.setFfprobePath(ffprobePath);
       console.log('ffprobe 경로 설정됨:', ffprobePath);
     } else {
       console.log('ffprobe-static 경로를 찾을 수 없음');
     }
+    
     return await new Promise((resolve, reject) => {
       console.log('ffprobe 실행 시작');
       ffmpeg.ffprobe(normalizedPath, (err, metadata) => {
