@@ -705,37 +705,39 @@ async function handleUpdateRecord(_, id, data) {
         
         // ffmpeg-static 경로 설정 (인스톨러 버전 대응)
         let ffmpegPath = ffmpegStatic;
-        if (process.env.NODE_ENV === 'production') {
-          const possiblePaths = [
-            ffmpegStatic,
-            path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe'),
-            path.join(__dirname, '..', 'resources', 'ffmpeg-static', 'ffmpeg.exe'),
-            path.join(process.cwd(), 'resources', 'ffmpeg-static', 'ffmpeg.exe')
-          ];
-          
-          for (const possiblePath of possiblePaths) {
-            if (fs.existsSync(possiblePath)) {
-              ffmpegPath = possiblePath;
-              break;
-            }
+        
+        // 인스톨러 버전에서는 resources 폴더에서 찾기
+        const possiblePaths = [
+          ffmpegStatic,
+          path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe'),
+          path.join(__dirname, '..', 'resources', 'ffmpeg-static', 'ffmpeg.exe'),
+          path.join(process.cwd(), 'resources', 'ffmpeg-static', 'ffmpeg.exe'),
+          path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe')
+        ];
+        
+        for (const possiblePath of possiblePaths) {
+          if (fs.existsSync(possiblePath)) {
+            ffmpegPath = possiblePath;
+            break;
           }
         }
         
         // ffprobe-static 경로 설정 (인스톨러 버전 대응)
         let ffprobePath = ffprobeStatic.path;
-        if (process.env.NODE_ENV === 'production') {
-          const possiblePaths = [
-            ffprobeStatic.path,
-            path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
-            path.join(__dirname, '..', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
-            path.join(process.cwd(), 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe')
-          ];
-          
-          for (const possiblePath of possiblePaths) {
-            if (fs.existsSync(possiblePath)) {
-              ffprobePath = possiblePath;
-              break;
-            }
+        
+        // 인스톨러 버전에서는 app.asar.unpacked에서 찾기
+        const possibleFfprobePaths = [
+          ffprobeStatic.path,
+          path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+          path.join(__dirname, '..', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+          path.join(process.cwd(), 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+          path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe')
+        ];
+        
+        for (const possiblePath of possibleFfprobePaths) {
+          if (fs.existsSync(possiblePath)) {
+            ffprobePath = possiblePath;
+            break;
           }
         }
         
@@ -863,37 +865,39 @@ ipcMain.handle('db:addRecord', async (_, record) => {
         
         // ffmpeg-static 경로 설정 (인스톨러 버전 대응)
         let ffmpegPath = ffmpegStatic;
-        if (process.env.NODE_ENV === 'production') {
-          const possiblePaths = [
-            ffmpegStatic,
-            path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe'),
-            path.join(__dirname, '..', 'resources', 'ffmpeg-static', 'ffmpeg.exe'),
-            path.join(process.cwd(), 'resources', 'ffmpeg-static', 'ffmpeg.exe')
-          ];
-          
-          for (const possiblePath of possiblePaths) {
-            if (fs.existsSync(possiblePath)) {
-              ffmpegPath = possiblePath;
-              break;
-            }
+        
+        // 인스톨러 버전에서는 resources 폴더에서 찾기
+        const possiblePaths = [
+          ffmpegStatic,
+          path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe'),
+          path.join(__dirname, '..', 'resources', 'ffmpeg-static', 'ffmpeg.exe'),
+          path.join(process.cwd(), 'resources', 'ffmpeg-static', 'ffmpeg.exe'),
+          path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe')
+        ];
+        
+        for (const possiblePath of possiblePaths) {
+          if (fs.existsSync(possiblePath)) {
+            ffmpegPath = possiblePath;
+            break;
           }
         }
         
         // ffprobe-static 경로 설정 (인스톨러 버전 대응)
         let ffprobePath = ffprobeStatic.path;
-        if (process.env.NODE_ENV === 'production') {
-          const possiblePaths = [
-            ffprobeStatic.path,
-            path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
-            path.join(__dirname, '..', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
-            path.join(process.cwd(), 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe')
-          ];
-          
-          for (const possiblePath of possiblePaths) {
-            if (fs.existsSync(possiblePath)) {
-              ffprobePath = possiblePath;
-              break;
-            }
+        
+        // 인스톨러 버전에서는 app.asar.unpacked에서 찾기
+        const possibleFfprobePaths = [
+          ffprobeStatic.path,
+          path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+          path.join(__dirname, '..', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+          path.join(process.cwd(), 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+          path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe')
+        ];
+        
+        for (const possiblePath of possibleFfprobePaths) {
+          if (fs.existsSync(possiblePath)) {
+            ffprobePath = possiblePath;
+            break;
           }
         }
         
@@ -1422,20 +1426,20 @@ ipcMain.handle('generateThumbnailWithTime', async (_, filePath, timestampSec) =>
     
     // ffmpeg-static 경로 설정 (인스톨러 버전 대응)
     let ffmpegPath = ffmpegStatic;
-    if (process.env.NODE_ENV === 'production') {
-      // 인스톨러 버전에서는 resources 폴더에서 찾기
-      const possiblePaths = [
-        ffmpegStatic,
-        path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe'),
-        path.join(__dirname, '..', 'resources', 'ffmpeg-static', 'ffmpeg.exe'),
-        path.join(process.cwd(), 'resources', 'ffmpeg-static', 'ffmpeg.exe')
-      ];
-      
-      for (const possiblePath of possiblePaths) {
-        if (fs.existsSync(possiblePath)) {
-          ffmpegPath = possiblePath;
-          break;
-        }
+    
+    // 인스톨러 버전에서는 resources 폴더에서 찾기
+    const possiblePaths = [
+      ffmpegStatic,
+      path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe'),
+      path.join(__dirname, '..', 'resources', 'ffmpeg-static', 'ffmpeg.exe'),
+      path.join(process.cwd(), 'resources', 'ffmpeg-static', 'ffmpeg.exe'),
+      path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe')
+    ];
+    
+    for (const possiblePath of possiblePaths) {
+      if (fs.existsSync(possiblePath)) {
+        ffmpegPath = possiblePath;
+        break;
       }
     }
     
@@ -1502,52 +1506,57 @@ ipcMain.handle('getVideoDuration', async (_, filePath) => {
     
     // ffmpeg-static 경로 설정 (인스톨러 버전 대응)
     let ffmpegPath = ffmpegStatic;
-    if (process.env.NODE_ENV === 'production') {
-      // 인스톨러 버전에서는 resources 폴더에서 찾기
-      const possiblePaths = [
-        ffmpegStatic,
-        path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe'),
-        path.join(__dirname, '..', 'resources', 'ffmpeg-static', 'ffmpeg.exe'),
-        path.join(process.cwd(), 'resources', 'ffmpeg-static', 'ffmpeg.exe')
-      ];
-      
-      for (const possiblePath of possiblePaths) {
-        if (fs.existsSync(possiblePath)) {
-          ffmpegPath = possiblePath;
-          console.log('ffmpeg 경로 찾음:', ffmpegPath);
-          break;
-        }
+    console.log('기본 ffmpeg 경로:', ffmpegPath);
+    
+    // 인스톨러 버전에서는 resources 폴더에서 찾기
+    const possibleFfmpegPaths = [
+      ffmpegStatic,
+      path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe'),
+      path.join(__dirname, '..', 'resources', 'ffmpeg-static', 'ffmpeg.exe'),
+      path.join(process.cwd(), 'resources', 'ffmpeg-static', 'ffmpeg.exe'),
+      path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe')
+    ];
+    
+    for (const possiblePath of possibleFfmpegPaths) {
+      console.log('ffmpeg 경로 확인 중:', possiblePath);
+      if (fs.existsSync(possiblePath)) {
+        ffmpegPath = possiblePath;
+        console.log('ffmpeg 경로 찾음:', ffmpegPath);
+        break;
       }
     }
     
     // ffprobe-static 경로 설정 (인스톨러 버전 대응)
     let ffprobePath = ffprobeStatic.path;
-    if (process.env.NODE_ENV === 'production') {
-      // 인스톨러 버전에서는 app.asar.unpacked에서 찾기
-      const possiblePaths = [
-        ffprobeStatic.path,
-        path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
-        path.join(__dirname, '..', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
-        path.join(process.cwd(), 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe')
-      ];
-      
-      for (const possiblePath of possiblePaths) {
-        if (fs.existsSync(possiblePath)) {
-          ffprobePath = possiblePath;
-          console.log('ffprobe 경로 찾음:', ffprobePath);
-          break;
-        }
+    console.log('기본 ffprobe 경로:', ffprobePath);
+    
+    // 인스톨러 버전에서는 app.asar.unpacked에서 찾기
+    const possibleFfprobePaths = [
+      ffprobeStatic.path,
+      path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+      path.join(__dirname, '..', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+      path.join(process.cwd(), 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+      path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe')
+    ];
+    
+    for (const possiblePath of possibleFfprobePaths) {
+      console.log('ffprobe 경로 확인 중:', possiblePath);
+      if (fs.existsSync(possiblePath)) {
+        ffprobePath = possiblePath;
+        console.log('ffprobe 경로 찾음:', ffprobePath);
+        break;
       }
     }
     
-    console.log('ffmpeg-static 경로:', ffmpegPath);
-    console.log('ffprobe-static 경로:', ffprobePath);
+    console.log('최종 ffmpeg 경로:', ffmpegPath);
+    console.log('최종 ffprobe 경로:', ffprobePath);
     
     if (ffmpegPath && fs.existsSync(ffmpegPath)) {
       ffmpeg.setFfmpegPath(ffmpegPath);
       console.log('ffmpeg 경로 설정됨:', ffmpegPath);
     } else {
       console.log('ffmpeg-static 경로를 찾을 수 없음');
+      return null;
     }
     
     if (ffprobePath && fs.existsSync(ffprobePath)) {
@@ -1555,6 +1564,7 @@ ipcMain.handle('getVideoDuration', async (_, filePath) => {
       console.log('ffprobe 경로 설정됨:', ffprobePath);
     } else {
       console.log('ffprobe-static 경로를 찾을 수 없음');
+      return null;
     }
     
     return await new Promise((resolve, reject) => {
