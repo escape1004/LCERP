@@ -36,6 +36,8 @@ export interface ElectronAPI {
   getVideoServerPort: () => Promise<number>;
   getFileSize: (filePath: string) => Promise<{ success: boolean; size?: string; error?: string }>;
   deleteThumbnail: (filePath: string) => Promise<boolean>;
+  generateThumbnailWithTime: (filePath: string, timestampSec: number) => Promise<string | null>;
+  getVideoDuration: (filePath: string) => Promise<number | null>;
 }
 
 declare global {
@@ -77,6 +79,7 @@ export interface DataRecord {
   data: { [key: string]: any };
   createdAt: string;
   updatedAt: string;
+  duration?: number;
 }
 
 export interface NewCategory {

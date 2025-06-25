@@ -54,6 +54,8 @@ const api: ElectronAPI = {
   getVideoBlobUrl: (filePath: string) => ipcRenderer.invoke('getVideoBlobUrl', filePath),
   getFileSize: (filePath: string) => ipcRenderer.invoke('getFileSize', filePath),
   deleteThumbnail: (filePath: string) => ipcRenderer.invoke('deleteThumbnail', filePath),
+  generateThumbnailWithTime: (filePath: string, timestampSec: number) => ipcRenderer.invoke('generateThumbnailWithTime', filePath, timestampSec),
+  getVideoDuration: (filePath: string) => ipcRenderer.invoke('getVideoDuration', filePath),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api); 

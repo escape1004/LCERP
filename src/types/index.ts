@@ -29,9 +29,10 @@ export interface CategoryUpdate extends Partial<NewCategory> {}
 export interface DataRecord {
   id: string;
   categoryId: string;
-  data: Record<string, any>;
+  data: { [key: string]: any };
   createdAt: string;
   updatedAt: string;
+  duration?: number;
 }
 
 export interface NewRecord extends Omit<DataRecord, 'id' | 'createdAt' | 'updatedAt'> {}

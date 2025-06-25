@@ -26,7 +26,7 @@ const deleteThumbnail = (filePath: string) => {
 };
 
 // 썸네일 생성 함수
-const generateThumbnailForFile = async (filePath: string) => {
+const generateThumbnailForFile = async (filePath: string, timestampSec: number = 1) => {
   try {
     console.log('썸네일 생성 시작:', filePath);
     
@@ -80,7 +80,7 @@ const generateThumbnailForFile = async (filePath: string) => {
       await new Promise((resolve, reject) => {
         ffmpeg(normalizedPath)
           .screenshots({
-            timestamps: ['00:00:01'],
+            timestamps: [timestampSec],
             filename: path.basename(thumbnailPath),
             folder: thumbnailDir,
             size: '400x400'
@@ -309,5 +309,9 @@ export const registerRecordHandlers = (database: Database) => {
 
   ipcMain.handle('deleteThumbnail', async (_, filePath) => {
     return deleteThumbnail(filePath);
+  });
+
+  ipcMain.handle('generateThumbnailWithTime', async (_, filePath, timestampSec) => {
+    return await generateThumbnailForFile(filePath, timestampSec);
   });
 }; 

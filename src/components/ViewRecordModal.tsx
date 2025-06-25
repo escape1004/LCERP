@@ -5,6 +5,7 @@ import { Category, DataRecord, FieldDefinition } from '../types';
 import { Button } from './ui/button';
 import { toast } from './ui/use-toast';
 import { ViewerModal } from './ViewerModal';
+import { TimeInput } from './TimeInput';
 import { format } from "date-fns";
 
 // 해시태그 파싱 유틸리티 함수
@@ -94,6 +95,12 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   const [viewerModalOpen, setViewerModalOpen] = useState(false);
   const [viewerFilePath, setViewerFilePath] = useState<string>('');
   const [viewerFileType, setViewerFileType] = useState<'image' | 'video' | 'archive' | null>(null);
+  const [hh, setHh] = React.useState(0);
+  const [mm, setMm] = React.useState(0);
+  const [ss, setSs] = React.useState(1); // 기본 1초
+  const totalSec = hh * 3600 + mm * 60 + ss;
+  const [duration, setDuration] = React.useState<number | null>(null); // 동영상 전체 길이(초)
+  const [lastValidDuration, setLastValidDuration] = React.useState<number | null>(null);
 
   // ESC 키로 모달 닫기
   useEffect(() => {
@@ -445,7 +452,31 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
     const [error, setError] = React.useState<string | null>(null);
     const [regenLoading, setRegenLoading] = React.useState(false);
     const ext = filePath ? filePath.slice(filePath.lastIndexOf('.')).toLowerCase() : '';
+    const isVideo = /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(ext);
     const loadRecords = useERPStore(state => state.loadRecords);
+
+    // duration: record에서 우선 사용, 없으면 lazy fetch
+    React.useEffect(() => {
+      let ignore = false;
+      if (isVideo && filePath) {
+        if (record && typeof (record as any).duration === 'number' && (record as any).duration > 0) {
+          setDuration((record as any).duration);
+          setLastValidDuration((record as any).duration);
+        } else {
+          window.electronAPI.getVideoDuration(filePath).then(sec => {
+            if (!ignore && sec && sec > 0) {
+              setDuration(sec);
+              setLastValidDuration(sec);
+              // lazy update: DB에 duration 저장 요청
+              window.electronAPI.updateRecord(record.id, { ...record.data, duration: sec });
+            }
+          });
+        }
+      } else {
+        setDuration(null);
+      }
+      return () => { ignore = true; };
+    }, [isVideo, filePath, record]);
 
     const reloadThumbnail = React.useCallback(() => {
       setLoading(true);
@@ -476,6 +507,26 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
       }
     }, [filePath, reloadThumbnail]);
 
+    // 시/분/초 입력값 보정 (duration 초과 시 자동 보정)
+    React.useEffect(() => {
+      if (!isVideo || duration == null) return;
+      const totalSec = hh * 3600 + mm * 60 + ss;
+      if (totalSec > duration) {
+        // duration 내 최대값으로 보정
+        let d = duration;
+        const newHh = Math.floor(d / 3600);
+        d = d % 3600;
+        const newMm = Math.floor(d / 60);
+        const newSs = d % 60;
+        setHh(newHh);
+        setMm(newMm);
+        setSs(newSs);
+      }
+    }, [hh, mm, ss, duration, isVideo]);
+
+    // duration이 0이거나 null이면 시간 입력 UI를 렌더하지 않음
+    const effectiveDuration = lastValidDuration;
+
     if (!SUPPORTED_THUMBNAIL_EXTS.includes(ext)) return null;
 
     return (
@@ -500,39 +551,46 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         ) : (
           <div className="w-[320px] h-[320px] bg-gray-900 flex items-center justify-center text-lg text-gray-500 border border-gray-700 rounded-xl">썸네일 없음</div>
         )}
-        <Button
-          size="sm"
-          className="mt-2 text-xs text-discord-muted bg-transparent hover:bg-discord-hover border-none shadow-none"
-          variant="ghost"
-          disabled={regenLoading}
-          onClick={async () => {
-            setRegenLoading(true);
-            try {
-              const res = await window.electronAPI.generateThumbnail(filePath);
-              if (res) {
-                toast({ title: '썸네일이 재생성되었습니다.' });
-                reloadThumbnail();
-                
-                // 전역 이벤트 발생 - 레코드 리스트의 썸네일도 업데이트
-                window.dispatchEvent(new CustomEvent('thumbnail:regenerated', {
-                  detail: { filePath }
-                }));
-                
-                if (categoryId) {
-                  await loadRecords(categoryId);
-                }
-              } else {
-                toast({ title: '썸네일 재생성 실패', description: '', variant: 'destructive' });
-              }
-            } catch (e) {
-              toast({ title: '썸네일 재생성 실패', description: String(e), variant: 'destructive' });
-            } finally {
-              setRegenLoading(false);
-            }
-          }}
-        >
-          {regenLoading ? '재생성 중...' : '썸네일 재생성'}
-        </Button>
+        {/* 시간 입력/슬라이더 부분만 분기 */}
+        {isVideo && (
+          <div className="flex items-center gap-2 mt-2">
+            {(!effectiveDuration || effectiveDuration === 0)
+              ? <div className="text-xs text-gray-500">동영상 길이 불러오는 중...</div>
+              : <TimeInput
+                  hh={hh}
+                  mm={mm}
+                  ss={ss}
+                  maxDuration={effectiveDuration}
+                  onChange={(newHh, newMm, newSs) => {
+                    setHh(newHh);
+                    setMm(newMm);
+                    setSs(newSs);
+                  }}
+                  onRegenerate={async () => {
+                    setRegenLoading(true);
+                    try {
+                      const res = await window.electronAPI.generateThumbnailWithTime(filePath, hh * 3600 + mm * 60 + ss);
+                      if (res) {
+                        toast({ title: `썸네일이 ${hh.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}:${ss.toString().padStart(2, '0')} 지점에서 재생성되었습니다.` });
+                        reloadThumbnail();
+                        window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));
+                        if (categoryId) {
+                          await loadRecords(categoryId);
+                        }
+                      } else {
+                        toast({ title: '썸네일 재생성 실패', description: '', variant: 'destructive' });
+                      }
+                    } catch (e) {
+                      toast({ title: '썸네일 재생성 실패', description: String(e), variant: 'destructive' });
+                    } finally {
+                      setRegenLoading(false);
+                    }
+                  }}
+                  disabled={regenLoading}
+                  loading={regenLoading}
+                />}
+          </div>
+        )}
       </div>
     );
   };
@@ -595,7 +653,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                   </h3>
                   <div className="text-discord-text text-sm">
                     {/* 파일 필드는 상세 정보에서 썸네일 대신 경로 복사 버튼만 */}
-                    {field.type === 'file' && record.data[field.id] ? (
+                    {field.type === 'file' && record?.data[field.id] ? (
                       <button
                         type="button"
                         className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all"

@@ -59,7 +59,7 @@ export function getThumbnailHash(filePath: string): string {
   return crypto.createHash('sha1').update(normalizedPath).digest('hex');
 }
 
-export async function generateThumbnail(filePath: string): Promise<string | null> {
+export async function generateThumbnail(filePath: string, timestampSec: number = 1): Promise<string | null> {
   // 파일 경로 검증
   if (!isValidFilePath(filePath)) {
     throw new Error('Invalid or unauthorized file path');
@@ -91,7 +91,7 @@ export async function generateThumbnail(filePath: string): Promise<string | null
         return new Promise((resolve, reject) => {
           ffmpeg(filePath)
             .screenshots({
-              timestamps: ['00:00:01'],
+              timestamps: [timestampSec],
               filename: path.basename(thumbnailPath),
               folder: thumbnailDir,
               size: '400x400'

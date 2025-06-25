@@ -40,6 +40,8 @@ const api: ElectronAPI = {
   getFileSize: (filePath: string) => ipcRenderer.invoke('getFileSize', filePath),
   getVideoServerPort: () => ipcRenderer.invoke('getVideoServerPort'),
   deleteThumbnail: (filePath: string) => ipcRenderer.invoke('deleteThumbnail', filePath),
+  generateThumbnailWithTime: (filePath: string, timestampSec: number) => ipcRenderer.invoke('generateThumbnailWithTime', filePath, timestampSec),
+  getVideoDuration: (filePath: string) => ipcRenderer.invoke('getVideoDuration', filePath),
 } as const;
 
 // API를 window 객체에 노출
