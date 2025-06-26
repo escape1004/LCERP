@@ -313,7 +313,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
             )}
             <button
               type="button"
-              className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all"
+              className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all text-left"
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(value);
@@ -333,7 +333,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
       return (
         <button
           type="button"
-          className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all"
+          className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all text-left"
           onClick={async () => {
             try {
               await navigator.clipboard.writeText(value);
@@ -735,7 +735,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                     {field.type === 'file' && record?.data[field.id] ? (
                       <button
                         type="button"
-                        className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all"
+                        className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all text-left"
                         onClick={async () => {
                           try {
                             await navigator.clipboard.writeText(record.data[field.id]);
