@@ -257,6 +257,37 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         return () => { ignore = true; };
       }, [value]);
 
+      // 썸네일 재생성 이벤트 처리
+      React.useEffect(() => {
+        const handleThumbnailRegenerated = (event: CustomEvent<{ filePath: string }>) => {
+          if (event.detail.filePath === value) {
+            // 해당 파일의 썸네일이 재생성되었으므로 다시 로드
+            setLoading(true);
+            window.electronAPI.getThumbnailDataUrl(value)
+              .then(res => {
+                if (res) {
+                  setThumbnailDataUrl(res);
+                  setError(null);
+                } else {
+                  setThumbnailDataUrl(null);
+                  setError(null);
+                }
+                setLoading(false);
+              })
+              .catch(e => {
+                setThumbnailDataUrl(null);
+                setError(String(e));
+                setLoading(false);
+              });
+          }
+        };
+
+        window.addEventListener('thumbnail:regenerated', handleThumbnailRegenerated as EventListener);
+        return () => {
+          window.removeEventListener('thumbnail:regenerated', handleThumbnailRegenerated as EventListener);
+        };
+      }, [value]);
+
       if (SUPPORTED_THUMBNAIL_EXTS.includes(ext)) {
         console.log('썸네일 dataUrl:', thumbnailDataUrl, '에러:', error);
         return (
@@ -505,6 +536,21 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         setDataUrl(null);
         setError(null);
       }
+    }, [filePath, reloadThumbnail]);
+
+    // 썸네일 재생성 이벤트 처리
+    React.useEffect(() => {
+      const handleThumbnailRegenerated = (event: CustomEvent<{ filePath: string }>) => {
+        if (event.detail.filePath === filePath) {
+          // 해당 파일의 썸네일이 재생성되었으므로 다시 로드
+          reloadThumbnail();
+        }
+      };
+
+      window.addEventListener('thumbnail:regenerated', handleThumbnailRegenerated as EventListener);
+      return () => {
+        window.removeEventListener('thumbnail:regenerated', handleThumbnailRegenerated as EventListener);
+      };
     }, [filePath, reloadThumbnail]);
 
     // 시/분/초 입력값 보정 (duration 초과 시 자동 보정)

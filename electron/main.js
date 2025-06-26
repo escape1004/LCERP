@@ -670,6 +670,8 @@ ipcMain.handle('db:addCategory', async (_, category) => {
 
 async function handleUpdateRecord(_, id, data) {
   try {
+    log('=== handleUpdateRecord 시작 ===', { id, dataKeys: Object.keys(data) });
+    
     const record = db.prepare('SELECT categoryId, duration FROM records WHERE id = ?').get(id);
     if (!record) {
       throw new Error('Record not found');
@@ -729,6 +731,39 @@ async function handleUpdateRecord(_, id, data) {
       }
     }
 
+    // 파일 경로 변경 감지를 위해 업데이트 전에 이전 데이터 조회
+    let prevFilePath = null;
+    try {
+      log('=== 파일 경로 변경 감지 시작 ===');
+      const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(record.categoryId);
+      if (category) {
+        const fields = JSON.parse(category.fields);
+        log('=== 카테고리 필드 ===', { fields: fields.map(f => ({ id: f.id, type: f.type, name: f.name })) });
+        
+        const fileField = fields.find(f => f.type === 'file');
+        if (fileField) {
+          log('=== 파일 필드 발견 ===', { fileFieldId: fileField.id, fileFieldName: fileField.name });
+          
+          // 업데이트 전에 이전 파일 경로 조회
+          const prevRecord = db.prepare('SELECT data FROM records WHERE id = ?').get(id);
+          if (prevRecord) {
+            const prevData = JSON.parse(prevRecord.data);
+            prevFilePath = prevData[fileField.id] || null;
+            log('=== 이전 파일 경로 조회 완료 ===', { prevFilePath });
+          } else {
+            log('=== 이전 레코드 데이터 없음 ===');
+          }
+        } else {
+          log('=== 파일 필드 없음 ===');
+        }
+      } else {
+        log('=== 카테고리 없음 ===');
+      }
+    } catch (error) {
+      log('이전 파일 경로 조회 중 오류:', error);
+    }
+
+    log('=== DB 업데이트 시작 ===');
     const stmt = db.prepare(`
       UPDATE records
       SET data = ?, updatedAt = ?, duration = ?
@@ -741,36 +776,70 @@ async function handleUpdateRecord(_, id, data) {
       duration,
       id
     );
+    log('=== DB 업데이트 완료 ===');
     
     // 파일 필드가 있으면 썸네일 자동 생성 (파일 경로가 변경된 경우에만)
     try {
+      log('=== 썸네일 생성 로직 시작 ===');
       const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(record.categoryId);
       if (category) {
         const fields = JSON.parse(category.fields);
         const fileField = fields.find(f => f.type === 'file');
         if (fileField && data[fileField.id]) {
-          // 이전 파일 경로와 비교
-          const prevRecord = db.prepare('SELECT data FROM records WHERE id = ?').get(id);
-          const prevData = prevRecord ? JSON.parse(prevRecord.data) : {};
-          const prevFilePath = prevData[fileField.id];
           const newFilePath = data[fileField.id];
+          log('=== 새 파일 경로 ===', { newFilePath });
+          log('=== 파일 경로 변경 여부 ===', { 
+            prevFilePath, 
+            newFilePath, 
+            isChanged: newFilePath !== prevFilePath,
+            prevType: typeof prevFilePath,
+            newType: typeof newFilePath
+          });
+          
           if (newFilePath !== prevFilePath) {
-            log('레코드 업데이트 시 썸네일 생성 시작(파일 경로 변경):', newFilePath);
+            log('=== 썸네일 생성 시작 (파일 경로 변경됨) ===', { newFilePath });
             // 썸네일 생성
             const thumbnailResult = await generateThumbnail(newFilePath);
             if (thumbnailResult) {
-              log('썸네일 생성 완료:', thumbnailResult);
+              log('=== 썸네일 생성 완료 ===', { thumbnailResult });
+              
+              // 프론트엔드에 썸네일 재생성 이벤트 전송
+              try {
+                const { BrowserWindow } = require('electron');
+                const windows = BrowserWindow.getAllWindows();
+                log('=== 이벤트 전송 시작 ===', { windowCount: windows.length });
+                windows.forEach((window) => {
+                  if (!window.isDestroyed()) {
+                    window.webContents.send('thumbnail:regenerated', { filePath: newFilePath });
+                    log('=== 이벤트 전송됨 ===', { filePath: newFilePath });
+                  }
+                });
+              } catch (error) {
+                log('썸네일 재생성 이벤트 전송 중 오류:', error);
+              }
+            } else {
+              log('=== 썸네일 생성 실패 ===');
             }
           } else {
-            log('레코드 업데이트: 파일 경로 동일, 썸네일 재생성 생략');
+            log('=== 파일 경로 동일, 썸네일 재생성 생략 ===');
           }
+        } else {
+          log('=== 파일 필드가 없거나 파일 경로가 비어있음 ===', { 
+            hasFileField: !!fileField, 
+            fileFieldId: fileField?.id,
+            hasFilePath: fileField ? !!data[fileField.id] : false,
+            filePath: fileField ? data[fileField.id] : null
+          });
         }
+      } else {
+        log('=== 카테고리를 찾을 수 없음 ===');
       }
     } catch (error) {
       log('썸네일 생성 중 오류:', error);
       // 썸네일 생성 실패는 레코드 업데이트를 막지 않음
     }
     
+    log('=== handleUpdateRecord 완료 ===');
     return { success: true };
   } catch (error) {
     log('Error in updateRecord:', error);

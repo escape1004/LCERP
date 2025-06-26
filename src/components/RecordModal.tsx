@@ -15,6 +15,13 @@ import { toast } from './ui/use-toast';
 import { AlertDialog } from './ui/alert-dialog';
 import { DatePicker } from './ui/date-picker';
 
+// 전역 이벤트 타입 정의
+declare global {
+  interface WindowEventMap {
+    'thumbnail:regenerated': CustomEvent<{ filePath: string }>;
+  }
+}
+
 interface RecordModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -124,6 +131,24 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     }
   }, [isOpen, category]);
 
+  // 썸네일 재생성 이벤트 처리
+  useEffect(() => {
+    const handleThumbnailRegenerated = (event: CustomEvent<{ filePath: string }>) => {
+      // 파일 필드가 있는지 확인
+      const fileField = category?.fields?.find(f => f.type === 'file');
+      if (fileField && formData[fileField.id] === event.detail.filePath) {
+        // 현재 모달에서 표시 중인 파일의 썸네일이 재생성되었으므로 UI 갱신 필요
+        // 필요한 경우 여기에 추가 로직 구현
+        console.log('썸네일이 재생성되었습니다:', event.detail.filePath);
+      }
+    };
+
+    window.addEventListener('thumbnail:regenerated', handleThumbnailRegenerated as EventListener);
+    return () => {
+      window.removeEventListener('thumbnail:regenerated', handleThumbnailRegenerated as EventListener);
+    };
+  }, [category, formData]);
+
   const validateForm = useCallback(() => {
     const newErrors: Record<string, string> = {};
     (category?.fields ?? []).forEach(field => {
@@ -194,6 +219,19 @@ export const RecordModal: React.FC<RecordModalProps> = ({
       setIsValidating(true);
       if (record) {
         await updateRecord(record.id, formData);
+        
+        // 파일 필드가 변경되었는지 확인하고 썸네일 재생성 이벤트 발생
+        const fileField = category.fields.find(f => f.type === 'file');
+        if (fileField) {
+          const prevFilePath = record.data[fileField.id];
+          const newFilePath = formData[fileField.id];
+          if (newFilePath !== prevFilePath && newFilePath) {
+            // 전역 이벤트 발생 - 레코드 리스트의 썸네일도 업데이트
+            window.dispatchEvent(new CustomEvent('thumbnail:regenerated', {
+              detail: { filePath: newFilePath }
+            }));
+          }
+        }
       } else {
         const now = new Date().toISOString();
         const newRecord: NewRecord = {

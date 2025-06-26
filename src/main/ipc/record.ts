@@ -264,15 +264,13 @@ export const registerRecordHandlers = (database: Database) => {
 
   ipcMain.handle('db:updateRecord', async (_, id, data) => {
     const now = new Date().toISOString();
-    const stringifiedData = JSON.stringify(data);
     
-    db.prepare(`
-      UPDATE records 
-      SET data = ?, updatedAt = ?
-      WHERE id = ?
-    `).run(stringifiedData, now, id);
-
-    // 파일 필드가 있으면 썸네일 자동 생성
+    // 데이터 정규화
+    const normalizedData = normalizeValue(data);
+    const stringifiedData = JSON.stringify(normalizedData);
+    
+    // 파일 경로 변경 감지를 위해 업데이트 전에 이전 데이터 조회
+    let prevFilePath: string | null = null;
     try {
       const record = db.prepare('SELECT categoryId FROM records WHERE id = ?').get(id) as {categoryId: string} | undefined;
       if (record) {
@@ -280,11 +278,62 @@ export const registerRecordHandlers = (database: Database) => {
         if (category) {
           const fields = JSON.parse(category.fields);
           const fileField = fields.find((f: any) => f.type === 'file');
-          if (fileField && data[fileField.id]) {
-            const filePath = data[fileField.id];
-            console.log('레코드 업데이트 시 썸네일 생성 시작:', filePath);
+          if (fileField) {
+            // 업데이트 전에 이전 파일 경로 조회
+            const prevRecord = db.prepare('SELECT data FROM records WHERE id = ?').get(id) as {data: string} | undefined;
+            if (prevRecord) {
+              const prevData = JSON.parse(prevRecord.data);
+              prevFilePath = prevData[fileField.id] || null;
+              console.log('이전 파일 경로:', prevFilePath);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('이전 파일 경로 조회 중 오류:', error);
+    }
+    
+    db.prepare(`
+      UPDATE records 
+      SET data = ?, updatedAt = ?
+      WHERE id = ?
+    `).run(stringifiedData, now, id);
+
+    // 파일 필드가 있으면 썸네일 자동 생성 (파일 경로가 변경된 경우에만)
+    try {
+      const record = db.prepare('SELECT categoryId FROM records WHERE id = ?').get(id) as {categoryId: string} | undefined;
+      if (record) {
+        const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(record.categoryId) as {fields: string} | undefined;
+        if (category) {
+          const fields = JSON.parse(category.fields);
+          const fileField = fields.find((f: any) => f.type === 'file');
+          if (fileField && normalizedData[fileField.id]) {
+            const newFilePath = normalizedData[fileField.id];
+            console.log('새 파일 경로:', newFilePath);
+            console.log('파일 경로 변경 여부:', newFilePath !== prevFilePath);
             
-            await generateThumbnailForFile(filePath);
+            if (newFilePath !== prevFilePath) {
+              console.log('레코드 업데이트 시 썸네일 생성 시작(파일 경로 변경):', newFilePath);
+              // 썸네일 생성
+              await generateThumbnailForFile(newFilePath);
+              
+              // 프론트엔드에 썸네일 재생성 이벤트 전송
+              try {
+                const { BrowserWindow } = require('electron');
+                const windows = BrowserWindow.getAllWindows();
+                windows.forEach((window: any) => {
+                  if (!window.isDestroyed()) {
+                    window.webContents.send('thumbnail:regenerated', { filePath: newFilePath });
+                  }
+                });
+              } catch (error) {
+                console.error('썸네일 재생성 이벤트 전송 중 오류:', error);
+              }
+            } else {
+              console.log('레코드 업데이트: 파일 경로 동일, 썸네일 재생성 생략');
+            }
+          } else {
+            console.log('파일 필드가 없거나 파일 경로가 비어있음');
           }
         }
       }
