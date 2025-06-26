@@ -72,6 +72,10 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const [imgRotation, setImgRotation] = useState(0); // 이미지 회전 각도
   const [videoRotation, setVideoRotation] = useState(0); // 동영상 회전 각도
   const [archiveImgRotation, setArchiveImgRotation] = useState(0); // 압축 이미지 회전 각도
+  
+  // 볼륨 오버레이 상태 추가
+  const [showVolumeOverlay, setShowVolumeOverlay] = useState(false);
+  const volumeOverlayTimeoutRef = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
     if (!isOpen || !filePath || !fileType) {
@@ -176,6 +180,15 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     } else if (isMuted) {
       setIsMuted(false);
     }
+    
+    // 볼륨 오버레이 표시
+    setShowVolumeOverlay(true);
+    if (volumeOverlayTimeoutRef.current) {
+      clearTimeout(volumeOverlayTimeoutRef.current);
+    }
+    volumeOverlayTimeoutRef.current = setTimeout(() => {
+      setShowVolumeOverlay(false);
+    }, 1500);
   };
 
   const handleMuteToggle = () => {
@@ -684,6 +697,37 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     }
   }, [isOpen]);
 
+  // 컴포넌트 언마운트 시 타이머 정리
+  useEffect(() => {
+    return () => {
+      if (volumeOverlayTimeoutRef.current) {
+        clearTimeout(volumeOverlayTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // 볼륨 슬라이더 wheel 이벤트 등록
+  useEffect(() => {
+    const volumeSliders = document.querySelectorAll('#volume-slider');
+    
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.05 : 0.05;
+      const newVolume = Math.max(0, Math.min(1, (isMuted ? 0 : volume) + delta));
+      handleVolumeChange(newVolume);
+    };
+
+    volumeSliders.forEach(slider => {
+      slider.addEventListener('wheel', handleWheel, { passive: false });
+    });
+
+    return () => {
+      volumeSliders.forEach(slider => {
+        slider.removeEventListener('wheel', handleWheel);
+      });
+    };
+  }, [volume, isMuted, handleVolumeChange]);
+
   if (!isOpen || !filePath || !fileType) return null;
 
   const currentFile = archiveFiles[currentArchiveIndex];
@@ -834,6 +878,28 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                     </div>
                   </div>
                   
+                  {/* 볼륨 오버레이 */}
+                  {showVolumeOverlay && (
+                    <div className="absolute top-4 left-4 transition-opacity duration-300">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-center w-8 h-8 bg-discord-accent rounded-full">
+                          {isMuted || volume === 0 ? (
+                            <VolumeX size={16} className="text-white" />
+                          ) : volume < 0.5 ? (
+                            <Volume2 size={16} className="text-white" />
+                          ) : (
+                            <Volume2 size={16} className="text-white" />
+                          )}
+                        </div>
+                        <div className="text-center">
+                          <div className="text-xl font-bold text-white">
+                            {Math.round((isMuted ? 0 : volume) * 100)}%
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
                   {/* 커스텀 컨트롤 */}
                   <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
                     {/* 재생바 */}
@@ -876,10 +942,11 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                           type="range"
                           min="0"
                           max="1"
-                          step="0.1"
+                          step="0.01"
                           value={isMuted ? 0 : volume}
                           onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
                           className="w-20 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
+                          id="volume-slider"
                         />
                       </div>
                       
@@ -1045,6 +1112,28 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                               />
                             </div>
                             
+                            {/* 볼륨 오버레이 */}
+                            {showVolumeOverlay && (
+                              <div className="absolute top-4 left-4 transition-opacity duration-300">
+                                <div className="flex items-center gap-3">
+                                  <div className="flex items-center justify-center w-8 h-8 bg-discord-accent rounded-full">
+                                    {isMuted || volume === 0 ? (
+                                      <VolumeX size={16} className="text-white" />
+                                    ) : volume < 0.5 ? (
+                                      <Volume2 size={16} className="text-white" />
+                                    ) : (
+                                      <Volume2 size={16} className="text-white" />
+                                    )}
+                                  </div>
+                                  <div className="text-center">
+                                    <div className="text-xl font-bold text-white">
+                                      {Math.round((isMuted ? 0 : volume) * 100)}%
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            
                             {/* 커스텀 컨트롤 */}
                             <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
                               {/* 재생바 */}
@@ -1087,10 +1176,11 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                     type="range"
                                     min="0"
                                     max="1"
-                                    step="0.1"
+                                    step="0.01"
                                     value={isMuted ? 0 : volume}
                                     onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
                                     className="w-20 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
+                                    id="volume-slider"
                                   />
                                 </div>
                                 
