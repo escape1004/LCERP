@@ -591,6 +591,39 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                 />}
           </div>
         )}
+        
+        {/* 이미지/압축파일용 썸네일 재생성 버튼 */}
+        {!isVideo && fileExists === true && (
+          <div className="flex items-center gap-2 mt-2">
+            <button
+              type="button"
+              onClick={async () => {
+                setRegenLoading(true);
+                try {
+                  const res = await window.electronAPI.regenerateThumbnail(filePath);
+                  if (res) {
+                    toast({ title: '썸네일이 재생성되었습니다.' });
+                    reloadThumbnail();
+                    window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));
+                    if (categoryId) {
+                      await loadRecords(categoryId);
+                    }
+                  } else {
+                    toast({ title: '썸네일 재생성 실패', description: '', variant: 'destructive' });
+                  }
+                } catch (e) {
+                  toast({ title: '썸네일 재생성 실패', description: String(e), variant: 'destructive' });
+                } finally {
+                  setRegenLoading(false);
+                }
+              }}
+              disabled={regenLoading}
+              className="px-3 py-1 text-xs text-discord-muted bg-transparent hover:bg-discord-hover border border-gray-600 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {regenLoading ? '재생성 중...' : '썸네일 재생성'}
+            </button>
+          </div>
+        )}
       </div>
     );
   };

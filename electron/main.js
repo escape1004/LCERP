@@ -37,6 +37,7 @@ function log(message, data = '') {
   const timestamp = new Date().toISOString();
   const logMessage = `${timestamp} - ${message} ${data ? JSON.stringify(data) : ''}\n`;
   logStream.write(logMessage);
+  console.log(logMessage);
 }
 
 // 프로토콜 등록 함수
@@ -353,12 +354,22 @@ async function generateThumbnail(filePath) {
     const ffmpegStatic = require('ffmpeg-static');
     const ffprobeStatic = require('ffprobe-static');
     
-    // ffmpeg/ffprobe 경로를 resources 폴더의 경로로만 강제 지정
-    const ffmpegPath = path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe');
-    const ffprobePath = path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe');
+    // ffmpeg/ffprobe 경로를 여러 후보에서 찾기
+    const ffmpegCandidates = [
+      path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe'),
+      path.join(__dirname, '..', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe'),
+      path.join(__dirname, '..', 'node_modules', '.bin', 'ffmpeg.exe')
+    ];
+    const ffprobeCandidates = [
+      path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+      path.join(__dirname, '..', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+      path.join(__dirname, '..', 'node_modules', '.bin', 'ffprobe.exe')
+    ];
+    const ffmpegPath = ffmpegCandidates.find(fs.existsSync);
+    const ffprobePath = ffprobeCandidates.find(fs.existsSync);
     console.log('ffmpegPath:', ffmpegPath);
     console.log('ffprobePath:', ffprobePath);
-    if (!fs.existsSync(ffmpegPath) || !fs.existsSync(ffprobePath)) {
+    if (!ffmpegPath || !ffprobePath) {
       log('ffmpeg/ffprobe 경로를 찾을 수 없음', { ffmpegPath, ffprobePath });
       return null;
     }
@@ -678,26 +689,44 @@ async function handleUpdateRecord(_, id, data) {
         const ffprobeStatic = require('ffprobe-static');
         const path = require('path');
         const fs = require('fs');
-        
-        // ffmpeg/ffprobe 경로를 resources 폴더의 경로로만 강제 지정
-        const ffmpegPath = path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe');
-        const ffprobePath = path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe');
-        console.log('ffmpegPath:', ffmpegPath);
-        console.log('ffprobePath:', ffprobePath);
-        if (!fs.existsSync(ffmpegPath) || !fs.existsSync(ffprobePath)) {
-          log('ffmpeg/ffprobe 경로를 찾을 수 없음', { ffmpegPath, ffprobePath });
-          return null;
-        }
-        ffmpeg.setFfmpegPath(ffmpegPath);
-        ffmpeg.setFfprobePath(ffprobePath);
-        
-        duration = await new Promise((resolve) => {
-          ffmpeg.ffprobe(fileField, (err, metadata) => {
-            if (err || !metadata || !metadata.format || !metadata.format.duration) return resolve(null);
-            resolve(Math.floor(metadata.format.duration));
+        // ffmpeg/ffprobe 경로를 여러 후보에서 찾기
+        const ffmpegCandidates = [
+          path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe'),
+          path.join(__dirname, '..', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe'),
+          path.join(__dirname, '..', 'node_modules', '.bin', 'ffmpeg.exe')
+        ];
+        const ffprobeCandidates = [
+          path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+          path.join(__dirname, '..', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+          path.join(__dirname, '..', 'node_modules', '.bin', 'ffprobe.exe')
+        ];
+        const ffmpegPath = ffmpegCandidates.find(fs.existsSync);
+        const ffprobePath = ffprobeCandidates.find(fs.existsSync);
+        log('[addRecord] 동영상 duration 계산 시도', { fileField, ffmpegPath, ffprobePath });
+        if (!ffmpegPath || !ffprobePath) {
+          log('[addRecord] ffmpeg/ffprobe 경로를 찾을 수 없음, duration=null', { ffmpegPath, ffprobePath });
+          duration = null;
+        } else {
+          ffmpeg.setFfmpegPath(ffmpegPath);
+          ffmpeg.setFfprobePath(ffprobePath);
+          duration = await new Promise((resolve) => {
+            ffmpeg.ffprobe(fileField, (err, metadata) => {
+              if (err) {
+                log('[addRecord] ffprobe 에러', { fileField, err: err.message, stack: err.stack });
+                return resolve(null);
+              }
+              if (!metadata || !metadata.format || !metadata.format.duration) {
+                log('[addRecord] ffprobe 결과에 duration 없음', { fileField, metadata });
+                return resolve(null);
+              }
+              resolve(Math.floor(metadata.format.duration));
+            });
           });
-        });
-      } catch (e) { duration = null; }
+        }
+      } catch (e) {
+        log('[addRecord] duration 계산 중 예외', { fileField, error: e.message, stack: e.stack });
+        duration = null;
+      }
     }
 
     const stmt = db.prepare(`
@@ -812,61 +841,85 @@ ipcMain.handle('db:addRecord', async (_, record) => {
         const ffprobeStatic = require('ffprobe-static');
         const path = require('path');
         const fs = require('fs');
-        
-        // ffmpeg/ffprobe 경로를 resources 폴더의 경로로만 강제 지정
-        const ffmpegPath = path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe');
-        const ffprobePath = path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe');
-        console.log('ffmpegPath:', ffmpegPath);
-        console.log('ffprobePath:', ffprobePath);
-        if (!fs.existsSync(ffmpegPath) || !fs.existsSync(ffprobePath)) {
-          log('ffmpeg/ffprobe 경로를 찾을 수 없음', { ffmpegPath, ffprobePath });
-          return null;
-        }
-        ffmpeg.setFfmpegPath(ffmpegPath);
-        ffmpeg.setFfprobePath(ffprobePath);
-        
-        duration = await new Promise((resolve) => {
-          ffmpeg.ffprobe(fileField, (err, metadata) => {
-            if (err || !metadata || !metadata.format || !metadata.format.duration) return resolve(null);
-            resolve(Math.floor(metadata.format.duration));
+        // ffmpeg/ffprobe 경로를 여러 후보에서 찾기
+        const ffmpegCandidates = [
+          path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe'),
+          path.join(__dirname, '..', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe'),
+          path.join(__dirname, '..', 'node_modules', '.bin', 'ffmpeg.exe')
+        ];
+        const ffprobeCandidates = [
+          path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+          path.join(__dirname, '..', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+          path.join(__dirname, '..', 'node_modules', '.bin', 'ffprobe.exe')
+        ];
+        const ffmpegPath = ffmpegCandidates.find(fs.existsSync);
+        const ffprobePath = ffprobeCandidates.find(fs.existsSync);
+        log('[addRecord] 동영상 duration 계산 시도', { fileField, ffmpegPath, ffprobePath });
+        if (!ffmpegPath || !ffprobePath) {
+          log('[addRecord] ffmpeg/ffprobe 경로를 찾을 수 없음, duration=null', { ffmpegPath, ffprobePath });
+          duration = null;
+        } else {
+          ffmpeg.setFfmpegPath(ffmpegPath);
+          ffmpeg.setFfprobePath(ffprobePath);
+          duration = await new Promise((resolve) => {
+            ffmpeg.ffprobe(fileField, (err, metadata) => {
+              if (err) {
+                log('[addRecord] ffprobe 에러', { fileField, err: err.message, stack: err.stack });
+                return resolve(null);
+              }
+              if (!metadata || !metadata.format || !metadata.format.duration) {
+                log('[addRecord] ffprobe 결과에 duration 없음', { fileField, metadata });
+                return resolve(null);
+              }
+              resolve(Math.floor(metadata.format.duration));
+            });
           });
-        });
-      } catch (e) { duration = null; }
+        }
+      } catch (e) {
+        log('[addRecord] duration 계산 중 예외', { fileField, error: e.message, stack: e.stack });
+        duration = null;
+      }
     }
-    stmt.run(
-      recordId,
-      record.categoryId,
-      JSON.stringify(record.data),
-      record.createdAt || now,
-      record.updatedAt || now,
-      duration
-    );
-    
+    try {
+      stmt.run(
+        recordId,
+        record.categoryId,
+        JSON.stringify(record.data),
+        record.createdAt || now,
+        record.updatedAt || now,
+        duration
+      );
+    } catch (e) {
+      log('[addRecord] DB insert 예외', { recordId, error: e.message, stack: e.stack });
+      throw e;
+    }
     // 파일 필드가 있으면 썸네일 자동 생성
     try {
       const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(record.categoryId);
       if (category) {
         const fields = JSON.parse(category.fields);
-        const fileField = fields.find(f => f.type === 'file');
-        if (fileField && record.data[fileField.id]) {
-          const filePath = record.data[fileField.id];
-          log('레코드 등록 시 썸네일 생성 시작:', filePath);
-          
-          // 썸네일 생성
-          const thumbnailResult = await generateThumbnail(filePath);
-          if (thumbnailResult) {
-            log('썸네일 생성 완료:', thumbnailResult);
+        const fileFieldObj = fields.find(f => f.type === 'file');
+        if (fileFieldObj && record.data[fileFieldObj.id]) {
+          const filePath = record.data[fileFieldObj.id];
+          log('[addRecord] 썸네일 생성 시작', { filePath });
+          try {
+            const thumbnailResult = await generateThumbnail(filePath);
+            if (thumbnailResult) {
+              log('[addRecord] 썸네일 생성 완료', { thumbnailResult });
+            } else {
+              log('[addRecord] 썸네일 생성 실패(결과 null)', { filePath });
+            }
+          } catch (thumbErr) {
+            log('[addRecord] 썸네일 생성 중 예외', { filePath, error: thumbErr.message, stack: thumbErr.stack });
           }
         }
       }
     } catch (error) {
-      log('썸네일 생성 중 오류:', error);
-      // 썸네일 생성 실패는 레코드 등록을 막지 않음
+      log('[addRecord] 썸네일 생성 블록 예외', { error: error.message, stack: error.stack });
     }
-    
     return recordId;
   } catch (error) {
-    log('Error in addRecord:', error);
+    log('[addRecord] 최상위 예외', { error: error.message, stack: error.stack });
     throw error;
   }
 });
@@ -1341,9 +1394,19 @@ ipcMain.handle('generateThumbnailWithTime', async (_, filePath, timestampSec) =>
       return null;
     }
     
-    // ffmpeg/ffprobe 경로를 resources 폴더의 경로로만 강제 지정
-    const ffmpegPath = path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe');
-    const ffprobePath = path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe');
+    // ffmpeg/ffprobe 경로를 여러 후보에서 찾기
+    const ffmpegCandidates = [
+      path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe'),
+      path.join(__dirname, '..', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe'),
+      path.join(__dirname, '..', 'node_modules', '.bin', 'ffmpeg.exe')
+    ];
+    const ffprobeCandidates = [
+      path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+      path.join(__dirname, '..', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+      path.join(__dirname, '..', 'node_modules', '.bin', 'ffprobe.exe')
+    ];
+    const ffmpegPath = ffmpegCandidates.find(fs.existsSync);
+    const ffprobePath = ffprobeCandidates.find(fs.existsSync);
     console.log('ffmpegPath:', ffmpegPath);
     console.log('ffprobePath:', ffprobePath);
     if (!fs.existsSync(ffmpegPath) || !fs.existsSync(ffprobePath)) {
@@ -1387,6 +1450,81 @@ ipcMain.handle('generateThumbnailWithTime', async (_, filePath, timestampSec) =>
     });
     return thumbnailPath;
   } catch (e) {
+    return null;
+  }
+});
+
+// 이미지/압축파일용 썸네일 재생성 함수
+ipcMain.handle('regenerateThumbnail', async (_, filePath) => {
+  try {
+    const sharp = require('sharp');
+    const AdmZip = require('adm-zip');
+    const path = require('path');
+    const fs = require('fs');
+    
+    let normalizedPath = filePath;
+    if (!path.isAbsolute(filePath)) {
+      normalizedPath = path.join(appDataDir, filePath);
+    }
+    
+    if (!fs.existsSync(normalizedPath)) {
+      log('파일이 존재하지 않음:', normalizedPath);
+      return null;
+    }
+    
+    const ext = path.extname(normalizedPath).toLowerCase();
+    const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext);
+    const isArchive = ['.zip', '.7z'].includes(ext);
+    
+    if (!isImage && !isArchive) {
+      log('지원하지 않는 파일 형식:', ext);
+      return null;
+    }
+    
+    const thumbnailDir = path.join(appDataDir, 'thumbnails');
+    if (!fs.existsSync(thumbnailDir)) {
+      fs.mkdirSync(thumbnailDir, { recursive: true });
+    }
+    
+    const hash = getThumbnailHash(normalizedPath);
+    const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
+    
+    log('썸네일 재생성 시작:', { filePath: normalizedPath, thumbnailPath, fileType: isImage ? 'image' : 'archive' });
+    
+    if (isImage) {
+      // 이미지 썸네일 재생성
+      await sharp(normalizedPath)
+        .resize(400, 400, { fit: 'contain' })
+        .toFile(thumbnailPath);
+      log('이미지 썸네일 재생성 완료:', thumbnailPath);
+    } else if (isArchive) {
+      // 압축파일 썸네일 재생성
+      const zip = new AdmZip(normalizedPath);
+      const zipEntries = zip.getEntries();
+      const imageEntry = zipEntries.find(entry => 
+        /\.(jpg|jpeg|png|gif|webp)$/i.test(entry.entryName) && !entry.isDirectory
+      );
+      
+      if (imageEntry) {
+        const buffer = zip.readFile(imageEntry);
+        if (buffer) {
+          await sharp(buffer)
+            .resize(400, 400, { fit: 'contain' })
+            .toFile(thumbnailPath);
+          log('압축파일 썸네일 재생성 완료:', thumbnailPath);
+        } else {
+          log('압축파일 내 이미지 버퍼 읽기 실패');
+          return null;
+        }
+      } else {
+        log('압축파일 내 이미지 파일을 찾을 수 없음');
+        return null;
+      }
+    }
+    
+    return thumbnailPath;
+  } catch (e) {
+    log('썸네일 재생성 에러:', e);
     return null;
   }
 });

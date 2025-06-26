@@ -41,6 +41,7 @@ const api: ElectronAPI = {
   getVideoServerPort: () => ipcRenderer.invoke('getVideoServerPort'),
   deleteThumbnail: (filePath: string) => ipcRenderer.invoke('deleteThumbnail', filePath),
   generateThumbnailWithTime: (filePath: string, timestampSec: number) => ipcRenderer.invoke('generateThumbnailWithTime', filePath, timestampSec),
+  regenerateThumbnail: (filePath: string) => ipcRenderer.invoke('regenerateThumbnail', filePath),
   getVideoDuration: (filePath: string) => ipcRenderer.invoke('getVideoDuration', filePath),
 } as const;
 

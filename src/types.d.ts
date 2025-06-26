@@ -37,6 +37,7 @@ export interface ElectronAPI {
   getFileSize: (filePath: string) => Promise<{ success: boolean; size?: string; error?: string }>;
   deleteThumbnail: (filePath: string) => Promise<boolean>;
   generateThumbnailWithTime: (filePath: string, timestampSec: number) => Promise<string | null>;
+  regenerateThumbnail: (filePath: string) => Promise<string | null>;
   getVideoDuration: (filePath: string) => Promise<number | null>;
 }
 
