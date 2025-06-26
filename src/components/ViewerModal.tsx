@@ -719,8 +719,8 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
           </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 min-h-0 flex items-center justify-center relative">
+        {/* Content (Body) */}
+        <div className="flex-1 min-h-0 flex items-center justify-center relative" style={{ overflow: 'hidden' }}>
           {/* 회전 버튼: 바디 영역 우측 상단에 fixed 배치 */}
           {((fileType === 'image') || (fileType === 'video') || (fileType === 'archive' && (currentFileExt !== 'txt'))) && (
             <div className="absolute top-4 right-4 z-20 flex gap-2">
@@ -772,6 +772,8 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                       alt="이미지 뷰어"
                       className="max-w-full max-h-full object-contain rounded shadow-lg select-none"
                       style={{
+                        maxWidth: imgRotation % 180 !== 0 ? '80vh' : '100%',
+                        maxHeight: imgRotation % 180 !== 0 ? '95vw' : '80vh',
                         transform: `scale(${imgScale}) translate(${imgOffset.x / imgScale}px, ${imgOffset.y / imgScale}px) rotate(${imgRotation}deg)`,
                         cursor: imgScale > 1 ? (isPanning ? 'grabbing' : 'grab') : 'default',
                         transition: isPanning ? 'none' : 'transform 0.2s',
@@ -818,6 +820,10 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                         ref={videoRef}
                         src={dataUrl}
                         className="max-w-full max-h-[80vh] h-full object-contain bg-black"
+                        style={{
+                          maxWidth: videoRotation % 180 !== 0 ? '80vh' : '100%',
+                          maxHeight: videoRotation % 180 !== 0 ? '95vw' : '80vh',
+                        }}
                         onPlay={() => setIsPlaying(true)}
                         onPause={() => setIsPlaying(false)}
                         onLoadedMetadata={handleLoadedMetadata}
@@ -997,12 +1003,14 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                               <video
                                 src={currentArchiveDataUrl}
                                 className="max-w-full max-h-[80vh] object-contain bg-black rounded shadow-lg"
+                                style={{
+                                  maxWidth: archiveImgRotation % 180 !== 0 ? '80vh' : '100%',
+                                  maxHeight: archiveImgRotation % 180 !== 0 ? '95vw' : '80vh',
+                                  cursor: archiveVideoScale > 1 ? (archiveVideoIsPanning ? 'grabbing' : 'grab') : 'default',
+                                }}
                                 controls={false}
                                 autoPlay
                                 ref={archiveVideoRef}
-                                style={{
-                                  cursor: archiveVideoScale > 1 ? (archiveVideoIsPanning ? 'grabbing' : 'grab') : 'default',
-                                }}
                                 onMouseDown={(e) => {
                                   e.stopPropagation();
                                   handleArchiveVideoMouseDown(e);
@@ -1118,8 +1126,8 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                               alt={currentFile?.name || '압축 파일 이미지'}
                               className="max-w-full max-h-full object-contain rounded shadow-lg block mx-auto select-none"
                               style={{
-                                maxHeight: '80vh',
-                                maxWidth: '100%',
+                                maxWidth: archiveImgRotation % 180 !== 0 ? '80vh' : '100%',
+                                maxHeight: archiveImgRotation % 180 !== 0 ? '95vw' : '80vh',
                                 transform: `scale(${archiveImgScale}) translate(${archiveImgOffset.x / archiveImgScale}px, ${archiveImgOffset.y / archiveImgScale}px) rotate(${archiveImgRotation}deg)`,
                                 cursor: archiveImgScale > 1 ? (archiveIsPanning ? 'grabbing' : 'grab') : 'default',
                                 transition: archiveIsPanning ? 'none' : 'transform 0.2s',
