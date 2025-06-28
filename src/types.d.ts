@@ -39,6 +39,7 @@ export interface ElectronAPI {
   generateThumbnailWithTime: (filePath: string, timestampSec: number) => Promise<string | null>;
   regenerateThumbnail: (filePath: string) => Promise<string | null>;
   getVideoDuration: (filePath: string) => Promise<number | null>;
+  getVideoCodecInfo: (filePath: string) => Promise<{ video?: { codec?: string; profile?: string; pix_fmt?: string }; audio?: { codec?: string; sample_rate?: string; channels?: number }; error?: string }>;
 }
 
 declare global {

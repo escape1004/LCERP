@@ -43,6 +43,11 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   // 재생바 관련 상태 추가
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  
+  // 동영상 에러 상태 추가
+  const [videoError, setVideoError] = useState<string | null>(null);
+  // 동영상 코덱 정보 상태 추가
+  const [codecInfo, setCodecInfo] = useState<any>(null);
 
   // 일반 이미지 상태 및 핸들러
   const [imgScale, setImgScale] = useState(1);
@@ -85,6 +90,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       setCurrentArchiveDataUrl(null);
       setCurrentArchiveText(null);
       setIsPlaying(false);
+      setVideoError(null);
       return;
     }
 
@@ -860,21 +866,79 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                       transform: `rotate(${videoRotation}deg)`,
                       transition: 'transform 0.2s'
                     }}>
-                      <video
-                        ref={videoRef}
-                        src={dataUrl}
-                        className="max-w-full max-h-[80vh] h-full object-contain bg-black"
-                        style={{
-                          maxWidth: videoRotation % 180 !== 0 ? '80vh' : '100%',
-                          maxHeight: videoRotation % 180 !== 0 ? '95vw' : '80vh',
-                        }}
-                        onPlay={() => setIsPlaying(true)}
-                        onPause={() => setIsPlaying(false)}
-                        onLoadedMetadata={handleLoadedMetadata}
-                        onTimeUpdate={handleTimeUpdate}
-                        onClick={handleVideoClick}
-                        autoPlay
-                      />
+                      {videoError ? (
+                        <div className="flex flex-col items-center justify-center bg-black text-white p-8 rounded-lg">
+                          <div className="text-2xl mb-4">⚠️</div>
+                          <div className="text-lg font-semibold mb-2">{videoError}</div>
+                          <div className="text-sm text-gray-300 text-center">
+                            지원되지 않는 코덱이거나<br />
+                            파일이 손상되었을 수 있습니다.
+                          </div>
+                          {codecInfo && (
+                            <div className="mt-4 text-xs bg-gray-800 rounded p-2 text-left">
+                              <div className="mb-1 font-bold text-blue-300">코덱 정보</div>
+                              {codecInfo.error && <div className="text-red-400">{codecInfo.error}</div>}
+                              {codecInfo.video && (
+                                <div>Video: {codecInfo.video.codec} {codecInfo.video.profile ? `(${codecInfo.video.profile})` : ''} {codecInfo.video.pix_fmt ? `[${codecInfo.video.pix_fmt}]` : ''}</div>
+                              )}
+                              {codecInfo.audio && (
+                                <div>Audio: {codecInfo.audio.codec} {codecInfo.audio.sample_rate ? `@${codecInfo.audio.sample_rate}Hz` : ''} {codecInfo.audio.channels ? `채널:${codecInfo.audio.channels}` : ''}</div>
+                              )}
+                              {!codecInfo.video && !codecInfo.audio && !codecInfo.error && <div>코덱 정보를 찾을 수 없습니다.</div>}
+                            </div>
+                          )}
+                          <button
+                            onClick={() => {
+                              setVideoError(null);
+                              setCodecInfo(null);
+                              if (videoRef.current) {
+                                videoRef.current.load();
+                              }
+                            }}
+                            className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded transition-colors"
+                          >
+                            다시 시도
+                          </button>
+                        </div>
+                      ) : (
+                        <video
+                          ref={videoRef}
+                          src={dataUrl}
+                          className="max-w-full max-h-[80vh] h-full object-contain bg-black"
+                          style={{
+                            maxWidth: videoRotation % 180 !== 0 ? '80vh' : '100%',
+                            maxHeight: videoRotation % 180 !== 0 ? '95vw' : '80vh',
+                          }}
+                          onPlay={() => setIsPlaying(true)}
+                          onPause={() => setIsPlaying(false)}
+                          onLoadedMetadata={handleLoadedMetadata}
+                          onTimeUpdate={handleTimeUpdate}
+                          onClick={handleVideoClick}
+                          onError={(e) => {
+                            console.error('동영상 재생 에러:', e);
+                            console.error('동영상 소스:', dataUrl?.substring(0, 100) + '...');
+                            console.error('파일 경로:', filePath);
+                            // 에러 정보를 더 자세히 로깅
+                            const video = e.target as HTMLVideoElement;
+                            if (video.error) {
+                              console.error('비디오 에러 코드:', video.error.code);
+                              console.error('비디오 에러 메시지:', video.error.message);
+                            }
+                            setVideoError('동영상을 재생할 수 없습니다.');
+                            setCodecInfo(null);
+                            if (filePath) {
+                              window.electronAPI.getVideoCodecInfo(filePath).then(setCodecInfo);
+                            }
+                          }}
+                          onLoadStart={() => {
+                            console.log('동영상 로딩 시작:', filePath);
+                          }}
+                          onCanPlay={() => {
+                            console.log('동영상 재생 가능:', filePath);
+                            setVideoError(null);
+                          }}
+                        />
+                      )}
                     </div>
                   </div>
                   
@@ -1067,49 +1131,99 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                               transform: `scale(${archiveVideoScale}) translate(${archiveVideoOffset.x / archiveVideoScale}px, ${archiveVideoOffset.y / archiveVideoScale}px) rotate(${archiveImgRotation}deg)`,
                               transition: archiveVideoIsPanning ? 'none' : 'transform 0.2s',
                             }}>
-                              <video
-                                src={currentArchiveDataUrl}
-                                className="max-w-full max-h-[80vh] object-contain bg-black rounded shadow-lg"
-                                style={{
-                                  maxWidth: archiveImgRotation % 180 !== 0 ? '80vh' : '100%',
-                                  maxHeight: archiveImgRotation % 180 !== 0 ? '95vw' : '80vh',
-                                  cursor: archiveVideoScale > 1 ? (archiveVideoIsPanning ? 'grabbing' : 'grab') : 'default',
-                                }}
-                                controls={false}
-                                autoPlay
-                                ref={archiveVideoRef}
-                                onMouseDown={(e) => {
-                                  e.stopPropagation();
-                                  handleArchiveVideoMouseDown(e);
-                                }}
-                                onMouseMove={(e) => {
-                                  e.stopPropagation();
-                                  handleArchiveVideoMouseMove(e);
-                                }}
-                                onMouseUp={(e) => {
-                                  e.stopPropagation();
-                                  handleArchiveVideoMouseUp();
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.stopPropagation();
-                                  handleArchiveVideoMouseUp();
-                                }}
-                                onPlay={() => setIsPlaying(true)}
-                                onPause={() => setIsPlaying(false)}
-                                onLoadedMetadata={handleLoadedMetadata}
-                                onTimeUpdate={handleTimeUpdate}
-                                onClick={handleVideoClick}
-                                onError={(e) => {
-                                  console.error('동영상 재생 에러:', e);
-                                  console.error('동영상 소스:', currentArchiveDataUrl?.substring(0, 100) + '...');
-                                }}
-                                onLoadStart={() => {
-                                  console.log('동영상 로딩 시작:', currentFile?.name);
-                                }}
-                                onCanPlay={() => {
-                                  console.log('동영상 재생 가능:', currentFile?.name);
-                                }}
-                              />
+                              {videoError ? (
+                                <div className="flex flex-col items-center justify-center bg-black text-white p-8 rounded-lg">
+                                  <div className="text-2xl mb-4">⚠️</div>
+                                  <div className="text-lg font-semibold mb-2">{videoError}</div>
+                                  <div className="text-sm text-gray-300 text-center">
+                                    지원되지 않는 코덱이거나<br />
+                                    파일이 손상되었을 수 있습니다.
+                                  </div>
+                                  {codecInfo && (
+                                    <div className="mt-4 text-xs bg-gray-800 rounded p-2 text-left">
+                                      <div className="mb-1 font-bold text-blue-300">코덱 정보</div>
+                                      {codecInfo.error && <div className="text-red-400">{codecInfo.error}</div>}
+                                      {codecInfo.video && (
+                                        <div>Video: {codecInfo.video.codec} {codecInfo.video.profile ? `(${codecInfo.video.profile})` : ''} {codecInfo.video.pix_fmt ? `[${codecInfo.video.pix_fmt}]` : ''}</div>
+                                      )}
+                                      {codecInfo.audio && (
+                                        <div>Audio: {codecInfo.audio.codec} {codecInfo.audio.sample_rate ? `@${codecInfo.audio.sample_rate}Hz` : ''} {codecInfo.audio.channels ? `채널:${codecInfo.audio.channels}` : ''}</div>
+                                      )}
+                                      {!codecInfo.video && !codecInfo.audio && !codecInfo.error && <div>코덱 정보를 찾을 수 없습니다.</div>}
+                                    </div>
+                                  )}
+                                  <button
+                                    onClick={() => {
+                                      setVideoError(null);
+                                      setCodecInfo(null);
+                                      if (archiveVideoRef.current) {
+                                        archiveVideoRef.current.load();
+                                      }
+                                    }}
+                                    className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded transition-colors"
+                                  >
+                                    다시 시도
+                                  </button>
+                                </div>
+                              ) : (
+                                <video
+                                  src={currentArchiveDataUrl}
+                                  className="max-w-full max-h-[80vh] object-contain bg-black rounded shadow-lg"
+                                  style={{
+                                    maxWidth: archiveImgRotation % 180 !== 0 ? '80vh' : '100%',
+                                    maxHeight: archiveImgRotation % 180 !== 0 ? '95vw' : '80vh',
+                                    cursor: archiveVideoScale > 1 ? (archiveVideoIsPanning ? 'grabbing' : 'grab') : 'default',
+                                  }}
+                                  controls={false}
+                                  autoPlay
+                                  ref={archiveVideoRef}
+                                  onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    handleArchiveVideoMouseDown(e);
+                                  }}
+                                  onMouseMove={(e) => {
+                                    e.stopPropagation();
+                                    handleArchiveVideoMouseMove(e);
+                                  }}
+                                  onMouseUp={(e) => {
+                                    e.stopPropagation();
+                                    handleArchiveVideoMouseUp();
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.stopPropagation();
+                                    handleArchiveVideoMouseUp();
+                                  }}
+                                  onPlay={() => setIsPlaying(true)}
+                                  onPause={() => setIsPlaying(false)}
+                                  onLoadedMetadata={handleLoadedMetadata}
+                                  onTimeUpdate={handleTimeUpdate}
+                                  onClick={handleVideoClick}
+                                  onError={(e) => {
+                                    console.error('동영상 재생 에러:', e);
+                                    console.error('동영상 소스:', currentArchiveDataUrl?.substring(0, 100) + '...');
+                                    console.error('파일 경로:', filePath);
+                                    console.error('압축 파일 내 파일명:', currentFile?.name);
+                                    // 에러 정보를 더 자세히 로깅
+                                    const video = e.target as HTMLVideoElement;
+                                    if (video.error) {
+                                      console.error('비디오 에러 코드:', video.error.code);
+                                      console.error('비디오 에러 메시지:', video.error.message);
+                                    }
+                                    setVideoError('동영상을 재생할 수 없습니다.');
+                                    setCodecInfo(null);
+                                    if (filePath) {
+                                      window.electronAPI.getVideoCodecInfo(filePath).then(setCodecInfo);
+                                    }
+                                  }}
+                                  onLoadStart={() => {
+                                    console.log('동영상 로딩 시작:', currentFile?.name);
+                                  }}
+                                  onCanPlay={() => {
+                                    console.log('동영상 재생 가능:', currentFile?.name);
+                                    setVideoError(null);
+                                  }}
+                                />
+                              )}
                             </div>
                             
                             {/* 볼륨 오버레이 */}

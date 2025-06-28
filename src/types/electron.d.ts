@@ -41,6 +41,9 @@ export interface ElectronAPI {
 
   // New method
   getVideoDuration: (filePath: string) => Promise<number | null>;
+
+  // New method
+  getVideoCodecInfo: (filePath: string) => Promise<{ video?: { codec?: string; profile?: string; pix_fmt?: string }; audio?: { codec?: string; sample_rate?: string; channels?: number }; error?: string }>;
 }
 
 declare global {

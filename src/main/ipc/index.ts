@@ -16,7 +16,6 @@ interface IpcResponse<T = any> {
 
 // 에러 처리 유틸리티 함수
 const handleIpcError = (error: any): IpcResponse => {
-  console.error('[IPC Error]', error);
   return {
     success: false,
     error: error.message || '알 수 없는 오류가 발생했습니다.'
@@ -97,18 +96,14 @@ const getUrlMetaInfo = async (urlString: string): Promise<{ title?: string; desc
 const parseMetaTags = (html: string) => {
   const meta: { title?: string; description?: string; image?: string; siteName?: string } = {};
   
-  console.log('[URL Meta] Parsing HTML, length:', html.length);
-  
   // title 태그 (더 정교한 정규식)
   const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
   if (titleMatch) {
     meta.title = titleMatch[1].trim();
-    console.log('[URL Meta] Found title:', meta.title);
   }
   
   // meta 태그들 (더 포괄적인 정규식)
   const metaTags = html.match(/<meta[^>]+>/gi) || [];
-  console.log('[URL Meta] Found meta tags:', metaTags.length);
   
   metaTags.forEach((tag, index) => {
     const nameMatch = tag.match(/name=["']([^"']+)["']/i);
@@ -118,8 +113,6 @@ const parseMetaTags = (html: string) => {
     if (contentMatch) {
       const name = nameMatch?.[1] || propertyMatch?.[1];
       const content = contentMatch[1];
-      
-      console.log(`[URL Meta] Meta tag ${index}:`, { name, content });
       
       if (name === 'description') {
         meta.description = content;
@@ -143,12 +136,10 @@ const parseMetaTags = (html: string) => {
   
   // 메타 정보가 없는 경우 기본 정보 제공
   if (!meta.title && !meta.description) {
-    console.log('[URL Meta] No meta information found, providing fallback');
     meta.title = '웹페이지';
     meta.description = '메타 정보를 가져올 수 없습니다.';
   }
   
-  console.log('[URL Meta] Final result:', meta);
   return meta;
 };
 

@@ -24,7 +24,6 @@ export const registerBasicHandlers = (db: Database.Database) => {
       const data = fs.readFileSync(thumbnailPath);
       return `data:image/jpeg;base64,${data.toString('base64')}`;
     } catch (e) {
-      console.error('[썸네일 조회 에러]', e);
       return null;
     }
   });

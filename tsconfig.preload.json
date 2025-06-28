@@ -2,10 +2,10 @@
   "compilerOptions": {
     "target": "ES2020",
     "module": "commonjs",
-    "outDir": "./dist",
+    "outDir": "electron",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "include": ["electron/preload.ts"]
+  "files": ["preload.ts"]
 } 

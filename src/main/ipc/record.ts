@@ -28,8 +28,6 @@ const deleteThumbnail = (filePath: string) => {
 // 썸네일 생성 함수
 const generateThumbnailForFile = async (filePath: string, timestampSec: number = 1) => {
   try {
-    console.log('썸네일 생성 시작:', filePath);
-    
     // 직접 썸네일 생성 로직 구현
     let normalizedPath = filePath;
     if (!path.isAbsolute(filePath)) {
@@ -37,7 +35,6 @@ const generateThumbnailForFile = async (filePath: string, timestampSec: number =
     }
     
     if (!fs.existsSync(normalizedPath)) {
-      console.log('파일이 존재하지 않음:', normalizedPath);
       return;
     }
     
@@ -57,7 +54,6 @@ const generateThumbnailForFile = async (filePath: string, timestampSec: number =
     const isArchive = ['.zip', '.7z'].includes(ext);
     
     if (!isImage && !isVideo && !isArchive) {
-      console.log('지원하지 않는 파일 형식:', ext);
       return;
     }
     
@@ -69,13 +65,10 @@ const generateThumbnailForFile = async (filePath: string, timestampSec: number =
     const hash = getThumbnailHash(normalizedPath);
     const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
     
-    console.log('썸네일 생성 시작:', { filePath: normalizedPath, thumbnailPath, fileType: isImage ? 'image' : isVideo ? 'video' : 'archive' });
-    
     if (isImage) {
       await sharp(normalizedPath)
         .resize(400, 400, { fit: 'contain' })
         .toFile(thumbnailPath);
-      console.log('이미지 썸네일 생성 완료:', thumbnailPath);
     } else if (isVideo) {
       await new Promise((resolve, reject) => {
         ffmpeg(normalizedPath)
@@ -86,11 +79,9 @@ const generateThumbnailForFile = async (filePath: string, timestampSec: number =
             size: '400x400'
           })
           .on('end', () => {
-            console.log('비디오 썸네일 생성 완료:', thumbnailPath);
             resolve(null);
           })
           .on('error', (err: any) => {
-            console.log('비디오 썸네일 생성 실패:', err);
             reject(err);
           });
       });
@@ -113,10 +104,8 @@ const generateThumbnailForFile = async (filePath: string, timestampSec: number =
                   await sharp(buffer)
                     .resize(400, 400, { fit: 'contain' })
                     .toFile(thumbnailPath);
-                  console.log('아카이브 썸네일 생성 완료:', thumbnailPath);
                   resolve(null);
                 } catch (err) {
-                  console.log('아카이브 썸네일 생성 실패:', err);
                   reject(err);
                 }
               });
@@ -126,18 +115,15 @@ const generateThumbnailForFile = async (filePath: string, timestampSec: number =
           })
           .on('close', () => {
             if (!found) {
-              console.log('아카이브에서 이미지를 찾을 수 없음');
               resolve(null);
             }
           })
           .on('error', (err: any) => {
-            console.log('아카이브 처리 실패:', err);
             reject(err);
           });
       });
     }
   } catch (error) {
-    console.error('썸네일 생성 중 오류:', error);
   }
 };
 
@@ -249,14 +235,10 @@ export const registerRecordHandlers = (database: Database) => {
         const fileField = fields.find((f: any) => f.type === 'file');
         if (fileField && normalizedData[fileField.id]) {
           const filePath = normalizedData[fileField.id];
-          console.log('레코드 등록 시 썸네일 생성 시작:', filePath);
-          
           await generateThumbnailForFile(filePath);
         }
       }
     } catch (error) {
-      console.error('썸네일 생성 중 오류:', error);
-      // 썸네일 생성 실패는 레코드 등록을 막지 않음
     }
 
     return id;
@@ -284,13 +266,11 @@ export const registerRecordHandlers = (database: Database) => {
             if (prevRecord) {
               const prevData = JSON.parse(prevRecord.data);
               prevFilePath = prevData[fileField.id] || null;
-              console.log('이전 파일 경로:', prevFilePath);
             }
           }
         }
       }
     } catch (error) {
-      console.error('이전 파일 경로 조회 중 오류:', error);
     }
     
     db.prepare(`
@@ -309,37 +289,13 @@ export const registerRecordHandlers = (database: Database) => {
           const fileField = fields.find((f: any) => f.type === 'file');
           if (fileField && normalizedData[fileField.id]) {
             const newFilePath = normalizedData[fileField.id];
-            console.log('새 파일 경로:', newFilePath);
-            console.log('파일 경로 변경 여부:', newFilePath !== prevFilePath);
-            
             if (newFilePath !== prevFilePath) {
-              console.log('레코드 업데이트 시 썸네일 생성 시작(파일 경로 변경):', newFilePath);
-              // 썸네일 생성
               await generateThumbnailForFile(newFilePath);
-              
-              // 프론트엔드에 썸네일 재생성 이벤트 전송
-              try {
-                const { BrowserWindow } = require('electron');
-                const windows = BrowserWindow.getAllWindows();
-                windows.forEach((window: any) => {
-                  if (!window.isDestroyed()) {
-                    window.webContents.send('thumbnail:regenerated', { filePath: newFilePath });
-                  }
-                });
-              } catch (error) {
-                console.error('썸네일 재생성 이벤트 전송 중 오류:', error);
-              }
-            } else {
-              console.log('레코드 업데이트: 파일 경로 동일, 썸네일 재생성 생략');
             }
-          } else {
-            console.log('파일 필드가 없거나 파일 경로가 비어있음');
           }
         }
       }
     } catch (error) {
-      console.error('썸네일 생성 중 오류:', error);
-      // 썸네일 생성 실패는 레코드 업데이트를 막지 않음
     }
   });
 

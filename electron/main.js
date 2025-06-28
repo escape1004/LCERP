@@ -212,7 +212,10 @@ function startVideoHttpServer() {
         '.mkv': 'video/x-matroska',
         '.mov': 'video/quicktime',
         '.wmv': 'video/x-ms-wmv',
-        '.flv': 'video/x-flv'
+        '.flv': 'video/x-flv',
+        '.m4v': 'video/x-m4v',
+        '.3gp': 'video/3gpp',
+        '.ts': 'video/mp2t'
       };
       const mimeType = mimeTypes[ext] || 'application/octet-stream';
       if (range) {
@@ -225,12 +228,19 @@ function startVideoHttpServer() {
           'Content-Range': `bytes ${start}-${end}/${fileSize}`,
           'Accept-Ranges': 'bytes',
           'Content-Length': chunkSize,
-          'Content-Type': mimeType
+          'Content-Type': mimeType,
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, HEAD',
+          'Access-Control-Allow-Headers': 'Range'
         });
         file.pipe(res);
       } else {
         res.writeHead(200, {
           'Content-Length': fileSize,
+          'Content-Type': mimeType,
+          'Accept-Ranges': 'bytes',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, HEAD',
           'Content-Type': mimeType
         });
         fs.createReadStream(resolvedPath).pipe(res);
@@ -284,7 +294,10 @@ app.whenReady().then(() => {
         '.mkv': 'video/x-matroska',
         '.mov': 'video/quicktime',
         '.wmv': 'video/x-ms-wmv',
-        '.flv': 'video/x-flv'
+        '.flv': 'video/x-flv',
+        '.m4v': 'video/x-m4v',
+        '.3gp': 'video/3gpp',
+        '.ts': 'video/mp2t'
       };
       const mimeType = mimeTypes[ext] || 'application/octet-stream';
       callback({
@@ -1227,7 +1240,22 @@ ipcMain.handle('getFileDataUrl', async (_, filePath) => {
     else if (ext === '.png') mimeType = 'image/png';
     else if (ext === '.gif') mimeType = 'image/gif';
     else if (ext === '.webp') mimeType = 'image/webp';
-    else if (isVideo) mimeType = `video/${ext.slice(1)}`;
+    else if (isVideo) {
+      const videoMimeTypes = {
+        '.mp4': 'video/mp4',
+        '.webm': 'video/webm',
+        '.ogg': 'video/ogg',
+        '.avi': 'video/x-msvideo',
+        '.mkv': 'video/x-matroska',
+        '.mov': 'video/quicktime',
+        '.wmv': 'video/x-ms-wmv',
+        '.flv': 'video/x-flv',
+        '.m4v': 'video/x-m4v',
+        '.3gp': 'video/3gpp',
+        '.ts': 'video/mp2t'
+      };
+      mimeType = videoMimeTypes[ext] || 'video/mp4';
+    }
     return `data:${mimeType};base64,${data.toString('base64')}`;
   } catch (e) {
     log('Error in getFileDataUrl:', e);
@@ -1317,7 +1345,22 @@ ipcMain.handle('getArchiveFileDataUrl', async (_, filePath, fileName) => {
                 else if (fileExt === '.gif') mimeType = 'image/gif';
                 else if (fileExt === '.webp') mimeType = 'image/webp';
                 else if (fileExt === '.txt') mimeType = 'text/plain';
-                else if (['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'].includes(fileExt)) mimeType = `video/${fileExt.slice(1)}`;
+                else if (['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'].includes(fileExt)) {
+                  const videoMimeTypes = {
+                    '.mp4': 'video/mp4',
+                    '.webm': 'video/webm',
+                    '.ogg': 'video/ogg',
+                    '.avi': 'video/x-msvideo',
+                    '.mkv': 'video/x-matroska',
+                    '.mov': 'video/quicktime',
+                    '.wmv': 'video/x-ms-wmv',
+                    '.flv': 'video/x-flv',
+                    '.m4v': 'video/x-m4v',
+                    '.3gp': 'video/3gpp',
+                    '.ts': 'video/mp2t'
+                  };
+                  mimeType = videoMimeTypes[fileExt] || 'video/mp4';
+                }
                 resolve(`data:${mimeType};base64,${buffer.toString('base64')}`);
               } catch (err) {
                 reject(err);
@@ -1655,4 +1698,26 @@ ipcMain.handle('getVideoDuration', async (_, filePath) => {
 
 ipcMain.handle('generateThumbnail', async (_, filePath) => {
   return await generateThumbnail(filePath);
+});
+
+ipcMain.handle('getVideoCodecInfo', async (_, filePath) => {
+  try {
+    const ffmpeg = require('fluent-ffmpeg');
+    const ffprobeStatic = require('ffprobe-static');
+    ffmpeg.setFfprobePath(ffprobeStatic.path);
+    return await new Promise((resolve) => {
+      ffmpeg.ffprobe(filePath, (err, metadata) => {
+        if (err) return resolve({ error: err.message });
+        if (!metadata || !metadata.streams) return resolve({ error: 'No metadata' });
+        const video = metadata.streams.find(s => s.codec_type === 'video');
+        const audio = metadata.streams.find(s => s.codec_type === 'audio');
+        resolve({
+          video: video ? { codec: video.codec_name, profile: video.profile, pix_fmt: video.pix_fmt } : null,
+          audio: audio ? { codec: audio.codec_name, sample_rate: audio.sample_rate, channels: audio.channels } : null,
+        });
+      });
+    });
+  } catch (e) {
+    return { error: e.message };
+  }
 });

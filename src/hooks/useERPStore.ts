@@ -44,10 +44,8 @@ export const useERPStore = create<ERPStore>((set, get) => ({
   },
 
   loadRecords: async (categoryId: string) => {
-    console.log('Loading records for category:', categoryId);
     try {
       const records = await window.electronAPI.getRecords(categoryId);
-      console.log('Loaded records:', records);
       set(state => ({
         records: {
           ...state.records,
@@ -55,7 +53,6 @@ export const useERPStore = create<ERPStore>((set, get) => ({
         }
       }));
     } catch (error) {
-      console.error('Error loading records:', error);
       set(state => ({
         records: {
           ...state.records,
@@ -82,7 +79,6 @@ export const useERPStore = create<ERPStore>((set, get) => ({
 
   deleteCategory: async (id) => {
     const result = await window.electronAPI.deleteCategory(id);
-    await get().loadCategories();
     set(state => {
       const { [id]: _, ...remainingRecords } = state.records;
       return {
@@ -90,29 +86,24 @@ export const useERPStore = create<ERPStore>((set, get) => ({
         records: remainingRecords
       };
     });
+    await get().loadCategories();
     return result;
   },
 
   reorderCategories: async (categories) => {
-    console.log('=== reorderCategories called ===', categories.map(c => ({ id: c.id, name: c.name, order: c.order })));
-    
-    // 로컬 상태를 즉시 업데이트 (깜빡거림 방지)
     set({ categories });
     
-    // DB 업데이트는 백그라운드에서 실행
     for (const [index, category] of categories.entries()) {
-      console.log(`Updating category ${category.name} with order_num: ${category.order}`);
       await window.electronAPI.updateCategory(category.id, {
         name: category.name,
         parentId: category.parentId,
         fields: category.fields,
-        order_num: category.order // 반드시 order 값을 order_num으로 저장
+        order_num: category.order
       });
     }
   },
 
   addRecord: async (recordData: NewRecord) => {
-    console.log('Adding record:', recordData);
     const id = Math.random().toString(36).substring(2);
     const record = {
       ...recordData,
@@ -121,7 +112,6 @@ export const useERPStore = create<ERPStore>((set, get) => ({
     await window.electronAPI.addRecord(record);
     
     if (get().selectedCategoryId) {
-      console.log('Reloading records after add');
       await get().loadRecords(get().selectedCategoryId);
     }
     return id;
@@ -142,7 +132,6 @@ export const useERPStore = create<ERPStore>((set, get) => ({
   },
 
   selectCategory: async (id) => {
-    console.log('Selecting category:', id);
     if (id === null) {
       set({ selectedCategoryId: null });
       return;
@@ -152,7 +141,6 @@ export const useERPStore = create<ERPStore>((set, get) => ({
     
     try {
       const records = await window.electronAPI.getRecords(id);
-      console.log('Loaded records for category:', { id, count: records.length });
       set(state => ({
         records: {
           ...state.records,
@@ -160,7 +148,6 @@ export const useERPStore = create<ERPStore>((set, get) => ({
         }
       }));
     } catch (error) {
-      console.error('Error loading records for category:', { id, error });
       set(state => ({
         records: {
           ...state.records,
@@ -184,17 +171,14 @@ export const useERPStore = create<ERPStore>((set, get) => ({
     let count = 0;
     const { categories, records: allRecords } = get();
     
-    // 모든 카테고리를 순회하면서 참조 횟수 계산
     categories.forEach(category => {
       const categoryRecords = allRecords[category.id] || [];
       categoryRecords.forEach(record => {
         category.fields.forEach(field => {
           if (field.type === 'relation' && field.relationCategoryId === categoryId) {
-            // 단일 참조인 경우
             if (!field.multiple && record.data[field.id] === recordId) {
               count++;
             }
-            // 다중 참조인 경우
             if (field.multiple && Array.isArray(record.data[field.id])) {
               count += record.data[field.id].filter((id: string) => id === recordId).length;
             }
@@ -211,29 +195,23 @@ export const useERPStore = create<ERPStore>((set, get) => ({
 
   checkDuplicate: async (categoryId: string, fieldId: string, value: any, recordId?: string) => {
     try {
-      // 카테고리 찾기
       const category = get().categories.find(c => c.id === categoryId);
       if (!category) return false;
 
-      // 필드 찾기
       const field = category.fields.find(f => f.id === fieldId);
       if (!field || !field.unique) return false;
 
-      // 빈 값은 중복 체크 제외
       if (value === undefined || value === null || value === '') return false;
 
-      // 현재 카테고리의 레코드들 가져오기
       const records = get().getCategoryRecords(categoryId);
 
-      // 중복 체크
       const duplicate = records.some(record => {
-        if (recordId && record.id === recordId) return false; // 자기 자신 제외
+        if (recordId && record.id === recordId) return false;
         return record.data[fieldId] === value;
       });
 
       return duplicate;
     } catch (error) {
-      console.error('중복 체크 중 오류 발생:', error);
       return false;
     }
   },

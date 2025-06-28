@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { NewCategory, CategoryUpdate, NewRecord } from '../src/types';
-import { ElectronAPI } from '../src/types.d';
+import { NewCategory, CategoryUpdate, NewRecord } from './src/types';
+import { ElectronAPI } from './src/types.d';
 
 interface TableData {
   columns: string[];
@@ -57,6 +57,7 @@ const api: ElectronAPI = {
   generateThumbnailWithTime: (filePath: string, timestampSec: number) => ipcRenderer.invoke('generateThumbnailWithTime', filePath, timestampSec),
   regenerateThumbnail: (filePath: string) => ipcRenderer.invoke('regenerateThumbnail', filePath),
   getVideoDuration: (filePath: string) => ipcRenderer.invoke('getVideoDuration', filePath),
+  getVideoCodecInfo: (filePath: string) => ipcRenderer.invoke('getVideoCodecInfo', filePath),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api); 
