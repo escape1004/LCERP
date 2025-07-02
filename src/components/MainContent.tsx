@@ -258,6 +258,11 @@ export const MainContent: React.FC = () => {
     setSortDirection('asc'); // Reset sort direction when category changes
   }, [selectedCategoryId, setCurrentPage]);
 
+  // Reset pagination to page 1 when search term changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, setCurrentPage]);
+
   // Load related records when category changes
   useEffect(() => {
     if (selectedCategoryId) {
