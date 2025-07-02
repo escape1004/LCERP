@@ -1236,6 +1236,16 @@ export const MainContent: React.FC = () => {
     );
   }, [selectedCategorySafe, checkDuplicateField]);
 
+  // 1. 테이블 컨테이너 ref 선언
+  const tableContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // 2. 페이지 변경 시 스크롤 최상단 이동 함수
+  const scrollTableToTop = () => {
+    if (tableContainerRef.current) {
+      tableContainerRef.current.scrollTop = 0;
+    }
+  };
+
   // 렌더링 시 카테고리 없을 때 안내 메시지
   if (!categoriesSafe || categoriesSafe.length === 0) {
     return (
@@ -1435,7 +1445,7 @@ export const MainContent: React.FC = () => {
             ) : (
               <>
                 {/* Table Container - padding 제거, 스크롤 div는 thead 바로 위에서 시작 */}
-                <div className="flex-1 min-h-0 overflow-auto discord-scrollbar">
+                <div ref={tableContainerRef} className="flex-1 min-h-0 overflow-auto discord-scrollbar">
                   <table className="w-full table-fixed">
                     <thead className="sticky top-0 z-10 bg-discord-sidebar border-b border-gray-700">
                       <tr>
@@ -1571,7 +1581,10 @@ export const MainContent: React.FC = () => {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => setCurrentPage(currentPage - 1)}
+                        onClick={() => {
+                          setCurrentPage(currentPage - 1);
+                          scrollTableToTop();
+                        }}
                         disabled={currentPage === 1}
                         className="border-gray-600 hover:bg-discord-hover"
                       >
@@ -1603,7 +1616,10 @@ export const MainContent: React.FC = () => {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => setCurrentPage(currentPage + 1)}
+                        onClick={() => {
+                          setCurrentPage(currentPage + 1);
+                          scrollTableToTop();
+                        }}
                         disabled={currentPage >= totalPages}
                         className="border-gray-600 hover:bg-discord-hover"
                       >
