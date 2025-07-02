@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { X, ExternalLink, ChevronRight, Check } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
+import { useLoadingStore } from '../hooks/useLoadingStore';
 import { Category, DataRecord, FieldDefinition } from '../types';
 import { Button } from './ui/button';
 import { toast } from './ui/use-toast';
@@ -90,6 +91,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   if (!isOpen || !record || !category) return null;
 
   const { categories, getCategoryRecords, selectCategory, loadRecords } = useERPStore();
+  const { showLoading, hideLoading } = useLoadingStore();
 
   const [fileExists, setFileExists] = useState<boolean | null>(null);
   const [viewerModalOpen, setViewerModalOpen] = useState(false);
@@ -101,6 +103,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   const totalSec = hh * 3600 + mm * 60 + ss;
   const [duration, setDuration] = React.useState<number | null>(null); // 동영상 전체 길이(초)
   const [lastValidDuration, setLastValidDuration] = React.useState<number | null>(null);
+  const [regenLoading, setRegenLoading] = React.useState(false);
 
   // ESC 키로 모달 닫기
   useEffect(() => {
@@ -751,6 +754,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                   onRegenerate={async (newHh, newMm, newSs) => {
                     console.log('ViewRecordModal onRegenerate 호출됨:', { newHh, newMm, newSs });
                     setRegenLoading(true);
+                    showLoading('썸네일 재생성 중...', 60000, true); // 60초 타임아웃, 취소 버튼 표시
                     try {
                       const totalSeconds = newHh * 3600 + newMm * 60 + newSs;
                       console.log('총 초 계산:', totalSeconds);
@@ -771,6 +775,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                       toast({ title: '썸네일 재생성 실패', description: String(e), variant: 'destructive' });
                     } finally {
                       setRegenLoading(false);
+                      hideLoading();
                     }
                   }}
                   disabled={regenLoading}
@@ -786,6 +791,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
               type="button"
               onClick={async () => {
                 setRegenLoading(true);
+                showLoading('썸네일 재생성 중...', 30000, true); // 30초 타임아웃, 취소 버튼 표시
                 try {
                   const res = await window.electronAPI.regenerateThumbnail(filePath);
                   if (res) {
@@ -802,6 +808,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                   toast({ title: '썸네일 재생성 실패', description: String(e), variant: 'destructive' });
                 } finally {
                   setRegenLoading(false);
+                  hideLoading();
                 }
               }}
               disabled={regenLoading}

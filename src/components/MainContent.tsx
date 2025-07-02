@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, Upload, FileText, ChevronDown, ChevronUp, ArrowUpWideNarrow, ArrowDownWideNarrow, ArrowUp01, ArrowDown01, SortAsc, SortDesc, Check } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
+import { useLoadingStore } from '../hooks/useLoadingStore';
 import { DataRecord, FieldDefinition, Category } from '../types';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -104,9 +105,6 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
   
   switch (field.type) {
     case 'text':
-      if (field.hashtags) {
-        return renderTextWithHashtags(String(value));
-      }
       if (typeof value === 'string' && urlPattern.test(value)) {
         return renderUrl(value);
       }
@@ -338,6 +336,11 @@ export const MainContent: React.FC = () => {
     showDbViewer,
   } = useERPStore();
 
+  const {
+    showLoading,
+    hideLoading,
+  } = useLoadingStore();
+
   // 검색어를 로컬 상태로 관리
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -396,25 +399,50 @@ export const MainContent: React.FC = () => {
       if (category) {
         const relationFields = category.fields.filter(field => field.type === 'relation');
         const loadedCategories = new Set();
+        const categoriesToLoad: string[] = [];
+        
+        // 이미 로드되지 않은 관계형 카테고리만 찾기
         relationFields.forEach(field => {
           if (field.relationCategoryId && !loadedCategories.has(field.relationCategoryId)) {
+            // 이미 메모리에 로드된 카테고리인지 확인
+            const existingRecords = getCategoryRecords(field.relationCategoryId);
+            if (!existingRecords || existingRecords.length === 0) {
+              categoriesToLoad.push(field.relationCategoryId);
+            }
             loadedCategories.add(field.relationCategoryId);
-            loadRecords(field.relationCategoryId);
           }
         });
+        
+        // 로드할 카테고리가 있을 때만 로딩 표시
+        if (categoriesToLoad.length > 0) {
+          showLoading(`${category.name} 관련 데이터 로딩 중...`, 30000, true);
+          const loadPromises = categoriesToLoad.map(categoryId => loadRecords(categoryId));
+          
+          Promise.all(loadPromises).finally(() => {
+            hideLoading();
+          });
+        }
       }
     }
-  }, [selectedCategoryId, categoriesSafe, loadRecords]);
+  }, [selectedCategoryId, categoriesSafe, loadRecords, showLoading, hideLoading, getCategoryRecords]);
 
   useEffect(() => {
     if (!selectedCategoryId && categoriesSafe.length > 0 && !showDbViewer) {
       const rootCategories = categoriesSafe.filter(cat => !cat.parentId);
       const firstRootCategory = [...rootCategories].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0];
       if (firstRootCategory) {
+        // 이미 선택된 카테고리가 있는지 확인
+        const existingRecords = getCategoryRecords(firstRootCategory.id);
+        if (!existingRecords || existingRecords.length === 0) {
+          showLoading('초기 카테고리 로딩 중...', 15000, true);
+        }
         selectCategory(firstRootCategory.id);
+        setTimeout(() => {
+          hideLoading();
+        }, 500);
       }
     }
-  }, [selectedCategoryId, categoriesSafe, selectCategory, showDbViewer]);
+  }, [selectedCategoryId, categoriesSafe, selectCategory, showDbViewer, showLoading, hideLoading, getCategoryRecords]);
 
   const [sortField, setSortField] = useState<string>('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -617,10 +645,13 @@ export const MainContent: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F5' && selectedCategoryId) {
         e.preventDefault();
-        loadRecords(selectedCategoryId);
-        toast({
-          title: "새로고침 완료",
-          description: "레코드 목록이 새로고침되었습니다.",
+        showLoading('데이터 새로고침 중...', 30000, true); // 30초 타임아웃, 취소 버튼 표시
+        loadRecords(selectedCategoryId).finally(() => {
+          hideLoading();
+          toast({
+            title: "새로고침 완료",
+            description: "레코드 목록이 새로고침되었습니다.",
+          });
         });
       } else if (e.ctrlKey && e.key === 'f') {
         e.preventDefault();
@@ -641,18 +672,21 @@ export const MainContent: React.FC = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedCategoryId, loadRecords, currentPage, totalPages]);
+  }, [selectedCategoryId, loadRecords, currentPage, totalPages, showLoading, hideLoading]);
 
   // 썸네일 생성/삭제 시 레코드 리스트 강제 리로드
   useEffect(() => {
     const handler = () => {
       if (selectedCategoryId) {
-        loadRecords(selectedCategoryId);
+        showLoading('썸네일 업데이트 중...', 15000, true); // 15초 타임아웃, 취소 버튼 표시
+        loadRecords(selectedCategoryId).finally(() => {
+          hideLoading();
+        });
       }
     };
     window.addEventListener('thumbnail:regenerated', handler);
     return () => window.removeEventListener('thumbnail:regenerated', handler);
-  }, [selectedCategoryId, loadRecords]);
+  }, [selectedCategoryId, loadRecords, showLoading, hideLoading]);
 
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);

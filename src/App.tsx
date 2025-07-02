@@ -7,6 +7,7 @@ import { HashRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { TitleBar } from './components/TitleBar';
+import { LoadingOverlay } from './components/ui/loading-overlay';
 
 const queryClient = new QueryClient();
 
@@ -25,6 +26,7 @@ const App = () => (
           <Toaster />
           <Sonner />
         </div>
+        <LoadingOverlay />
       </div>
     </TooltipProvider>
   </QueryClientProvider>

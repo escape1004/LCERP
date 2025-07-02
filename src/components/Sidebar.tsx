@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Plus, Settings, Menu, ChevronLeft, Database } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
+import { useLoadingStore } from '../hooks/useLoadingStore';
 import { Category } from '../types';
 import { Button } from './ui/button';
 import { CategoryModal } from './CategoryModal';
@@ -13,8 +14,11 @@ export const Sidebar: React.FC = () => {
     selectedCategoryId, 
     selectCategory, 
     reorderCategories,
-    setShowDbViewer 
+    setShowDbViewer,
+    getCategoryRecords
   } = useERPStore();
+  
+  const { showLoading, hideLoading } = useLoadingStore();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
@@ -81,8 +85,16 @@ export const Sidebar: React.FC = () => {
           onMouseEnter={() => setHoveredCategory(category.id)}
           onMouseLeave={() => setHoveredCategory(null)}
           onClick={() => {
+            // 이미 로드된 카테고리인지 확인
+            const existingRecords = getCategoryRecords(category.id);
+            if (!existingRecords || existingRecords.length === 0) {
+              showLoading('카테고리 로딩 중...', 15000, true);
+            }
             selectCategory(category.id);
             setShowDbViewer(false);
+            setTimeout(() => {
+              hideLoading();
+            }, 300);
           }}
         >
           {level > 0 && (
@@ -140,8 +152,16 @@ export const Sidebar: React.FC = () => {
           onMouseEnter={() => setHoveredCategory(category.id)}
           onMouseLeave={() => setHoveredCategory(null)}
           onClick={() => {
+            // 이미 로드된 카테고리인지 확인
+            const existingRecords = getCategoryRecords(category.id);
+            if (!existingRecords || existingRecords.length === 0) {
+              showLoading('카테고리 로딩 중...', 15000, true);
+            }
             selectCategory(category.id);
             setShowDbViewer(false);
+            setTimeout(() => {
+              hideLoading();
+            }, 300);
           }}
         >
           {level > 0 && (
