@@ -25,9 +25,6 @@ export const TimeInput: React.FC<TimeInputProps> = ({
   const mmRef = useRef<HTMLInputElement>(null);
   const ssRef = useRef<HTMLInputElement>(null);
 
-  // 디버깅: maxDuration 값 확인
-  console.log('TimeInput maxDuration:', maxDuration);
-
   // 로컬 상태로 입력값 관리 (포커스 유지를 위해)
   const [localHh, setLocalHh] = useState(hh);
   const [localMm, setLocalMm] = useState(mm);
@@ -198,19 +195,13 @@ export const TimeInput: React.FC<TimeInputProps> = ({
 
   // 재생성 버튼 클릭 시 재생성 실행
   const handleRegenerateClick = () => {
-    console.log('=== handleRegenerateClick 시작 ===');
-    console.log('현재 로컬 상태:', { localHh, localMm, localSs });
-    console.log('현재 props 상태:', { hh, mm, ss });
-    
     // 재생성 중 플래그 설정
     setIsRegenerating(true);
-    console.log('isRegenerating 플래그 설정됨');
     
     // 즉시 실행
     const executeRegenerate = () => {
       // 현재 로컬 상태의 값을 부모에게 전달
       const newTotal = localHh * 3600 + localMm * 60 + localSs;
-      console.log('계산된 총 초:', newTotal);
       
       if (newTotal > maxDuration) {
         // duration을 초과하면 최대값으로 보정
@@ -219,11 +210,9 @@ export const TimeInput: React.FC<TimeInputProps> = ({
         d = d % 3600;
         const finalMm = Math.floor(d / 60);
         const finalSs = d % 60;
-        console.log('최대값으로 보정된 시간:', { finalHh, finalMm, finalSs });
         onChange(finalHh, finalMm, finalSs);
         onRegenerate(finalHh, finalMm, finalSs);
       } else {
-        console.log('정상 시간으로 재생성:', { localHh, localMm, localSs });
         onChange(localHh, localMm, localSs);
         onRegenerate(localHh, localMm, localSs);
       }
@@ -231,13 +220,11 @@ export const TimeInput: React.FC<TimeInputProps> = ({
       // 재생성 완료 후 플래그 리셋
       setTimeout(() => {
         setIsRegenerating(false);
-        console.log('isRegenerating 플래그 리셋됨');
       }, 100);
     };
     
     // 즉시 실행
     executeRegenerate();
-    console.log('=== handleRegenerateClick 완료 ===');
   };
 
   return (
@@ -326,19 +313,16 @@ export const TimeInput: React.FC<TimeInputProps> = ({
       <button
         type="button"
         onMouseDown={(e) => {
-          console.log('버튼 mousedown 이벤트 발생');
           e.preventDefault();
           e.stopPropagation();
         }}
         onClick={(e) => {
-          console.log('버튼 클릭 이벤트 발생');
           e.preventDefault();
           e.stopPropagation();
           e.nativeEvent.stopImmediatePropagation();
           handleRegenerateClick();
         }}
         onMouseUp={(e) => {
-          console.log('버튼 mouseup 이벤트 발생');
           e.preventDefault();
           e.stopPropagation();
         }}

@@ -139,7 +139,6 @@ export const RecordModal: React.FC<RecordModalProps> = ({
       if (fileField && formData[fileField.id] === event.detail.filePath) {
         // 현재 모달에서 표시 중인 파일의 썸네일이 재생성되었으므로 UI 갱신 필요
         // 필요한 경우 여기에 추가 로직 구현
-        console.log('썸네일이 재생성되었습니다:', event.detail.filePath);
       }
     };
 
@@ -231,7 +230,6 @@ export const RecordModal: React.FC<RecordModalProps> = ({
               if ((window.electronAPI as any).removeAllBookmarks) {
                 const result = await (window.electronAPI as any).removeAllBookmarks(category.id, record.id);
                 if (result && result.success) {
-                  console.log('파일 변경으로 인해 북마크가 삭제되었습니다:', prevFilePath);
                 } else if (result && result.error) {
                   console.error('북마크 삭제 실패:', result.error);
                 }

@@ -36,7 +36,6 @@ export const useLoadingStore = create<LoadingState>((set, get) => ({
               message: '', 
               showCancelButton: false 
             });
-            console.warn('Loading timeout reached:', timeout);
           }
         }, timeout);
         
@@ -79,6 +78,5 @@ export const useLoadingStore = create<LoadingState>((set, get) => ({
     }
     
     set({ isLoading: false, message: '', showCancelButton: false });
-    console.log('Loading cancelled by user');
   },
 })); 

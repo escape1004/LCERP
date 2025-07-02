@@ -2,10 +2,7 @@ import { ipcMain } from 'electron';
 import Database from 'better-sqlite3';
 
 export const registerBookmarkHandlers = (db: Database.Database) => {
-  console.log('=== Registering bookmark handlers ===');
-  
   ipcMain.handle('getBookmarks', async (_event, categoryId: string, recordId: string) => {
-    console.log('=== getBookmarks called with:', categoryId, recordId);
     const record = db.prepare("SELECT data FROM records WHERE categoryId = ? AND id = ?").get(categoryId, recordId) as { data: string } | undefined;
     if (!record) return { success: false, error: "Record not found" };
     const data = JSON.parse(record.data);
@@ -13,7 +10,6 @@ export const registerBookmarkHandlers = (db: Database.Database) => {
   });
 
   ipcMain.handle('addBookmark', async (_event, categoryId: string, recordId: string, time: number) => {
-    console.log('=== addBookmark called with:', categoryId, recordId, time);
     const record = db.prepare("SELECT data FROM records WHERE categoryId = ? AND id = ?").get(categoryId, recordId) as { data: string } | undefined;
     if (!record) return { success: false, error: "Record not found" };
     const data = JSON.parse(record.data);
@@ -30,7 +26,6 @@ export const registerBookmarkHandlers = (db: Database.Database) => {
   });
 
   ipcMain.handle('removeBookmark', async (_event, categoryId: string, recordId: string, time: number) => {
-    console.log('=== removeBookmark called with:', categoryId, recordId, time);
     const record = db.prepare("SELECT data FROM records WHERE categoryId = ? AND id = ?").get(categoryId, recordId) as { data: string } | undefined;
     if (!record) return { success: false, error: "Record not found" };
     const data = JSON.parse(record.data);

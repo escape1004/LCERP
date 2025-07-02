@@ -49,5 +49,3 @@ const api: ElectronAPI = {
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api); 
-
-console.log('preload loaded, removeAllBookmarks:', typeof api.removeAllBookmarks); 

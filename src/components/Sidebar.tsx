@@ -46,9 +46,6 @@ export const Sidebar: React.FC = () => {
     const [reorderedItem] = siblings.splice(source.index, 1);
     siblings.splice(destination.index, 0, reorderedItem);
 
-    // 디버깅 로그
-    console.log('Root categories after reorder:', siblings.map(s => ({ id: s.id, name: s.name, order: s.order })));
-
     const reorderedCategories = categories.map(cat => {
       if (!cat.parentId) {
         const newIndex = siblings.findIndex(sibling => sibling.id === cat.id);
@@ -56,9 +53,6 @@ export const Sidebar: React.FC = () => {
       }
       return cat;
     });
-
-    // 디버깅 로그
-    console.log('reorderCategories 호출 (root):', reorderedCategories.map(c => ({ id: c.id, name: c.name, order: c.order })));
 
     reorderCategories(reorderedCategories);
   };
