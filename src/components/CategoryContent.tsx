@@ -11,6 +11,7 @@ import type { ElectronAPI } from '../types/electron';
 import { LinkIcon } from 'lucide-react';
 import { ConfirmDialog } from './ui/confirm-dialog';
 import { AlertDialog } from './ui/alert-dialog';
+import { format } from 'date-fns';
 
 interface CategoryContentProps {
   categoryId: string | null;
@@ -154,13 +155,116 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
   const sortedRecords = [...categoryRecords]
     .filter(record => {
       if (!searchTerm) return true;
+      
+      // 빈 값 체크 함수
+      const isEmptyValue = (val: any): boolean => {
+        if (val === null || val === undefined) return true;
+        if (typeof val === 'string' && val.trim() === '') return true;
+        if (Array.isArray(val) && val.length === 0) return true;
+        if (typeof val === 'object' && Object.keys(val).length === 0) return true;
+        return false;
+      };
+      
       if (searchField === 'all') {
         return selectedCategory.fields.some(field => {
           const value = record.data[field.id];
+          
+          // 빈 값인 경우 검색어가 빈 값 관련 키워드인지 확인
+          if (isEmptyValue(value)) {
+            const emptyKeywords = ['빈', '없음', 'null', 'undefined', 'empty', ''];
+            return emptyKeywords.some(keyword => 
+              searchTerm.toLowerCase().includes(keyword.toLowerCase())
+            );
+          }
+          
+          // 관계형 필드인 경우 실제 데이터 값으로 검색
+          if (field.type === 'relation') {
+            if (field.multiple && Array.isArray(value)) {
+              // 다중 선택 관계형 필드
+              const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
+              if (!relatedCategory) return false;
+              
+              const relatedRecords = records[field.relationCategoryId] || [];
+              const displayField = field.displayFieldId
+                ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
+                : relatedCategory.fields[0];
+              
+              return value.some(recordId => {
+                const relatedRecord = relatedRecords.find(r => r.id === recordId);
+                if (!relatedRecord) return false;
+                const displayValue = relatedRecord.data[displayField?.id];
+                return String(displayValue || '').toLowerCase().includes(searchTerm.toLowerCase());
+              });
+            } else {
+              // 단일 선택 관계형 필드
+              const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
+              if (!relatedCategory) return false;
+              
+              const relatedRecords = records[field.relationCategoryId] || [];
+              const displayField = field.displayFieldId
+                ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
+                : relatedCategory.fields[0];
+              
+              const relatedRecord = relatedRecords.find(r => r.id === value);
+              if (!relatedRecord) return false;
+              const displayValue = relatedRecord.data[displayField?.id];
+              return String(displayValue || '').toLowerCase().includes(searchTerm.toLowerCase());
+            }
+          }
+          
+          // 일반 필드는 기존 로직 유지
           return String(value).toLowerCase().includes(searchTerm.toLowerCase());
         });
       } else {
+        const field = selectedCategory.fields.find(f => f.id === searchField);
+        if (!field) return false;
+        
         const value = record.data[searchField];
+        
+        // 빈 값인 경우 검색어가 빈 값 관련 키워드인지 확인
+        if (isEmptyValue(value)) {
+          const emptyKeywords = ['빈', '없음', 'null', 'undefined', 'empty', ''];
+          return emptyKeywords.some(keyword => 
+            searchTerm.toLowerCase().includes(keyword.toLowerCase())
+          );
+        }
+        
+        // 관계형 필드인 경우 실제 데이터 값으로 검색
+        if (field.type === 'relation') {
+          if (field.multiple && Array.isArray(value)) {
+            // 다중 선택 관계형 필드
+            const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
+            if (!relatedCategory) return false;
+            
+            const relatedRecords = records[field.relationCategoryId] || [];
+            const displayField = field.displayFieldId
+              ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
+              : relatedCategory.fields[0];
+            
+            return value.some(recordId => {
+              const relatedRecord = relatedRecords.find(r => r.id === recordId);
+              if (!relatedRecord) return false;
+              const displayValue = relatedRecord.data[displayField?.id];
+              return String(displayValue || '').toLowerCase().includes(searchTerm.toLowerCase());
+            });
+          } else {
+            // 단일 선택 관계형 필드
+            const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
+            if (!relatedCategory) return false;
+            
+            const relatedRecords = records[field.relationCategoryId] || [];
+            const displayField = field.displayFieldId
+              ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
+              : relatedCategory.fields[0];
+            
+            const relatedRecord = relatedRecords.find(r => r.id === value);
+            if (!relatedRecord) return false;
+            const displayValue = relatedRecord.data[displayField?.id];
+            return String(displayValue || '').toLowerCase().includes(searchTerm.toLowerCase());
+          }
+        }
+        
+        // 일반 필드는 기존 로직 유지
         return String(value).toLowerCase().includes(searchTerm.toLowerCase());
       }
     })
@@ -177,6 +281,72 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
       const bValue = b.data[sortField];
       const field = selectedCategory.fields.find(f => f.id === sortField);
       if (!field) return 0;
+
+      // 관계형 필드인 경우 실제 데이터 값으로 정렬
+      if (field.type === 'relation') {
+        const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
+        if (relatedCategory) {
+          const relatedRecords = records[field.relationCategoryId] || [];
+          const displayField = field.displayFieldId
+            ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
+            : relatedCategory.fields[0];
+          
+          if (field.multiple && Array.isArray(aValue) && Array.isArray(bValue)) {
+            // 다중 선택 관계형 필드 정렬
+            const aDisplayValues = aValue
+              .map((id: string) => {
+                const rec = relatedRecords.find(r => r.id === id);
+                return rec ? String(rec.data[displayField?.id] || '') : '';
+              })
+              .filter(Boolean)
+              .sort();
+            const bDisplayValues = bValue
+              .map((id: string) => {
+                const rec = relatedRecords.find(r => r.id === id);
+                return rec ? String(rec.data[displayField?.id] || '') : '';
+              })
+              .filter(Boolean)
+              .sort();
+            
+            const aKey = aDisplayValues.join(',');
+            const bKey = bDisplayValues.join(',');
+            const comparison = aKey.localeCompare(bKey);
+            return sortDirection === 'asc' ? comparison : -comparison;
+          } else if (field.multiple) {
+            // 다중 선택 필드이지만 배열이 아닌 경우 (잘못된 데이터)
+            return 0;
+          } else {
+            // 단일 선택 관계형 필드 정렬
+            const aRelatedRecord = relatedRecords.find(r => r.id === aValue);
+            const bRelatedRecord = relatedRecords.find(r => r.id === bValue);
+            
+            const aDisplayValue = aRelatedRecord ? String(aRelatedRecord.data[displayField?.id] || '') : '';
+            const bDisplayValue = bRelatedRecord ? String(bRelatedRecord.data[displayField?.id] || '') : '';
+            
+            const comparison = aDisplayValue.localeCompare(bDisplayValue);
+            return sortDirection === 'asc' ? comparison : -comparison;
+          }
+        }
+      }
+
+      // 빈 값 처리 (모든 필드 타입에 적용)
+      const isEmptyValue = (val: any): boolean => {
+        if (val === null || val === undefined) return true;
+        if (typeof val === 'string' && val.trim() === '') return true;
+        if (Array.isArray(val) && val.length === 0) return true;
+        if (typeof val === 'object' && Object.keys(val).length === 0) return true;
+        return false;
+      };
+
+      const aIsEmpty = isEmptyValue(aValue);
+      const bIsEmpty = isEmptyValue(bValue);
+
+      // 둘 다 빈 값인 경우
+      if (aIsEmpty && bIsEmpty) return 0;
+      // a만 빈 값인 경우
+      if (aIsEmpty) return sortDirection === 'asc' ? 1 : -1;
+      // b만 빈 값인 경우
+      if (bIsEmpty) return sortDirection === 'asc' ? -1 : 1;
 
       let comparison = 0;
       if (field.type === 'number') {
@@ -242,6 +412,45 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
     const rows = sortedRecords.map(record => 
       selectedCategory.fields.filter(f => !f.hidden).map(field => {
         const value = record.data[field.id];
+        
+        // 관계형 필드인 경우 실제 데이터 값으로 내보내기
+        if (field.type === 'relation') {
+          if (field.multiple && Array.isArray(value)) {
+            // 다중 선택 관계형 필드
+            const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
+            if (!relatedCategory) return '';
+            
+            const relatedRecords = records[field.relationCategoryId] || [];
+            const displayField = field.displayFieldId
+              ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
+              : relatedCategory.fields[0];
+            
+            const displayValues = value.map(recordId => {
+              const relatedRecord = relatedRecords.find(r => r.id === recordId);
+              return relatedRecord ? String(relatedRecord.data[displayField?.id] || '') : '';
+            }).filter(Boolean);
+            
+            const result = displayValues.join(', ');
+            return result.includes(',') ? `"${result}"` : result;
+          } else {
+            // 단일 선택 관계형 필드
+            const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
+            if (!relatedCategory) return '';
+            
+            const relatedRecords = records[field.relationCategoryId] || [];
+            const displayField = field.displayFieldId
+              ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
+              : relatedCategory.fields[0];
+            
+            const relatedRecord = relatedRecords.find(r => r.id === value);
+            if (!relatedRecord) return '';
+            
+            const displayValue = String(relatedRecord.data[displayField?.id] || '');
+            return displayValue.includes(',') ? `"${displayValue}"` : displayValue;
+          }
+        }
+        
+        // 일반 필드는 기존 로직 유지
         if (typeof value === 'string' && value.includes(',')) {
           return `"${value}"`;
         }
@@ -263,9 +472,75 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
   };
 
   const formatFieldValue = (field: any, value: any): string | JSX.Element => {
-    // 테스트용: 모든 값을 "-"로 출력
-    console.log('원래 값:', value); // 디버깅용 로그
+    // 빈 값 처리
+    if (value === null || value === undefined || value === '' || value === '-') {
+      return '-';
+    }
+
+    // 배열이지만 비어있는 경우
+    if (Array.isArray(value) && value.length === 0) {
     return '-';
+    }
+
+    switch (field.type) {
+      case 'number':
+        return String(value);
+      
+      case 'text':
+      case 'longtext': {
+        const strValue = String(value);
+        return strValue;
+      }
+      
+      case 'date': {
+        const dateValue = typeof value === 'string' && /^\d{4}-\d{2}$/.test(value)
+          ? format(new Date(value), "yyyy-MM")
+          : format(new Date(value), "yyyy-MM-dd");
+        return dateValue;
+      }
+      
+      case 'checkbox':
+        return value ? '✓' : '✗';
+      
+      case 'select':
+        if (Array.isArray(value)) {
+          return value.join(', ');
+        }
+        return String(value);
+      
+      case 'relation':
+        if (!field.relationCategoryId) return String(value);
+        
+        const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
+        if (!relatedCategory) return String(value);
+        
+        const relatedRecords = records[field.relationCategoryId] || [];
+        const displayField = field.displayFieldId
+          ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
+          : relatedCategory.fields[0];
+        
+        if (Array.isArray(value)) {
+          const names = value
+            .map(id => {
+              const record = relatedRecords.find(r => r.id === id);
+              if (!record) return null;
+              const displayValue = record.data[displayField?.id];
+              return displayValue || null;
+            })
+            .filter(Boolean);
+          
+          return names.length > 0 ? names.join(', ') : '-';
+        } else {
+          const record = relatedRecords.find(r => r.id === value);
+          if (!record) return '-';
+          
+          const displayValue = record.data[displayField?.id];
+          return displayValue || '-';
+        }
+      
+      default:
+        return String(value);
+    }
   };
 
   const formatRelationArray = (values: any[], field: any): string => {

@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { NewCategory, CategoryUpdate, NewRecord, ElectronAPI } from '../types.d';
 
 // API 정의
-const api: ElectronAPI = {
+const api = {
   getTables: () => ipcRenderer.invoke('db:getTables'),
   getTableData: (tableName: string) => ipcRenderer.invoke('db:getTableData', tableName),
   getDbPath: () => ipcRenderer.invoke('db:getPath'),
@@ -44,7 +44,11 @@ const api: ElectronAPI = {
   regenerateThumbnail: (filePath: string) => ipcRenderer.invoke('regenerateThumbnail', filePath),
   getVideoDuration: (filePath: string) => ipcRenderer.invoke('getVideoDuration', filePath),
   getVideoCodecInfo: (filePath: string) => ipcRenderer.invoke('getVideoCodecInfo', filePath),
-} as const;
+  getBookmarks: (categoryId, recordId) => ipcRenderer.invoke('getBookmarks', categoryId, recordId),
+  addBookmark: (categoryId, recordId, time) => ipcRenderer.invoke('addBookmark', categoryId, recordId, time),
+  removeBookmark: (categoryId, recordId, time) => ipcRenderer.invoke('removeBookmark', categoryId, recordId, time),
+  removeAllBookmarks: (categoryId, recordId) => ipcRenderer.invoke('removeAllBookmarks', categoryId, recordId),
+} as ElectronAPI;
 
 // API를 window 객체에 노출
 contextBridge.exposeInMainWorld('electronAPI', api); 

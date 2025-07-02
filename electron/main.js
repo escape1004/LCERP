@@ -137,6 +137,76 @@ function createWindow() {
 // 데이터베이스 연결 설정
 const db = new Database(dbPath, { verbose: log });
 
+// 북마크 핸들러 등록 (직접 추가)
+try {
+  console.log('=== Registering bookmark handlers ===');
+  
+  ipcMain.handle('getBookmarks', async (_event, categoryId, recordId) => {
+    console.log('=== getBookmarks called with:', categoryId, recordId);
+    const record = db.prepare("SELECT data FROM records WHERE categoryId = ? AND id = ?").get(categoryId, recordId);
+    if (!record) return { success: false, error: "Record not found" };
+    const data = JSON.parse(record.data);
+    return { success: true, bookmarks: data.bookmarks || [] };
+  });
+
+  ipcMain.handle('addBookmark', async (_event, categoryId, recordId, time) => {
+    console.log('=== addBookmark called with:', categoryId, recordId, time);
+    const record = db.prepare("SELECT data FROM records WHERE categoryId = ? AND id = ?").get(categoryId, recordId);
+    if (!record) return { success: false, error: "Record not found" };
+    const data = JSON.parse(record.data);
+    if (!data.bookmarks) data.bookmarks = [];
+    if (data.bookmarks.find((b) => Math.abs(b.time - time) < 1)) {
+      return { success: false, error: "이미 해당 시간에 북마크가 있습니다." };
+    }
+    const newBookmark = { time, createdAt: new Date().toISOString() };
+    data.bookmarks.push(newBookmark);
+    data.bookmarks.sort((a, b) => a.time - b.time);
+    db.prepare("UPDATE records SET data = ?, updatedAt = ? WHERE categoryId = ? AND id = ?")
+      .run(JSON.stringify(data), new Date().toISOString(), categoryId, recordId);
+    return { success: true, bookmark: newBookmark };
+  });
+
+  ipcMain.handle('removeBookmark', async (_event, categoryId, recordId, time) => {
+    console.log('=== removeBookmark called with:', categoryId, recordId, time);
+    const record = db.prepare("SELECT data FROM records WHERE categoryId = ? AND id = ?").get(categoryId, recordId);
+    if (!record) return { success: false, error: "Record not found" };
+    const data = JSON.parse(record.data);
+    if (!data.bookmarks) return { success: false, error: "북마크가 없습니다." };
+    const idx = data.bookmarks.findIndex((b) => Math.abs(b.time - time) < 1);
+    if (idx === -1) return { success: false, error: "해당 시간의 북마크를 찾을 수 없습니다." };
+    data.bookmarks.splice(idx, 1);
+    db.prepare("UPDATE records SET data = ?, updatedAt = ? WHERE categoryId = ? AND id = ?")
+      .run(JSON.stringify(data), new Date().toISOString(), categoryId, recordId);
+    return { success: true };
+  });
+
+  ipcMain.handle('removeAllBookmarks', async (_event, categoryId, recordId) => {
+    console.log('=== removeAllBookmarks called with:', categoryId, recordId);
+    try {
+      const record = db.prepare("SELECT data FROM records WHERE categoryId = ? AND id = ?").get(categoryId, recordId);
+      if (!record) return { success: false, error: "Record not found" };
+      
+      const data = JSON.parse(record.data);
+      if (data.bookmarks && data.bookmarks.length > 0) {
+        data.bookmarks = [];
+        db.prepare("UPDATE records SET data = ?, updatedAt = ? WHERE categoryId = ? AND id = ?")
+          .run(JSON.stringify(data), new Date().toISOString(), categoryId, recordId);
+        console.log('=== 북마크 삭제 완료 ===', { recordId, deletedCount: data.bookmarks.length });
+      } else {
+        console.log('=== 북마크가 없음 ===', { recordId });
+      }
+      return { success: true };
+    } catch (error) {
+      console.error('=== removeAllBookmarks 에러 ===', error);
+      return { success: false, error: error.message };
+    }
+  });
+  
+  log('Bookmark handlers registered');
+} catch (e) {
+  log('Bookmark handler registration failed', e);
+}
+
 // SQLite 설정
 db.exec('PRAGMA encoding = "UTF-8"');
 db.exec('PRAGMA foreign_keys = ON');
@@ -811,6 +881,26 @@ async function handleUpdateRecord(_, id, data) {
           
           if (newFilePath !== prevFilePath) {
             log('=== 썸네일 생성 시작 (파일 경로 변경됨) ===', { newFilePath });
+            
+            // 파일 경로가 변경되었으므로 기존 북마크 삭제
+            try {
+              const recordData = db.prepare('SELECT data FROM records WHERE id = ?').get(id);
+              if (recordData) {
+                const data = JSON.parse(recordData.data);
+                if (data.bookmarks && data.bookmarks.length > 0) {
+                  data.bookmarks = [];
+                  db.prepare("UPDATE records SET data = ?, updatedAt = ? WHERE id = ?")
+                    .run(JSON.stringify(data), new Date().toISOString(), id);
+                  log('=== 파일 변경으로 인해 북마크 삭제 완료 ===', { recordId: id, deletedCount: data.bookmarks.length });
+                } else {
+                  log('=== 파일 변경됨, 북마크 없음 ===', { recordId: id });
+                }
+              }
+            } catch (error) {
+              log('북마크 삭제 중 오류:', error);
+              // 북마크 삭제 실패는 레코드 업데이트를 막지 않음
+            }
+            
             // 썸네일 생성
             const thumbnailResult = await generateThumbnail(newFilePath);
             if (thumbnailResult) {
@@ -997,7 +1087,7 @@ ipcMain.handle('db:addRecord', async (_, record) => {
         }
       }
     } catch (error) {
-      log('[addRecord] 썸네일 생성 블록 예외', { error: error.message, stack: error.stack });
+      log('썸네일 생성 블록 예외', { error: error.message, stack: error.stack });
     }
     return recordId;
   } catch (error) {

@@ -226,6 +226,21 @@ export const RecordModal: React.FC<RecordModalProps> = ({
           const prevFilePath = record.data[fileField.id];
           const newFilePath = formData[fileField.id];
           if (newFilePath !== prevFilePath && newFilePath) {
+            // 파일이 변경되었으므로 기존 북마크 삭제 (에러 처리 추가)
+            try {
+              if ((window.electronAPI as any).removeAllBookmarks) {
+                const result = await (window.electronAPI as any).removeAllBookmarks(category.id, record.id);
+                if (result && result.success) {
+                  console.log('파일 변경으로 인해 북마크가 삭제되었습니다:', prevFilePath);
+                } else if (result && result.error) {
+                  console.error('북마크 삭제 실패:', result.error);
+                }
+              }
+            } catch (error) {
+              console.error('북마크 삭제 중 오류 발생:', error);
+              // 북마크 삭제 실패해도 레코드 저장은 계속 진행
+            }
+            
             // 전역 이벤트 발생 - 레코드 리스트의 썸네일도 업데이트
             window.dispatchEvent(new CustomEvent('thumbnail:regenerated', {
               detail: { filePath: newFilePath }

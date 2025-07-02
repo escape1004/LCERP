@@ -40,6 +40,9 @@ export interface ElectronAPI {
   regenerateThumbnail: (filePath: string) => Promise<string | null>;
   getVideoDuration: (filePath: string) => Promise<number | null>;
   getVideoCodecInfo: (filePath: string) => Promise<{ video?: { codec?: string; profile?: string; pix_fmt?: string }; audio?: { codec?: string; sample_rate?: string; channels?: number }; error?: string }>;
+  getBookmarks: (categoryId: string, recordId: string) => Promise<{ success: boolean; bookmarks: { time: number; createdAt: string }[]; error?: string }>;
+  addBookmark: (categoryId: string, recordId: string, time: number) => Promise<{ success: boolean; bookmark?: { time: number; createdAt: string }; error?: string }>;
+  removeBookmark: (categoryId: string, recordId: string, time: number) => Promise<{ success: boolean; error?: string }>;
 }
 
 declare global {

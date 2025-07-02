@@ -6,6 +6,7 @@ import fs from 'fs';
 const { getThumbnailHash } = require('../lib/fileHandler');
 import { registerRecordHandlers } from './ipc/record';
 import { registerCategoryHandlers } from './ipc/category';
+import { registerBookmarkHandlers } from './ipc/bookmark';
 
 const isDevelopment = process.env.NODE_ENV === 'development';
 
@@ -191,6 +192,9 @@ if (!gotTheLock) {
           return false;
         }
       });
+      
+      // 북마크 핸들러 등록
+      registerBookmarkHandlers(db);
       
       // 카테고리/레코드 핸들러 등록
       registerCategoryHandlers(db);

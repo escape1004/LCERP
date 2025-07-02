@@ -14,7 +14,12 @@ const api = {
   setBackupInterval: (minutes: number) => ipcRenderer.invoke('db:setBackupInterval', minutes),
   send: (channel: string, ...args: any[]) => ipcRenderer.send(channel, ...args),
   deleteThumbnail: (filePath: string) => ipcRenderer.invoke('deleteThumbnail', filePath),
+  // 북마크 API
+  getBookmarks: (categoryId: string, recordId: string) => ipcRenderer.invoke('getBookmarks', categoryId, recordId),
+  addBookmark: (categoryId: string, recordId: string, time: number) => ipcRenderer.invoke('addBookmark', categoryId, recordId, time),
+  removeBookmark: (categoryId: string, recordId: string, time: number) => ipcRenderer.invoke('removeBookmark', categoryId, recordId, time),
+  removeAllBookmarks: (categoryId: string, recordId: string) => ipcRenderer.invoke('removeAllBookmarks', categoryId, recordId),
 };
 
 // API를 window 객체에 노출
-contextBridge.exposeInMainWorld('electron', api); 
+contextBridge.exposeInMainWorld('electronAPI', api); 

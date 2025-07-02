@@ -149,18 +149,24 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
           setFileExists(exists);
           if (!exists) {
             toast({ title: '원본 파일이 존재하지 않습니다.', variant: 'destructive' });
-            // 파일이 존재하지 않으면 썸네일도 삭제
-            window.electronAPI.deleteThumbnail(filePath).then(deleted => {
-              if (deleted) {
-                console.log('썸네일이 삭제되었습니다:', filePath);
-                // 전역 이벤트 발생 - 레코드 리스트의 썸네일도 업데이트
-                window.dispatchEvent(new CustomEvent('thumbnail:regenerated', {
-                  detail: { filePath }
-                }));
+            // 파일이 존재하지 않으면 해당 레코드의 북마크 삭제
+            if (record && category) {
+              (async () => {
+                try {
+                  if ((window.electronAPI as any).removeAllBookmarks) {
+                    const result = await (window.electronAPI as any).removeAllBookmarks(category.id, record.id);
+                    if (result && result.success) {
+                      console.log('북마크가 삭제되었습니다:', filePath);
+                    } else if (result && result.error) {
+                      console.error('북마크 삭제 실패:', result.error);
               }
-            }).catch(error => {
-              console.error('썸네일 삭제 실패:', error);
-            });
+                  }
+                } catch (error) {
+                  console.error('북마크 삭제 중 오류:', error);
+                  // 북마크 삭제 실패는 사용자에게 알리지 않음 (파일이 없어서 발생하는 정상적인 상황)
+                }
+              })();
+            }
           }
         }
       });
@@ -168,7 +174,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
       setFileExists(null);
     }
     return () => { ignore = true; };
-  }, [isOpen, filePath]);
+  }, [isOpen, filePath, record, category]);
 
   const canOpenFile = !!filePath && filePath !== '' && filePath !== '-' && fileExists !== false;
 
@@ -941,6 +947,8 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
           onClose={handleViewerClose}
           filePath={viewerFilePath}
           fileType={viewerFileType}
+          categoryId={category.id}
+          recordId={record?.id || ''}
         />
       )}
     </div>

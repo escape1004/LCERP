@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { X, ChevronLeft, ChevronRight, Download, FileImage, FileVideo, Archive, FileText, Play, Pause, Volume2, VolumeX, RotateCcw, Maximize, Minimize } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Download, FileImage, FileVideo, Archive, FileText, Play, Pause, Volume2, VolumeX, RotateCcw, Maximize, Minimize, Bookmark } from 'lucide-react';
 import AdmZip from 'adm-zip';
 
 interface ViewerModalProps {
   isOpen: boolean;
   filePath: string;
   fileType: 'image' | 'video' | 'archive' | null;
+  categoryId?: string;
+  recordId?: string;
   onClose: () => void;
 }
 
@@ -16,7 +18,7 @@ interface ArchiveFile {
   data?: Buffer;
 }
 
-export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, fileType, onClose }) => {
+export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, fileType, categoryId = '', recordId = '', onClose }) => {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [archiveFiles, setArchiveFiles] = useState<ArchiveFile[]>([]);
   const [currentArchiveIndex, setCurrentArchiveIndex] = useState<number>(0);
@@ -82,6 +84,44 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const [showVolumeOverlay, setShowVolumeOverlay] = useState(false);
   const volumeOverlayTimeoutRef = useRef<NodeJS.Timeout>();
 
+  // 1. 북마크 상태 및 불러오기
+  const [bookmarks, setBookmarks] = useState<{ time: number; createdAt: string }[]>([]);
+
+  // 파일 없음 상태 추가
+  const [fileNotFound, setFileNotFound] = useState(false);
+
+  // 파일이 없을 때 북마크 자동 삭제
+  useEffect(() => {
+    if (fileNotFound && fileType === 'video' && categoryId && recordId) {
+      // 파일이 없으면 해당 레코드의 모든 북마크 삭제
+      (async () => {
+        try {
+          if ((window.electronAPI as any).removeAllBookmarks) {
+            const res = await (window.electronAPI as any).removeAllBookmarks(categoryId, recordId);
+            if (res && res.success) {
+              console.log('파일 없음으로 인한 북마크 자동 삭제 완료');
+            } else if (res && res.error) {
+              console.error('북마크 자동 삭제 실패:', res.error);
+            }
+          }
+        } catch (error) {
+          console.error('북마크 삭제 중 오류:', error);
+        }
+      })();
+    }
+  }, [fileNotFound, fileType, categoryId, recordId]);
+
+  useEffect(() => {
+    if (fileType === 'video' && isOpen && filePath && categoryId && recordId) {
+      window.electronAPI.getBookmarks(categoryId, recordId).then(res => {
+        if (res.success) setBookmarks(res.bookmarks);
+        else setBookmarks([]);
+      });
+    } else {
+      setBookmarks([]);
+    }
+  }, [fileType, isOpen, filePath, categoryId, recordId]);
+
   useEffect(() => {
     if (!isOpen || !filePath || !fileType) {
       setDataUrl(null);
@@ -91,13 +131,18 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       setCurrentArchiveText(null);
       setIsPlaying(false);
       setVideoError(null);
+      setFileNotFound(false);
       return;
     }
 
     if (fileType === 'image' || fileType === 'video') {
       setLoading(true);
+      setFileNotFound(false);
       window.electronAPI.getFileDataUrl(filePath).then((url) => {
-        if (fileType === 'video' && url === 'stream') {
+        if (url === null || url === 'error') {
+          setFileNotFound(true);
+          setDataUrl(null);
+        } else if (fileType === 'video' && url === 'stream') {
           // 스트리밍 서버 URL로 연결
           // filePath에 한글/공백 등 특수문자 있을 수 있으므로 encodeURIComponent 적용
           const port = (window as any).videoServerPort || 17345;
@@ -107,8 +152,15 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
           setDataUrl(url);
         }
         setLoading(false);
+      }).catch((error) => {
+        console.error('파일 로드 실패:', error);
+        setFileNotFound(true);
+        setDataUrl(null);
+        setLoading(false);
       });
     } else if (fileType === 'archive') {
+      setLoading(true);
+      setFileNotFound(false);
       loadArchiveFiles();
     } else {
       setDataUrl(null);
@@ -327,6 +379,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const loadArchiveFiles = async () => {
     try {
       setLoading(true);
+      setFileNotFound(false);
       const files = await window.electronAPI.getArchiveFiles(filePath);
       const supportedFiles = files.filter(file => 
         !file.isDirectory && /\.(jpg|jpeg|png|gif|webp|txt|mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(file.name)
@@ -336,6 +389,8 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       setCurrentArchiveIndex(0);
     } catch (error) {
       console.error('압축 파일 로드 실패:', error);
+      setFileNotFound(true);
+      setArchiveFiles([]);
     } finally {
       setLoading(false);
     }
@@ -349,12 +404,6 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
         const currentFile = archiveFiles[currentArchiveIndex];
         const fileExt = currentFile.name.toLowerCase().split('.').pop();
         
-        console.log('압축파일 내 파일 로딩:', {
-          fileName: currentFile.name,
-          fileExt: fileExt,
-          fileSize: currentFile.size
-        });
-        
         if (fileExt === 'txt') {
           // 텍스트 파일인 경우
           const text = await window.electronAPI.getArchiveFileText(filePath, currentFile.name);
@@ -362,13 +411,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
           setCurrentArchiveDataUrl(null);
         } else if (['mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'webm'].includes(fileExt || '')) {
           // 동영상 파일인 경우
-          console.log('동영상 파일 로딩 시작:', currentFile.name);
           const dataUrl = await window.electronAPI.getArchiveFileDataUrl(filePath, currentFile.name);
-          console.log('동영상 파일 로딩 결과:', {
-            fileName: currentFile.name,
-            dataUrlLength: dataUrl?.length || 0,
-            hasDataUrl: !!dataUrl
-          });
           setCurrentArchiveDataUrl(dataUrl);
           setCurrentArchiveText(null);
         } else {
@@ -734,6 +777,35 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     };
   }, [volume, isMuted, handleVolumeChange]);
 
+  // 2. 북마크 추가/삭제 함수 (일반 동영상에서만 작동)
+  const handleAddBookmark = () => {
+    if (fileType !== 'video') return; // 일반 동영상에서만 북마크 추가 가능
+    window.electronAPI.addBookmark(categoryId, recordId, currentTime).then(res => {
+      if (res.success) {
+        setBookmarks(prev => [...prev, res.bookmark].sort((a, b) => a.time - b.time));
+      } else {
+        // 에러 처리
+        console.error('북마크 추가 실패:', res.error);
+      }
+    });
+  };
+  const handleRemoveBookmark = (time: number) => {
+    if (fileType !== 'video') return; // 일반 동영상에서만 북마크 삭제 가능
+    window.electronAPI.removeBookmark(categoryId, recordId, time).then(res => {
+      if (res.success) {
+        setBookmarks(prev => prev.filter(b => Math.abs(b.time - time) >= 1));
+      } else {
+        // 에러 처리
+        console.error('북마크 삭제 실패:', res.error);
+      }
+    });
+  };
+
+  // 현재 시간에 북마크가 있는지 확인하는 함수
+  const hasBookmarkAtCurrentTime = () => {
+    return bookmarks.some(bm => Math.abs(bm.time - currentTime) < 1);
+  };
+
   if (!isOpen || !filePath || !fileType) return null;
 
   const currentFile = archiveFiles[currentArchiveIndex];
@@ -802,6 +874,18 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
           {loading ? (
             <div className="flex items-center justify-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-discord-accent"></div>
+            </div>
+          ) : fileNotFound ? (
+            <div className="flex flex-col items-center justify-center text-center p-8">
+              <div className="text-6xl mb-4">📁</div>
+              <div className="text-2xl font-bold text-discord-text mb-2">원본 파일을 찾을 수 없습니다</div>
+              <div className="text-discord-muted mb-4 max-w-md">
+                파일이 삭제되었거나 이동되었을 수 있습니다.<br />
+                파일 경로: <span className="font-mono text-sm bg-discord-sidebar px-2 py-1 rounded">{filePath}</span>
+              </div>
+              <div className="text-sm text-discord-muted">
+                이 파일과 관련된 북마크는 자동으로 삭제됩니다.
+              </div>
             </div>
           ) : (
             <>
@@ -932,10 +1016,9 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                             }
                           }}
                           onLoadStart={() => {
-                            console.log('동영상 로딩 시작:', filePath);
+                            // 동영상 로딩 시작
                           }}
                           onCanPlay={() => {
-                            console.log('동영상 재생 가능:', filePath);
                             setVideoError(null);
                           }}
                         />
@@ -969,15 +1052,48 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                   <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
                     {/* 재생바 */}
                     <div className="mb-4">
+                      <div style={{ position: 'relative', width: '100%' }}>
                       <input
                         type="range"
-                        min="0"
-                        max={duration || 0}
-                        step="0.1"
+                          min={0}
+                          max={duration}
+                          step={0.01}
                         value={currentTime}
                         onChange={handleSeek}
-                        className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer video-progress"
-                      />
+                          className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
+                          id="seekbar"
+                        />
+                        {/* 북마크 마커 (일반 동영상에서만 표시) */}
+                        {fileType === 'video' && bookmarks.map(bm => (
+                          <div
+                            key={bm.time}
+                            style={{
+                              position: 'absolute',
+                              left: `${(bm.time / duration) * 100}%`,
+                              top: 0,
+                              width: 12,
+                              height: 12,
+                              borderRadius: '50%',
+                              transform: 'translate(-50%, -50%)',
+                              cursor: 'pointer',
+                              zIndex: 10,
+                              transition: 'all 0.2s ease-in-out',
+                            }}
+                            className="bg-red-500/60 shadow-md shadow-red-500/30 border border-white/10 hover:bg-red-500 hover:shadow-lg hover:shadow-red-500/60"
+                            onClick={() => {
+                              if (videoRef.current && fileType === 'video') {
+                                videoRef.current.currentTime = bm.time;
+                                setCurrentTime(bm.time);
+                              }
+                            }}
+                            onContextMenu={e => {
+                              e.preventDefault();
+                              handleRemoveBookmark(bm.time);
+                            }}
+                            title={`북마크: ${formatTime(bm.time)} (클릭: 이동, 우클릭: 삭제)`}
+                          />
+                        ))}
+                      </div>
                       <div className="flex justify-between text-white text-xs mt-1">
                         <span>{formatTime(currentTime)}</span>
                         <span>{formatTime(duration)}</span>
@@ -1023,6 +1139,36 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                       >
                         <RotateCcw size={20} />
                       </button>
+                      
+                      {/* 북마크 버튼 (일반 동영상에서만 표시) */}
+                      {fileType === 'video' && (
+                        <button
+                          onClick={() => {
+                            if (hasBookmarkAtCurrentTime()) {
+                              // 현재 시간에 북마크가 있으면 삭제
+                              const bookmarkToRemove = bookmarks.find(bm => Math.abs(bm.time - currentTime) < 1);
+                              if (bookmarkToRemove) {
+                                handleRemoveBookmark(bookmarkToRemove.time);
+                              }
+                            } else {
+                              // 현재 시간에 북마크가 없으면 추가
+                              handleAddBookmark();
+                            }
+                          }}
+                          className={`transition-colors ml-2 ${
+                            hasBookmarkAtCurrentTime() 
+                              ? 'text-blue-400' 
+                              : 'text-white hover:text-red-400'
+                          }`}
+                          title={
+                            hasBookmarkAtCurrentTime() 
+                              ? '북마크 삭제' 
+                              : '현재 위치 북마크'
+                          }
+                        >
+                          <Bookmark size={20} />
+                        </button>
+                      )}
                       
                       {/* 전체화면 버튼 */}
                       <button
@@ -1217,10 +1363,9 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                     }
                                   }}
                                   onLoadStart={() => {
-                                    console.log('동영상 로딩 시작:', currentFile?.name);
+                                    // 동영상 로딩 시작
                                   }}
                                   onCanPlay={() => {
-                                    console.log('동영상 재생 가능:', currentFile?.name);
                                     setVideoError(null);
                                   }}
                                 />
@@ -1253,15 +1398,18 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                             <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
                               {/* 재생바 */}
                               <div className="mb-4">
+                                <div style={{ position: 'relative', width: '100%' }}>
                                 <input
                                   type="range"
-                                  min="0"
-                                  max={duration || 0}
-                                  step="0.1"
+                                    min={0}
+                                    max={duration}
+                                    step={0.01}
                                   value={currentTime}
                                   onChange={handleSeek}
-                                  className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer video-progress"
+                                    className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
+                                    id="seekbar"
                                 />
+                                </div>
                                 <div className="flex justify-between text-white text-xs mt-1">
                                   <span>{formatTime(currentTime)}</span>
                                   <span>{formatTime(duration)}</span>

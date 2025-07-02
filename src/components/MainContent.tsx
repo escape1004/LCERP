@@ -75,6 +75,270 @@ const renderTextWithHashtags = (text: string) => {
   return parts;
 };
 
+// URL 렌더링 함수
+const renderUrl = (url: string) => (
+  <button
+    type="button"
+    onClick={async (e) => {
+      e.preventDefault();
+      console.log('Attempting to open URL:', url);
+      try {
+        const result = await window.electronAPI.openExternal(url);
+        if (!result.success) {
+          console.error('Failed to open URL:', result.error);
+        }
+      } catch (error) {
+        console.error('Error opening URL:', error);
+      }
+    }}
+    className="text-discord-accent hover:underline flex items-center gap-2 break-all"
+  >
+    {url}
+    <ExternalLink size={16} className="flex-shrink-0" />
+  </button>
+);
+
+// 필드 값 포맷팅 함수
+const formatFieldValue = (field: FieldDefinition, value: any, categories: Category[], getCategoryRecords: (categoryId: string) => DataRecord[]) => {
+  // 빈 값 처리
+  if (value === null || value === undefined || value === '' || value === '-') {
+    return <span className="text-gray-500">-</span>;
+  }
+
+  // 배열이지만 비어있는 경우
+  if (Array.isArray(value) && value.length === 0) {
+    return <span className="text-gray-500">-</span>;
+  }
+
+  const urlPattern = /^https?:\/\/.+/i;
+
+  switch (field.type) {
+    case 'number':
+      return (
+        <span 
+          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+          title={`${String(value)} (클릭하여 복사)`}
+          onClick={async (e) => {
+            e.stopPropagation();
+            try {
+              await navigator.clipboard.writeText(String(value));
+              toast({ 
+                title: '복사 완료', 
+                description: '숫자가 클립보드에 복사되었습니다.' 
+              });
+            } catch (error) {
+              toast({ 
+                title: '복사 실패', 
+                description: '클립보드 복사에 실패했습니다.', 
+                variant: 'destructive' 
+              });
+            }
+          }}
+        >
+          {String(value)}
+        </span>
+      );
+    
+    case 'text':
+    case 'longtext': {
+      const strValue = String(value);
+      
+      // URL 자동 감지 및 렌더링
+      if (urlPattern.test(strValue)) {
+        return renderUrl(strValue);
+      }
+
+  return (
+        <div 
+          className="whitespace-pre-wrap text-discord-text break-words overflow-wrap-anywhere hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+          title={`${strValue} (클릭하여 복사)`}
+          onClick={async (e) => {
+            e.stopPropagation();
+            try {
+              await navigator.clipboard.writeText(strValue);
+              toast({ 
+                title: '복사 완료', 
+                description: '텍스트가 클립보드에 복사되었습니다.' 
+              });
+            } catch (error) {
+              toast({ 
+                title: '복사 실패', 
+                description: '클립보드 복사에 실패했습니다.', 
+                variant: 'destructive' 
+              });
+            }
+          }}
+        >
+          {renderTextWithHashtags(strValue)}
+        </div>
+      );
+    }
+    
+    case 'date': {
+      const dateValue = typeof value === 'string' && /^\d{4}-\d{2}$/.test(value)
+        ? format(new Date(value), "yyyy-MM")
+        : format(new Date(value), "yyyy-MM-dd");
+      
+      return (
+        <span 
+          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+          title={`${dateValue} (클릭하여 복사)`}
+          onClick={async (e) => {
+            e.stopPropagation();
+            try {
+              await navigator.clipboard.writeText(dateValue);
+              toast({ 
+                title: '복사 완료', 
+                description: '날짜가 클립보드에 복사되었습니다.' 
+              });
+            } catch (error) {
+              toast({ 
+                title: '복사 실패', 
+                description: '클립보드 복사에 실패했습니다.', 
+                variant: 'destructive' 
+              });
+            }
+          }}
+        >
+          {dateValue}
+        </span>
+      );
+    }
+    
+    case 'checkbox':
+      return value ? <Check className="w-5 h-5 text-discord-accent" /> : <X className="w-5 h-5 text-discord-danger" />;
+    
+    case 'select':
+      if (Array.isArray(value)) {
+        return (
+          <div className="flex flex-wrap gap-1">
+            {value.map((item) => (
+              <span
+                key={item}
+                className="px-2 py-1 text-xs rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 transition-colors"
+                title={`${String(item)} (클릭하여 복사)`}
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  try {
+                    await navigator.clipboard.writeText(String(item));
+                    toast({
+                      title: '복사 완료',
+                      description: '값이 클립보드에 복사되었습니다.'
+                    });
+                  } catch (error) {
+                    toast({
+                      title: '복사 실패',
+                      description: '클립보드 복사에 실패했습니다.',
+                      variant: 'destructive'
+                    });
+                  }
+                }}
+              >
+                {String(item)}
+              </span>
+      ))}
+    </div>
+  );
+      }
+      return (
+        <span 
+          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+          title={`${String(value)} (클릭하여 복사)`}
+          onClick={async (e) => {
+            e.stopPropagation();
+            try {
+              await navigator.clipboard.writeText(String(value));
+              toast({ 
+                title: '복사 완료', 
+                description: '선택된 값이 클립보드에 복사되었습니다.' 
+              });
+            } catch (error) {
+              toast({ 
+                title: '복사 실패', 
+                description: '클립보드 복사에 실패했습니다.', 
+                variant: 'destructive' 
+              });
+            }
+          }}
+        >
+          {String(value)}
+        </span>
+      );
+    
+    case 'relation':
+      if (!field.relationCategoryId) return String(value);
+      
+      const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
+      if (!relatedCategory) return String(value);
+      
+      const relatedRecords = getCategoryRecords(field.relationCategoryId);
+      const displayField = field.displayFieldId
+        ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
+        : relatedCategory.fields[0];
+      
+      if (Array.isArray(value)) {
+        return (
+          <div className="flex flex-wrap gap-1">
+            {value.map((relatedId) => {
+              const relatedRecord = relatedRecords.find(r => r.id === relatedId);
+              if (!relatedRecord) return null;
+              return (
+                <span
+                  key={relatedId}
+                  className="px-2 py-1 text-xs rounded bg-green-600/20 text-green-500 hover:bg-green-600/30"
+                  title="상세 보기"
+                >
+                  {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
+                </span>
+              );
+            })}
+          </div>
+        );
+      } else {
+        const relatedRecord = relatedRecords.find(r => r.id === value);
+        return relatedRecord 
+          ? (
+            <span
+              className="text-green-500 hover:underline"
+              title="상세 보기"
+            >
+              {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
+            </span>
+          )
+          : String(value);
+      }
+    
+    default:
+      if (typeof value === 'string' && urlPattern.test(value)) {
+        return renderUrl(value);
+      }
+      return (
+        <span 
+          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+          title={`${String(value)} (클릭하여 복사)`}
+          onClick={async (e) => {
+            e.stopPropagation();
+            try {
+              await navigator.clipboard.writeText(String(value));
+              toast({ 
+                title: '복사 완료', 
+                description: '값이 클립보드에 복사되었습니다.' 
+              });
+            } catch (error) {
+              toast({ 
+                title: '복사 실패', 
+                description: '클립보드 복사에 실패했습니다.', 
+                variant: 'destructive' 
+              });
+            }
+          }}
+        >
+          {String(value)}
+        </span>
+      );
+  }
+};
+
 // 전역 이벤트 타입 정의
 declare global {
   interface WindowEventMap {
@@ -82,53 +346,6 @@ declare global {
     'thumbnail:regenerated': CustomEvent<{ filePath: string }>;
   }
 }
-
-// Breadcrumb component
-const CategoryBreadcrumb = React.memo(({ 
-  category, 
-  categories,
-  onCategoryClick 
-}: { 
-  category: Category; 
-  categories: Category[];
-  onCategoryClick: (categoryId: string) => void;
-}) => {
-  const getCategoryPath = useCallback((currentCategory: Category): Category[] => {
-    const path: Category[] = [currentCategory];
-    let parent = currentCategory.parentId ? categories.find(c => c.id === currentCategory.parentId) : null;
-    
-    while (parent) {
-      path.unshift(parent);
-      parent = parent.parentId ? categories.find(c => c.id === parent.parentId) : null;
-    }
-    
-    return path;
-  }, [categories]);
-
-  const categoryPath = useMemo(() => getCategoryPath(category), [category, getCategoryPath]);
-
-  return (
-    <div className="flex items-center gap-1 text-sm text-discord-muted mt-1">
-      {categoryPath.map((cat, index) => (
-        <React.Fragment key={cat.id}>
-          {index > 0 && <ChevronRight size={14} className="text-discord-muted" />}
-          <button
-            onClick={() => onCategoryClick(cat.id)}
-            className={`hover:text-discord-text ${
-              index === categoryPath.length - 1 
-                ? 'text-discord-text font-semibold' 
-                : 'hover:underline'
-            }`}
-          >
-            {cat.name}
-          </button>
-        </React.Fragment>
-      ))}
-    </div>
-  );
-});
-
-CategoryBreadcrumb.displayName = 'CategoryBreadcrumb';
 
 // 썸네일 렌더링 유틸
 const ThumbnailCell: React.FC<{ 
@@ -203,8 +420,6 @@ export const MainContent: React.FC = () => {
   const {
     categories,
     selectedCategoryId,
-    searchTerm,
-    setSearchTerm,
     currentPage,
     setCurrentPage,
     itemsPerPage,
@@ -214,6 +429,9 @@ export const MainContent: React.FC = () => {
     selectCategory,
     showDbViewer,
   } = useERPStore();
+
+  // 검색어를 로컬 상태로 관리
+  const [searchTerm, setSearchTerm] = useState('');
 
   // categories, selectedCategory, currentRecords에 기본값 보장
   const categoriesSafe = categories || [];
@@ -297,23 +515,75 @@ export const MainContent: React.FC = () => {
   // Custom filtered records based on field-specific search
   const customFilteredRecords = useMemo(() => {
     if (!selectedCategoryId) return [];
-    
     if (!searchTerm) return currentRecordsSafe;
-    
+
     return currentRecordsSafe.filter((record) => {
       if (searchField === 'all') {
-        // 테이블에 보이는 필드만 검색 (hidden이 아닌 필드)
         const visibleFields = selectedCategorySafe?.fields.filter(f => !f.hidden) || [];
         return visibleFields.some((field) => {
           const value = record.data[field.id];
+
+          // 관계형 필드 처리
+          if (field.type === 'relation' && field.relationCategoryId) {
+            const relatedCategory = categoriesSafe.find(cat => cat.id === field.relationCategoryId);
+            if (!relatedCategory) return false;
+            const relatedRecords = getCategoryRecords(field.relationCategoryId);
+            const displayField = field.displayFieldId
+              ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
+              : relatedCategory.fields[0];
+
+            if (field.multiple && Array.isArray(value)) {
+              return value.some((relatedId) => {
+                const relatedRecord = relatedRecords.find(r => r.id === relatedId);
+                if (!relatedRecord) return false;
+                const displayValue = relatedRecord.data[displayField?.id];
+                return String(displayValue || '').toLowerCase().includes(searchTerm.toLowerCase());
+              });
+            } else {
+              const relatedRecord = relatedRecords.find(r => r.id === value);
+              if (!relatedRecord) return false;
+              const displayValue = relatedRecord.data[displayField?.id];
+              return String(displayValue || '').toLowerCase().includes(searchTerm.toLowerCase());
+            }
+          }
+
+          // 일반 필드
           return String(value || '').toLowerCase().includes(searchTerm.toLowerCase());
         });
       } else {
-        const fieldValue = record.data[searchField];
-        return String(fieldValue || '').toLowerCase().includes(searchTerm.toLowerCase());
+        // 특정 필드만 검색
+        const field = selectedCategorySafe?.fields.find(f => f.id === searchField);
+        if (!field) return false;
+        const value = record.data[field.id];
+
+        if (field.type === 'relation' && field.relationCategoryId) {
+          const relatedCategory = categoriesSafe.find(cat => cat.id === field.relationCategoryId);
+          if (!relatedCategory) return false;
+          const relatedRecords = getCategoryRecords(field.relationCategoryId);
+          const displayField = field.displayFieldId
+            ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
+            : relatedCategory.fields[0];
+
+          if (field.multiple && Array.isArray(value)) {
+            return value.some((relatedId) => {
+              const relatedRecord = relatedRecords.find(r => r.id === relatedId);
+              if (!relatedRecord) return false;
+              const displayValue = relatedRecord.data[displayField?.id];
+              return String(displayValue || '').toLowerCase().includes(searchTerm.toLowerCase());
+            });
+          } else {
+            const relatedRecord = relatedRecords.find(r => r.id === value);
+            if (!relatedRecord) return false;
+            const displayValue = relatedRecord.data[displayField?.id];
+            return String(displayValue || '').toLowerCase().includes(searchTerm.toLowerCase());
+          }
+        }
+
+        // 일반 필드
+        return String(value || '').toLowerCase().includes(searchTerm.toLowerCase());
       }
     });
-  }, [selectedCategoryId, searchTerm, searchField, currentRecordsSafe, selectedCategorySafe]);
+  }, [selectedCategoryId, searchTerm, searchField, currentRecordsSafe, selectedCategorySafe, categoriesSafe, getCategoryRecords]);
 
   // 파일 필드 존재 여부
   const fileField = selectedCategorySafe?.fields.find(f => f.type === 'file');
@@ -345,6 +615,69 @@ export const MainContent: React.FC = () => {
 
       let aValue = a.data[sortField];
       let bValue = b.data[sortField];
+
+      // 관계형 필드인 경우 실제 데이터 값으로 정렬
+      const sortFieldDef = selectedCategorySafe?.fields.find(f => f.id === sortField);
+      if (sortFieldDef?.type === 'relation') {
+        const relatedCategory = categoriesSafe.find(cat => cat.id === sortFieldDef.relationCategoryId);
+        if (relatedCategory) {
+          const relatedRecords = getCategoryRecords(sortFieldDef.relationCategoryId!);
+          const displayField = sortFieldDef.displayFieldId
+            ? relatedCategory.fields.find(f => f.id === sortFieldDef.displayFieldId)
+            : relatedCategory.fields[0];
+          
+          if (sortFieldDef.multiple && Array.isArray(aValue) && Array.isArray(bValue)) {
+            // 다중 선택 관계형 필드 정렬
+            const aDisplayValues = aValue
+              .map((id: string) => {
+                const rec = relatedRecords.find(r => r.id === id);
+                return rec ? String(rec.data[displayField?.id] || '') : '';
+              })
+              .filter(Boolean)
+              .sort();
+            const bDisplayValues = bValue
+              .map((id: string) => {
+                const rec = relatedRecords.find(r => r.id === id);
+                return rec ? String(rec.data[displayField?.id] || '') : '';
+              })
+              .filter(Boolean)
+              .sort();
+            
+            aValue = aDisplayValues.join(',');
+            bValue = bDisplayValues.join(',');
+          } else if (sortFieldDef.multiple) {
+            // 다중 선택 필드이지만 배열이 아닌 경우 (잘못된 데이터)
+            aValue = '';
+            bValue = '';
+          } else {
+            // 단일 선택 관계형 필드 정렬
+            const aRelatedRecord = relatedRecords.find(r => r.id === aValue);
+            const bRelatedRecord = relatedRecords.find(r => r.id === bValue);
+            
+            aValue = aRelatedRecord ? String(aRelatedRecord.data[displayField?.id] || '') : '';
+            bValue = bRelatedRecord ? String(bRelatedRecord.data[displayField?.id] || '') : '';
+          }
+        }
+      }
+
+      // 빈 값 처리 (모든 필드 타입에 적용)
+      const isEmptyValue = (val: any): boolean => {
+        if (val === null || val === undefined) return true;
+        if (typeof val === 'string' && val.trim() === '') return true;
+        if (Array.isArray(val) && val.length === 0) return true;
+        if (typeof val === 'object' && Object.keys(val).length === 0) return true;
+        return false;
+      };
+
+      const aIsEmpty = isEmptyValue(aValue);
+      const bIsEmpty = isEmptyValue(bValue);
+
+      // 둘 다 빈 값인 경우
+      if (aIsEmpty && bIsEmpty) return 0;
+      // a만 빈 값인 경우
+      if (aIsEmpty) return sortDirection === 'asc' ? 1 : -1;
+      // b만 빈 값인 경우
+      if (bIsEmpty) return sortDirection === 'asc' ? -1 : 1;
 
       // Handle different data types
       if (typeof aValue === 'string' && typeof bValue === 'string') {
@@ -442,6 +775,8 @@ export const MainContent: React.FC = () => {
   const [viewerModalOpen, setViewerModalOpen] = useState(false);
   const [viewerFilePath, setViewerFilePath] = useState<string>('');
   const [viewerFileType, setViewerFileType] = useState<'image' | 'video' | 'archive' | null>(null);
+  const [viewerCategoryId, setViewerCategoryId] = useState<string>('');
+  const [viewerRecordId, setViewerRecordId] = useState<string>('');
 
   const handleSort = (fieldId: string) => {
     if (sortField === fieldId) {
@@ -492,791 +827,6 @@ export const MainContent: React.FC = () => {
     setIsAlertDialogOpen(true);
   };
 
-  const exportToCSV = () => {
-    if (!selectedCategorySafe || sortedRecords.length === 0) return;
-
-    const headers = ['ID', ...selectedCategorySafe.fields.filter(f => !f.hidden).map(f => f.name), '생성일', '수정일'];
-    
-    // Add BOM for Korean encoding
-    const BOM = '\uFEFF';
-    
-    const csvContent = BOM + [
-      headers.join(','),
-      ...sortedRecords.map(record => [
-        record.id,
-        ...selectedCategorySafe.fields.filter(f => !f.hidden).map(field => {
-          const value = record.data[field.id];
-          
-          // Handle different field types
-          if (field.type === 'relation') {
-            if (Array.isArray(value)) {
-              const relatedCategory = categoriesSafe.find(cat => cat.id === field.relationCategoryId);
-              if (!relatedCategory) return `"${value.join(', ')}"`;
-              
-              const relatedRecords = getCategoryRecords(field.relationCategoryId!);
-              const displayField = relatedCategory.fields[0];
-              
-              const displayValues = value.map(recordId => {
-                const relatedRecord = relatedRecords.find(r => r.id === recordId);
-                return relatedRecord ? 
-                  String(relatedRecord.data[displayField?.id] || recordId) : 
-                  recordId;
-              });
-              
-              return `"${displayValues.join(', ')}"`;
-            } else if (value) {
-              const relatedCategory = categoriesSafe.find(cat => cat.id === field.relationCategoryId);
-              if (!relatedCategory) return `"${value}"`;
-              
-              const relatedRecords = getCategoryRecords(field.relationCategoryId!);
-              const displayField = relatedCategory.fields[0];
-              const relatedRecord = relatedRecords.find(r => r.id === value);
-              
-              return `"${relatedRecord ? 
-                String(relatedRecord.data[displayField?.id] || value) : 
-                value}"`;
-            }
-            return '""';
-          }
-          
-          // Handle arrays (e.g., select multiple)
-          if (Array.isArray(value)) {
-            return `"${value.join(', ')}"`;
-          }
-          
-          // Handle dates
-          if (field.type === 'date' && value) {
-            return `"${format(new Date(value), "yyyy-MM-dd")}"`;
-          }
-          
-          // Handle other types
-          if (value === null || value === undefined) {
-            return '""';
-          }
-          
-          // Escape quotes and format other values
-          const stringValue = String(value).replace(/"/g, '""');
-          return `"${stringValue}"`;
-        }),
-        format(new Date(record.createdAt), "yyyy-MM-dd HH:mm:ss"),
-        format(new Date(record.updatedAt), "yyyy-MM-dd HH:mm:ss")
-      ].join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `${selectedCategorySafe.name}_${timestamp}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handleUrlClick = async (e: React.MouseEvent, url: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    try {
-      await window.electronAPI.openExternal(url);
-    } catch (error) {
-      console.error('URL 열기 실패:', error);
-    }
-  };
-
-  const renderUrl = (url: string, maxLength: number) => (
-    <button
-      type="button"
-      onClick={(e) => handleUrlClick(e, url)}
-      className="text-discord-accent hover:underline flex items-center gap-1 text-left w-full"
-    >
-      <span className="truncate">
-        {url.length > maxLength ? url.substring(0, maxLength) + '...' : url}
-      </span>
-      <ExternalLink size={14} className="flex-shrink-0" />
-    </button>
-  );
-
-  const formatFieldValue = (field: FieldDefinition, value: any, recordId: string) => {
-    // 공통 빈 값 처리 함수
-    const isEmptyValue = (val: any): boolean => {
-      if (val === null || val === undefined) return true;
-      if (typeof val === 'string' && val.trim() === '') return true;
-      if (Array.isArray(val) && val.length === 0) return true;
-      if (typeof val === 'object' && Object.keys(val).length === 0) return true;
-      return false;
-    };
-
-    // 빈 값이면 "-" 표시
-    if (isEmptyValue(value)) {
-      return <span className="text-discord-muted">-</span>;
-    }
-
-    // URL 자동 감지 및 렌더링
-    if (typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'))) {
-      return renderUrl(value, 30);
-    }
-    
-    switch (field.type) {
-      case 'text':
-      case 'longtext': {
-        const strValue = String(value);
-        const { hashtags, plainText } = parseHashtags(strValue);
-        
-        return (
-          <div 
-            className="text-discord-text truncate max-w-full hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
-            title={`${strValue} (클릭하여 복사)`}
-            onClick={async (e) => {
-              e.stopPropagation();
-              try {
-                await navigator.clipboard.writeText(strValue);
-                toast({ 
-                  title: '복사 완료', 
-                  description: '텍스트가 클립보드에 복사되었습니다.' 
-                });
-              } catch (error) {
-                toast({ 
-                  title: '복사 실패', 
-                  description: '클립보드 복사에 실패했습니다.', 
-                  variant: 'destructive' 
-                });
-              }
-            }}
-          >
-            {renderTextWithHashtags(strValue)}
-          </div>
-        );
-      }
-      case 'number': {
-        const numValue = String(value);
-        if (numValue.length > 20) {
-          return (
-            <span 
-              className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
-              title={`${numValue} (클릭하여 복사)`}
-              onClick={async (e) => {
-                e.stopPropagation();
-                try {
-                  await navigator.clipboard.writeText(numValue);
-                  toast({ 
-                    title: '복사 완료', 
-                    description: '숫자가 클립보드에 복사되었습니다.' 
-                  });
-                } catch (error) {
-                  toast({ 
-                    title: '복사 실패', 
-                    description: '클립보드 복사에 실패했습니다.', 
-                    variant: 'destructive' 
-                  });
-                }
-              }}
-            >
-              {numValue.substring(0, 20)}...
-            </span>
-          );
-        }
-        return (
-          <span 
-            className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
-            title={`${numValue} (클릭하여 복사)`}
-            onClick={async (e) => {
-              e.stopPropagation();
-              try {
-                await navigator.clipboard.writeText(numValue);
-                toast({ 
-                  title: '복사 완료', 
-                  description: '숫자가 클립보드에 복사되었습니다.' 
-                });
-              } catch (error) {
-                toast({ 
-                  title: '복사 실패', 
-                  description: '클립보드 복사에 실패했습니다.', 
-                  variant: 'destructive' 
-                });
-              }
-            }}
-          >
-            {numValue}
-          </span>
-        );
-      }
-      case 'date': {
-        const dateValue = typeof value === 'string' && /^\d{4}-\d{2}$/.test(value)
-          ? format(new Date(value), "yyyy-MM")
-          : format(new Date(value), "yyyy-MM-dd");
-        
-        return (
-          <span 
-            className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
-            title={`${dateValue} (클릭하여 복사)`}
-            onClick={async (e) => {
-              e.stopPropagation();
-              try {
-                await navigator.clipboard.writeText(dateValue);
-                toast({ 
-                  title: '복사 완료', 
-                  description: '날짜가 클립보드에 복사되었습니다.' 
-                });
-              } catch (error) {
-                toast({ 
-                  title: '복사 실패', 
-                  description: '클립보드 복사에 실패했습니다.', 
-                  variant: 'destructive' 
-                });
-              }
-            }}
-          >
-            {dateValue}
-          </span>
-        );
-      }
-      
-      case 'checkbox':
-        return value ? <Check className="w-5 h-5 text-discord-accent" /> : <X className="w-5 h-5 text-discord-danger" />;
-      
-      case 'select':
-        if (Array.isArray(value)) {
-          const isExpanded = expandedTags[`${recordId}-${field.id}`];
-          const displayTags = isExpanded ? value : value.slice(0, 3);
-          const remainingCount = value.length - 3;
-
-          return (
-            <div className="flex flex-wrap gap-1">
-              {displayTags.map((item) => (
-                <span
-                  key={item}
-                  className="px-2 py-1 text-xs rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 transition-colors"
-                  title={`${String(item)} (클릭하여 복사)`}
-                  style={{ cursor: 'pointer' }}
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    try {
-                      await navigator.clipboard.writeText(String(item));
-                      toast({
-                        title: '복사 완료',
-                        description: '값이 클립보드에 복사되었습니다.'
-                      });
-                    } catch (error) {
-                      toast({
-                        title: '복사 실패',
-                        description: '클립보드 복사에 실패했습니다.',
-                        variant: 'destructive'
-                      });
-                    }
-                  }}
-                >
-                  {String(item)}
-                </span>
-              ))}
-              {!isExpanded && remainingCount > 0 && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setExpandedTags(prev => ({
-                      ...prev,
-                      [`${recordId}-${field.id}`]: true
-                    }));
-                  }}
-                  className="px-2 py-1 text-xs rounded bg-discord-blurple text-white hover:bg-discord-blurple/80"
-                >
-                  +{remainingCount}개 더보기
-                </button>
-              )}
-              {isExpanded && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setExpandedTags(prev => ({
-                      ...prev,
-                      [`${recordId}-${field.id}`]: false
-                    }));
-                  }}
-                  className="px-2 py-1 text-xs rounded bg-gray-500 text-white hover:bg-gray-600"
-                >
-                  접기
-                </button>
-              )}
-            </div>
-          );
-        }
-        // 단일 선택 필드
-        return (
-          <span 
-            className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
-            title={`${String(value)} (클릭하여 복사)`}
-            onClick={async (e) => {
-              e.stopPropagation();
-              try {
-                await navigator.clipboard.writeText(String(value));
-                toast({ 
-                  title: '복사 완료', 
-                  description: '선택된 값이 클립보드에 복사되었습니다.' 
-                });
-              } catch (error) {
-                toast({ 
-                  title: '복사 실패', 
-                  description: '클립보드 복사에 실패했습니다.', 
-                  variant: 'destructive' 
-                });
-              }
-            }}
-          >
-            {String(value)}
-          </span>
-        );
-      
-      case 'relation':
-        if (!field.relationCategoryId) return String(value);
-        
-        const relatedCategory = categoriesSafe.find(cat => cat.id === field.relationCategoryId);
-        if (!relatedCategory) return String(value);
-        
-        const relatedRecords = getCategoryRecords(field.relationCategoryId);
-        const displayField = field.displayFieldId
-          ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
-          : relatedCategory.fields[0];
-        
-        if (field.multiple && Array.isArray(value)) {
-          const isExpanded = expandedTags[`${recordId}-${field.id}`];
-          const displayTags = isExpanded ? value : value.slice(0, 3);
-          const remainingCount = value.length - 3;
-
-          return (
-            <div className="flex flex-wrap gap-1">
-              {displayTags.map((relatedId) => {
-                const relatedRecord = relatedRecords.find(r => r.id === relatedId);
-                if (!relatedRecord) return null;
-                return (
-                  <span
-                    key={relatedId}
-                    className="px-2 py-1 text-xs rounded bg-green-600/20 text-green-500 cursor-pointer hover:bg-green-600/30"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleViewRelatedRecord(relatedRecord, relatedCategory);
-                    }}
-                  >
-                    {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
-                  </span>
-                );
-              })}
-              {!isExpanded && remainingCount > 0 && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setExpandedTags(prev => ({
-                      ...prev,
-                      [`${recordId}-${field.id}`]: true
-                    }));
-                  }}
-                  className="px-2 py-1 text-xs rounded bg-discord-blurple text-white hover:bg-discord-blurple/80"
-                >
-                  +{remainingCount}개 더보기
-                </button>
-              )}
-              {isExpanded && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setExpandedTags(prev => ({
-                      ...prev,
-                      [`${recordId}-${field.id}`]: false
-                    }));
-                  }}
-                  className="px-2 py-1 text-xs rounded bg-gray-500 text-white hover:bg-gray-600"
-                >
-                  접기
-                </button>
-              )}
-            </div>
-          );
-        } else {
-          // 단일 선택 필드는 일반 텍스트로 표시
-          const relatedRecord = relatedRecords.find(r => r.id === value);
-          if (!relatedRecord) return String(value);
-          
-          return (
-            <span
-              className="text-green-500 cursor-pointer hover:underline"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleViewRelatedRecord(relatedRecord, relatedCategory);
-              }}
-            >
-              {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
-            </span>
-          );
-        }
-      
-      case 'file':
-        return (
-          <span 
-            className="text-discord-text text-xs hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
-            title={`${String(value)} (클릭하여 경로 복사)`}
-            onClick={async (e) => {
-              e.stopPropagation();
-              try {
-                await navigator.clipboard.writeText(String(value));
-                toast({ 
-                  title: '복사 완료', 
-                  description: '파일 경로가 클립보드에 복사되었습니다.' 
-                });
-              } catch (error) {
-                toast({ 
-                  title: '복사 실패', 
-                  description: '클립보드 복사에 실패했습니다.', 
-                  variant: 'destructive' 
-                });
-              }
-            }}
-          >
-            {String(value)}
-          </span>
-        );
-      
-      default:
-        return (
-          <span 
-            className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
-            title={`${String(value)} (클릭하여 복사)`}
-            onClick={async (e) => {
-              e.stopPropagation();
-              try {
-                await navigator.clipboard.writeText(String(value));
-                toast({ 
-                  title: '복사 완료', 
-                  description: '값이 클립보드에 복사되었습니다.' 
-                });
-              } catch (error) {
-                toast({ 
-                  title: '복사 실패', 
-                  description: '클립보드 복사에 실패했습니다.', 
-                  variant: 'destructive' 
-                });
-              }
-            }}
-          >
-            {String(value)}
-          </span>
-        );
-    }
-  };
-
-  const handleCategoryClick = useCallback((categoryId: string) => {
-    selectCategory(categoryId);
-  }, [selectCategory]);
-
-  // Get parent categories path
-  const getParentPath = useCallback((category: Category): Category[] => {
-    const path: Category[] = [];
-    let parent = category.parentId ? categoriesSafe.find(c => c.id === category.parentId) : null;
-    
-    while (parent) {
-      path.unshift(parent);
-      parent = parent.parentId ? categoriesSafe.find(c => c.id === parent.parentId) : null;
-    }
-    
-    return path;
-  }, [categoriesSafe]);
-
-  const handleCsvDownload = () => {
-    exportToCSV();
-    setCsvDropdownOpen(false);
-  };
-
-  const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedCategorySafe) return;
-
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async (results) => {
-        const { data, errors } = results;
-        if (errors.length > 0) {
-          toast({ title: 'CSV 파싱 오류', description: errors.map(e => e.message).join(', '), variant: 'destructive' });
-          setCsvDropdownOpen(false);
-          return;
-        }
-        // 필드 매핑
-        const fields = selectedCategorySafe.fields;
-        const requiredFields = fields.filter(f => f.required);
-        let successCount = 0;
-        let failCount = 0;
-        const failRows: number[] = [];
-        for (let i = 0; i < data.length; i++) {
-          const row = data[i] as Record<string, any>;
-          // 필수값 누락 체크
-          const missing = requiredFields.find(f => !row[f.name] && row[f.name] !== 0);
-          if (missing) {
-            failCount++;
-            failRows.push(i + 2); // header + 1-based
-            continue;
-          }
-          // 중복 체크(고유 필드)
-          const uniqueField = fields.find(f => f.unique && row[f.name]);
-          if (uniqueField) {
-            const isDuplicate = currentRecordsSafe.some(r => r.data[uniqueField.id] === row[uniqueField.name]);
-            if (isDuplicate) {
-              failCount++;
-              failRows.push(i + 2);
-              continue;
-            }
-          }
-          // 데이터 변환 및 삽입
-          const recordData: Record<string, any> = {};
-          fields.forEach(f => {
-            recordData[f.id] = row[f.name] ?? '';
-          });
-          try {
-            const now = new Date().toISOString();
-            const createdAt = row['생성일'] ? new Date(row['생성일']).toISOString() : now;
-            const updatedAt = row['수정일'] ? new Date(row['수정일']).toISOString() : now;
-            
-            await window.electronAPI.addRecord({
-              categoryId: selectedCategorySafe.id,
-              data: recordData,
-              createdAt,
-              updatedAt,
-            });
-            successCount++;
-          } catch (err) {
-            failCount++;
-            failRows.push(i + 2);
-          }
-        }
-        toast({
-          title: `CSV 업로드 결과`,
-          description: `성공: ${successCount}건, 실패: ${failCount}건${failRows.length ? ' (실패 행: ' + failRows.join(', ') + ')' : ''}`,
-          variant: failCount > 0 ? 'destructive' : 'default',
-        });
-        setCsvDropdownOpen(false);
-        loadRecords(selectedCategorySafe.id);
-      },
-      error: (err) => {
-        toast({ title: 'CSV 파싱 실패', description: String(err), variant: 'destructive' });
-        setCsvDropdownOpen(false);
-      },
-    });
-  };
-
-  const handleTemplateDownload = () => {
-    if (!selectedCategorySafe) return;
-    const fields = selectedCategorySafe.fields;
-    // 필수 필드는 *표시, 옵션 필드는 그대로
-    const headers = fields.filter(f => !f.hidden).map(f => f.required ? `${f.name}*` : f.name);
-    // 예시 데이터: 필수는 "", 옵션은 ""
-    const example = fields.filter(f => !f.hidden).map(() => '');
-    const BOM = '\uFEFF';
-    const csvContent = BOM + [headers.join(','), example.join(',')].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `${selectedCategorySafe.name}_양식.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setCsvDropdownOpen(false);
-  };
-
-  const handleExcelDownload = () => {
-    if (!selectedCategorySafe || sortedRecords.length === 0) return;
-    const headers = ['ID', ...selectedCategorySafe.fields.filter(f => !f.hidden).map(f => f.name), '생성일', '수정일'];
-    const data = sortedRecords.map(record => [
-      record.id,
-      ...selectedCategorySafe.fields.filter(f => !f.hidden).map(field => record.data[field.id]),
-      format(new Date(record.createdAt), "yyyy-MM-dd HH:mm:ss"),
-      format(new Date(record.updatedAt), "yyyy-MM-dd HH:mm:ss")
-    ]);
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Records');
-    XLSX.writeFile(wb, `${selectedCategorySafe.name}_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`);
-    setCsvDropdownOpen(false);
-  };
-
-  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedCategorySafe) return;
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      const data = new Uint8Array(evt.target?.result as ArrayBuffer);
-      const workbook = XLSX.read(data, { type: 'array' });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-      const [header, ...rows] = json;
-      if (!header || !Array.isArray(header)) {
-        toast({ title: '엑셀 파싱 오류', description: '헤더가 올바르지 않습니다.', variant: 'destructive' });
-        setCsvDropdownOpen(false);
-        return;
-      }
-
-      // 필드 매핑 정보 생성
-      const fields = selectedCategorySafe.fields;
-      const fieldMap = new Map();
-      let createdAtIndex = -1;
-      let updatedAtIndex = -1;
-
-      header.forEach((h: string, idx: number) => {
-        // 필수 필드 표시(*) 제거
-        const fieldName = h.replace(/\*$/, '');
-        if (fieldName === '생성일') {
-          createdAtIndex = idx;
-        } else if (fieldName === '수정일') {
-          updatedAtIndex = idx;
-        } else {
-          const field = fields.find(f => f.name === fieldName);
-          if (field) {
-            fieldMap.set(idx, field);
-          }
-        }
-      });
-
-      const requiredFields = fields.filter(f => f.required);
-      let successCount = 0;
-      let failCount = 0;
-      const failRows: number[] = [];
-
-      for (let i = 0; i < rows.length; i++) {
-        const row = rows[i] as any[];
-        const recordData: Record<string, any> = {};
-
-        // 데이터 매핑
-        fieldMap.forEach((field, idx) => {
-          recordData[field.id] = row[idx] ?? '';
-        });
-
-        // 필수값 누락 체크
-        const missing = requiredFields.find(f => !recordData[f.id] && recordData[f.id] !== 0);
-        if (missing) {
-          failCount++;
-          failRows.push(i + 2); // header + 1-based
-          continue;
-        }
-
-        // 중복 체크(고유 필드)
-        const uniqueField = fields.find(f => f.unique && recordData[f.id]);
-        if (uniqueField) {
-          const isDuplicate = currentRecordsSafe.some(r => r.data[uniqueField.id] === recordData[uniqueField.id]);
-          if (isDuplicate) {
-            failCount++;
-            failRows.push(i + 2);
-            continue;
-          }
-        }
-
-        try {
-          const now = new Date().toISOString();
-          const createdAt = createdAtIndex >= 0 && row[createdAtIndex] 
-            ? new Date(row[createdAtIndex]).toISOString() 
-            : now;
-          const updatedAt = updatedAtIndex >= 0 && row[updatedAtIndex]
-            ? new Date(row[updatedAtIndex]).toISOString()
-            : now;
-
-          await window.electronAPI.addRecord({
-            categoryId: selectedCategorySafe.id,
-            data: recordData,
-            createdAt,
-            updatedAt,
-          });
-          successCount++;
-        } catch (err) {
-          console.error('Record add error:', err);
-          failCount++;
-          failRows.push(i + 2);
-        }
-      }
-
-      toast({
-        title: `엑셀 업로드 결과`,
-        description: `성공: ${successCount}건, 실패: ${failCount}건${failRows.length ? ' (실패 행: ' + failRows.join(', ') + ')' : ''}`,
-        variant: failCount > 0 ? 'destructive' : 'default',
-      });
-      setCsvDropdownOpen(false);
-      loadRecords(selectedCategorySafe.id);
-    };
-    reader.readAsArrayBuffer(file);
-  };
-
-  const handleExcelTemplateDownload = () => {
-    if (!selectedCategorySafe) return;
-    const fields = selectedCategorySafe.fields;
-    const headers = fields.filter(f => !f.hidden).map(f => f.required ? `${f.name}*` : f.name);
-    const example = fields.filter(f => !f.hidden).map(() => '');
-    const ws = XLSX.utils.aoa_to_sheet([headers, example]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Template');
-    XLSX.writeFile(wb, `${selectedCategorySafe.name}_양식.xlsx`);
-    setCsvDropdownOpen(false);
-  };
-
-  // 참조 횟수 컬럼 노출 조건 (id가 명확히 존재할 때만)
-  const showRefCount = !!selectedCategorySafe?.id &&
-    categoriesSafe.some(cat =>
-      cat.fields.some(field =>
-        field.type === 'relation' &&
-        !!field.relationCategoryId &&
-        field.relationCategoryId === selectedCategorySafe.id
-      )
-    );
-
-  const handlePageInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const pageNumber = parseInt(pageInputValue);
-      if (pageNumber >= 1 && pageNumber <= totalPages) {
-        setCurrentPage(pageNumber);
-        setIsPageInputMode(false);
-        setPageInputValue('');
-      }
-    } else if (e.key === 'Escape') {
-      setIsPageInputMode(false);
-      setPageInputValue('');
-    }
-  };
-
-  const handlePageInputBlur = () => {
-    const pageNumber = parseInt(pageInputValue);
-    if (pageNumber >= 1 && pageNumber <= totalPages) {
-      setCurrentPage(pageNumber);
-    }
-    setIsPageInputMode(false);
-    setPageInputValue('');
-  };
-
-  const handlePageNumberClick = () => {
-    setIsPageInputMode(true);
-    setPageInputValue(currentPage.toString());
-  };
-
-  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
-
-  // 중복 불가 필드의 중복 여부를 체크하는 함수
-  const checkDuplicateField = useCallback((field: FieldDefinition, recordId: string, value: any): boolean => {
-    if (!field.unique || !value || value === '' || value === null || value === undefined) {
-      return false;
-    }
-
-    const records = getCategoryRecords(selectedCategorySafe?.id || '');
-    const duplicateCount = records.filter(record => 
-      record.id !== recordId && 
-      record.data[field.id] === value
-    ).length;
-
-    return duplicateCount > 0;
-  }, [selectedCategorySafe?.id, getCategoryRecords]);
-
-  // 레코드의 중복 필드가 있는지 체크하는 함수
-  const hasDuplicateFields = useCallback((record: DataRecord): boolean => {
-    if (!selectedCategorySafe) return false;
-    
-    return selectedCategorySafe.fields.some(field => 
-      field.unique && checkDuplicateField(field, record.id, record.data[field.id])
-    );
-  }, [selectedCategorySafe, checkDuplicateField]);
-
   return (
     <div className="flex-1 h-full flex flex-col bg-discord-bg">
       {showDbViewer ? (
@@ -1289,90 +839,11 @@ export const MainContent: React.FC = () => {
           <div className="shrink-0 p-6 border-b border-gray-700">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <div className="flex items-end">
                   <h1 className="text-xl font-bold text-discord-text">
-                    {selectedCategorySafe?.name}
+                  {selectedCategorySafe?.name || '카테고리를 선택해주세요'}
                   </h1>
-                  {selectedCategorySafe?.parentId && (
-                    <span className="ml-2 text-sm text-discord-muted flex items-center">
-                      (
-                      {(() => {
-                        const parentPath = getParentPath(selectedCategorySafe);
-                        return (
-                          <>
-                            {parentPath.map((cat, idx) => (
-                              <React.Fragment key={cat.id}>
-                                <button
-                                  onClick={() => handleCategoryClick(cat.id)}
-                                  className="hover:text-discord-text hover:underline"
-                                >
-                                  {cat.name}
-                                </button>
-                                <ChevronRight size={14} className="mx-1 text-discord-muted" />
-                              </React.Fragment>
-                            ))}
-                            <span className="text-discord-muted font-semibold">{selectedCategorySafe.name}</span>
-                          </>
-                        );
-                      })()}
-                      )
-                    </span>
-                  )}
-                </div>
               </div>
               <div className="flex gap-3">
-                <div className="relative">
-                  <Button
-                    onClick={() => setCsvDropdownOpen((v) => !v)}
-                    variant="outline"
-                    className="border-gray-600 hover:bg-discord-hover flex items-center"
-                    disabled={sortedRecords.length === 0 && !selectedCategorySafe}
-                  >
-                    <FileText size={16} className="mr-2" />
-                    CSV 관리
-                    <ChevronDown size={16} className="ml-1" />
-                  </Button>
-                  {csvDropdownOpen && (
-                    <div className="absolute left-0 mt-2 w-48 bg-discord-sidebar border border-gray-700 rounded shadow-lg z-50">
-                      <button
-                        className="w-full flex items-center px-4 py-2 text-sm hover:bg-discord-hover text-discord-text"
-                        onClick={handleCsvDownload}
-                      >
-                        <Download size={16} className="mr-2" /> CSV 다운로드
-                      </button>
-                      <button
-                        className="w-full flex items-center px-4 py-2 text-sm hover:bg-discord-hover text-discord-text"
-                        onClick={() => csvInputRef.current?.click()}
-                      >
-                        <Upload size={16} className="mr-2" /> CSV 업로드
-                      </button>
-                      <button
-                        className="w-full flex items-center px-4 py-2 text-sm hover:bg-discord-hover text-discord-text"
-                        onClick={handleTemplateDownload}
-                      >
-                        <FileText size={16} className="mr-2" /> CSV 양식 다운로드
-                      </button>
-                      <input
-                        ref={csvInputRef}
-                        type="file"
-                        accept=".csv"
-                        className="hidden"
-                        onChange={handleCsvUpload}
-                      />
-                      <div className="border-t border-gray-700" />
-                      <button className="w-full flex items-center px-4 py-2 text-sm hover:bg-discord-hover text-discord-text" onClick={handleExcelDownload}>
-                        <Download size={16} className="mr-2" /> 엑셀 다운로드
-                      </button>
-                      <button className="w-full flex items-center px-4 py-2 text-sm hover:bg-discord-hover text-discord-text" onClick={() => excelInputRef.current?.click()}>
-                        <Upload size={16} className="mr-2" /> 엑셀 업로드
-                      </button>
-                      <button className="w-full flex items-center px-4 py-2 text-sm hover:bg-discord-hover text-discord-text" onClick={handleExcelTemplateDownload}>
-                        <FileText size={16} className="mr-2" /> 엑셀 양식 다운로드
-                      </button>
-                      <input ref={excelInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleExcelUpload} />
-                    </div>
-                  )}
-                </div>
                 <Button
                   onClick={() => {
                     setEditingRecord(null);
@@ -1449,8 +920,8 @@ export const MainContent: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <>
-                {/* Table Container - padding 제거, 스크롤 div는 thead 바로 위에서 시작 */}
+              <div className="flex-1 flex flex-col min-h-0">
+                {/* Table Container */}
                 <div ref={tableContainerRef} className="flex-1 min-h-0 overflow-auto discord-scrollbar">
                   <table className="w-full table-fixed">
                     <thead className="sticky top-0 z-10 bg-discord-sidebar border-b border-gray-700">
@@ -1494,33 +965,12 @@ export const MainContent: React.FC = () => {
                             </div>
                           </th>
                         ))}
-                        {showRefCount && (
-                          <th className="px-2 py-2 text-left text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover w-24 whitespace-nowrap" onClick={() => handleSort('__refCount')}>
-                            <div className="flex items-center justify-start gap-1">
-                              참조 횟수
-                              {sortField === '__refCount' && (
-                                sortDirection === 'asc' ? (
-                                  <SortAsc size={16} className="text-white" />
-                                ) : (
-                                  <SortDesc size={16} className="text-white" />
-                                )
-                              )}
-                            </div>
-                          </th>
-                        )}
                         <th className="px-2 py-2 text-left text-xs font-semibold text-discord-text w-32">작업</th>
                       </tr>
                     </thead>
                     <tbody>
                       {paginatedRecords.map((record) => (
-                        <tr key={record.id} className={`hover:bg-discord-hover group ${
-                          hasDuplicateFields(record) ? 'bg-red-900/20 border-l-4 border-red-500' : ''
-                        }`}
-                        title={
-                          hasDuplicateFields(record)
-                            ? '이 레코드에는 중복 불가 필드의 중복된 값이 있습니다'
-                            : ''
-                        }>
+                        <tr key={record.id} className="hover:bg-discord-hover group">
                           {fileField && (
                             <td className="px-2 py-3 text-xs text-discord-text w-[112px] overflow-hidden relative">
                               <ThumbnailCell
@@ -1530,6 +980,8 @@ export const MainContent: React.FC = () => {
                                   if (fileType === 'image' || fileType === 'video' || fileType === 'archive') {
                                     setViewerFilePath(filePath);
                                     setViewerFileType(fileType);
+                                    setViewerCategoryId(selectedCategorySafe?.id || '');
+                                    setViewerRecordId(record.id);
                                     setViewerModalOpen(true);
                                   }
                                 }}
@@ -1541,24 +993,10 @@ export const MainContent: React.FC = () => {
                               field.type === 'checkbox'
                                 ? 'min-w-[40px] max-w-[160px] px-2 py-3 text-xs text-discord-text text-left'
                                 : 'px-2 py-3 text-xs text-discord-text'
-                            } ${
-                              field.unique && checkDuplicateField(field, record.id, record.data[field.id])
-                                ? 'bg-red-500/20'
-                                : ''
-                            }`}
-                            title={
-                              field.unique && checkDuplicateField(field, record.id, record.data[field.id])
-                                ? `${field.name} 필드의 값이 중복됩니다 (중복 불가 설정)`
-                                : ''
-                            }>
-                              {formatFieldValue(field, record.data[field.id], record.id)}
+                            }`}>
+                              {formatFieldValue(field, record.data[field.id], categoriesSafe, getCategoryRecords)}
                             </td>
                           ))}
-                          {showRefCount && (
-                            <td className="px-2 py-3 text-xs text-discord-text text-left w-24">
-                              {getRecordReferenceCount(record.id, selectedCategorySafe.id)}
-                            </td>
-                          )}
                           <td className="px-2 py-3 text-xs text-discord-text w-32">
                             <div className="flex gap-1">
                               <Button
@@ -1593,7 +1031,7 @@ export const MainContent: React.FC = () => {
                   </table>
                 </div>
 
-                {/* Pagination - Fixed to bottom */}
+                {/* Pagination */}
                 <div className="shrink-0 px-6 py-4 border-t border-gray-700">
                   <div className="flex items-center justify-between">
                     <div className="text-sm text-discord-muted">
@@ -1612,29 +1050,9 @@ export const MainContent: React.FC = () => {
                       >
                         이전
                       </Button>
-                      {isPageInputMode ? (
-                        <div className="flex items-center gap-1">
-                          <Input
-                            type="number"
-                            value={pageInputValue}
-                            onChange={(e) => setPageInputValue(e.target.value)}
-                            onKeyDown={handlePageInputKeyDown}
-                            onBlur={handlePageInputBlur}
-                            className="w-16 h-8 text-sm text-center bg-discord-sidebar border-gray-600 text-discord-text [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            min={1}
-                            max={totalPages}
-                            autoFocus
-                          />
-                          <span className="text-sm text-discord-text">/ {Math.max(totalPages, 1)}</span>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={handlePageNumberClick}
-                          className="flex items-center px-3 text-sm text-discord-text hover:bg-discord-hover rounded cursor-pointer"
-                        >
+                      <span className="flex items-center px-3 text-sm text-discord-text">
                           {currentPage} / {Math.max(totalPages, 1)}
-                        </button>
-                      )}
+                      </span>
                       <Button
                         size="sm"
                         variant="outline"
@@ -1650,7 +1068,7 @@ export const MainContent: React.FC = () => {
                     </div>
                   </div>
                 </div>
-              </>
+              </div>
             )}
           </div>
 
@@ -1683,9 +1101,13 @@ export const MainContent: React.FC = () => {
               setViewerModalOpen(false);
               setViewerFilePath('');
               setViewerFileType(null);
+              setViewerCategoryId('');
+              setViewerRecordId('');
             }}
             filePath={viewerFilePath}
             fileType={viewerFileType}
+            categoryId={viewerCategoryId}
+            recordId={viewerRecordId}
           />
 
           {/* 커스텀 다이얼로그들 */}
