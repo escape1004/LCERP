@@ -42,6 +42,7 @@ const api: ElectronAPI = {
   openFile: (filePath: string) => ipcRenderer.invoke('openFile', filePath),
   generateThumbnail: (filePath: string) => ipcRenderer.invoke('generateThumbnail', filePath),
   getThumbnailDataUrl: (filePath: string) => ipcRenderer.invoke('getThumbnailDataUrl', filePath),
+  getThumbnailDataUrlHybrid: (record: any, filePath: string) => ipcRenderer.invoke('getThumbnailDataUrlHybrid', record, filePath),
   openFileDialog: () => ipcRenderer.invoke('openFileDialog'),
   getAppRoot: () => ipcRenderer.invoke('getAppRoot'),
   getFileDataUrl: (filePath: string) => ipcRenderer.invoke('getFileDataUrl', filePath),
@@ -58,6 +59,10 @@ const api: ElectronAPI = {
   regenerateThumbnail: (filePath: string) => ipcRenderer.invoke('regenerateThumbnail', filePath),
   getVideoDuration: (filePath: string) => ipcRenderer.invoke('getVideoDuration', filePath),
   getVideoCodecInfo: (filePath: string) => ipcRenderer.invoke('getVideoCodecInfo', filePath),
+  getBookmarks: (categoryId: string, recordId: string) => ipcRenderer.invoke('getBookmarks', categoryId, recordId),
+  addBookmark: (categoryId: string, recordId: string, time: number) => ipcRenderer.invoke('addBookmark', categoryId, recordId, time),
+  removeBookmark: (categoryId: string, recordId: string, time: number) => ipcRenderer.invoke('removeBookmark', categoryId, recordId, time),
+  migrateThumbnailPaths: () => ipcRenderer.invoke('migrateThumbnailPaths'),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api); 

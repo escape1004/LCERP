@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, Upload, FileText, ChevronDown, ChevronUp, ArrowUpWideNarrow, ArrowDownWideNarrow, ArrowUp01, ArrowDown01, SortAsc, SortDesc, Check } from 'lucide-react';
+import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, Upload, FileText, ChevronDown, ChevronUp, ArrowUpWideNarrow, ArrowDownWideNarrow, ArrowUp01, ArrowDown01, SortAsc, SortDesc, Check, RefreshCw } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { useLoadingStore } from '../hooks/useLoadingStore';
 import { DataRecord, FieldDefinition, Category } from '../types';
@@ -266,13 +266,15 @@ declare global {
 // 썸네일 렌더링 유틸
 const ThumbnailCell: React.FC<{ 
   filePath: string | undefined;
+  record: DataRecord | undefined;
   onThumbnailClick: (filePath: string) => void;
-}> = ({ filePath, onThumbnailClick }) => {
+}> = ({ filePath, record, onThumbnailClick }) => {
   const [dataUrl, setDataUrl] = React.useState<string | null>(null);
   
   React.useEffect(() => {
     let ignore = false;
     if (filePath) {
+      // 임시로 기존 방식 사용 (하이브리드 시스템 완성 전까지)
       window.electronAPI.getThumbnailDataUrl(filePath).then(res => {
         if (!ignore) setDataUrl(res);
       });
@@ -280,7 +282,7 @@ const ThumbnailCell: React.FC<{
       setDataUrl(null);
     }
     return () => { ignore = true; };
-  }, [filePath]);
+  }, [filePath, record]);
 
   // 썸네일 삭제 이벤트 감지하여 캐시 초기화
   React.useEffect(() => {
@@ -299,7 +301,7 @@ const ThumbnailCell: React.FC<{
     return () => {
       window.removeEventListener('thumbnail:regenerated', handleThumbnailRegenerated as EventListener);
     };
-  }, [filePath]);
+  }, [filePath, record]);
 
   // 파일 확장자 추출
   const getFileExtension = (path: string) => {
@@ -307,16 +309,26 @@ const ThumbnailCell: React.FC<{
     return ext;
   };
 
+  // 썸네일이 해시 기반인지 여부
+  const isHashBased = record && !record.thumbnailPath;
+
   return (
     <div className="relative w-24 h-24">
       {dataUrl ? (
-        <img 
-          src={dataUrl} 
-          alt="썸네일" 
-          className="w-24 h-24 object-contain rounded border border-gray-700 cursor-pointer hover:opacity-80"
-          onClick={() => filePath && onThumbnailClick(filePath)}
-          title="썸네일 클릭 시 뷰어 모달 열기"
-        />
+        <>
+          <img 
+            src={dataUrl} 
+            alt="썸네일" 
+            className="w-24 h-24 object-contain rounded border border-gray-700 cursor-pointer hover:opacity-80"
+            onClick={() => filePath && onThumbnailClick(filePath)}
+            title="썸네일 클릭 시 뷰어 모달 열기"
+          />
+          {isHashBased && (
+            <div className="absolute top-1 left-1 z-10">
+              <RefreshCw size={16} className="text-[#5865F2]" />
+            </div>
+          )}
+        </>
       ) : (
         <div className="w-24 h-24 bg-gray-800 flex items-center justify-center text-gray-500 border border-gray-700 rounded">
           <span className="text-2xl">🖼️</span>
@@ -927,6 +939,7 @@ export const MainContent: React.FC = () => {
                             <td className="px-2 py-3 text-xs text-discord-text w-[112px] overflow-hidden relative">
                               <ThumbnailCell
                                 filePath={record.data[fileField.id]}
+                                record={record}
                                 onThumbnailClick={async (filePath) => {
                                   const fileType = await window.electronAPI.getFileType(filePath);
                                   if (fileType === 'image' || fileType === 'video' || fileType === 'archive') {

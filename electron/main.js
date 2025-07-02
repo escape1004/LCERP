@@ -246,6 +246,11 @@ function initializeDatabase() {
     if (!columns.some(col => col.name === 'duration')) {
       db.exec('ALTER TABLE records ADD COLUMN duration INTEGER');
     }
+    
+    // thumbnailPath 필드가 없으면 추가 (새로운 마이그레이션)
+    if (!columns.some(col => col.name === 'thumbnailPath')) {
+      db.exec('ALTER TABLE records ADD COLUMN thumbnailPath TEXT');
+    }
   } catch (error) {
     log('Error initializing database:', error);
     throw error;
@@ -861,7 +866,7 @@ async function handleUpdateRecord(_, id, data) {
     );
     log('=== DB 업데이트 완료 ===');
     
-    // 파일 필드가 있으면 썸네일 자동 생성 (파일 경로가 변경된 경우에만)
+    // 파일 필드가 있으면 썸네일 자동 생성
     try {
       log('=== 썸네일 생성 로직 시작 ===');
       const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(record.categoryId);
@@ -906,20 +911,9 @@ async function handleUpdateRecord(_, id, data) {
             if (thumbnailResult) {
               log('=== 썸네일 생성 완료 ===', { thumbnailResult });
               
-              // 프론트엔드에 썸네일 재생성 이벤트 전송
-              try {
-                const { BrowserWindow } = require('electron');
-                const windows = BrowserWindow.getAllWindows();
-                log('=== 이벤트 전송 시작 ===', { windowCount: windows.length });
-                windows.forEach((window) => {
-                  if (!window.isDestroyed()) {
-                    window.webContents.send('thumbnail:regenerated', { filePath: newFilePath });
-                    log('=== 이벤트 전송됨 ===', { filePath: newFilePath });
-                  }
-                });
-              } catch (error) {
-                log('썸네일 재생성 이벤트 전송 중 오류:', error);
-              }
+              // 새 레코드의 경우 썸네일 경로를 DB에 저장
+              db.prepare('UPDATE records SET thumbnailPath = ? WHERE id = ?').run(thumbnailResult, id);
+              log('[addRecord] 썸네일 경로 DB 저장 완료', { recordId: id, thumbnailPath: thumbnailResult });
             } else {
               log('=== 썸네일 생성 실패 ===');
             }
@@ -977,7 +971,7 @@ ipcMain.handle('db:deleteCategory', async (_, id) => {
 ipcMain.handle('db:getRecords', async (_, categoryId) => {
   try {
     if (!categoryId) throw new Error('Category ID is required');
-    const records = db.prepare('SELECT id, categoryId, data, createdAt, updatedAt, duration FROM records WHERE categoryId = ? ORDER BY createdAt DESC').all(categoryId);
+    const records = db.prepare('SELECT id, categoryId, data, createdAt, updatedAt, duration, thumbnailPath FROM records WHERE categoryId = ? ORDER BY createdAt DESC').all(categoryId);
     return records.map(record => ({
       ...record,
       data: JSON.parse(record.data)
@@ -1078,6 +1072,10 @@ ipcMain.handle('db:addRecord', async (_, record) => {
             const thumbnailResult = await generateThumbnail(filePath);
             if (thumbnailResult) {
               log('[addRecord] 썸네일 생성 완료', { thumbnailResult });
+              
+              // 새 레코드의 경우 썸네일 경로를 DB에 저장
+              db.prepare('UPDATE records SET thumbnailPath = ? WHERE id = ?').run(thumbnailResult, recordId);
+              log('[addRecord] 썸네일 경로 DB 저장 완료', { recordId, thumbnailPath: thumbnailResult });
             } else {
               log('[addRecord] 썸네일 생성 실패(결과 null)', { filePath });
             }
@@ -1820,3 +1818,81 @@ const getUnpackedFfprobePath = () => {
   }
   return base;
 };
+
+// 새로운 하이브리드 썸네일 데이터 URL 핸들러
+ipcMain.handle('getThumbnailDataUrlHybrid', async (_, record, filePath) => {
+  try {
+    const { getThumbnailPathHybrid } = require('./lib/fileHandler');
+    
+    // 하이브리드 방식으로 썸네일 경로 결정
+    const thumbnailPath = getThumbnailPathHybrid(record, filePath);
+    
+    if (!thumbnailPath || !fs.existsSync(thumbnailPath)) {
+      log('하이브리드 썸네일 파일이 존재하지 않음:', thumbnailPath);
+      return null;
+    }
+    
+    const buffer = fs.readFileSync(thumbnailPath);
+    const base64 = buffer.toString('base64');
+    return `data:image/jpeg;base64,${base64}`;
+  } catch (e) {
+    log('Error getting hybrid thumbnail data URL:', e);
+    return null;
+  }
+});
+
+// 썸네일 경로 마이그레이션 핸들러
+ipcMain.handle('migrateThumbnailPaths', async () => {
+  try {
+    log('=== 썸네일 경로 마이그레이션 시작 ===');
+    
+    // 모든 카테고리 조회
+    const categories = db.prepare('SELECT id, fields FROM categories').all();
+    let totalProcessed = 0;
+    let totalUpdated = 0;
+    
+    for (const category of categories) {
+      const fields = JSON.parse(category.fields);
+      const fileField = fields.find(f => f.type === 'file');
+      
+      if (!fileField) continue;
+      
+      // 해당 카테고리의 모든 레코드 조회
+      const records = db.prepare('SELECT id, data, thumbnailPath FROM records WHERE categoryId = ?').all(category.id);
+      
+      for (const record of records) {
+        totalProcessed++;
+        const data = JSON.parse(record.data);
+        const filePath = data[fileField.id];
+        
+        if (!filePath || filePath === '' || filePath === '-') continue;
+        
+        // 이미 thumbnailPath가 있으면 건너뛰기
+        if (record.thumbnailPath) continue;
+        
+        try {
+          // 해시 기반 썸네일 경로 생성
+          const hash = getThumbnailHash(filePath);
+          const thumbnailDir = path.join(appDataDir, 'thumbnails');
+          const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
+          
+          // 썸네일 파일이 실제로 존재하는지 확인
+          if (fs.existsSync(thumbnailPath)) {
+            // DB에 썸네일 경로 저장
+            db.prepare('UPDATE records SET thumbnailPath = ? WHERE id = ?').run(thumbnailPath, record.id);
+            totalUpdated++;
+            log(`썸네일 경로 업데이트: ${record.id} -> ${thumbnailPath}`);
+          }
+        } catch (error) {
+          log(`썸네일 경로 업데이트 실패: ${record.id}`, error);
+        }
+      }
+    }
+    
+    log('=== 썸네일 경로 마이그레이션 완료 ===', { totalProcessed, totalUpdated });
+    return { success: true, totalProcessed, totalUpdated };
+  } catch (error) {
+    log('썸네일 경로 마이그레이션 중 오류:', error);
+    return { success: false, error: error.message };
+  }
+});

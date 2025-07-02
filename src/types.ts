@@ -49,6 +49,8 @@ export interface DataRecord {
   data: Record<string, any>;
   createdAt: string;
   updatedAt: string;
+  duration?: number;
+  thumbnailPath?: string;
 }
 
 export interface NewRecord {

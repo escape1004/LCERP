@@ -30,6 +30,7 @@ exports.getThumbnailHash = getThumbnailHash;
 exports.generateThumbnail = generateThumbnail;
 exports.getFileType = getFileType;
 exports.openFile = openFile;
+exports.getThumbnailPathHybrid = getThumbnailPathHybrid;
 const electron_1 = require("electron");
 const sharp_1 = __importDefault(require("sharp"));
 const fluent_ffmpeg_1 = __importDefault(require("fluent-ffmpeg"));
@@ -163,4 +164,22 @@ async function openFile(filePath) {
     catch (error) {
         throw error;
     }
+}
+// 하이브리드 썸네일 경로 결정 함수
+function getThumbnailPathHybrid(record, filePath) {
+  // 1. DB에 저장된 썸네일 경로가 있으면 우선 사용
+  if (record && record.thumbnailPath && fs.existsSync(record.thumbnailPath)) {
+    return record.thumbnailPath;
+  }
+  
+  // 2. 해시 기반 경로 (기존 시스템)
+  const hash = getThumbnailHash(filePath);
+  const hashPath = path.join('save', 'thumbnails', `thumb_${hash}.jpg`);
+  
+  if (fs.existsSync(hashPath)) {
+    return hashPath;
+  }
+  
+  // 3. 둘 다 없으면 null
+  return null;
 }

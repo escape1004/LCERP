@@ -24,12 +24,13 @@ export interface ElectronAPI {
   openFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
   generateThumbnail: (filePath: string) => Promise<string | null>;
   getThumbnailDataUrl: (filePath: string) => Promise<string | null>;
+  getThumbnailDataUrlHybrid: (record: any, filePath: string) => Promise<string | null>;
   getFileDataUrl: (filePath: string) => Promise<string | null>;
   getVideoStream: (filePath: string) => Promise<string | null>;
   getArchiveFiles: (filePath: string) => Promise<Array<{ name: string; size: number; isDirectory: boolean; comment: string }>>;
   getArchiveFileDataUrl: (filePath: string, fileName: string) => Promise<string | null>;
   getArchiveFileText: (filePath: string, fileName: string) => Promise<string | null>;
-  openFileDialog: () => Promise<{ canceled: boolean; filePaths?: string[] }>;
+  openFileDialog: () => Promise<Electron.OpenDialogReturnValue>;
   getFileType: (filePath: string) => Promise<'image' | 'video' | 'archive' | 'other'>;
   getAppRoot: () => Promise<string>;
   getVideoBlobUrl: (filePath: string) => Promise<{ base64: string; mimeType: string } | null>;
@@ -43,6 +44,7 @@ export interface ElectronAPI {
   getBookmarks: (categoryId: string, recordId: string) => Promise<{ success: boolean; bookmarks: { time: number; createdAt: string }[]; error?: string }>;
   addBookmark: (categoryId: string, recordId: string, time: number) => Promise<{ success: boolean; bookmark?: { time: number; createdAt: string }; error?: string }>;
   removeBookmark: (categoryId: string, recordId: string, time: number) => Promise<{ success: boolean; error?: string }>;
+  migrateThumbnailPaths: () => Promise<{ success: boolean; totalProcessed?: number; totalUpdated?: number; error?: string }>;
 }
 
 declare global {
@@ -85,6 +87,7 @@ export interface DataRecord {
   createdAt: string;
   updatedAt: string;
   duration?: number;
+  thumbnailPath?: string;
 }
 
 export interface NewCategory {
