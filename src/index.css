@@ -48,6 +48,30 @@
     width: 100vw;
   }
 
+  /* 전역 포커스 테두리 숨기기 */
+  *:focus {
+    outline: none !important;
+  }
+
+  /* 접근성을 위한 커스텀 포커스 스타일 (필요한 경우에만) */
+  *:focus-visible {
+    outline: 2px solid #3b82f6 !important;
+    outline-offset: 2px !important;
+  }
+
+  /* 특정 요소들은 포커스 테두리 완전 제거 */
+  button:focus,
+  input:focus,
+  textarea:focus,
+  select:focus,
+  [role="button"]:focus,
+  [tabindex]:focus,
+  .slider:focus,
+  .video-progress:focus,
+  [data-video-container]:focus {
+    outline: none !important;
+  }
+
   /* Global scrollbar style */
   ::-webkit-scrollbar {
     width: 8px;
@@ -198,8 +222,4 @@
   border-radius: 0.5rem;
   height: 6px;
   border: none;
-}
-
-[data-video-container]:focus {
-  outline: none;
 }
