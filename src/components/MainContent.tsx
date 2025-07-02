@@ -252,6 +252,7 @@ export const MainContent: React.FC = () => {
   // Reset search field to 'all' when category changes
   useEffect(() => {
     setSearchField('all');
+    setSearchTerm(''); // Reset search term when category changes
     setCurrentPage(1); // Reset pagination when category changes
     setSortField(''); // Reset sort field when category changes
     setSortDirection('asc'); // Reset sort direction when category changes
