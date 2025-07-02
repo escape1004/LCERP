@@ -139,7 +139,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
             }
           }}
         >
-          {String(value)}
+          {typeof value === 'string' ? renderTextWithHashtags(value) : String(value)}
         </span>
       );
     
@@ -181,29 +181,53 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
         : relatedCategory.fields[0];
       
       if (Array.isArray(value)) {
-        return (
-          <div className="flex flex-wrap gap-1">
-            {value.map((relatedId) => {
-              const relatedRecord = relatedRecords.find(r => r.id === relatedId);
-              if (!relatedRecord) return null;
-              return (
-                <span
-                  key={relatedId}
-                  className="px-2 py-1 text-xs rounded bg-green-600/20 text-green-500 cursor-pointer hover:bg-green-600/30"
+        // 다중 선택 관계형 필드 - 더보기 기능 추가
+        const MultiSelectRelationField: React.FC = () => {
+          const [isExpanded, setIsExpanded] = React.useState(false);
+          const maxVisible = 3;
+          const hasMore = value.length > maxVisible;
+          
+          const visibleItems = isExpanded ? value : value.slice(0, maxVisible);
+          
+          return (
+            <div className="flex flex-wrap gap-1">
+              {visibleItems.map((relatedId) => {
+                const relatedRecord = relatedRecords.find(r => r.id === relatedId);
+                if (!relatedRecord) return null;
+                return (
+                  <span
+                    key={relatedId}
+                    className="px-2 py-1 text-xs rounded bg-green-600/20 text-green-500 cursor-pointer hover:bg-green-600/30"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onViewRelatedRecord) {
+                        onViewRelatedRecord(relatedRecord, relatedCategory);
+                      }
+                    }}
+                    title="상세 보기"
+                  >
+                    {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
+                  </span>
+                );
+              })}
+              {hasMore && (
+                <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (onViewRelatedRecord) {
-                      onViewRelatedRecord(relatedRecord, relatedCategory);
-                    }
+                    setIsExpanded(!isExpanded);
                   }}
-                  title="상세 보기"
+                  className="px-2 py-1 text-xs rounded bg-gray-600/20 text-gray-400 hover:bg-gray-600/30 cursor-pointer"
+                  title={isExpanded ? "접기" : "더보기"}
                 >
-                  {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
-                </span>
-              );
-            })}
-          </div>
-        );
+                  {isExpanded ? "접기" : `+${value.length - maxVisible}개 더보기`}
+                </button>
+              )}
+            </div>
+          );
+        };
+        
+        return <MultiSelectRelationField />;
       } else {
         const relatedRecord = relatedRecords.find(r => r.id === value);
         return relatedRecord 
@@ -228,6 +252,63 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
       if (typeof value === 'string' && urlPattern.test(value)) {
         return renderUrl(value);
       }
+      
+      // 배열 값 처리 (다중 선택 필드들)
+      if (Array.isArray(value)) {
+        const MultiSelectField: React.FC = () => {
+          const [isExpanded, setIsExpanded] = React.useState(false);
+          const maxVisible = 3;
+          const hasMore = value.length > maxVisible;
+          
+          const visibleItems = isExpanded ? value : value.slice(0, maxVisible);
+          
+          return (
+            <div className="flex flex-wrap gap-1">
+              {visibleItems.map((item, index) => (
+                <span
+                  key={index}
+                  className="px-2 py-1 text-xs rounded bg-blue-600/20 text-blue-400 cursor-pointer hover:bg-blue-600/30"
+                  title={`${String(item)} (클릭하여 복사)`}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      await navigator.clipboard.writeText(String(item));
+                      toast({ 
+                        title: '복사 완료', 
+                        description: '값이 클립보드에 복사되었습니다.' 
+                      });
+                    } catch (error) {
+                      toast({ 
+                        title: '복사 실패', 
+                        description: '클립보드 복사에 실패했습니다.', 
+                        variant: 'destructive' 
+                      });
+                    }
+                  }}
+                >
+                  {String(item)}
+                </span>
+              ))}
+              {hasMore && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsExpanded(!isExpanded);
+                  }}
+                  className="px-2 py-1 text-xs rounded bg-gray-600/20 text-gray-400 hover:bg-gray-600/30 cursor-pointer"
+                  title={isExpanded ? "접기" : "더보기"}
+                >
+                  {isExpanded ? "접기" : `+${value.length - maxVisible}개 더보기`}
+                </button>
+              )}
+            </div>
+          );
+        };
+        
+        return <MultiSelectField />;
+      }
+      
       return (
         <span 
           className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors cursor-pointer" 
@@ -249,7 +330,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
             }
           }}
         >
-          {String(value)}
+          {typeof value === 'string' ? renderTextWithHashtags(value) : String(value)}
         </span>
       );
   }
