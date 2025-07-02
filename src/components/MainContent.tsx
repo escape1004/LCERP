@@ -284,71 +284,9 @@ export const MainContent: React.FC = () => {
     }
   }, [selectedCategoryId, categoriesSafe, selectCategory, showDbViewer]);
 
-  // F5 키 새로고침 기능 및 Ctrl+F 검색창 포커스
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'F5' && selectedCategoryId) {
-        e.preventDefault();
-        loadRecords(selectedCategoryId);
-        toast({
-          title: "새로고침 완료",
-          description: "레코드 목록이 새로고침되었습니다.",
-        });
-      } else if (e.ctrlKey && e.key === 'f') {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [selectedCategoryId, loadRecords]);
-
-  // 썸네일 생성/삭제 시 레코드 리스트 강제 리로드
-  useEffect(() => {
-    const handler = () => {
-      if (selectedCategoryId) {
-        loadRecords(selectedCategoryId);
-      }
-    };
-    window.addEventListener('thumbnail:regenerated', handler);
-    return () => window.removeEventListener('thumbnail:regenerated', handler);
-  }, [selectedCategoryId, loadRecords]);
-
-  const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-  const [editingRecord, setEditingRecord] = useState<DataRecord | null>(null);
-  const [viewingRecord, setViewingRecord] = useState<DataRecord | null>(null);
-  const [viewingCategory, setViewingCategory] = useState<string>('');
   const [sortField, setSortField] = useState<string>('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [searchField, setSearchField] = useState<string>('all');
-  const [expandedTags, setExpandedTags] = useState<{[key: string]: boolean}>({});
-  const [csvDropdownOpen, setCsvDropdownOpen] = useState(false);
-  const csvInputRef = useRef<HTMLInputElement | null>(null);
-  const excelInputRef = useRef<HTMLInputElement | null>(null);
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
-  const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
-  const [alertDialogProps, setAlertDialogProps] = useState<{
-    title: string;
-    message: string;
-    variant: 'error' | 'warning' | 'info' | 'success';
-  }>({
-    title: '',
-    message: '',
-    variant: 'info'
-  });
-  const [recordToDelete, setRecordToDelete] = useState<DataRecord | null>(null);
-  const [isPageInputMode, setIsPageInputMode] = useState(false);
-  const [pageInputValue, setPageInputValue] = useState('');
-
-  // 뷰어 모달 상태
-  const [viewerModalOpen, setViewerModalOpen] = useState(false);
-  const [viewerFilePath, setViewerFilePath] = useState<string>('');
-  const [viewerFileType, setViewerFileType] = useState<'image' | 'video' | 'archive' | null>(null);
 
   // Custom filtered records based on field-specific search
   const customFilteredRecords = useMemo(() => {
@@ -401,6 +339,86 @@ export const MainContent: React.FC = () => {
   const totalPages = Math.ceil(sortedRecords.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedRecords = sortedRecords.slice(startIndex, startIndex + itemsPerPage);
+
+  // 테이블 컨테이너 ref 선언
+  const tableContainerRef = useRef<HTMLDivElement | null>(null);
+  const scrollTableToTop = () => {
+    if (tableContainerRef.current) {
+      tableContainerRef.current.scrollTop = 0;
+    }
+  };
+
+  // Ctrl+좌우 방향키 페이지 이동 핸들러
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F5' && selectedCategoryId) {
+        e.preventDefault();
+        loadRecords(selectedCategoryId);
+        toast({
+          title: "새로고침 완료",
+          description: "레코드 목록이 새로고침되었습니다.",
+        });
+      } else if (e.ctrlKey && e.key === 'f') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.ctrlKey && e.key === 'ArrowRight') {
+        if (currentPage < totalPages) {
+          setCurrentPage(currentPage + 1);
+          scrollTableToTop();
+        }
+      } else if (e.ctrlKey && e.key === 'ArrowLeft') {
+        if (currentPage > 1) {
+          setCurrentPage(currentPage - 1);
+          scrollTableToTop();
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedCategoryId, loadRecords, currentPage, totalPages]);
+
+  // 썸네일 생성/삭제 시 레코드 리스트 강제 리로드
+  useEffect(() => {
+    const handler = () => {
+      if (selectedCategoryId) {
+        loadRecords(selectedCategoryId);
+      }
+    };
+    window.addEventListener('thumbnail:regenerated', handler);
+    return () => window.removeEventListener('thumbnail:regenerated', handler);
+  }, [selectedCategoryId, loadRecords]);
+
+  const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<DataRecord | null>(null);
+  const [viewingRecord, setViewingRecord] = useState<DataRecord | null>(null);
+  const [viewingCategory, setViewingCategory] = useState<string>('');
+  const [expandedTags, setExpandedTags] = useState<{[key: string]: boolean}>({});
+  const [csvDropdownOpen, setCsvDropdownOpen] = useState(false);
+  const csvInputRef = useRef<HTMLInputElement | null>(null);
+  const excelInputRef = useRef<HTMLInputElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+  const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
+  const [alertDialogProps, setAlertDialogProps] = useState<{
+    title: string;
+    message: string;
+    variant: 'error' | 'warning' | 'info' | 'success';
+  }>({
+    title: '',
+    message: '',
+    variant: 'info'
+  });
+  const [recordToDelete, setRecordToDelete] = useState<DataRecord | null>(null);
+  const [isPageInputMode, setIsPageInputMode] = useState(false);
+  const [pageInputValue, setPageInputValue] = useState('');
+
+  // 뷰어 모달 상태
+  const [viewerModalOpen, setViewerModalOpen] = useState(false);
+  const [viewerFilePath, setViewerFilePath] = useState<string>('');
+  const [viewerFileType, setViewerFileType] = useState<'image' | 'video' | 'archive' | null>(null);
 
   const handleSort = (fieldId: string) => {
     if (sortField === fieldId) {
@@ -1235,16 +1253,6 @@ export const MainContent: React.FC = () => {
       field.unique && checkDuplicateField(field, record.id, record.data[field.id])
     );
   }, [selectedCategorySafe, checkDuplicateField]);
-
-  // 1. 테이블 컨테이너 ref 선언
-  const tableContainerRef = useRef<HTMLDivElement | null>(null);
-
-  // 2. 페이지 변경 시 스크롤 최상단 이동 함수
-  const scrollTableToTop = () => {
-    if (tableContainerRef.current) {
-      tableContainerRef.current.scrollTop = 0;
-    }
-  };
 
   // 렌더링 시 카테고리 없을 때 안내 메시지
   if (!categoriesSafe || categoriesSafe.length === 0) {
