@@ -374,7 +374,7 @@ async function generateThumbnail(filePath) {
       path.join(__dirname, '..', 'node_modules', '.bin', 'ffmpeg.exe')
     ];
     const ffprobeCandidates = [
-      path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+      getUnpackedFfprobePath(),
       path.join(__dirname, '..', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
       path.join(__dirname, '..', 'node_modules', '.bin', 'ffprobe.exe')
     ];
@@ -711,7 +711,7 @@ async function handleUpdateRecord(_, id, data) {
           path.join(__dirname, '..', 'node_modules', '.bin', 'ffmpeg.exe')
         ];
         const ffprobeCandidates = [
-          path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+          getUnpackedFfprobePath(),
           path.join(__dirname, '..', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
           path.join(__dirname, '..', 'node_modules', '.bin', 'ffprobe.exe')
         ];
@@ -930,7 +930,7 @@ ipcMain.handle('db:addRecord', async (_, record) => {
           path.join(__dirname, '..', 'node_modules', '.bin', 'ffmpeg.exe')
         ];
         const ffprobeCandidates = [
-          path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+          getUnpackedFfprobePath(),
           path.join(__dirname, '..', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
           path.join(__dirname, '..', 'node_modules', '.bin', 'ffprobe.exe')
         ];
@@ -1513,7 +1513,7 @@ ipcMain.handle('generateThumbnailWithTime', async (_, filePath, timestampSec) =>
       path.join(__dirname, '..', 'node_modules', '.bin', 'ffmpeg.exe')
     ];
     const ffprobeCandidates = [
-      path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+      getUnpackedFfprobePath(),
       path.join(__dirname, '..', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
       path.join(__dirname, '..', 'node_modules', '.bin', 'ffprobe.exe')
     ];
@@ -1662,7 +1662,7 @@ ipcMain.handle('getVideoDuration', async (_, filePath) => {
     
     // ffmpeg/ffprobe 경로를 resources 폴더의 경로로만 강제 지정
     const ffmpegPath = path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe');
-    const ffprobePath = path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe');
+    const ffprobePath = getUnpackedFfprobePath();
     console.log('ffmpegPath:', ffmpegPath);
     console.log('ffprobePath:', ffprobePath);
     if (!fs.existsSync(ffmpegPath) || !fs.existsSync(ffprobePath)) {
@@ -1721,3 +1721,12 @@ ipcMain.handle('getVideoCodecInfo', async (_, filePath) => {
     return { error: e.message };
   }
 });
+
+const getUnpackedFfprobePath = () => {
+  const base = path.join(process.resourcesPath, 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe');
+  // asar 환경이면 unpacked 경로로 보정
+  if (base.includes('app.asar')) {
+    return base.replace('app.asar', 'app.asar.unpacked');
+  }
+  return base;
+};

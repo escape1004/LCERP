@@ -904,6 +904,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                         <video
                           ref={videoRef}
                           src={dataUrl}
+                          autoPlay
                           className="max-w-full max-h-[80vh] h-full object-contain bg-black"
                           style={{
                             maxWidth: videoRotation % 180 !== 0 ? '80vh' : '100%',
