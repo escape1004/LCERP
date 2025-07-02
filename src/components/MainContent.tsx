@@ -315,6 +315,9 @@ export const MainContent: React.FC = () => {
     });
   }, [selectedCategoryId, searchTerm, searchField, currentRecordsSafe, selectedCategorySafe]);
 
+  // 파일 필드 존재 여부
+  const fileField = selectedCategorySafe?.fields.find(f => f.type === 'file');
+
   // Sorting
   const sortedRecords = useMemo(() => {
     if (!sortField) return customFilteredRecords;
@@ -324,6 +327,20 @@ export const MainContent: React.FC = () => {
         const countA = getRecordReferenceCount(a.id, selectedCategorySafe?.id || '');
         const countB = getRecordReferenceCount(b.id, selectedCategorySafe?.id || '');
         return sortDirection === 'asc' ? countA - countB : countB - countA;
+      }
+
+      if (sortField === '__thumbnail') {
+        // 썸네일 유무에 따른 정렬
+        const hasThumbnailA = fileField && a.data[fileField.id] && a.data[fileField.id] !== '' && a.data[fileField.id] !== '-';
+        const hasThumbnailB = fileField && b.data[fileField.id] && b.data[fileField.id] !== '' && b.data[fileField.id] !== '-';
+        
+        if (hasThumbnailA && !hasThumbnailB) {
+          return sortDirection === 'asc' ? -1 : 1; // 오름차순: 썸네일 있는 것 먼저, 내림차순: 썸네일 없는 것 먼저
+        }
+        if (!hasThumbnailA && hasThumbnailB) {
+          return sortDirection === 'asc' ? 1 : -1;
+        }
+        return 0; // 둘 다 썸네일이 있거나 둘 다 없는 경우
       }
 
       let aValue = a.data[sortField];
@@ -339,7 +356,7 @@ export const MainContent: React.FC = () => {
       if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [customFilteredRecords, sortField, sortDirection, selectedCategorySafe?.id, getRecordReferenceCount]);
+  }, [customFilteredRecords, sortField, sortDirection, selectedCategorySafe?.id, getRecordReferenceCount, fileField]);
 
   // Pagination
   const totalPages = Math.ceil(sortedRecords.length / itemsPerPage);
@@ -1260,31 +1277,6 @@ export const MainContent: React.FC = () => {
     );
   }, [selectedCategorySafe, checkDuplicateField]);
 
-  // 렌더링 시 카테고리 없을 때 안내 메시지
-  if (!categoriesSafe || categoriesSafe.length === 0) {
-    return (
-      <div className="relative flex-1 h-full">
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center">
-            <h3 className="text-lg font-semibold text-discord-text mb-2">카테고리가 없습니다</h3>
-            <p className="text-discord-muted mb-4">첫 번째 카테고리를 추가해보세요.</p>
-            <Button
-              className="bg-discord-accent hover:bg-blue-600"
-              onClick={() => setIsCategoryModalOpen(true)}
-            >
-              <Plus size={16} className="mr-2" />
-              카테고리 추가하기
-            </Button>
-          </div>
-        </div>
-        <CategoryModal isOpen={isCategoryModalOpen} onClose={() => setIsCategoryModalOpen(false)} />
-      </div>
-    );
-  }
-
-  // 파일 필드 존재 여부
-  const fileField = selectedCategorySafe?.fields.find(f => f.type === 'file');
-
   return (
     <div className="flex-1 h-full flex flex-col bg-discord-bg">
       {showDbViewer ? (
@@ -1463,7 +1455,23 @@ export const MainContent: React.FC = () => {
                   <table className="w-full table-fixed">
                     <thead className="sticky top-0 z-10 bg-discord-sidebar border-b border-gray-700">
                       <tr>
-                        {fileField && <th className="px-2 py-2 text-left text-xs font-semibold text-discord-text w-[112px]">썸네일</th>}
+                        {fileField && (
+                          <th 
+                            className="px-2 py-2 text-left text-xs font-semibold text-discord-text w-[112px] cursor-pointer hover:bg-discord-hover"
+                            onClick={() => handleSort('__thumbnail')}
+                          >
+                            <div className="flex items-center gap-1 select-none">
+                              썸네일
+                              {sortField === '__thumbnail' && (
+                                sortDirection === 'asc' ? (
+                                  <SortAsc size={16} className="text-white" />
+                                ) : (
+                                  <SortDesc size={16} className="text-white" />
+                                )
+                              )}
+                            </div>
+                          </th>
+                        )}
                         {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
                           <th
                             key={field.id}
