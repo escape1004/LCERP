@@ -706,7 +706,25 @@ export const MainContent: React.FC = () => {
               {displayTags.map((item) => (
                 <span
                   key={item}
-                  className="px-2 py-1 text-xs rounded bg-green-600/20 text-green-500"
+                  className="px-2 py-1 text-xs rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 transition-colors"
+                  title={`${String(item)} (클릭하여 복사)`}
+                  style={{ cursor: 'pointer' }}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      await navigator.clipboard.writeText(String(item));
+                      toast({
+                        title: '복사 완료',
+                        description: '값이 클립보드에 복사되었습니다.'
+                      });
+                    } catch (error) {
+                      toast({
+                        title: '복사 실패',
+                        description: '클립보드 복사에 실패했습니다.',
+                        variant: 'destructive'
+                      });
+                    }
+                  }}
                 >
                   {String(item)}
                 </span>
