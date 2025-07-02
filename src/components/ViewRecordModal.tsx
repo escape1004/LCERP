@@ -742,12 +742,16 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                     setMm(newMm);
                     setSs(newSs);
                   }}
-                  onRegenerate={async () => {
+                  onRegenerate={async (newHh, newMm, newSs) => {
+                    console.log('ViewRecordModal onRegenerate 호출됨:', { newHh, newMm, newSs });
                     setRegenLoading(true);
                     try {
-                      const res = await window.electronAPI.generateThumbnailWithTime(filePath, hh * 3600 + mm * 60 + ss);
+                      const totalSeconds = newHh * 3600 + newMm * 60 + newSs;
+                      console.log('총 초 계산:', totalSeconds);
+                      const res = await window.electronAPI.generateThumbnailWithTime(filePath, totalSeconds);
+                      console.log('썸네일 재생성 결과:', res);
                       if (res) {
-                        toast({ title: `썸네일이 ${hh.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}:${ss.toString().padStart(2, '0')} 지점에서 재생성되었습니다.` });
+                        toast({ title: `썸네일이 ${newHh.toString().padStart(2, '0')}:${newMm.toString().padStart(2, '0')}:${newSs.toString().padStart(2, '0')} 지점에서 재생성되었습니다.` });
                         reloadThumbnail();
                         window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));
                         if (categoryId) {
@@ -757,6 +761,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                         toast({ title: '썸네일 재생성 실패', description: '', variant: 'destructive' });
                       }
                     } catch (e) {
+                      console.error('썸네일 재생성 오류:', e);
                       toast({ title: '썸네일 재생성 실패', description: String(e), variant: 'destructive' });
                     } finally {
                       setRegenLoading(false);

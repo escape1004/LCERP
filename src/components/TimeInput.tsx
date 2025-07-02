@@ -6,7 +6,7 @@ interface TimeInputProps {
   ss: number;
   maxDuration: number; // 전체 duration(초)
   onChange: (hh: number, mm: number, ss: number) => void;
-  onRegenerate: () => void;
+  onRegenerate: (hh: number, mm: number, ss: number) => void;
   disabled?: boolean;
   loading?: boolean;
 }
@@ -62,6 +62,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [tooltipPosition, setTooltipPosition] = useState(0);
   const [showTooltip, setShowTooltip] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false); // 재생성 중 플래그
   
   // 슬라이더 값이 외부에서 바뀌면 동기화 (드래그 중이 아닐 때만)
   useEffect(() => {
@@ -144,6 +145,11 @@ export const TimeInput: React.FC<TimeInputProps> = ({
 
   // 입력 필드에서 포커스가 벗어날 때 부모에게 값 전달
   const handleInputBlur = useCallback((field: 'hh' | 'mm' | 'ss') => {
+    // 재생성 중이면 onChange 호출하지 않음
+    if (isRegenerating) {
+      return;
+    }
+    
     const newHh = field === 'hh' ? localHh : hh;
     const newMm = field === 'mm' ? localMm : mm;
     const newSs = field === 'ss' ? localSs : ss;
@@ -162,14 +168,14 @@ export const TimeInput: React.FC<TimeInputProps> = ({
     } else {
       onChange(newHh, newMm, newSs);
     }
-  }, [localHh, localMm, localSs, hh, mm, ss, maxDuration, onChange]);
+  }, [localHh, localMm, localSs, hh, mm, ss, maxDuration, onChange, isRegenerating]);
 
   // 키보드 이벤트 처리
   const handleKeyDown = useCallback((field: 'hh' | 'mm' | 'ss', e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       handleInputBlur(field);
-      onRegenerate();
+      onRegenerate(localHh, localMm, localSs);
     } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       e.preventDefault();
       const currentValue = field === 'hh' ? localHh : field === 'mm' ? localMm : localSs;
@@ -188,6 +194,50 @@ export const TimeInput: React.FC<TimeInputProps> = ({
     const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  // 재생성 버튼 클릭 시 재생성 실행
+  const handleRegenerateClick = () => {
+    console.log('=== handleRegenerateClick 시작 ===');
+    console.log('현재 로컬 상태:', { localHh, localMm, localSs });
+    console.log('현재 props 상태:', { hh, mm, ss });
+    
+    // 재생성 중 플래그 설정
+    setIsRegenerating(true);
+    console.log('isRegenerating 플래그 설정됨');
+    
+    // 즉시 실행
+    const executeRegenerate = () => {
+      // 현재 로컬 상태의 값을 부모에게 전달
+      const newTotal = localHh * 3600 + localMm * 60 + localSs;
+      console.log('계산된 총 초:', newTotal);
+      
+      if (newTotal > maxDuration) {
+        // duration을 초과하면 최대값으로 보정
+        let d = maxDuration;
+        const finalHh = Math.floor(d / 3600);
+        d = d % 3600;
+        const finalMm = Math.floor(d / 60);
+        const finalSs = d % 60;
+        console.log('최대값으로 보정된 시간:', { finalHh, finalMm, finalSs });
+        onChange(finalHh, finalMm, finalSs);
+        onRegenerate(finalHh, finalMm, finalSs);
+      } else {
+        console.log('정상 시간으로 재생성:', { localHh, localMm, localSs });
+        onChange(localHh, localMm, localSs);
+        onRegenerate(localHh, localMm, localSs);
+      }
+      
+      // 재생성 완료 후 플래그 리셋
+      setTimeout(() => {
+        setIsRegenerating(false);
+        console.log('isRegenerating 플래그 리셋됨');
+      }, 100);
+    };
+    
+    // 즉시 실행
+    executeRegenerate();
+    console.log('=== handleRegenerateClick 완료 ===');
   };
 
   return (
@@ -275,7 +325,23 @@ export const TimeInput: React.FC<TimeInputProps> = ({
       {/* 재생성 버튼 */}
       <button
         type="button"
-        onClick={onRegenerate}
+        onMouseDown={(e) => {
+          console.log('버튼 mousedown 이벤트 발생');
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+        onClick={(e) => {
+          console.log('버튼 클릭 이벤트 발생');
+          e.preventDefault();
+          e.stopPropagation();
+          e.nativeEvent.stopImmediatePropagation();
+          handleRegenerateClick();
+        }}
+        onMouseUp={(e) => {
+          console.log('버튼 mouseup 이벤트 발생');
+          e.preventDefault();
+          e.stopPropagation();
+        }}
         disabled={disabled || loading}
         className="px-3 py-1 text-xs text-discord-muted bg-transparent hover:bg-discord-hover border border-gray-600 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
