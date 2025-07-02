@@ -159,7 +159,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                       console.log('북마크가 삭제되었습니다:', filePath);
                     } else if (result && result.error) {
                       console.error('북마크 삭제 실패:', result.error);
-              }
+                }
                   }
                 } catch (error) {
                   console.error('북마크 삭제 중 오류:', error);
@@ -222,7 +222,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
     </button>
   );
 
-  const formatFieldValue = (field: FieldDefinition, value: any) => {
+  const formatFieldValue = (field: FieldDefinition, value: any, onViewRecord?: (record: DataRecord, category: Category) => void) => {
     // 파일 필드 특별 처리
     if (field.type === 'file') {
       if (!value || value === '' || value === '-') return '-';
@@ -890,7 +890,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                         {record.data[field.id]}
                       </button>
                     ) : (
-                      formatFieldValue(field, record.data[field.id])
+                      formatFieldValue(field, record.data[field.id], onViewRecord)
                     )}
                   </div>
                 </div>

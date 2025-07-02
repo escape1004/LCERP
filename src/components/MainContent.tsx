@@ -99,24 +99,20 @@ const renderUrl = (url: string) => (
 );
 
 // 필드 값 포맷팅 함수
-const formatFieldValue = (field: FieldDefinition, value: any, categories: Category[], getCategoryRecords: (categoryId: string) => DataRecord[]) => {
-  // 빈 값 처리
-  if (value === null || value === undefined || value === '' || value === '-') {
-    return <span className="text-gray-500">-</span>;
-  }
-
-  // 배열이지만 비어있는 경우
-  if (Array.isArray(value) && value.length === 0) {
-    return <span className="text-gray-500">-</span>;
-  }
-
-  const urlPattern = /^https?:\/\/.+/i;
-
+const formatFieldValue = (field: FieldDefinition, value: any, categories: Category[], getCategoryRecords: (categoryId: string) => DataRecord[], onViewRelatedRecord?: (record: DataRecord, category: Category) => void) => {
+  const urlPattern = /^https?:\/\/.+/;
+  
   switch (field.type) {
-    case 'number':
+    case 'text':
+      if (field.hashtags) {
+        return renderTextWithHashtags(String(value));
+      }
+      if (typeof value === 'string' && urlPattern.test(value)) {
+        return renderUrl(value);
+      }
       return (
         <span 
-          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors cursor-pointer" 
           title={`${String(value)} (클릭하여 복사)`}
           onClick={async (e) => {
             e.stopPropagation();
@@ -124,7 +120,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
               await navigator.clipboard.writeText(String(value));
               toast({ 
                 title: '복사 완료', 
-                description: '숫자가 클립보드에 복사되었습니다.' 
+                description: '값이 클립보드에 복사되었습니다.' 
               });
             } catch (error) {
               toast({ 
@@ -139,110 +135,10 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
         </span>
       );
     
-    case 'text':
-    case 'longtext': {
-      const strValue = String(value);
-      
-      // URL 자동 감지 및 렌더링
-      if (urlPattern.test(strValue)) {
-        return renderUrl(strValue);
-      }
-
-  return (
-        <div 
-          className="whitespace-pre-wrap text-discord-text break-words overflow-wrap-anywhere hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
-          title={`${strValue} (클릭하여 복사)`}
-          onClick={async (e) => {
-            e.stopPropagation();
-            try {
-              await navigator.clipboard.writeText(strValue);
-              toast({ 
-                title: '복사 완료', 
-                description: '텍스트가 클립보드에 복사되었습니다.' 
-              });
-            } catch (error) {
-              toast({ 
-                title: '복사 실패', 
-                description: '클립보드 복사에 실패했습니다.', 
-                variant: 'destructive' 
-              });
-            }
-          }}
-        >
-          {renderTextWithHashtags(strValue)}
-        </div>
-      );
-    }
-    
-    case 'date': {
-      const dateValue = typeof value === 'string' && /^\d{4}-\d{2}$/.test(value)
-        ? format(new Date(value), "yyyy-MM")
-        : format(new Date(value), "yyyy-MM-dd");
-      
+    case 'number':
       return (
         <span 
-          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
-          title={`${dateValue} (클릭하여 복사)`}
-          onClick={async (e) => {
-            e.stopPropagation();
-            try {
-              await navigator.clipboard.writeText(dateValue);
-              toast({ 
-                title: '복사 완료', 
-                description: '날짜가 클립보드에 복사되었습니다.' 
-              });
-            } catch (error) {
-              toast({ 
-                title: '복사 실패', 
-                description: '클립보드 복사에 실패했습니다.', 
-                variant: 'destructive' 
-              });
-            }
-          }}
-        >
-          {dateValue}
-        </span>
-      );
-    }
-    
-    case 'checkbox':
-      return value ? <Check className="w-5 h-5 text-discord-accent" /> : <X className="w-5 h-5 text-discord-danger" />;
-    
-    case 'select':
-      if (Array.isArray(value)) {
-        return (
-          <div className="flex flex-wrap gap-1">
-            {value.map((item) => (
-              <span
-                key={item}
-                className="px-2 py-1 text-xs rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 transition-colors"
-                title={`${String(item)} (클릭하여 복사)`}
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  try {
-                    await navigator.clipboard.writeText(String(item));
-                    toast({
-                      title: '복사 완료',
-                      description: '값이 클립보드에 복사되었습니다.'
-                    });
-                  } catch (error) {
-                    toast({
-                      title: '복사 실패',
-                      description: '클립보드 복사에 실패했습니다.',
-                      variant: 'destructive'
-                    });
-                  }
-                }}
-              >
-                {String(item)}
-              </span>
-      ))}
-    </div>
-  );
-      }
-      return (
-        <span 
-          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors cursor-pointer" 
           title={`${String(value)} (클릭하여 복사)`}
           onClick={async (e) => {
             e.stopPropagation();
@@ -250,7 +146,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
               await navigator.clipboard.writeText(String(value));
               toast({ 
                 title: '복사 완료', 
-                description: '선택된 값이 클립보드에 복사되었습니다.' 
+                description: '값이 클립보드에 복사되었습니다.' 
               });
             } catch (error) {
               toast({ 
@@ -285,7 +181,13 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
               return (
                 <span
                   key={relatedId}
-                  className="px-2 py-1 text-xs rounded bg-green-600/20 text-green-500 hover:bg-green-600/30"
+                  className="px-2 py-1 text-xs rounded bg-green-600/20 text-green-500 cursor-pointer hover:bg-green-600/30"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onViewRelatedRecord) {
+                      onViewRelatedRecord(relatedRecord, relatedCategory);
+                    }
+                  }}
                   title="상세 보기"
                 >
                   {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
@@ -299,7 +201,13 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
         return relatedRecord 
           ? (
             <span
-              className="text-green-500 hover:underline"
+              className="text-green-500 hover:underline cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onViewRelatedRecord) {
+                  onViewRelatedRecord(relatedRecord, relatedCategory);
+                }
+              }}
               title="상세 보기"
             >
               {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
@@ -314,7 +222,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
       }
       return (
         <span 
-          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors cursor-pointer" 
           title={`${String(value)} (클릭하여 복사)`}
           onClick={async (e) => {
             e.stopPropagation();
@@ -994,7 +902,7 @@ export const MainContent: React.FC = () => {
                                 ? 'min-w-[40px] max-w-[160px] px-2 py-3 text-xs text-discord-text text-left'
                                 : 'px-2 py-3 text-xs text-discord-text'
                             }`}>
-                              {formatFieldValue(field, record.data[field.id], categoriesSafe, getCategoryRecords)}
+                              {formatFieldValue(field, record.data[field.id], categoriesSafe, getCategoryRecords, handleViewRelatedRecord)}
                             </td>
                           ))}
                           <td className="px-2 py-3 text-xs text-discord-text w-32">
