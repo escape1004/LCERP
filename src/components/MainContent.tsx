@@ -325,7 +325,7 @@ const ThumbnailCell: React.FC<{
           />
           {isHashBased && (
             <div className="absolute top-1 left-1 z-10">
-              <RefreshCw size={16} className="text-[#5865F2]" />
+              <RefreshCw size={16} className="text-[#5865F2] drop-shadow-[0_1px_4px_rgba(0,0,0,0.7)]" />
             </div>
           )}
         </>
