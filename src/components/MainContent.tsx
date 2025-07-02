@@ -537,18 +537,25 @@ export const MainContent: React.FC = () => {
   const handleUrlClick = async (e: React.MouseEvent, url: string) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log('Attempting to open URL:', url);
     try {
-      const result = await window.electronAPI.openExternal(url);
-      if (!result.success) {
-        console.error('Failed to open URL:', result.error);
-        // TODO: Add toast notification here
-      }
+      await window.electronAPI.openExternal(url);
     } catch (error) {
-      console.error('Error opening URL:', error);
-      // TODO: Add toast notification here
+      console.error('URL 열기 실패:', error);
     }
   };
+
+  const renderUrl = (url: string, maxLength: number) => (
+    <button
+      type="button"
+      onClick={(e) => handleUrlClick(e, url)}
+      className="text-discord-accent hover:underline flex items-center gap-1 text-left w-full"
+    >
+      <span className="truncate">
+        {url.length > maxLength ? url.substring(0, maxLength) + '...' : url}
+      </span>
+      <ExternalLink size={14} className="flex-shrink-0" />
+    </button>
+  );
 
   const formatFieldValue = (field: FieldDefinition, value: any, recordId: string) => {
     // 공통 빈 값 처리 함수
@@ -577,7 +584,26 @@ export const MainContent: React.FC = () => {
         const { hashtags, plainText } = parseHashtags(strValue);
         
         return (
-          <div className="text-discord-text truncate max-w-full" title={strValue}>
+          <div 
+            className="text-discord-text truncate max-w-full hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+            title={`${strValue} (클릭하여 복사)`}
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                await navigator.clipboard.writeText(strValue);
+                toast({ 
+                  title: '복사 완료', 
+                  description: '텍스트가 클립보드에 복사되었습니다.' 
+                });
+              } catch (error) {
+                toast({ 
+                  title: '복사 실패', 
+                  description: '클립보드 복사에 실패했습니다.', 
+                  variant: 'destructive' 
+                });
+              }
+            }}
+          >
             {renderTextWithHashtags(strValue)}
           </div>
         );
@@ -585,15 +611,85 @@ export const MainContent: React.FC = () => {
       case 'number': {
         const numValue = String(value);
         if (numValue.length > 20) {
-          return <span className="text-discord-text">{numValue.substring(0, 20)}...</span>;
+          return (
+            <span 
+              className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+              title={`${numValue} (클릭하여 복사)`}
+              onClick={async (e) => {
+                e.stopPropagation();
+                try {
+                  await navigator.clipboard.writeText(numValue);
+                  toast({ 
+                    title: '복사 완료', 
+                    description: '숫자가 클립보드에 복사되었습니다.' 
+                  });
+                } catch (error) {
+                  toast({ 
+                    title: '복사 실패', 
+                    description: '클립보드 복사에 실패했습니다.', 
+                    variant: 'destructive' 
+                  });
+                }
+              }}
+            >
+              {numValue.substring(0, 20)}...
+            </span>
+          );
         }
-        return <span className="text-discord-text">{numValue}</span>;
+        return (
+          <span 
+            className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+            title={`${numValue} (클릭하여 복사)`}
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                await navigator.clipboard.writeText(numValue);
+                toast({ 
+                  title: '복사 완료', 
+                  description: '숫자가 클립보드에 복사되었습니다.' 
+                });
+              } catch (error) {
+                toast({ 
+                  title: '복사 실패', 
+                  description: '클립보드 복사에 실패했습니다.', 
+                  variant: 'destructive' 
+                });
+              }
+            }}
+          >
+            {numValue}
+          </span>
+        );
       }
       case 'date': {
-        if (typeof value === 'string' && /^\d{4}-\d{2}$/.test(value)) {
-          return format(new Date(value), "yyyy-MM");
-        }
-        return format(new Date(value), "yyyy-MM-dd");
+        const dateValue = typeof value === 'string' && /^\d{4}-\d{2}$/.test(value)
+          ? format(new Date(value), "yyyy-MM")
+          : format(new Date(value), "yyyy-MM-dd");
+        
+        return (
+          <span 
+            className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+            title={`${dateValue} (클릭하여 복사)`}
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                await navigator.clipboard.writeText(dateValue);
+                toast({ 
+                  title: '복사 완료', 
+                  description: '날짜가 클립보드에 복사되었습니다.' 
+                });
+              } catch (error) {
+                toast({ 
+                  title: '복사 실패', 
+                  description: '클립보드 복사에 실패했습니다.', 
+                  variant: 'destructive' 
+                });
+              }
+            }}
+          >
+            {dateValue}
+          </span>
+        );
       }
       
       case 'checkbox':
@@ -647,7 +743,30 @@ export const MainContent: React.FC = () => {
           );
         }
         // 단일 선택 필드
-        return String(value);
+        return (
+          <span 
+            className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+            title={`${String(value)} (클릭하여 복사)`}
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                await navigator.clipboard.writeText(String(value));
+                toast({ 
+                  title: '복사 완료', 
+                  description: '선택된 값이 클립보드에 복사되었습니다.' 
+                });
+              } catch (error) {
+                toast({ 
+                  title: '복사 실패', 
+                  description: '클립보드 복사에 실패했습니다.', 
+                  variant: 'destructive' 
+                });
+              }
+            }}
+          >
+            {String(value)}
+          </span>
+        );
       
       case 'relation':
         if (!field.relationCategoryId) return String(value);
@@ -733,13 +852,55 @@ export const MainContent: React.FC = () => {
       
       case 'file':
         return (
-          <span className="text-discord-text text-xs">
+          <span 
+            className="text-discord-text text-xs hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+            title={`${String(value)} (클릭하여 경로 복사)`}
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                await navigator.clipboard.writeText(String(value));
+                toast({ 
+                  title: '복사 완료', 
+                  description: '파일 경로가 클립보드에 복사되었습니다.' 
+                });
+              } catch (error) {
+                toast({ 
+                  title: '복사 실패', 
+                  description: '클립보드 복사에 실패했습니다.', 
+                  variant: 'destructive' 
+                });
+              }
+            }}
+          >
             {String(value)}
           </span>
         );
       
       default:
-        return String(value);
+        return (
+          <span 
+            className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+            title={`${String(value)} (클릭하여 복사)`}
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                await navigator.clipboard.writeText(String(value));
+                toast({ 
+                  title: '복사 완료', 
+                  description: '값이 클립보드에 복사되었습니다.' 
+                });
+              } catch (error) {
+                toast({ 
+                  title: '복사 실패', 
+                  description: '클립보드 복사에 실패했습니다.', 
+                  variant: 'destructive' 
+                });
+              }
+            }}
+          >
+            {String(value)}
+          </span>
+        );
     }
   };
 
@@ -1081,19 +1242,6 @@ export const MainContent: React.FC = () => {
 
   // 파일 필드 존재 여부
   const fileField = selectedCategorySafe?.fields.find(f => f.type === 'file');
-
-  const renderUrl = (url: string, maxLength: number) => (
-    <button
-      type="button"
-      onClick={(e) => handleUrlClick(e, url)}
-      className="text-discord-accent hover:underline flex items-center gap-1 text-left w-full"
-    >
-      <span className="truncate">
-        {url.length > maxLength ? url.substring(0, maxLength) + '...' : url}
-      </span>
-      <ExternalLink size={14} className="flex-shrink-0" />
-    </button>
-  );
 
   return (
     <div className="flex-1 h-full flex flex-col bg-discord-bg">
