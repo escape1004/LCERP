@@ -363,7 +363,30 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
 
     switch (field.type) {
       case 'number':
-        return String(value);
+        return (
+          <span 
+            className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+            title={`${String(value)} (클릭하여 복사)`}
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                await navigator.clipboard.writeText(String(value));
+                toast({ 
+                  title: '복사 완료', 
+                  description: '숫자가 클립보드에 복사되었습니다.' 
+                });
+              } catch (error) {
+                toast({ 
+                  title: '복사 실패', 
+                  description: '클립보드 복사에 실패했습니다.', 
+                  variant: 'destructive' 
+                });
+              }
+            }}
+          >
+            {String(value)}
+          </span>
+        );
       
       case 'text':
       case 'longtext': {
@@ -376,17 +399,60 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         }
         
         return (
-          <div className="whitespace-pre-wrap text-discord-text break-words overflow-wrap-anywhere">
+          <div 
+            className="whitespace-pre-wrap text-discord-text break-words overflow-wrap-anywhere hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+            title={`${strValue} (클릭하여 복사)`}
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                await navigator.clipboard.writeText(strValue);
+                toast({ 
+                  title: '복사 완료', 
+                  description: '텍스트가 클립보드에 복사되었습니다.' 
+                });
+              } catch (error) {
+                toast({ 
+                  title: '복사 실패', 
+                  description: '클립보드 복사에 실패했습니다.', 
+                  variant: 'destructive' 
+                });
+              }
+            }}
+          >
             {renderTextWithHashtags(strValue)}
           </div>
         );
       }
       
       case 'date': {
-        if (typeof value === 'string' && /^\d{4}-\d{2}$/.test(value)) {
-          return format(new Date(value), "yyyy-MM");
-        }
-        return format(new Date(value), "yyyy-MM-dd");
+        const dateValue = typeof value === 'string' && /^\d{4}-\d{2}$/.test(value)
+          ? format(new Date(value), "yyyy-MM")
+          : format(new Date(value), "yyyy-MM-dd");
+        
+        return (
+          <span 
+            className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+            title={`${dateValue} (클릭하여 복사)`}
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                await navigator.clipboard.writeText(dateValue);
+                toast({ 
+                  title: '복사 완료', 
+                  description: '날짜가 클립보드에 복사되었습니다.' 
+                });
+              } catch (error) {
+                toast({ 
+                  title: '복사 실패', 
+                  description: '클립보드 복사에 실패했습니다.', 
+                  variant: 'destructive' 
+                });
+              }
+            }}
+          >
+            {dateValue}
+          </span>
+        );
       }
       
       case 'checkbox':
@@ -399,7 +465,25 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
               {value.map((item) => (
                 <span
                   key={item}
-                  className="px-2 py-1 text-xs rounded bg-green-600/20 text-green-500"
+                  className="px-2 py-1 text-xs rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 transition-colors"
+                  title={`${String(item)} (클릭하여 복사)`}
+                  style={{ cursor: 'pointer' }}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      await navigator.clipboard.writeText(String(item));
+                      toast({
+                        title: '복사 완료',
+                        description: '값이 클립보드에 복사되었습니다.'
+                      });
+                    } catch (error) {
+                      toast({
+                        title: '복사 실패',
+                        description: '클립보드 복사에 실패했습니다.',
+                        variant: 'destructive'
+                      });
+                    }
+                  }}
                 >
                   {String(item)}
                 </span>
@@ -407,7 +491,30 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
             </div>
           );
         }
-        return String(value);
+        return (
+          <span 
+            className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+            title={`${String(value)} (클릭하여 복사)`}
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                await navigator.clipboard.writeText(String(value));
+                toast({ 
+                  title: '복사 완료', 
+                  description: '선택된 값이 클립보드에 복사되었습니다.' 
+                });
+              } catch (error) {
+                toast({ 
+                  title: '복사 실패', 
+                  description: '클립보드 복사에 실패했습니다.', 
+                  variant: 'destructive' 
+                });
+              }
+            }}
+          >
+            {String(value)}
+          </span>
+        );
       
       case 'relation':
         if (!field.relationCategoryId) return String(value);
@@ -472,7 +579,30 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         if (typeof value === 'string' && urlPattern.test(value)) {
           return renderUrl(value);
         }
-        return String(value);
+        return (
+          <span 
+            className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+            title={`${String(value)} (클릭하여 복사)`}
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                await navigator.clipboard.writeText(String(value));
+                toast({ 
+                  title: '복사 완료', 
+                  description: '값이 클립보드에 복사되었습니다.' 
+                });
+              } catch (error) {
+                toast({ 
+                  title: '복사 실패', 
+                  description: '클립보드 복사에 실패했습니다.', 
+                  variant: 'destructive' 
+                });
+              }
+            }}
+          >
+            {String(value)}
+          </span>
+        );
     }
   };
 
