@@ -1010,6 +1010,28 @@ export const MainContent: React.FC = () => {
                             </div>
                           </th>
                         ))}
+                        {/* 참조되는 카테고리인 경우에만 참조 횟수 컬럼 표시 */}
+                        {selectedCategorySafe && categoriesSafe.some(cat => 
+                          cat.fields.some(field => 
+                            field.type === 'relation' && field.relationCategoryId === selectedCategorySafe.id
+                          )
+                        ) && (
+                          <th 
+                            className="px-2 py-2 text-left text-xs font-semibold text-discord-text w-20 cursor-pointer hover:bg-discord-hover"
+                            onClick={() => handleSort('__refCount')}
+                          >
+                            <div className="flex items-center gap-1 select-none">
+                              참조 횟수
+                              {sortField === '__refCount' && (
+                                sortDirection === 'asc' ? (
+                                  <SortAsc size={16} className="text-white" />
+                                ) : (
+                                  <SortDesc size={16} className="text-white" />
+                                )
+                              )}
+                            </div>
+                          </th>
+                        )}
                         <th className="px-2 py-2 text-left text-xs font-semibold text-discord-text w-32">작업</th>
                       </tr>
                     </thead>
@@ -1043,6 +1065,16 @@ export const MainContent: React.FC = () => {
                               {formatFieldValue(field, record.data[field.id], categoriesSafe, getCategoryRecords, handleViewRelatedRecord)}
                             </td>
                           ))}
+                          {/* 참조되는 카테고리인 경우에만 참조 횟수 표시 */}
+                          {selectedCategorySafe && categoriesSafe.some(cat => 
+                            cat.fields.some(field => 
+                              field.type === 'relation' && field.relationCategoryId === selectedCategorySafe.id
+                            )
+                          ) && (
+                            <td className="px-2 py-3 text-xs text-discord-text w-20 text-center">
+                              {getRecordReferenceCount(record.id, selectedCategorySafe.id)}
+                            </td>
+                          )}
                           <td className="px-2 py-3 text-xs text-discord-text w-32">
                             <div className="flex gap-1">
                               <Button
