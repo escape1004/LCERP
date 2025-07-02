@@ -44,6 +44,8 @@ const api: ElectronAPI = {
   addBookmark: (categoryId: string, recordId: string, time: number) => ipcRenderer.invoke('addBookmark', categoryId, recordId, time),
   removeBookmark: (categoryId: string, recordId: string, time: number) => ipcRenderer.invoke('removeBookmark', categoryId, recordId, time),
   removeAllBookmarks: (categoryId: string, recordId: string) => ipcRenderer.invoke('removeAllBookmarks', categoryId, recordId),
+  checkThumbnailSync: () => ipcRenderer.invoke('checkThumbnailSync'),
+  cleanupThumbnailSync: (options?: any) => ipcRenderer.invoke('cleanupThumbnailSync', options),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api); 

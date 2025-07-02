@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from './ui/button';
-import { Save, Settings2, Link2, X } from 'lucide-react';
+import { Save, Settings2, Link2, X, RefreshCw, AlertTriangle, CheckCircle } from 'lucide-react';
 import { useToast } from './ui/use-toast';
 import { useERPStore } from '../hooks/useERPStore';
 import { Input } from './ui/input';
@@ -13,7 +13,17 @@ import {
   FormControl,
 } from './ui/form';
 import { useForm } from 'react-hook-form';
-import { TableInfo, TableData, Config, ApiResponse } from '../types/electron';
+import { ThumbnailSyncCheckResult, ThumbnailSyncCleanupOptions, ThumbnailSyncCleanupResult } from '../types';
+
+interface TableInfo {
+  name: string;
+}
+
+interface Config {
+  dbPath: string;
+  backupDir: string;
+  backupInterval: number;
+}
 
 interface FormValues {
   dbPath: string;
@@ -24,11 +34,19 @@ interface FormValues {
 export const DatabaseViewer: React.FC = () => {
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
-  const [tableData, setTableData] = useState<TableData | null>(null);
+  const [tableData, setTableData] = useState<any | null>(null);
   const [dbPath, setDbPath] = useState<string>('');
   const [config, setConfig] = useState<Config | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [fileSize, setFileSize] = useState<string>('');
+  const [syncCheckResult, setSyncCheckResult] = useState<ThumbnailSyncCheckResult | null>(null);
+  const [isCheckingSync, setIsCheckingSync] = useState(false);
+  const [isCleaningUp, setIsCleaningUp] = useState(false);
+  const [cleanupOptions, setCleanupOptions] = useState<ThumbnailSyncCleanupOptions>({
+    removeDbOnly: true,
+    addFileOnly: true,
+    dryRun: false
+  });
   const { toast } = useToast();
   const { selectCategory } = useERPStore();
 
@@ -106,8 +124,8 @@ export const DatabaseViewer: React.FC = () => {
   const handleOpenBackup = async () => {
     try {
       const result = await window.electronAPI.openBackupLocation();
-      if (!result.success && result.error) {
-        throw new Error(result.error);
+      if (!result.success) {
+        throw new Error('백업 폴더를 열 수 없습니다.');
       }
     } catch (error) {
       handleApiError(error, '백업 폴더를 여는데 실패했습니다.');
@@ -189,6 +207,41 @@ export const DatabaseViewer: React.FC = () => {
     }
   };
 
+  // 썸네일 동기화 점검
+  const handleCheckThumbnailSync = async () => {
+    try {
+      setIsCheckingSync(true);
+      const result = await window.electronAPI.checkThumbnailSync();
+      setSyncCheckResult(result);
+      showSuccessToast('썸네일 동기화 점검이 완료되었습니다.');
+    } catch (error) {
+      handleApiError(error, '썸네일 동기화 점검에 실패했습니다.');
+    } finally {
+      setIsCheckingSync(false);
+    }
+  };
+
+  // 썸네일 동기화 정리
+  const handleCleanupThumbnailSync = async () => {
+    try {
+      setIsCleaningUp(true);
+      const result = await window.electronAPI.cleanupThumbnailSync(cleanupOptions);
+      
+      if (result.errors.length > 0) {
+        showErrorToast(`${result.errors.length}개의 오류가 발생했습니다.`);
+      } else {
+        showSuccessToast(`정리가 완료되었습니다. (DB에서 제거: ${result.removedFromDb}, DB에 추가: ${result.addedToDb})`);
+      }
+      
+      // 점검 결과 새로고침
+      await handleCheckThumbnailSync();
+    } catch (error) {
+      handleApiError(error, '썸네일 동기화 정리에 실패했습니다.');
+    } finally {
+      setIsCleaningUp(false);
+    }
+  };
+
   useEffect(() => {
     const initializeViewer = async () => {
       try {
@@ -219,6 +272,15 @@ export const DatabaseViewer: React.FC = () => {
           <div className="flex items-center gap-2">
             <Button 
               variant="outline" 
+              onClick={handleCheckThumbnailSync}
+              disabled={isCheckingSync}
+              className="border-gray-600 hover:bg-discord-hover"
+            >
+              <RefreshCw size={16} className={`mr-2 ${isCheckingSync ? 'animate-spin' : ''}`} />
+              썸네일 동기화 점검
+            </Button>
+            <Button 
+              variant="outline" 
               onClick={handleBackup}
               className="border-gray-600 hover:bg-discord-hover"
             >
@@ -235,6 +297,87 @@ export const DatabaseViewer: React.FC = () => {
             </Button>
           </div>
         </div>
+
+        {/* 썸네일 동기화 상태 표시 */}
+        {syncCheckResult && (
+          <div className="bg-discord-sidebar rounded-lg p-4 border border-gray-700">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-discord-text">썸네일 동기화 상태</h3>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleCleanupThumbnailSync}
+                  disabled={isCleaningUp}
+                  className="border-gray-600 hover:bg-discord-hover text-xs"
+                >
+                  <AlertTriangle size={14} className="mr-1" />
+                  {isCleaningUp ? '정리 중...' : '동기화 정리'}
+                </Button>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-discord-muted">총 레코드:</span>
+                <span className="text-discord-text font-medium">{syncCheckResult.totalRecords}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle size={14} className="text-green-400" />
+                <span className="text-discord-muted">정상:</span>
+                <span className="text-discord-text font-medium">{syncCheckResult.bothExist}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={14} className="text-yellow-400" />
+                <span className="text-discord-muted">DB에만:</span>
+                <span className="text-discord-text font-medium">{syncCheckResult.dbOnly.length}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={14} className="text-blue-400" />
+                <span className="text-discord-muted">파일에만:</span>
+                <span className="text-discord-text font-medium">{syncCheckResult.fileOnly.length}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <X size={14} className="text-red-400" />
+                <span className="text-discord-muted">둘 다 없음:</span>
+                <span className="text-discord-text font-medium">{syncCheckResult.neitherExist}</span>
+              </div>
+            </div>
+
+            {/* 정리 옵션 */}
+            <div className="mt-3 pt-3 border-t border-gray-700">
+              <div className="flex items-center gap-4 text-xs">
+                <label className="flex items-center gap-2 text-discord-muted">
+                  <input
+                    type="checkbox"
+                    checked={cleanupOptions.removeDbOnly}
+                    onChange={(e) => setCleanupOptions(prev => ({ ...prev, removeDbOnly: e.target.checked }))}
+                    className="rounded border-gray-600 bg-discord-bg"
+                  />
+                  DB에만 있는 썸네일 경로 제거
+                </label>
+                <label className="flex items-center gap-2 text-discord-muted">
+                  <input
+                    type="checkbox"
+                    checked={cleanupOptions.addFileOnly}
+                    onChange={(e) => setCleanupOptions(prev => ({ ...prev, addFileOnly: e.target.checked }))}
+                    className="rounded border-gray-600 bg-discord-bg"
+                  />
+                  파일에만 있는 썸네일 경로 추가
+                </label>
+                <label className="flex items-center gap-2 text-discord-muted">
+                  <input
+                    type="checkbox"
+                    checked={cleanupOptions.dryRun}
+                    onChange={(e) => setCleanupOptions(prev => ({ ...prev, dryRun: e.target.checked }))}
+                    className="rounded border-gray-600 bg-discord-bg"
+                  />
+                  시뮬레이션만 실행
+                </label>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="text-sm text-muted-foreground space-y-1">
           <div className="flex items-center gap-2">
@@ -296,10 +439,10 @@ export const DatabaseViewer: React.FC = () => {
                   <tr>
                     {tableData.columns.filter(f => !f.hidden).map((column) => (
                       <th 
-                        key={column} 
+                        key={column.name} 
                         className="bg-discord-sidebar text-xs font-medium text-discord-text p-2 text-left sticky top-0 border-b border-gray-700 first:pl-2"
                       >
-                        {column}
+                        {column.name}
                       </th>
                     ))}
                   </tr>
@@ -307,19 +450,26 @@ export const DatabaseViewer: React.FC = () => {
                 <tbody>
                   {tableData.rows.map((row, i) => (
                     <tr 
-                      key={i}
+                      key={`row-${i}-${JSON.stringify(row).slice(0, 50)}`}
                       className="hover:bg-discord-hover transition-colors"
                     >
                       {tableData.columns.filter(f => !f.hidden).map((column, colIndex) => (
                         <td 
-                          key={column} 
+                          key={`${i}-${column.name}`}
                           className={`p-2 text-xs text-discord-text border-b border-gray-700 ${
                             colIndex === 0 ? 'pl-2' : ''
                           }`}
                         >
-                          {typeof row[column] === 'object'
-                            ? JSON.stringify(row[column])
-                            : String(row[column])}
+                          {(() => {
+                            const value = row[column.name];
+                            if (value === null || value === undefined) {
+                              return <span className="text-gray-500">-</span>;
+                            }
+                            if (typeof value === 'object') {
+                              return <span className="text-gray-400">{JSON.stringify(value)}</span>;
+                            }
+                            return String(value);
+                          })()}
                         </td>
                       ))}
                     </tr>

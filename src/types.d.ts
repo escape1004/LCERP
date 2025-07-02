@@ -45,6 +45,8 @@ export interface ElectronAPI {
   addBookmark: (categoryId: string, recordId: string, time: number) => Promise<{ success: boolean; bookmark?: { time: number; createdAt: string }; error?: string }>;
   removeBookmark: (categoryId: string, recordId: string, time: number) => Promise<{ success: boolean; error?: string }>;
   migrateThumbnailPaths: () => Promise<{ success: boolean; totalProcessed?: number; totalUpdated?: number; error?: string }>;
+  checkThumbnailSync: () => Promise<any>;
+  cleanupThumbnailSync: (options?: any) => Promise<any>;
 }
 
 declare global {

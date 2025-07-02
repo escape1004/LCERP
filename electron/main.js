@@ -712,7 +712,8 @@ ipcMain.handle('db:getTableData', (event, tableName) => {
   }
   const stmt = db.prepare(`SELECT * FROM ${tableName} LIMIT 1000`);
   const rows = stmt.all();
-  const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+  const columnNames = rows.length > 0 ? Object.keys(rows[0]) : [];
+  const columns = columnNames.map(name => ({ name, hidden: false }));
   return { columns, rows, total: rows.length };
 });
 
@@ -1894,5 +1895,163 @@ ipcMain.handle('migrateThumbnailPaths', async () => {
   } catch (error) {
     log('썸네일 경로 마이그레이션 중 오류:', error);
     return { success: false, error: error.message };
+  }
+});
+
+// 썸네일 동기화 점검/정리 핸들러
+ipcMain.handle('checkThumbnailSync', async () => {
+  try {
+    log('=== 썸네일 동기화 점검 시작 ===');
+    
+    const thumbnailDir = path.join(appDataDir, 'thumbnails');
+    const results = {
+      totalRecords: 0,
+      dbOnly: [], // DB에만 있고 파일이 없는 경우
+      fileOnly: [], // 파일만 있고 DB에 없는 경우
+      bothExist: 0, // 둘 다 있는 경우
+      neitherExist: 0 // 둘 다 없는 경우
+    };
+    
+    // 모든 카테고리 조회
+    const categories = db.prepare('SELECT id, fields FROM categories').all();
+    
+    for (const category of categories) {
+      const fields = JSON.parse(category.fields);
+      const fileField = fields.find(f => f.type === 'file');
+      
+      if (!fileField) continue;
+      
+      // 해당 카테고리의 모든 레코드 조회
+      const records = db.prepare('SELECT id, data, thumbnailPath FROM records WHERE categoryId = ?').all(category.id);
+      
+      for (const record of records) {
+        results.totalRecords++;
+        const data = JSON.parse(record.data);
+        const filePath = data[fileField.id];
+        
+        if (!filePath || filePath === '' || filePath === '-') {
+          results.neitherExist++;
+          continue;
+        }
+        
+        // 해시 기반 썸네일 경로
+        const hash = getThumbnailHash(filePath);
+        const hashPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
+        
+        const dbExists = record.thumbnailPath && fs.existsSync(record.thumbnailPath);
+        const hashExists = fs.existsSync(hashPath);
+        
+        if (dbExists && hashExists) {
+          results.bothExist++;
+        } else if (dbExists && !hashExists) {
+          results.dbOnly.push({
+            recordId: record.id,
+            dbPath: record.thumbnailPath,
+            filePath: filePath
+          });
+        } else if (!dbExists && hashExists) {
+          results.fileOnly.push({
+            recordId: record.id,
+            hashPath: hashPath,
+            filePath: filePath
+          });
+        } else {
+          results.neitherExist++;
+        }
+      }
+    }
+    
+    log('=== 썸네일 동기화 점검 완료 ===');
+    log(`총 레코드: ${results.totalRecords}`);
+    log(`DB에만 존재: ${results.dbOnly.length}`);
+    log(`파일에만 존재: ${results.fileOnly.length}`);
+    log(`둘 다 존재: ${results.bothExist}`);
+    log(`둘 다 없음: ${results.neitherExist}`);
+    
+    return results;
+  } catch (error) {
+    log('Error checking thumbnail sync:', error);
+    throw error;
+  }
+});
+
+// 썸네일 동기화 정리 핸들러
+ipcMain.handle('cleanupThumbnailSync', async (event, options = {}) => {
+  try {
+    log('=== 썸네일 동기화 정리 시작 ===');
+    
+    const { 
+      removeDbOnly = true, // DB에만 있고 파일이 없으면 DB에서 제거
+      addFileOnly = true,  // 파일만 있고 DB에 없으면 DB에 추가
+      dryRun = false       // 실제 변경하지 않고 시뮬레이션만
+    } = options;
+    
+    const thumbnailDir = path.join(appDataDir, 'thumbnails');
+    const results = {
+      removedFromDb: 0,
+      addedToDb: 0,
+      errors: []
+    };
+    
+    // 모든 카테고리 조회
+    const categories = db.prepare('SELECT id, fields FROM categories').all();
+    
+    for (const category of categories) {
+      const fields = JSON.parse(category.fields);
+      const fileField = fields.find(f => f.type === 'file');
+      
+      if (!fileField) continue;
+      
+      // 해당 카테고리의 모든 레코드 조회
+      const records = db.prepare('SELECT id, data, thumbnailPath FROM records WHERE categoryId = ?').all(category.id);
+      
+      for (const record of records) {
+        const data = JSON.parse(record.data);
+        const filePath = data[fileField.id];
+        
+        if (!filePath || filePath === '' || filePath === '-') continue;
+        
+        // 해시 기반 썸네일 경로
+        const hash = getThumbnailHash(filePath);
+        const hashPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
+        
+        const dbExists = record.thumbnailPath && fs.existsSync(record.thumbnailPath);
+        const hashExists = fs.existsSync(hashPath);
+        
+        try {
+          if (removeDbOnly && dbExists && !hashExists) {
+            // DB에만 있고 파일이 없으면 DB에서 제거
+            if (!dryRun) {
+              db.prepare('UPDATE records SET thumbnailPath = NULL WHERE id = ?').run(record.id);
+            }
+            results.removedFromDb++;
+            log(`DB에서 썸네일 경로 제거: ${record.id}`);
+          } else if (addFileOnly && !dbExists && hashExists) {
+            // 파일만 있고 DB에 없으면 DB에 추가
+            if (!dryRun) {
+              db.prepare('UPDATE records SET thumbnailPath = ? WHERE id = ?').run(hashPath, record.id);
+            }
+            results.addedToDb++;
+            log(`DB에 썸네일 경로 추가: ${record.id} -> ${hashPath}`);
+          }
+        } catch (error) {
+          results.errors.push({
+            recordId: record.id,
+            error: error.message
+          });
+          log(`정리 중 오류: ${record.id}`, error);
+        }
+      }
+    }
+    
+    log('=== 썸네일 동기화 정리 완료 ===');
+    log(`DB에서 제거: ${results.removedFromDb}`);
+    log(`DB에 추가: ${results.addedToDb}`);
+    log(`오류: ${results.errors.length}`);
+    
+    return results;
+  } catch (error) {
+    log('Error cleaning up thumbnail sync:', error);
+    throw error;
   }
 });

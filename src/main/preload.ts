@@ -48,6 +48,10 @@ const api = {
   addBookmark: (categoryId, recordId, time) => ipcRenderer.invoke('addBookmark', categoryId, recordId, time),
   removeBookmark: (categoryId, recordId, time) => ipcRenderer.invoke('removeBookmark', categoryId, recordId, time),
   removeAllBookmarks: (categoryId, recordId) => ipcRenderer.invoke('removeAllBookmarks', categoryId, recordId),
+  getThumbnailDataUrlHybrid: (record, filePath) => ipcRenderer.invoke('getThumbnailDataUrlHybrid', record, filePath),
+  migrateThumbnailPaths: () => ipcRenderer.invoke('migrateThumbnailPaths'),
+  checkThumbnailSync: () => ipcRenderer.invoke('checkThumbnailSync'),
+  cleanupThumbnailSync: (options) => ipcRenderer.invoke('cleanupThumbnailSync', options),
 } as ElectronAPI;
 
 // API를 window 객체에 노출

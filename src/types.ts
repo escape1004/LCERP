@@ -65,4 +65,36 @@ export interface TableData {
   columns: string[];
   rows: any[];
   total: number;
+}
+
+// 썸네일 동기화 관련 타입
+export interface ThumbnailSyncCheckResult {
+  totalRecords: number;
+  dbOnly: Array<{
+    recordId: string;
+    dbPath: string;
+    filePath: string;
+  }>;
+  fileOnly: Array<{
+    recordId: string;
+    hashPath: string;
+    filePath: string;
+  }>;
+  bothExist: number;
+  neitherExist: number;
+}
+
+export interface ThumbnailSyncCleanupOptions {
+  removeDbOnly?: boolean; // DB에만 있고 파일이 없으면 DB에서 제거
+  addFileOnly?: boolean;  // 파일만 있고 DB에 없으면 DB에 추가
+  dryRun?: boolean;       // 실제 변경하지 않고 시뮬레이션만
+}
+
+export interface ThumbnailSyncCleanupResult {
+  removedFromDb: number;
+  addedToDb: number;
+  errors: Array<{
+    recordId: string;
+    error: string;
+  }>;
 } 
