@@ -103,6 +103,16 @@ const renderUrl = (url: string) => (
 const formatFieldValue = (field: FieldDefinition, value: any, categories: Category[], getCategoryRecords: (categoryId: string) => DataRecord[], onViewRelatedRecord?: (record: DataRecord, category: Category) => void) => {
   const urlPattern = /^https?:\/\/.+/;
   
+  // 빈 값 처리 - 레코드 리스트 테이블과 동일하게
+  if (value === null || value === undefined || value === '' || value === '-') {
+    return <span className="text-gray-500">-</span>;
+  }
+
+  // 배열이지만 비어있는 경우
+  if (Array.isArray(value) && value.length === 0) {
+    return <span className="text-gray-500">-</span>;
+  }
+  
   switch (field.type) {
     case 'text':
       if (typeof value === 'string' && urlPattern.test(value)) {
