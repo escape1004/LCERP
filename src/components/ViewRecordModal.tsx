@@ -245,14 +245,39 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   };
 
   const renderUrl = (url: string) => (
-    <button
-      type="button"
-      onClick={(e) => handleUrlClick(e, url)}
-      className="text-discord-accent hover:underline flex items-center gap-2 break-all"
-    >
-      {url}
-      <ExternalLink size={16} className="flex-shrink-0" />
-    </button>
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all text-left truncate"
+        title={`${url} (클릭하여 복사)`}
+        onClick={async (e) => {
+          e.stopPropagation();
+          try {
+            await navigator.clipboard.writeText(url);
+            toast({ 
+              title: '복사 완료', 
+              description: 'URL이 클립보드에 복사되었습니다.' 
+            });
+          } catch (error) {
+            toast({ 
+              title: '복사 실패', 
+              description: '클립보드 복사에 실패했습니다.', 
+              variant: 'destructive' 
+            });
+          }
+        }}
+      >
+        {url}
+      </button>
+      <button
+        type="button"
+        onClick={(e) => handleUrlClick(e, url)}
+        className="text-discord-accent hover:text-blue-400 flex-shrink-0"
+        title="외부 브라우저에서 열기"
+      >
+        <ExternalLink size={16} />
+      </button>
+    </div>
   );
 
   const formatFieldValue = (field: FieldDefinition, value: any, onViewRecord?: (record: DataRecord, category: Category) => void) => {

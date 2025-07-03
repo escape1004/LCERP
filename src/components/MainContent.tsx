@@ -78,25 +78,60 @@ const renderTextWithHashtags = (text: string) => {
 
 // URL 렌더링 함수
 const renderUrl = (url: string) => (
-  <button
-    type="button"
-    onClick={async (e) => {
-      e.preventDefault();
-      console.log('Attempting to open URL:', url);
-      try {
-        const result = await window.electronAPI.openExternal(url);
-        if (!result.success) {
-          console.error('Failed to open URL:', result.error);
+  <div className="flex items-center gap-2">
+    <span
+      className="text-discord-accent px-1 py-0.5 rounded transition-colors truncate flex-1"
+      title={`${url} (클릭하여 복사)`}
+      onClick={async (e) => {
+        e.stopPropagation();
+        try {
+          await navigator.clipboard.writeText(url);
+          toast({ 
+            title: '복사 완료', 
+            description: 'URL이 클립보드에 복사되었습니다.' 
+          });
+        } catch (error) {
+          toast({ 
+            title: '복사 실패', 
+            description: '클립보드 복사에 실패했습니다.', 
+            variant: 'destructive' 
+          });
         }
-      } catch (error) {
-        console.error('Error opening URL:', error);
-      }
-    }}
-    className="text-discord-accent hover:underline flex items-center gap-2 break-all"
-  >
-    {url}
-    <ExternalLink size={16} className="flex-shrink-0" />
-  </button>
+      }}
+    >
+      {url}
+    </span>
+    <button
+      type="button"
+      onClick={async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('Attempting to open URL:', url);
+        try {
+          const result = await window.electronAPI.openExternal(url);
+          if (!result.success) {
+            console.error('Failed to open URL:', result.error);
+            toast({ 
+              title: '링크 열기 실패', 
+              description: '외부 브라우저에서 링크를 열 수 없습니다.', 
+              variant: 'destructive' 
+            });
+          }
+        } catch (error) {
+          console.error('Error opening URL:', error);
+          toast({ 
+            title: '링크 열기 실패', 
+            description: '외부 브라우저에서 링크를 열 수 없습니다.', 
+            variant: 'destructive' 
+          });
+        }
+      }}
+      className="text-discord-accent hover:text-blue-400 flex-shrink-0"
+      title="외부 브라우저에서 열기"
+    >
+      <ExternalLink size={16} />
+    </button>
+  </div>
 );
 
 // 필드 값 포맷팅 함수
@@ -120,7 +155,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
       }
       return (
         <span 
-          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors cursor-pointer truncate block" 
+          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block" 
           title={`${String(value)} (클릭하여 복사)`}
           onClick={async (e) => {
             e.stopPropagation();
@@ -146,7 +181,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
     case 'number':
       return (
         <span 
-          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors cursor-pointer truncate block" 
+          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block" 
           title={`${String(value)} (클릭하여 복사)`}
           onClick={async (e) => {
             e.stopPropagation();
@@ -154,7 +189,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
               await navigator.clipboard.writeText(String(value));
               toast({ 
                 title: '복사 완료', 
-                description: '값이 클립보드에 복사되었습니다.' 
+                description: '숫자가 클립보드에 복사되었습니다.' 
               });
             } catch (error) {
               toast({ 
@@ -270,7 +305,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
               {visibleItems.map((item, index) => (
                 <span
                   key={index}
-                  className="px-2 py-1 text-xs rounded bg-blue-600/20 text-blue-400 cursor-pointer hover:bg-blue-600/30"
+                  className="px-2 py-1 text-xs rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/30"
                   title={`${String(item)} (클릭하여 복사)`}
                   onClick={async (e) => {
                     e.stopPropagation();
@@ -314,7 +349,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
       
       return (
         <span 
-          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors cursor-pointer truncate block" 
+          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block" 
           title={`${String(value)} (클릭하여 복사)`}
           onClick={async (e) => {
             e.stopPropagation();
