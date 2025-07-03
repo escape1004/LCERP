@@ -36,7 +36,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
   category,
   record,
 }) => {
-  const { addRecord, updateRecord, categories, getCategoryRecords, checkDuplicate, selectCategory } = useERPStore();
+  const { addRecord, updateRecord, categories, getCategoryRecords, checkDuplicate, selectCategory, loadRecords } = useERPStore();
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [duplicateErrors, setDuplicateErrors] = useState<Record<string, string>>({});
@@ -260,6 +260,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
           updatedAt: now
         };
         await addRecord(newRecord);
+        await loadRecords(category.id);
       }
       onClose();
     } catch (error) {

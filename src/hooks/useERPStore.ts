@@ -162,9 +162,9 @@ export const useERPStore = create<ERPStore>((set, get) => ({
     };
     await window.electronAPI.addRecord(record);
     
-    if (get().selectedCategoryId) {
-      await get().loadRecords(get().selectedCategoryId);
-    }
+    // 캐시 무효화 후 새로 생성한 레코드의 카테고리로 loadRecords 호출
+    get().invalidateCache(recordData.categoryId);
+    await get().loadRecords(recordData.categoryId);
     return id;
   },
 
@@ -180,6 +180,8 @@ export const useERPStore = create<ERPStore>((set, get) => ({
   deleteRecord: async (id) => {
     await window.electronAPI.deleteRecord(id);
     if (get().selectedCategoryId) {
+      // 캐시 무효화 후 새로 로드
+      get().invalidateCache(get().selectedCategoryId);
       await get().loadRecords(get().selectedCategoryId);
     }
   },
