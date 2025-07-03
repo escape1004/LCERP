@@ -120,7 +120,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
       }
       return (
         <span 
-          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors cursor-pointer" 
+          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors cursor-pointer truncate block" 
           title={`${String(value)} (클릭하여 복사)`}
           onClick={async (e) => {
             e.stopPropagation();
@@ -146,7 +146,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
     case 'number':
       return (
         <span 
-          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors cursor-pointer" 
+          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors cursor-pointer truncate block" 
           title={`${String(value)} (클릭하여 복사)`}
           onClick={async (e) => {
             e.stopPropagation();
@@ -168,6 +168,9 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
           {String(value)}
         </span>
       );
+    
+    case 'checkbox':
+      return value ? <Check className="w-5 h-5 text-discord-accent" /> : <X className="w-5 h-5 text-discord-danger" />;
     
     case 'relation':
       if (!field.relationCategoryId) return String(value);
@@ -233,7 +236,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
         return relatedRecord 
           ? (
             <span
-              className="text-green-500 hover:underline cursor-pointer"
+              className="text-green-500 hover:underline cursor-pointer truncate block"
               onClick={(e) => {
                 e.stopPropagation();
                 if (onViewRelatedRecord) {
@@ -245,7 +248,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
               {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
             </span>
           )
-          : String(value);
+          : <span className="truncate block">{String(value)}</span>;
       }
     
     default:
@@ -311,7 +314,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
       
       return (
         <span 
-          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors cursor-pointer" 
+          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors cursor-pointer truncate block" 
           title={`${String(value)} (클릭하여 복사)`}
           onClick={async (e) => {
             e.stopPropagation();
@@ -1017,7 +1020,7 @@ export const MainContent: React.FC = () => {
                           )
                         ) && (
                           <th 
-                            className="px-2 py-2 text-left text-xs font-semibold text-discord-text w-20 cursor-pointer hover:bg-discord-hover"
+                            className="px-2 py-2 text-left text-xs font-semibold text-discord-text w-24 cursor-pointer hover:bg-discord-hover"
                             onClick={() => handleSort('__refCount')}
                           >
                             <div className="flex items-center gap-1 select-none">
@@ -1059,8 +1062,8 @@ export const MainContent: React.FC = () => {
                           {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
                             <td key={field.id} className={`${
                               field.type === 'checkbox'
-                                ? 'min-w-[40px] max-w-[160px] px-2 py-3 text-xs text-discord-text text-left'
-                                : 'px-2 py-3 text-xs text-discord-text'
+                                ? 'min-w-[40px] max-w-[160px] px-2 py-3 text-xs text-discord-text text-left overflow-hidden'
+                                : 'px-2 py-3 text-xs text-discord-text overflow-hidden'
                             }`}>
                               {formatFieldValue(field, record.data[field.id], categoriesSafe, getCategoryRecords, handleViewRelatedRecord)}
                             </td>
@@ -1071,7 +1074,7 @@ export const MainContent: React.FC = () => {
                               field.type === 'relation' && field.relationCategoryId === selectedCategorySafe.id
                             )
                           ) && (
-                            <td className="px-2 py-3 text-xs text-discord-text w-20 text-center">
+                            <td className="px-2 py-3 text-xs text-discord-text w-24 text-left">
                               {getRecordReferenceCount(record.id, selectedCategorySafe.id)}
                             </td>
                           )}

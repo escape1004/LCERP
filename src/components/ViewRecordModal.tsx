@@ -199,6 +199,36 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
     setViewerFileType(null);
   };
 
+  // 참조 횟수 계산 함수
+  const getRecordReferenceCount = useCallback((recordId: string, categoryId: string): number => {
+    let count = 0;
+    const currentCategory = categories.find(cat => cat.id === categoryId);
+    if (!currentCategory || !currentCategory.parentId) return 0;
+
+    const parentCategory = categories.find(cat => cat.id === currentCategory.parentId);
+    if (!parentCategory) return 0;
+
+    const relationFields = parentCategory.fields.filter(
+      field => field.type === 'relation' && field.relationCategoryId === categoryId
+    );
+
+    if (relationFields.length > 0) {
+      const records = getCategoryRecords(parentCategory.id);
+      records.forEach(record => {
+        relationFields.forEach(field => {
+          const value = record.data[field.id];
+          if (field.multiple && Array.isArray(value)) {
+            count += value.filter(id => id === recordId).length;
+          } else if (value === recordId) {
+            count += 1;
+          }
+        });
+      });
+    }
+
+    return count;
+  }, [categories, getCategoryRecords]);
+
   const handleUrlClick = async (e: React.MouseEvent, url: string) => {
     e.preventDefault();
     console.log('Attempting to open URL:', url);
@@ -374,7 +404,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
       case 'number':
         return (
           <span 
-            className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+            className="text-discord-text px-1 py-0.5 rounded transition-colors" 
             title={`${String(value)} (클릭하여 복사)`}
             onClick={async (e) => {
               e.stopPropagation();
@@ -409,7 +439,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         
         return (
           <div 
-            className="whitespace-pre-wrap text-discord-text break-words overflow-wrap-anywhere hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+            className="whitespace-pre-wrap text-discord-text break-words overflow-wrap-anywhere px-1 py-0.5 rounded transition-colors" 
             title={`${strValue} (클릭하여 복사)`}
             onClick={async (e) => {
               e.stopPropagation();
@@ -440,7 +470,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         
         return (
           <span 
-            className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+            className="text-discord-text px-1 py-0.5 rounded transition-colors" 
             title={`${dateValue} (클릭하여 복사)`}
             onClick={async (e) => {
               e.stopPropagation();
@@ -502,7 +532,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         }
         return (
           <span 
-            className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+            className="text-discord-text px-1 py-0.5 rounded transition-colors" 
             title={`${String(value)} (클릭하여 복사)`}
             onClick={async (e) => {
               e.stopPropagation();
@@ -590,7 +620,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         }
         return (
           <span 
-            className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors" 
+            className="text-discord-text px-1 py-0.5 rounded transition-colors" 
             title={`${String(value)} (클릭하여 복사)`}
             onClick={async (e) => {
               e.stopPropagation();
@@ -902,6 +932,22 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                   </div>
                 </div>
               ))}
+            
+            {/* 참조 횟수 - 해당 카테고리가 다른 카테고리에서 참조될 때만 표시 */}
+            {categories.some(cat => 
+              cat.fields.some(field => 
+                field.type === 'relation' && field.relationCategoryId === category.id
+              )
+            ) && (
+              <div className="border-b border-gray-800 pb-4">
+                <h3 className="text-sm font-semibold text-discord-muted uppercase tracking-wide mb-2">
+                  참조 횟수
+                </h3>
+                <div className="text-discord-text text-sm">
+                  {getRecordReferenceCount(record.id, category.id)}
+                </div>
+              </div>
+            )}
             
             {/* Metadata */}
             <div className="pt-4 border-t border-gray-700">
