@@ -171,6 +171,8 @@ export const useERPStore = create<ERPStore>((set, get) => ({
   updateRecord: async (id, data) => {
     await window.electronAPI.updateRecord(id, data);
     if (get().selectedCategoryId) {
+      // 캐시 무효화 후 새로 로드
+      get().invalidateCache(get().selectedCategoryId);
       await get().loadRecords(get().selectedCategoryId);
     }
   },
