@@ -41,6 +41,7 @@ export interface FieldDefinition {
   newOption?: string;
   hidden?: boolean;
   displayFieldId?: string;
+  subDisplayFieldId?: string;
 }
 
 export interface DataRecord {

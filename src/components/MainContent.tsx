@@ -209,24 +209,20 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
     
     case 'relation':
       if (!field.relationCategoryId) return String(value);
-      
       const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
       if (!relatedCategory) return String(value);
-      
       const relatedRecords = getCategoryRecords(field.relationCategoryId);
       const displayField = field.displayFieldId
         ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
         : relatedCategory.fields[0];
-      
+
       if (Array.isArray(value)) {
         // 다중 선택 관계형 필드 - 더보기 기능 추가
         const MultiSelectRelationField: React.FC = () => {
           const [isExpanded, setIsExpanded] = React.useState(false);
           const maxVisible = 3;
           const hasMore = value.length > maxVisible;
-          
           const visibleItems = isExpanded ? value : value.slice(0, maxVisible);
-          
           return (
             <div className="flex flex-wrap gap-1">
               {visibleItems.map((relatedId) => {
@@ -244,7 +240,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
                     }}
                     title="상세 보기"
                   >
-                    {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
+                    {displayField ? relatedRecord.data[displayField.id] : relatedRecord.id}
                   </span>
                 );
               })}
@@ -264,7 +260,6 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
             </div>
           );
         };
-        
         return <MultiSelectRelationField />;
       } else {
         const relatedRecord = relatedRecords.find(r => r.id === value);
@@ -280,7 +275,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
               }}
               title="상세 보기"
             >
-              {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
+              {displayField ? relatedRecord.data[displayField.id] : relatedRecord.id}
             </span>
           )
           : <span className="truncate block">{String(value)}</span>;

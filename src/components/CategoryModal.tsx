@@ -603,22 +603,17 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                               }}
                                             >
                                               <SelectTrigger className="w-full bg-[#2b2d31] border-gray-600 text-gray-200">
-                                                <SelectValue placeholder="필드 선택" />
+                                                <SelectValue placeholder="라벨 필드 선택" />
                                               </SelectTrigger>
                                               <SelectContent className="bg-[#2b2d31] border-gray-600">
                                                 {(() => {
-                                                  const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
-                                                  const selectableFields = (relatedCategory?.fields || []).filter(f => f.required);
-                                                  if (selectableFields.length === 0) {
-                                                    return (
-                                                      <div className="px-4 py-2 text-sm text-center text-gray-500">
-                                                        선택할 수 있는 필수 필드가 없습니다.
-                                                      </div>
-                                                    );
-                                                  }
-                                                  return selectableFields.map(f => (
-                                                    <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
-                                                  ));
+                                                  const relCat = categories.find(c => c.id === field.relationCategoryId);
+                                                  if (!relCat) return null;
+                                                  return relCat.fields
+                                                    .filter(f => f.type !== 'file' && f.type !== 'relation')
+                                                    .map(f => (
+                                                      <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                                                    ));
                                                 })()}
                                               </SelectContent>
                                             </Select>
@@ -626,6 +621,31 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                               <p className="text-red-500 text-sm mt-1">
                                                 {errors[`field_${index}_displayField`]}
                                               </p>
+                                            )}
+                                            {field.displayFieldId && (
+                                              <div className="mt-2">
+                                                <Label className="text-sm text-gray-400">보조 라벨 필드(선택사항, 라벨 옆에 괄호로 표시)</Label>
+                                                <Select
+                                                  value={field.subDisplayFieldId || 'none'}
+                                                  onValueChange={(value) => updateField(index, { subDisplayFieldId: value === 'none' ? undefined : value })}
+                                                >
+                                                  <SelectTrigger className="w-full bg-[#2b2d31] border-gray-600 text-gray-200">
+                                                    <SelectValue placeholder="보조 라벨 필드 선택 (선택사항)" />
+                                                  </SelectTrigger>
+                                                  <SelectContent className="bg-[#2b2d31] border-gray-600">
+                                                    <SelectItem value="none">(없음)</SelectItem>
+                                                    {(() => {
+                                                      const relCat = categories.find(c => c.id === field.relationCategoryId);
+                                                      if (!relCat) return null;
+                                                      return relCat.fields
+                                                        .filter(f => f.type !== 'file')
+                                                        .map(f => (
+                                                          <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                                                        ));
+                                                    })()}
+                                                  </SelectContent>
+                                                </Select>
+                                              </div>
                                             )}
                                           </div>
                                         )}
