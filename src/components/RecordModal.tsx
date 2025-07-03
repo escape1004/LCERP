@@ -14,6 +14,7 @@ import { cn } from '../lib/utils';
 import { toast } from './ui/use-toast';
 import { AlertDialog } from './ui/alert-dialog';
 import { DatePicker } from './ui/date-picker';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from './ui/dialog';
 
 // 전역 이벤트 타입 정의
 declare global {
@@ -53,6 +54,11 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     message: '',
     variant: 'info'
   });
+  const [ambiguousDialogOpen, setAmbiguousDialogOpen] = useState(false);
+  const [ambiguousOptions, setAmbiguousOptions] = useState<{ value: string, records: DataRecord[] }[]>([]);
+  const [pendingAmbiguous, setPendingAmbiguous] = useState<{ value: string, records: DataRecord[] } | null>(null);
+  const [pendingAmbiguousField, setPendingAmbiguousField] = useState<FieldDefinition | null>(null);
+  const [pendingAmbiguousCurrentValues, setPendingAmbiguousCurrentValues] = useState<any[]>([]);
 
   // 첫 번째 필드에 포커스하기 위한 ref
   const firstFieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement>(null);
@@ -306,6 +312,53 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     }));
   };
 
+  const getRelationLabel = (record: DataRecord, field: FieldDefinition): string => {
+    const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
+    if (!relatedCategory) return record.id;
+    const displayField = field.displayFieldId
+      ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
+      : relatedCategory.fields[0];
+    const mainLabel = displayField ? record.data[displayField.id] : record.id;
+
+    // 보조라벨 처리
+    const subField = field.subDisplayFieldId
+      ? relatedCategory.fields.find(f => f.id === field.subDisplayFieldId)
+      : undefined;
+
+    if (subField) {
+      const subValue = record.data[subField.id];
+      if (subField.type === 'relation' && subField.relationCategoryId) {
+        // 보조라벨이 relation 타입인 경우, 하위 카테고리의 레코드에서 찾기
+        const subCategory = categories.find(cat => cat.id === subField.relationCategoryId);
+        const subRecords = getCategoryRecords(subField.relationCategoryId);
+        const subRecord = subRecords.find(r => r.id === subValue);
+        if (subRecord) {
+          const subLabel = getRelationLabel(subRecord, subField);
+          if (subLabel && subLabel !== 'undefined' && subLabel !== '' && subLabel !== 'null' && subLabel !== undefined && subLabel !== null) {
+            return `${mainLabel}(${subLabel})`;
+          } else {
+            return String(mainLabel);
+          }
+        } else {
+          return String(mainLabel);
+        }
+      } else if (subValue !== undefined && subValue !== null && subValue !== '') {
+        // 보조라벨이 일반 타입인 경우
+        return `${mainLabel}(${subValue})`;
+      }
+    }
+    return String(mainLabel);
+  };
+
+  const getMainLabel = (record: DataRecord, field: FieldDefinition): string => {
+    const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
+    if (!relatedCategory) return record.id;
+    const displayField = field.displayFieldId
+      ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
+      : relatedCategory.fields[0];
+    return displayField ? record.data[displayField.id] : record.id;
+  };
+
   const renderField = (field: FieldDefinition, isFirstField: boolean = false) => {
     const value =
       field.type === 'select' && field.multiple
@@ -487,6 +540,16 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                     <CommandList className="max-h-[200px] overflow-y-auto">
                       <CommandEmpty className="py-2 pl-3 text-sm text-discord-muted">항목을 찾을 수 없습니다.</CommandEmpty>
                       <CommandGroup>
+                        <CommandItem
+                          value=""
+                          onSelect={() => {
+                            updateFieldValue(field.id, '');
+                            toggleCombobox(field.id);
+                          }}
+                          className="text-discord-text hover:bg-discord-hover"
+                        >
+                          선택 해제
+                        </CommandItem>
                         {field.options?.map((option) => (
                           <CommandItem
                             key={option}
@@ -627,12 +690,10 @@ export const RecordModal: React.FC<RecordModalProps> = ({
           );
         }
 
-      case 'relation':
+      case 'relation': {
         if (!field.relationCategoryId) return null;
-        
         const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
         if (!relatedCategory) return null;
-        
         const relatedRecords = getCategoryRecords(field.relationCategoryId);
         const displayField = field.displayFieldId
           ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
@@ -640,49 +701,6 @@ export const RecordModal: React.FC<RecordModalProps> = ({
         const subDisplayField = field.subDisplayFieldId
           ? relatedCategory.fields.find(f => f.id === field.subDisplayFieldId)
           : undefined;
-
-        // 재귀적으로 라벨(보조라벨) 포맷팅
-        const getRelationLabel = (record: DataRecord, field: FieldDefinition): string => {
-          // field는 항상 관계형 필드임
-          const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
-          if (!relatedCategory) return record.id;
-          const displayField = field.displayFieldId
-            ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
-            : relatedCategory.fields[0];
-          const mainLabel = displayField ? record.data[displayField.id] : record.id;
-
-          // 보조라벨 처리
-          const subDisplayField = field.subDisplayFieldId
-            ? relatedCategory.fields.find(f => f.id === field.subDisplayFieldId)
-            : undefined;
-
-          if (subDisplayField) {
-            const subValue = record.data[subDisplayField.id];
-            const subField = relatedCategory.fields.find(f => f.id === subDisplayField.id);
-            if (subField && subField.type === 'relation' && subField.relationCategoryId) {
-              const subCat = categories.find(cat => cat.id === subField.relationCategoryId);
-              if (subCat) {
-                const subRecords = getCategoryRecords(subField.relationCategoryId);
-                const subRecord = subRecords.find(r => r.id === subValue);
-                if (subRecord) {
-                  // 재귀 호출: 하위 관계형 필드(subField)와 레코드(subRecord)를 넘김
-                  const subLabel = getRelationLabel(subRecord, subField);
-                  if (subLabel && subLabel !== 'undefined' && subLabel !== '' && subLabel !== 'null' && subLabel !== undefined && subLabel !== null) {
-                    return `${mainLabel}(${subLabel})`;
-                  } else {
-                    return String(mainLabel);
-                  }
-                } else {
-                  return String(mainLabel);
-                }
-              }
-            }
-            if (subValue !== undefined && subValue !== null && subValue !== '' && subValue !== 'undefined' && subValue !== 'null') {
-              return `${mainLabel}(${subValue})`;
-            }
-          }
-          return String(mainLabel);
-        };
 
         if (field.multiple) {
           return (
@@ -713,42 +731,27 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                         const pastedText = e.clipboardData.getData('text');
                         const pastedValues = pastedText.split(',').map(v => v.trim()).filter(v => v);
                         
-                        // 기존 레코드에서 일치하는 값 찾기
-                        const validRecords = relatedRecords.filter(record => 
-                          pastedValues.some(v => 
-                            getRelationLabel(record, field).toLowerCase() === v.toLowerCase()
-                          )
-                        );
-                        
-                        if (validRecords.length > 0) {
-                          const currentValues = Array.isArray(value) ? value : [];
-                          const newValues = [...new Set([...currentValues, ...validRecords.map(r => r.id)])];
-                          updateFieldValue(field.id, newValues);
-                          
-                          // 유효하지 않은 값이 있었다면 상세한 알림
-                          const invalidValues = pastedValues.filter(v => 
-                            !relatedRecords.some(record => 
-                              getRelationLabel(record, field).toLowerCase() === v.toLowerCase()
-                            )
+                        // 붙여넣기(다중)
+                        const ambiguousMatches: { value: string, records: DataRecord[] }[] = [];
+                        const validRecords: DataRecord[] = [];
+                        pastedValues.forEach(v => {
+                          const matches = relatedRecords.filter(record =>
+                            getMainLabel(record, field).toLowerCase() === v.toLowerCase()
                           );
-                          if (invalidValues.length > 0) {
-                            toast({
-                              title: "일부 값이 무시됨",
-                              description: `다음 값들이 유효하지 않아 제외되었습니다: ${invalidValues.join(', ')}`,
-                              variant: "destructive",
-                            });
-                          } else {
-                            toast({
-                              title: "값이 추가됨",
-                              description: `${validRecords.length}개의 값이 추가되었습니다.`,
-                            });
+                          if (matches.length === 1) {
+                            validRecords.push(matches[0]);
+                          } else if (matches.length > 1) {
+                            ambiguousMatches.push({ value: v, records: matches });
                           }
+                        });
+                        if (ambiguousMatches.length > 0) {
+                          setAmbiguousDialogOpen(true);
+                          setAmbiguousOptions(ambiguousMatches);
+                          setPendingAmbiguousField(field);
+                          setPendingAmbiguousCurrentValues(Array.isArray(value) ? value : []);
+                          // 이후 사용자가 선택한 레코드를 validRecords에 추가
                         } else {
-                          toast({
-                            title: "유효하지 않은 값",
-                            description: `붙여넣은 모든 값이 유효하지 않습니다: ${pastedValues.join(', ')}`,
-                            variant: "destructive",
-                          });
+                          updateFieldValue(field.id, [...new Set([...Array.isArray(value) ? value : [], ...validRecords.map(r => r.id)])]);
                         }
                       }}
                     />
@@ -841,18 +844,26 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                         const pastedValue = pastedText.trim();
                         
                         // 기존 레코드에서 일치하는 값 찾기
-                        const matchingRecord = relatedRecords.find(record => 
-                          getRelationLabel(record, field).toLowerCase() === pastedValue.toLowerCase()
+                        const matchingRecords = relatedRecords.filter(record => 
+                          getMainLabel(record, field).toLowerCase() === pastedValue.toLowerCase()
                         );
                         
-                        if (matchingRecord) {
-                          updateFieldValue(field.id, matchingRecord.id);
+                        if (matchingRecords.length === 1) {
+                          // 단일 일치: 바로 선택
+                          updateFieldValue(field.id, matchingRecords[0].id);
                           toggleCombobox(field.id);
                           toast({
                             title: "값이 선택됨",
-                            description: `"${getRelationLabel(matchingRecord, field)}"이 선택되었습니다.`,
+                            description: `"${getRelationLabel(matchingRecords[0], field)}"이 선택되었습니다.`,
                           });
+                        } else if (matchingRecords.length > 1) {
+                          // 다중 일치: 선택 모달 띄우기
+                          setAmbiguousDialogOpen(true);
+                          setAmbiguousOptions([{ value: pastedValue, records: matchingRecords }]);
+                          setPendingAmbiguousField(field);
+                          setPendingAmbiguousCurrentValues([]);
                         } else {
+                          // 일치하는 항목 없음
                           toast({
                             title: "유효하지 않은 값",
                             description: `"${pastedValue}"는 유효한 항목이 아닙니다.`,
@@ -901,6 +912,8 @@ export const RecordModal: React.FC<RecordModalProps> = ({
             </div>
           );
         }
+        break;
+      }
 
       case 'file':
         return (
@@ -1067,6 +1080,66 @@ export const RecordModal: React.FC<RecordModalProps> = ({
         message={alertDialogProps.message}
         variant={alertDialogProps.variant}
       />
+
+      {/* 모달 UI 추가 */}
+      <Dialog open={ambiguousDialogOpen} onOpenChange={setAmbiguousDialogOpen}>
+        <DialogContent>
+          <DialogTitle>중복된 항목 선택</DialogTitle>
+          <DialogDescription>
+            붙여넣은 값 중 동일한 이름을 가진 항목이 여러 개 있습니다. 원하는 항목을 선택해 주세요.
+          </DialogDescription>
+          {ambiguousOptions.map((option, idx) => (
+            <div key={option.value} className="mb-4">
+              <div className="font-semibold mb-2">{option.value}:</div>
+              <div className="flex flex-col gap-2">
+                {option.records.map(record => (
+                  <Button
+                    key={record.id}
+                    variant="outline"
+                    onClick={() => {
+                      // 선택 시 해당 레코드만 추가
+                      if (pendingAmbiguousField?.multiple) {
+                        // 다중: 배열로 추가
+                        updateFieldValue(
+                          pendingAmbiguousField.id,
+                          [...new Set([...pendingAmbiguousCurrentValues, record.id])]
+                        );
+                      } else {
+                        // 단일: id만 저장
+                        updateFieldValue(
+                          pendingAmbiguousField.id,
+                          record.id
+                        );
+                      }
+                      // 다음 ambiguous로 넘어가거나, 모두 끝나면 닫기
+                      const nextOptions = ambiguousOptions.filter((_, i) => i !== idx);
+                      if (nextOptions.length > 0) {
+                        setAmbiguousOptions(nextOptions);
+                      } else {
+                        setAmbiguousDialogOpen(false);
+                        setAmbiguousOptions([]);
+                        setPendingAmbiguousField(null);
+                        setPendingAmbiguousCurrentValues([]);
+                      }
+                    }}
+                    className="justify-start"
+                  >
+                    {getRelationLabel(record, pendingAmbiguousField!)}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          ))}
+          <div className="flex justify-end mt-4">
+            <Button variant="ghost" onClick={() => {
+              setAmbiguousDialogOpen(false);
+              setAmbiguousOptions([]);
+              setPendingAmbiguousField(null);
+              setPendingAmbiguousCurrentValues([]);
+            }}>취소</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
