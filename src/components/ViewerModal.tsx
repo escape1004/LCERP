@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { X, ChevronLeft, ChevronRight, Download, FileImage, FileVideo, Archive, FileText, Play, Pause, Volume2, VolumeX, RotateCcw, Maximize, Minimize, Bookmark } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Download, FileImage, FileVideo, Archive, FileText, Play, Pause, Volume2, VolumeX, RotateCcw, Maximize, Minimize, Bookmark, Clock } from 'lucide-react';
 import AdmZip from 'adm-zip';
 
 interface ViewerModalProps {
@@ -50,6 +50,13 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const [videoError, setVideoError] = useState<string | null>(null);
   // 동영상 코덱 정보 상태 추가
   const [codecInfo, setCodecInfo] = useState<any>(null);
+
+  // 배속 관련 상태 추가
+  const [playbackSpeed, setPlaybackSpeed] = useState(() => {
+    const savedSpeed = localStorage.getItem('videoPlaybackSpeed');
+    return savedSpeed ? parseFloat(savedSpeed) : 1.0;
+  });
+  const [showSpeedMenu, setShowSpeedMenu] = useState(false);
 
   // 일반 이미지 상태 및 핸들러
   const [imgScale, setImgScale] = useState(1);
@@ -182,6 +189,11 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     localStorage.setItem('videoMuted', JSON.stringify(isMuted));
   }, [isMuted]);
 
+  // 배속 설정 저장
+  useEffect(() => {
+    localStorage.setItem('videoPlaybackSpeed', playbackSpeed.toString());
+  }, [playbackSpeed]);
+
   // 동영상 볼륨 설정
   useEffect(() => {
     if (videoRef.current && fileType === 'video') {
@@ -196,6 +208,37 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       }
     }
   }, [volume, isMuted, fileType, archiveFiles, currentArchiveIndex]);
+
+  // 동영상 배속 설정
+  useEffect(() => {
+    if (videoRef.current && fileType === 'video') {
+      videoRef.current.playbackRate = playbackSpeed;
+    }
+    if (archiveVideoRef.current && fileType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
+      const currentFile = archiveFiles[currentArchiveIndex];
+      if (currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name)) {
+        archiveVideoRef.current.playbackRate = playbackSpeed;
+      }
+    }
+  }, [playbackSpeed, fileType, archiveFiles, currentArchiveIndex]);
+
+  // 배속 메뉴 외부 클릭 시 닫기
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (showSpeedMenu && !target.closest('[data-speed-menu]')) {
+        setShowSpeedMenu(false);
+      }
+    };
+
+    if (showSpeedMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showSpeedMenu]);
 
   // 동영상 플레이어 포커스 설정
   useEffect(() => {
@@ -332,6 +375,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       videoRef.current.volume = isMuted ? 0 : volume;
       videoRef.current.muted = isMuted;
       videoRef.current.loop = isLooping;
+      videoRef.current.playbackRate = playbackSpeed;
     }
     if (archiveVideoRef.current && fileType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
       const currentFile = archiveFiles[currentArchiveIndex];
@@ -340,6 +384,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
         archiveVideoRef.current.volume = isMuted ? 0 : volume;
         archiveVideoRef.current.muted = isMuted;
         archiveVideoRef.current.loop = isLooping;
+        archiveVideoRef.current.playbackRate = playbackSpeed;
       }
     }
   };
@@ -483,6 +528,22 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
           const newVolumeDown = Math.max(0, volume - 0.05);
           handleVolumeChange(newVolumeDown);
           break;
+        case '>':
+        case '.':
+          e.preventDefault();
+          const speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+          const currentIndex = speeds.indexOf(playbackSpeed);
+          const nextIndex = currentIndex < speeds.length - 1 ? currentIndex + 1 : 0;
+          handleSpeedChange(speeds[nextIndex]);
+          break;
+        case '<':
+        case ',':
+          e.preventDefault();
+          const speeds2 = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+          const currentIndex2 = speeds2.indexOf(playbackSpeed);
+          const prevIndex = currentIndex2 > 0 ? currentIndex2 - 1 : speeds2.length - 1;
+          handleSpeedChange(speeds2[prevIndex]);
+          break;
       }
     }
     
@@ -520,6 +581,22 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
             e.preventDefault();
             const newVolumeDown = Math.max(0, volume - 0.05);
             handleVolumeChange(newVolumeDown);
+            break;
+          case '>':
+          case '.':
+            e.preventDefault();
+            const speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+            const currentIndex = speeds.indexOf(playbackSpeed);
+            const nextIndex = currentIndex < speeds.length - 1 ? currentIndex + 1 : 0;
+            handleSpeedChange(speeds[nextIndex]);
+            break;
+          case '<':
+          case ',':
+            e.preventDefault();
+            const speeds2 = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+            const currentIndex2 = speeds2.indexOf(playbackSpeed);
+            const prevIndex = currentIndex2 > 0 ? currentIndex2 - 1 : speeds2.length - 1;
+            handleSpeedChange(speeds2[prevIndex]);
             break;
         }
       } else {
@@ -806,6 +883,17 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     return bookmarks.some(bm => Math.abs(bm.time - currentTime) < 1);
   };
 
+  // 배속 변경 함수
+  const handleSpeedChange = (speed: number) => {
+    setPlaybackSpeed(speed);
+    setShowSpeedMenu(false);
+  };
+
+  // 배속 메뉴 토글 함수
+  const handleSpeedMenuToggle = () => {
+    setShowSpeedMenu(!showSpeedMenu);
+  };
+
   if (!isOpen || !filePath || !fileType) return null;
 
   const currentFile = archiveFiles[currentArchiveIndex];
@@ -1053,13 +1141,13 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                     {/* 재생바 */}
                     <div className="mb-4">
                       <div style={{ position: 'relative', width: '100%' }}>
-                      <input
-                        type="range"
+                        <input
+                          type="range"
                           min={0}
                           max={duration}
                           step={0.01}
-                        value={currentTime}
-                        onChange={handleSeek}
+                          value={currentTime}
+                          onChange={handleSeek}
                           className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
                           id="seekbar"
                         />
@@ -1099,85 +1187,98 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                         <span>{formatTime(duration)}</span>
                       </div>
                     </div>
-                    
-                    <div className="flex items-center gap-4">
-                      {/* 재생/정지 버튼 */}
-                      <button
-                        onClick={handlePlayPause}
-                        className="text-white hover:text-gray-300 transition-colors"
-                        title={isPlaying ? '일시정지' : '재생'}
-                      >
-                        {isPlaying ? <Pause size={24} /> : <Play size={24} />}
-                      </button>
-                      
-                      {/* 볼륨 컨트롤 */}
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={handleMuteToggle}
-                          className="text-white hover:text-gray-300 transition-colors"
-                          title={isMuted ? '음소거 해제' : '음소거'}
-                        >
-                          {isMuted || volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
+                    {/* 컨트롤바: 좌우 분리 */}
+                    <div className="flex items-center justify-between w-full">
+                      {/* 왼쪽 그룹 */}
+                      <div className="flex items-center gap-5">
+                        {/* 재생/정지 버튼 */}
+                        <button onClick={handlePlayPause} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors" title={isPlaying ? '일시정지' : '재생'}>
+                          {isPlaying ? <Pause size={20} /> : <Play size={20} />}
                         </button>
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.01"
-                          value={isMuted ? 0 : volume}
-                          onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-                          className="w-20 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
-                          id="volume-slider"
-                        />
-                      </div>
-                      
-                      {/* 반복 버튼 */}
-                      <button
-                        onClick={handleLoopToggle}
-                        className={`transition-colors ${isLooping ? 'text-blue-400' : 'text-white hover:text-gray-300'}`}
-                        title={isLooping ? '반복 해제' : '반복 재생'}
-                      >
-                        <RotateCcw size={20} />
-                      </button>
-                      
-                      {/* 북마크 버튼 (일반 동영상에서만 표시) */}
-                      {fileType === 'video' && (
-                        <button
-                          onClick={() => {
-                            if (hasBookmarkAtCurrentTime()) {
-                              // 현재 시간에 북마크가 있으면 삭제
-                              const bookmarkToRemove = bookmarks.find(bm => Math.abs(bm.time - currentTime) < 1);
-                              if (bookmarkToRemove) {
-                                handleRemoveBookmark(bookmarkToRemove.time);
+                        {/* 볼륨 컨트롤 */}
+                        <div className="flex items-center gap-2">
+                          <button onClick={handleMuteToggle} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors" title={isMuted ? '음소거 해제' : '음소거'}>
+                            {isMuted || volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
+                          </button>
+                          <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            value={isMuted ? 0 : volume}
+                            onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                            className="w-20 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
+                            id="volume-slider"
+                          />
+                        </div>
+                        {/* 북마크 버튼 (일반 동영상만) */}
+                        {fileType === 'video' && (
+                          <button
+                            onClick={() => {
+                              if (hasBookmarkAtCurrentTime()) {
+                                const bookmarkToRemove = bookmarks.find(bm => Math.abs(bm.time - currentTime) < 1);
+                                if (bookmarkToRemove) {
+                                  handleRemoveBookmark(bookmarkToRemove.time);
+                                }
+                              } else {
+                                handleAddBookmark();
                               }
-                            } else {
-                              // 현재 시간에 북마크가 없으면 추가
-                              handleAddBookmark();
+                            }}
+                            className={`w-8 h-8 flex items-center justify-center transition-colors ${
+                              hasBookmarkAtCurrentTime() 
+                                ? 'text-blue-400' 
+                                : 'text-white hover:text-gray-300'
+                            }`}
+                            title={
+                              hasBookmarkAtCurrentTime() 
+                                ? '북마크 삭제' 
+                                : '현재 위치 북마크'
                             }
-                          }}
-                          className={`transition-colors ml-2 ${
-                            hasBookmarkAtCurrentTime() 
-                              ? 'text-blue-400' 
-                              : 'text-white hover:text-red-400'
-                          }`}
-                          title={
-                            hasBookmarkAtCurrentTime() 
-                              ? '북마크 삭제' 
-                              : '현재 위치 북마크'
-                          }
-                        >
-                          <Bookmark size={20} />
+                          >
+                            <Bookmark size={20} />
+                          </button>
+                        )}
+                      </div>
+                      {/* 오른쪽 그룹 */}
+                      <div className="flex items-center gap-5">
+                        {/* 루프 버튼 */}
+                        <button onClick={handleLoopToggle} className={`w-8 h-8 flex items-center justify-center transition-colors ${isLooping ? 'text-blue-400' : 'text-white hover:text-gray-300'}`} title={isLooping ? '반복 해제' : '반복 재생'}>
+                          <RotateCcw size={20} />
                         </button>
-                      )}
-                      
-                      {/* 전체화면 버튼 */}
-                      <button
-                        onClick={handleFullscreenToggle}
-                        className="text-white hover:text-gray-300 transition-colors ml-auto"
-                        title={isFullscreen ? '전체화면 해제' : '전체화면'}
-                      >
-                        {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
-                      </button>
+                        {/* 배속 버튼 */}
+                        <div className="relative">
+                          <button
+                            onClick={handleSpeedMenuToggle}
+                            className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors"
+                            title={`재생 속도: ${playbackSpeed}x (>, < 키로 변경)`}
+                            data-speed-menu
+                          >
+                            <Clock size={20} />
+                          </button>
+                          {showSpeedMenu && (
+                            <div className="absolute bottom-full left-0 mb-2 bg-discord-sidebar border border-gray-700 rounded-lg shadow-lg z-50 min-w-[120px]" data-speed-menu>
+                              <div className="p-2 text-xs text-discord-muted border-b border-gray-700">
+                                재생 속도
+                              </div>
+                              {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((speed) => (
+                                <button
+                                  key={speed}
+                                  onClick={() => handleSpeedChange(speed)}
+                                  className={`w-full text-left px-3 py-2 text-sm hover:bg-discord-hover transition-colors ${
+                                    playbackSpeed === speed ? 'text-discord-accent bg-discord-hover' : 'text-discord-text'
+                                  }`}
+                                >
+                                  {speed}x
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        {/* 전체화면 버튼 */}
+                        <button onClick={handleFullscreenToggle} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors ml-auto" title={isFullscreen ? '전체화면 해제' : '전체화면'}>
+                          {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1399,71 +1500,144 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                               {/* 재생바 */}
                               <div className="mb-4">
                                 <div style={{ position: 'relative', width: '100%' }}>
-                                <input
-                                  type="range"
+                                  <input
+                                    type="range"
                                     min={0}
                                     max={duration}
                                     step={0.01}
-                                  value={currentTime}
-                                  onChange={handleSeek}
+                                    value={currentTime}
+                                    onChange={handleSeek}
                                     className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
                                     id="seekbar"
-                                />
+                                  />
+                                  {/* 북마크 마커 (일반 동영상에서만 표시) */}
+                                  {fileType === 'video' && bookmarks.map(bm => (
+                                    <div
+                                      key={bm.time}
+                                      style={{
+                                        position: 'absolute',
+                                        left: `${(bm.time / duration) * 100}%`,
+                                        top: 0,
+                                        width: 12,
+                                        height: 12,
+                                        borderRadius: '50%',
+                                        transform: 'translate(-50%, -50%)',
+                                        cursor: 'pointer',
+                                        zIndex: 10,
+                                        transition: 'all 0.2s ease-in-out',
+                                      }}
+                                      className="bg-red-500/60 shadow-md shadow-red-500/30 border border-white/10 hover:bg-red-500 hover:shadow-lg hover:shadow-red-500/60"
+                                      onClick={() => {
+                                        if (videoRef.current && fileType === 'video') {
+                                          videoRef.current.currentTime = bm.time;
+                                          setCurrentTime(bm.time);
+                                        }
+                                      }}
+                                      onContextMenu={e => {
+                                        e.preventDefault();
+                                        handleRemoveBookmark(bm.time);
+                                      }}
+                                      title={`북마크: ${formatTime(bm.time)} (클릭: 이동, 우클릭: 삭제)`}
+                                    />
+                                  ))}
                                 </div>
                                 <div className="flex justify-between text-white text-xs mt-1">
                                   <span>{formatTime(currentTime)}</span>
                                   <span>{formatTime(duration)}</span>
                                 </div>
                               </div>
-                              
-                              <div className="flex items-center gap-4">
-                                {/* 재생/정지 버튼 */}
-                                <button
-                                  onClick={handlePlayPause}
-                                  className="text-white hover:text-gray-300 transition-colors"
-                                  title={isPlaying ? '일시정지' : '재생'}
-                                >
-                                  {isPlaying ? <Pause size={24} /> : <Play size={24} />}
-                                </button>
-                                
-                                {/* 볼륨 컨트롤 */}
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    onClick={handleMuteToggle}
-                                    className="text-white hover:text-gray-300 transition-colors"
-                                    title={isMuted ? '음소거 해제' : '음소거'}
-                                  >
-                                    {isMuted || volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
+                              {/* 컨트롤바: 좌우 분리 */}
+                              <div className="flex items-center justify-between w-full">
+                                {/* 왼쪽 그룹 */}
+                                <div className="flex items-center gap-5">
+                                  {/* 재생/정지 버튼 */}
+                                  <button onClick={handlePlayPause} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors" title={isPlaying ? '일시정지' : '재생'}>
+                                    {isPlaying ? <Pause size={20} /> : <Play size={20} />}
                                   </button>
-                                  <input
-                                    type="range"
-                                    min="0"
-                                    max="1"
-                                    step="0.01"
-                                    value={isMuted ? 0 : volume}
-                                    onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-                                    className="w-20 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
-                                    id="volume-slider"
-                                  />
+                                  {/* 볼륨 컨트롤 */}
+                                  <div className="flex items-center gap-2">
+                                    <button onClick={handleMuteToggle} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors" title={isMuted ? '음소거 해제' : '음소거'}>
+                                      {isMuted || volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
+                                    </button>
+                                    <input
+                                      type="range"
+                                      min="0"
+                                      max="1"
+                                      step="0.01"
+                                      value={isMuted ? 0 : volume}
+                                      onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                                      className="w-20 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
+                                      id="volume-slider"
+                                    />
+                                  </div>
+                                  {/* 북마크 버튼 (일반 동영상만) */}
+                                  {fileType === 'video' && (
+                                    <button
+                                      onClick={() => {
+                                        if (hasBookmarkAtCurrentTime()) {
+                                          const bookmarkToRemove = bookmarks.find(bm => Math.abs(bm.time - currentTime) < 1);
+                                          if (bookmarkToRemove) {
+                                            handleRemoveBookmark(bookmarkToRemove.time);
+                                          }
+                                        } else {
+                                          handleAddBookmark();
+                                        }
+                                      }}
+                                      className={`w-8 h-8 flex items-center justify-center transition-colors ${
+                                        hasBookmarkAtCurrentTime() 
+                                          ? 'text-blue-400' 
+                                          : 'text-white hover:text-gray-300'
+                                      }`}
+                                      title={
+                                        hasBookmarkAtCurrentTime() 
+                                          ? '북마크 삭제' 
+                                          : '현재 위치 북마크'
+                                      }
+                                    >
+                                      <Bookmark size={20} />
+                                    </button>
+                                  )}
                                 </div>
-                                
-                                {/* 반복 버튼 */}
-                                <button
-                                  onClick={handleLoopToggle}
-                                  className={`transition-colors ${isLooping ? 'text-blue-400' : 'text-white hover:text-gray-300'}`}
-                                  title={isLooping ? '반복 해제' : '반복 재생'}
-                                >
-                                  <RotateCcw size={20} />
-                                </button>
-                                
-                                {/* 전체화면 버튼 */}
-                                <button
-                                  onClick={handleFullscreenToggle}
-                                  className="text-white hover:text-gray-300 transition-colors ml-auto"
-                                  title={isFullscreen ? '전체화면 해제' : '전체화면'}
-                                >
-                                  {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
-                                </button>
+                                {/* 오른쪽 그룹 */}
+                                <div className="flex items-center gap-5">
+                                  {/* 루프 버튼 */}
+                                  <button onClick={handleLoopToggle} className={`w-8 h-8 flex items-center justify-center transition-colors ${isLooping ? 'text-blue-400' : 'text-white hover:text-gray-300'}`} title={isLooping ? '반복 해제' : '반복 재생'}>
+                                    <RotateCcw size={20} />
+                                  </button>
+                                  {/* 배속 버튼 */}
+                                  <div className="relative">
+                                    <button
+                                      onClick={handleSpeedMenuToggle}
+                                      className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors"
+                                      title={`재생 속도: ${playbackSpeed}x (>, < 키로 변경)`}
+                                      data-speed-menu
+                                    >
+                                      <Clock size={20} />
+                                    </button>
+                                    {showSpeedMenu && (
+                                      <div className="absolute bottom-full left-0 mb-2 bg-discord-sidebar border border-gray-700 rounded-lg shadow-lg z-50 min-w-[120px]" data-speed-menu>
+                                        <div className="p-2 text-xs text-discord-muted border-b border-gray-700">
+                                          재생 속도
+                                        </div>
+                                        {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((speed) => (
+                                          <button
+                                            key={speed}
+                                            onClick={() => handleSpeedChange(speed)}
+                                            className={`w-full text-left px-3 py-2 text-sm hover:bg-discord-hover transition-colors ${
+                                              playbackSpeed === speed ? 'text-discord-accent bg-discord-hover' : 'text-discord-text'
+                                            }`}
+                                          >
+                                            {speed}x
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                  {/* 전체화면 버튼 */}
+                                  <button onClick={handleFullscreenToggle} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors ml-auto" title={isFullscreen ? '전체화면 해제' : '전체화면'}>
+                                    {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           </div>
