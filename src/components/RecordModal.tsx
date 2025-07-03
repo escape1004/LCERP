@@ -734,6 +734,8 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                         // 붙여넣기(다중)
                         const ambiguousMatches: { value: string, records: DataRecord[] }[] = [];
                         const validRecords: DataRecord[] = [];
+                        const invalidValues: string[] = [];
+                        
                         pastedValues.forEach(v => {
                           const matches = relatedRecords.filter(record =>
                             getMainLabel(record, field).toLowerCase() === v.toLowerCase()
@@ -742,8 +744,21 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                             validRecords.push(matches[0]);
                           } else if (matches.length > 1) {
                             ambiguousMatches.push({ value: v, records: matches });
+                          } else {
+                            // 일치하는 항목이 없는 경우
+                            invalidValues.push(v);
                           }
                         });
+                        
+                        // 유효하지 않은 값이 있는 경우 토스트 메시지 표시
+                        if (invalidValues.length > 0) {
+                          toast({
+                            title: "유효하지 않은 값",
+                            description: `"${invalidValues.join(', ')}"는 유효한 항목이 아닙니다.`,
+                            variant: "destructive",
+                          });
+                        }
+                        
                         if (ambiguousMatches.length > 0) {
                           setAmbiguousDialogOpen(true);
                           setAmbiguousOptions(ambiguousMatches);
@@ -751,7 +766,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                           // 현재 값과 이미 처리된 validRecords를 모두 포함
                           const currentValues = Array.isArray(value) ? value : [];
                           setPendingAmbiguousCurrentValues([...currentValues, ...validRecords.map(r => r.id)]);
-                        } else {
+                        } else if (validRecords.length > 0) {
                           updateFieldValue(field.id, [...new Set([...Array.isArray(value) ? value : [], ...validRecords.map(r => r.id)])]);
                         }
                       }}
