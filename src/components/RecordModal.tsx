@@ -642,11 +642,22 @@ export const RecordModal: React.FC<RecordModalProps> = ({
           : undefined;
 
         // 재귀적으로 라벨(보조라벨) 포맷팅
-        const getRelationLabel = (record: DataRecord): string => {
+        const getRelationLabel = (record: DataRecord, field: FieldDefinition): string => {
+          // field는 항상 관계형 필드임
+          const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
+          if (!relatedCategory) return record.id;
+          const displayField = field.displayFieldId
+            ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
+            : relatedCategory.fields[0];
           const mainLabel = displayField ? record.data[displayField.id] : record.id;
+
+          // 보조라벨 처리
+          const subDisplayField = field.subDisplayFieldId
+            ? relatedCategory.fields.find(f => f.id === field.subDisplayFieldId)
+            : undefined;
+
           if (subDisplayField) {
             const subValue = record.data[subDisplayField.id];
-            // 보조라벨이 관계형이면 재귀적으로 라벨값을 구함
             const subField = relatedCategory.fields.find(f => f.id === subDisplayField.id);
             if (subField && subField.type === 'relation' && subField.relationCategoryId) {
               const subCat = categories.find(cat => cat.id === subField.relationCategoryId);
@@ -654,13 +665,19 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                 const subRecords = getCategoryRecords(subField.relationCategoryId);
                 const subRecord = subRecords.find(r => r.id === subValue);
                 if (subRecord) {
-                  // 재귀 호출
-                  return `${mainLabel}(${getRelationLabel(subRecord)})`;
+                  // 재귀 호출: 하위 관계형 필드(subField)와 레코드(subRecord)를 넘김
+                  const subLabel = getRelationLabel(subRecord, subField);
+                  if (subLabel && subLabel !== 'undefined' && subLabel !== '' && subLabel !== 'null' && subLabel !== undefined && subLabel !== null) {
+                    return `${mainLabel}(${subLabel})`;
+                  } else {
+                    return String(mainLabel);
+                  }
+                } else {
+                  return String(mainLabel);
                 }
               }
             }
-            // 보조라벨이 일반 값이면 그냥 출력
-            if (subValue !== undefined && subValue !== null && subValue !== '') {
+            if (subValue !== undefined && subValue !== null && subValue !== '' && subValue !== 'undefined' && subValue !== 'null') {
               return `${mainLabel}(${subValue})`;
             }
           }
@@ -699,7 +716,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                         // 기존 레코드에서 일치하는 값 찾기
                         const validRecords = relatedRecords.filter(record => 
                           pastedValues.some(v => 
-                            getRelationLabel(record).toLowerCase() === v.toLowerCase()
+                            getRelationLabel(record, field).toLowerCase() === v.toLowerCase()
                           )
                         );
                         
@@ -711,7 +728,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                           // 유효하지 않은 값이 있었다면 상세한 알림
                           const invalidValues = pastedValues.filter(v => 
                             !relatedRecords.some(record => 
-                              getRelationLabel(record).toLowerCase() === v.toLowerCase()
+                              getRelationLabel(record, field).toLowerCase() === v.toLowerCase()
                             )
                           );
                           if (invalidValues.length > 0) {
@@ -741,7 +758,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                         {relatedRecords.map((record) => (
                           <CommandItem
                             key={record.id}
-                            value={getRelationLabel(record)}
+                            value={getRelationLabel(record, field)}
                             onSelect={() => {
                               const currentValues = Array.isArray(value) ? value : [];
                               if (currentValues.includes(record.id)) {
@@ -758,7 +775,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                                 Array.isArray(value) && value.includes(record.id) ? "opacity-100" : "opacity-0"
                               )}
                             />
-                            {getRelationLabel(record)}
+                            {getRelationLabel(record, field)}
                           </CommandItem>
                         ))}
                       </CommandGroup>
@@ -776,7 +793,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                         key={recordId}
                         className="inline-flex items-center gap-1 px-2 py-1 bg-green-600/20 text-green-500 text-xs rounded hover:bg-green-600/30"
                       >
-                        <span className="max-w-[150px] truncate">{getRelationLabel(record)}</span>
+                        <span className="max-w-[150px] truncate">{getRelationLabel(record, field)}</span>
                         <button
                           type="button"
                           onClick={(e) => {
@@ -808,7 +825,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                   >
                     {value ? (() => {
                       const selectedRecord = relatedRecords.find(r => r.id === value);
-                      return selectedRecord ? getRelationLabel(selectedRecord) : value;
+                      return selectedRecord ? getRelationLabel(selectedRecord, field) : value;
                     })() : `${field.name} 선택`}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
@@ -825,7 +842,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                         
                         // 기존 레코드에서 일치하는 값 찾기
                         const matchingRecord = relatedRecords.find(record => 
-                          getRelationLabel(record).toLowerCase() === pastedValue.toLowerCase()
+                          getRelationLabel(record, field).toLowerCase() === pastedValue.toLowerCase()
                         );
                         
                         if (matchingRecord) {
@@ -833,7 +850,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                           toggleCombobox(field.id);
                           toast({
                             title: "값이 선택됨",
-                            description: `"${getRelationLabel(matchingRecord)}"이 선택되었습니다.`,
+                            description: `"${getRelationLabel(matchingRecord, field)}"이 선택되었습니다.`,
                           });
                         } else {
                           toast({
@@ -860,7 +877,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                         {relatedRecords.map((record) => (
                           <CommandItem
                             key={record.id}
-                            value={getRelationLabel(record)}
+                            value={getRelationLabel(record, field)}
                             onSelect={() => {
                               updateFieldValue(field.id, record.id);
                               toggleCombobox(field.id);
@@ -873,7 +890,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                                 value === record.id ? "opacity-100" : "opacity-0"
                               )}
                             />
-                            {getRelationLabel(record)}
+                            {getRelationLabel(record, field)}
                           </CommandItem>
                         ))}
                       </CommandGroup>
