@@ -546,9 +546,21 @@ export const MainContent: React.FC = () => {
         setTimeout(() => {
           hideLoading();
         }, 500);
+        
+        // 백그라운드에서 자주 사용하는 카테고리들 프리로드
+        setTimeout(() => {
+          const frequentlyUsedCategories = rootCategories.slice(1, 4); // 상위 3개 카테고리 (첫 번째 제외)
+          frequentlyUsedCategories.forEach(category => {
+            const existingRecords = getCategoryRecords(category.id);
+            if (!existingRecords || existingRecords.length === 0) {
+              // 백그라운드에서 로드 (로딩 표시 없이)
+              loadRecords(category.id).catch(console.error);
+            }
+          });
+        }, 1000); // 1초 후 백그라운드 로딩 시작
       }
     }
-  }, [selectedCategoryId, categoriesSafe, selectCategory, showDbViewer, showLoading, hideLoading, getCategoryRecords]);
+  }, [selectedCategoryId, categoriesSafe, selectCategory, showDbViewer, showLoading, hideLoading, getCategoryRecords, loadRecords]);
 
   const [sortField, setSortField] = useState<string>('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');

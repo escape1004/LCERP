@@ -520,7 +520,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                   {value.map((item) => (
                     <div
                       key={item}
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-green-600/20 text-green-500 text-xs rounded hover:bg-green-600/30"
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-blue-600/20 text-blue-400 text-xs rounded hover:bg-blue-600/30"
                     >
                       <span className="max-w-[150px] truncate">{item}</span>
                       <button
@@ -530,7 +530,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                           const newValue = value.filter((v) => v !== item);
                           updateFieldValue(field.id, newValue);
                         }}
-                        className="text-green-500 hover:text-green-400 shrink-0"
+                        className="text-blue-400 hover:text-blue-300 shrink-0"
                       >
                         <X size={12} />
                       </button>

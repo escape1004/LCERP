@@ -13,7 +13,7 @@ interface ERPStore {
   loadCategories: () => Promise<void>;
   loadRecords: (categoryId: string) => Promise<void>;
   addCategory: (category: NewCategory) => Promise<string>;
-  updateCategory: (id: string, updates: Partial<NewCategory>) => Promise<void>;
+  updateCategory: (id: string, updates: any) => Promise<void>;
   deleteCategory: (id: string) => Promise<{ success: boolean; thumbnailCleanupCount: number; relationCleanupCount: number }>;
   reorderCategories: (categories: Category[]) => Promise<void>;
   addRecord: (record: NewRecord) => Promise<string>;
@@ -27,6 +27,7 @@ interface ERPStore {
   getRecordReferenceCount: (recordId: string, categoryId: string) => number;
   toggleDbViewer: () => void;
   checkDuplicate: (categoryId: string, fieldId: string, value: any, recordId?: string) => Promise<boolean>;
+  invalidateCache: (categoryId?: string) => void;
 }
 
 export const useERPStore = create<ERPStore>((set, get) => ({
@@ -45,7 +46,40 @@ export const useERPStore = create<ERPStore>((set, get) => ({
 
   loadRecords: async (categoryId: string) => {
     try {
+      // 로컬 스토리지에서 캐시된 데이터 확인
+      const cacheKey = `records_${categoryId}`;
+      const cachedData = localStorage.getItem(cacheKey);
+      const cacheTimestamp = localStorage.getItem(`${cacheKey}_timestamp`);
+      
+      // 캐시가 5분 이내인지 확인 (5분 = 300000ms)
+      const isCacheValid = cacheTimestamp && (Date.now() - parseInt(cacheTimestamp)) < 300000;
+      
+      if (cachedData && isCacheValid) {
+        try {
+          const records = JSON.parse(cachedData);
+          set(state => ({
+            records: {
+              ...state.records,
+              [categoryId]: records
+            }
+          }));
+          return; // 캐시된 데이터 사용
+        } catch (error) {
+          console.warn('캐시된 데이터 파싱 실패:', error);
+        }
+      }
+      
+      // 캐시가 없거나 만료된 경우 서버에서 로드
       const records = await window.electronAPI.getRecords(categoryId);
+      
+      // 로컬 스토리지에 캐시 저장
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify(records));
+        localStorage.setItem(`${cacheKey}_timestamp`, Date.now().toString());
+      } catch (error) {
+        console.warn('캐시 저장 실패:', error);
+      }
+      
       set(state => ({
         records: {
           ...state.records,
@@ -59,6 +93,23 @@ export const useERPStore = create<ERPStore>((set, get) => ({
           [categoryId]: []
         }
       }));
+    }
+  },
+
+  // 캐시 무효화 함수
+  invalidateCache: (categoryId?: string) => {
+    if (categoryId) {
+      // 특정 카테고리 캐시만 무효화
+      localStorage.removeItem(`records_${categoryId}`);
+      localStorage.removeItem(`records_${categoryId}_timestamp`);
+    } else {
+      // 모든 캐시 무효화
+      const keys = Object.keys(localStorage);
+      keys.forEach(key => {
+        if (key.startsWith('records_')) {
+          localStorage.removeItem(key);
+        }
+      });
     }
   },
 
@@ -98,7 +149,7 @@ export const useERPStore = create<ERPStore>((set, get) => ({
         name: category.name,
         parentId: category.parentId,
         fields: category.fields,
-        order_num: category.order
+        order: category.order
       });
     }
   },
