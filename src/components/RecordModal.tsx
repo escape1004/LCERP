@@ -14,7 +14,6 @@ import { cn } from '../lib/utils';
 import { toast } from './ui/use-toast';
 import { AlertDialog } from './ui/alert-dialog';
 import { DatePicker } from './ui/date-picker';
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from './ui/dialog';
 
 // 전역 이벤트 타입 정의
 declare global {
@@ -749,8 +748,9 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                           setAmbiguousDialogOpen(true);
                           setAmbiguousOptions(ambiguousMatches);
                           setPendingAmbiguousField(field);
-                          setPendingAmbiguousCurrentValues(Array.isArray(value) ? value : []);
-                          // 이후 사용자가 선택한 레코드를 validRecords에 추가
+                          // 현재 값과 이미 처리된 validRecords를 모두 포함
+                          const currentValues = Array.isArray(value) ? value : [];
+                          setPendingAmbiguousCurrentValues([...currentValues, ...validRecords.map(r => r.id)]);
                         } else {
                           updateFieldValue(field.id, [...new Set([...Array.isArray(value) ? value : [], ...validRecords.map(r => r.id)])]);
                         }
@@ -1082,65 +1082,105 @@ export const RecordModal: React.FC<RecordModalProps> = ({
         variant={alertDialogProps.variant}
       />
 
-      {/* 모달 UI 추가 */}
-      <Dialog open={ambiguousDialogOpen} onOpenChange={setAmbiguousDialogOpen}>
-        <DialogContent>
-          <DialogTitle>중복된 항목 선택</DialogTitle>
-          <DialogDescription>
-            붙여넣은 값 중 동일한 이름을 가진 항목이 여러 개 있습니다. 원하는 항목을 선택해 주세요.
-          </DialogDescription>
-          {ambiguousOptions.map((option, idx) => (
-            <div key={option.value} className="mb-4">
-              <div className="font-semibold mb-2">{option.value}:</div>
-              <div className="flex flex-col gap-2">
-                {option.records.map(record => (
-                  <Button
-                    key={record.id}
-                    variant="outline"
-                    onClick={() => {
-                      // 선택 시 해당 레코드만 추가
-                      if (pendingAmbiguousField?.multiple) {
-                        // 다중: 배열로 추가
-                        updateFieldValue(
-                          pendingAmbiguousField.id,
-                          [...new Set([...pendingAmbiguousCurrentValues, record.id])]
-                        );
-                      } else {
-                        // 단일: id만 저장
-                        updateFieldValue(
-                          pendingAmbiguousField.id,
-                          record.id
-                        );
-                      }
-                      // 다음 ambiguous로 넘어가거나, 모두 끝나면 닫기
-                      const nextOptions = ambiguousOptions.filter((_, i) => i !== idx);
-                      if (nextOptions.length > 0) {
-                        setAmbiguousOptions(nextOptions);
-                      } else {
-                        setAmbiguousDialogOpen(false);
-                        setAmbiguousOptions([]);
-                        setPendingAmbiguousField(null);
-                        setPendingAmbiguousCurrentValues([]);
-                      }
-                    }}
-                    className="justify-start"
-                  >
-                    {getRelationLabel(record, pendingAmbiguousField!)}
-                  </Button>
+      {/* 중복 항목 선택 모달 */}
+      {ambiguousDialogOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-discord-bg rounded-lg w-full max-w-2xl flex flex-col max-h-[90vh]">
+            <div className="flex-shrink-0 flex items-center justify-between p-6 border-b border-gray-700">
+              <div>
+                <h2 className="text-xl font-bold text-discord-text">
+                  중복된 항목 선택
+                </h2>
+                <p className="text-discord-muted text-sm mt-1">
+                  붙여넣은 값 중 동일한 이름을 가진 항목이 여러 개 있습니다. 원하는 항목을 선택해 주세요.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setAmbiguousDialogOpen(false);
+                  setAmbiguousOptions([]);
+                  setPendingAmbiguousField(null);
+                  setPendingAmbiguousCurrentValues([]);
+                }}
+                className="text-discord-muted hover:text-discord-text"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-6">
+              <div className="space-y-4">
+                {ambiguousOptions.map((option, idx) => (
+                  <div key={option.value} className="space-y-3">
+                    <div className="font-semibold text-discord-text text-lg border-b border-gray-700 pb-2">
+                      {option.value}:
+                    </div>
+                    <div className="grid gap-2">
+                      {option.records.map(record => (
+                        <Button
+                          key={record.id}
+                          variant="outline"
+                          onClick={() => {
+                            if (pendingAmbiguousField?.multiple) {
+                              // 선택한 값을 누적만 함
+                              const newValues = [...new Set([...pendingAmbiguousCurrentValues, record.id])];
+                              setPendingAmbiguousCurrentValues(newValues);
+                              // 다음 ambiguous로 넘어가거나, 모두 끝나면 한 번만 updateFieldValue 호출
+                              const nextOptions = ambiguousOptions.filter((_, i) => i !== idx);
+                              if (nextOptions.length > 0) {
+                                setAmbiguousOptions(nextOptions);
+                              } else {
+                                updateFieldValue(pendingAmbiguousField.id, newValues);
+                                setAmbiguousDialogOpen(false);
+                                setAmbiguousOptions([]);
+                                setPendingAmbiguousField(null);
+                                setPendingAmbiguousCurrentValues([]);
+                              }
+                            } else {
+                              // 단일: id만 저장
+                              updateFieldValue(
+                                pendingAmbiguousField.id,
+                                record.id
+                              );
+                              setAmbiguousDialogOpen(false);
+                              setAmbiguousOptions([]);
+                              setPendingAmbiguousField(null);
+                              setPendingAmbiguousCurrentValues([]);
+                            }
+                          }}
+                          className="justify-start text-left h-auto p-4 bg-discord-dark hover:bg-discord-hover border-gray-600 text-discord-text"
+                        >
+                          <div className="flex flex-col items-start">
+                            <span className="font-medium">{getRelationLabel(record, pendingAmbiguousField!)}</span>
+                            <span className="text-sm text-discord-muted mt-1">
+                              ID: {record.id}
+                            </span>
+                          </div>
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
-          ))}
-          <div className="flex justify-end mt-4">
-            <Button variant="ghost" onClick={() => {
-              setAmbiguousDialogOpen(false);
-              setAmbiguousOptions([]);
-              setPendingAmbiguousField(null);
-              setPendingAmbiguousCurrentValues([]);
-            }}>취소</Button>
+
+            <div className="flex-shrink-0 flex items-center justify-end gap-3 p-6 border-t border-gray-700">
+              <Button 
+                variant="ghost" 
+                onClick={() => {
+                  setAmbiguousDialogOpen(false);
+                  setAmbiguousOptions([]);
+                  setPendingAmbiguousField(null);
+                  setPendingAmbiguousCurrentValues([]);
+                }}
+                className="text-discord-text hover:bg-discord-hover"
+              >
+                취소
+              </Button>
+            </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
     </div>
   );
 };
