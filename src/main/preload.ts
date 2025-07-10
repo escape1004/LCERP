@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { NewCategory, CategoryUpdate, NewRecord, ElectronAPI } from '../types.d';
 
 // API 정의
-const api = {
+const api: ElectronAPI = {
   getTables: () => ipcRenderer.invoke('db:getTables'),
   getTableData: (tableName: string) => ipcRenderer.invoke('db:getTableData', tableName),
   getDbPath: () => ipcRenderer.invoke('db:getPath'),
@@ -28,6 +28,7 @@ const api = {
   getArchiveFiles: (filePath: string) => ipcRenderer.invoke('getArchiveFiles', filePath),
   getArchiveFileDataUrl: (filePath: string, fileName: string) => ipcRenderer.invoke('getArchiveFileDataUrl', filePath, fileName),
   getArchiveFileText: (filePath: string, fileName: string) => ipcRenderer.invoke('getArchiveFileText', filePath, fileName),
+  getArchiveFileStreamInfo: (filePath: string, fileName: string) => ipcRenderer.invoke('getArchiveFileStreamInfo', filePath, fileName),
   getConfig: () => ipcRenderer.invoke('getConfig'),
   openBackupLocation: () => ipcRenderer.invoke('openBackupLocation'),
   backupDatabase: () => ipcRenderer.invoke('backupDatabase'),
@@ -47,12 +48,11 @@ const api = {
   getBookmarks: (categoryId, recordId) => ipcRenderer.invoke('getBookmarks', categoryId, recordId),
   addBookmark: (categoryId, recordId, time) => ipcRenderer.invoke('addBookmark', categoryId, recordId, time),
   removeBookmark: (categoryId, recordId, time) => ipcRenderer.invoke('removeBookmark', categoryId, recordId, time),
-  removeAllBookmarks: (categoryId, recordId) => ipcRenderer.invoke('removeAllBookmarks', categoryId, recordId),
   getThumbnailDataUrlHybrid: (record, filePath) => ipcRenderer.invoke('getThumbnailDataUrlHybrid', record, filePath),
   migrateThumbnailPaths: () => ipcRenderer.invoke('migrateThumbnailPaths'),
   checkThumbnailSync: () => ipcRenderer.invoke('checkThumbnailSync'),
   cleanupThumbnailSync: (options) => ipcRenderer.invoke('cleanupThumbnailSync', options),
-} as ElectronAPI;
+};
 
 // API를 window 객체에 노출
 contextBridge.exposeInMainWorld('electronAPI', api); 

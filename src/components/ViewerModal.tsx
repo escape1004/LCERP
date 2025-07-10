@@ -455,10 +455,21 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
           setCurrentArchiveText(text);
           setCurrentArchiveDataUrl(null);
         } else if (['mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'webm'].includes(fileExt || '')) {
-          // 동영상 파일인 경우
-          const dataUrl = await window.electronAPI.getArchiveFileDataUrl(filePath, currentFile.name);
-          setCurrentArchiveDataUrl(dataUrl);
-          setCurrentArchiveText(null);
+          // 동영상 파일인 경우 - 스트리밍 방식 확인
+          const streamInfo = await window.electronAPI.getArchiveFileStreamInfo(filePath, currentFile.name);
+          
+          if (streamInfo === 'stream') {
+            // 스트리밍 방식 사용
+            const port = (window as any).videoServerPort || 17345;
+            const streamUrl = `http://localhost:${port}/archive-video?archive=${encodeURIComponent(filePath)}&file=${encodeURIComponent(currentFile.name)}`;
+            setCurrentArchiveDataUrl(streamUrl);
+            setCurrentArchiveText(null);
+          } else {
+            // 일반 방식 사용
+            const dataUrl = await window.electronAPI.getArchiveFileDataUrl(filePath, currentFile.name);
+            setCurrentArchiveDataUrl(dataUrl);
+            setCurrentArchiveText(null);
+          }
         } else {
           // 이미지 파일인 경우
           const dataUrl = await window.electronAPI.getArchiveFileDataUrl(filePath, currentFile.name);

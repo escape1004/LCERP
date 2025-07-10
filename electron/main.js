@@ -320,6 +320,117 @@ function startVideoHttpServer() {
         });
         fs.createReadStream(resolvedPath).pipe(res);
       }
+    } else if (urlObj.pathname === '/archive-video') {
+      // 압축파일 내 동영상 스트리밍
+      const archivePath = decodeURIComponent(urlObj.searchParams.get('archive') || '');
+      const fileName = decodeURIComponent(urlObj.searchParams.get('file') || '');
+      
+      if (!archivePath || !fileName) {
+        res.writeHead(400);
+        res.end('Missing parameters');
+        return;
+      }
+      
+      let resolvedArchivePath = archivePath;
+      if (!path.isAbsolute(archivePath)) {
+        resolvedArchivePath = path.join(appDataDir, archivePath);
+      }
+      
+      if (!fs.existsSync(resolvedArchivePath)) {
+        res.writeHead(404);
+        res.end('Archive not found');
+        return;
+      }
+      
+      const fileExt = path.extname(fileName).toLowerCase();
+      const isVideo = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'].includes(fileExt);
+      
+      if (!isVideo) {
+        res.writeHead(400);
+        res.end('Not a video file');
+        return;
+      }
+      
+      const mimeTypes = {
+        '.mp4': 'video/mp4',
+        '.webm': 'video/webm',
+        '.ogg': 'video/ogg',
+        '.avi': 'video/x-msvideo',
+        '.mkv': 'video/x-matroska',
+        '.mov': 'video/quicktime',
+        '.wmv': 'video/x-ms-wmv',
+        '.flv': 'video/x-flv',
+        '.m4v': 'video/x-m4v',
+        '.3gp': 'video/3gpp',
+        '.ts': 'video/mp2t'
+      };
+      const mimeType = mimeTypes[fileExt] || 'application/octet-stream';
+      
+      // unzipper를 사용하여 압축파일 내 동영상 스트리밍
+      const unzipper = require('unzipper');
+      const range = req.headers.range;
+      
+      fs.createReadStream(resolvedArchivePath)
+        .pipe(unzipper.Parse())
+        .on('entry', function (entry) {
+          if (entry.path === fileName && entry.type === 'File') {
+            // 파일 크기 계산을 위해 전체 파일을 메모리에 로드 (개선 필요)
+            const chunks = [];
+            entry.on('data', chunk => chunks.push(chunk));
+            entry.on('end', () => {
+              const buffer = Buffer.concat(chunks);
+              const fileSize = buffer.length;
+              
+              if (range) {
+                const parts = range.replace(/bytes=/, '').split('-');
+                const start = parseInt(parts[0], 10);
+                const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+                const chunkSize = (end - start) + 1;
+                
+                res.writeHead(206, {
+                  'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                  'Accept-Ranges': 'bytes',
+                  'Content-Length': chunkSize,
+                  'Content-Type': mimeType,
+                  'Access-Control-Allow-Origin': '*',
+                  'Access-Control-Allow-Methods': 'GET, HEAD',
+                  'Access-Control-Allow-Headers': 'Range'
+                });
+                
+                res.end(buffer.slice(start, end + 1));
+              } else {
+                res.writeHead(200, {
+                  'Content-Length': fileSize,
+                  'Content-Type': mimeType,
+                  'Accept-Ranges': 'bytes',
+                  'Access-Control-Allow-Origin': '*',
+                  'Access-Control-Allow-Methods': 'GET, HEAD'
+                });
+                
+                res.end(buffer);
+              }
+            });
+            entry.on('error', (err) => {
+              res.writeHead(500);
+              res.end('Error reading file from archive');
+            });
+          } else {
+            entry.autodrain();
+          }
+        })
+        .on('close', () => {
+          // 파일을 찾지 못한 경우
+          if (!res.headersSent) {
+            res.writeHead(404);
+            res.end('File not found in archive');
+          }
+        })
+        .on('error', (err) => {
+          if (!res.headersSent) {
+            res.writeHead(500);
+            res.end('Error reading archive');
+          }
+        });
     } else {
       res.writeHead(404);
       res.end('Not found');
@@ -1465,6 +1576,51 @@ ipcMain.handle('getArchiveFileDataUrl', async (_, filePath, fileName) => {
     });
   } catch (e) {
     log('Error in getArchiveFileDataUrl:', e);
+    return null;
+  }
+});
+
+// getArchiveFileStreamInfo 핸들러 (압축파일 내 동영상 스트리밍 여부 결정)
+ipcMain.handle('getArchiveFileStreamInfo', async (_, filePath, fileName) => {
+  try {
+    if (!fs.existsSync(filePath)) return null;
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext === '.7z') return null;
+    
+    const fileExt = path.extname(fileName).toLowerCase();
+    const isVideo = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'].includes(fileExt);
+    
+    if (!isVideo) return null;
+    
+    // 압축파일 내 동영상 파일 크기 확인
+    return new Promise((resolve, reject) => {
+      fs.createReadStream(filePath)
+        .pipe(unzipper.Parse())
+        .on('entry', function (entry) {
+          if (entry.path === fileName && entry.type === 'File') {
+            const fileSizeInMB = entry.vars.uncompressedSize / (1024 * 1024);
+            
+            // 50MB 이상인 경우 스트리밍 방식 사용
+            if (fileSizeInMB > 50) {
+              log('압축파일 내 대용량 동영상 감지, 스트리밍 방식 사용:', { 
+                archivePath: filePath, 
+                fileName, 
+                sizeMB: fileSizeInMB 
+              });
+              resolve('stream'); // 스트리밍 방식 사용을 나타내는 특별한 값
+            } else {
+              resolve(null); // 일반 방식 사용
+            }
+            entry.autodrain();
+          } else {
+            entry.autodrain();
+          }
+        })
+        .on('close', () => resolve(null))
+        .on('error', reject);
+    });
+  } catch (e) {
+    log('Error in getArchiveFileStreamInfo:', e);
     return null;
   }
 });

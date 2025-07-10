@@ -49,6 +49,7 @@ const api: ElectronAPI = {
   getVideoStream: (filePath: string) => ipcRenderer.invoke('getVideoStream', filePath),
   getArchiveFiles: (filePath: string) => ipcRenderer.invoke('getArchiveFiles', filePath),
   getArchiveFileDataUrl: (filePath: string, fileName: string) => ipcRenderer.invoke('getArchiveFileDataUrl', filePath, fileName),
+  getArchiveFileStreamInfo: (filePath: string, fileName: string) => ipcRenderer.invoke('getArchiveFileStreamInfo', filePath, fileName),
   getArchiveFileText: (filePath: string, fileName: string) => ipcRenderer.invoke('getArchiveFileText', filePath, fileName),
   getFileType: (filePath: string) => ipcRenderer.invoke('db:getFileType', filePath),
   getVideoServerPort: () => ipcRenderer.invoke('getVideoServerPort'),
@@ -63,6 +64,8 @@ const api: ElectronAPI = {
   addBookmark: (categoryId: string, recordId: string, time: number) => ipcRenderer.invoke('addBookmark', categoryId, recordId, time),
   removeBookmark: (categoryId: string, recordId: string, time: number) => ipcRenderer.invoke('removeBookmark', categoryId, recordId, time),
   migrateThumbnailPaths: () => ipcRenderer.invoke('migrateThumbnailPaths'),
+  checkThumbnailSync: () => ipcRenderer.invoke('checkThumbnailSync'),
+  cleanupThumbnailSync: (options?: any) => ipcRenderer.invoke('cleanupThumbnailSync', options),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api); 
