@@ -521,6 +521,7 @@ export const MainContent: React.FC = () => {
     setCurrentPage(1); // Reset pagination when category changes
     setSortField(''); // Reset sort field when category changes
     setSortDirection('asc'); // Reset sort direction when category changes
+    scrollTableToTop(); // Reset scroll position when category changes
   }, [selectedCategoryId, setCurrentPage]);
 
   // Reset pagination to page 1 when search term changes

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Download, Edit, Eye, Filter, Plus, Search, Trash2, X } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { Button } from './ui/button';
@@ -51,6 +51,14 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
   const [isPageInputMode, setIsPageInputMode] = useState(false);
   const [pageInputValue, setPageInputValue] = useState('');
 
+  // 테이블 컨테이너 ref 선언
+  const tableContainerRef = useRef<HTMLDivElement | null>(null);
+  const scrollTableToTop = () => {
+    if (tableContainerRef.current) {
+      tableContainerRef.current.scrollTop = 0;
+    }
+  };
+
   const isEmpty = (v: any): boolean => {
     // null, undefined 체크
     if (v === null || v === undefined) return true;
@@ -84,9 +92,10 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
     return false;
   };
 
-  // Reset pagination when category changes
+  // Reset pagination and scroll when category changes
   useEffect(() => {
     setCurrentPage(1);
+    scrollTableToTop(); // Reset scroll position when category changes
   }, [categoryId, setCurrentPage]);
 
   const getRecordReferenceCount = useCallback((recordId: string, categoryId: string): number => {
@@ -597,6 +606,7 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
     const pageNumber = parseInt(pageInputValue);
     if (pageNumber >= 1 && pageNumber <= totalPages) {
       setCurrentPage(pageNumber);
+      scrollTableToTop();
     }
     setIsPageInputMode(false);
     setPageInputValue('');
@@ -725,7 +735,7 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
         ) : (
           <div className="h-full flex flex-col">
             {/* Table */}
-            <div className="flex-1 overflow-auto discord-scrollbar">
+            <div className="flex-1 overflow-auto discord-scrollbar" ref={tableContainerRef}>
               <table className="w-full">
                 <thead className="sticky top-0 bg-discord-sidebar border-b border-gray-700">
                   <tr>
@@ -840,7 +850,10 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => setCurrentPage(currentPage - 1)}
+                  onClick={() => {
+                    setCurrentPage(currentPage - 1);
+                    scrollTableToTop();
+                  }}
                   disabled={currentPage === 1}
                   className="border-gray-600 hover:bg-discord-hover"
                 >
@@ -872,7 +885,10 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => setCurrentPage(currentPage + 1)}
+                  onClick={() => {
+                    setCurrentPage(currentPage + 1);
+                    scrollTableToTop();
+                  }}
                   disabled={currentPage >= totalPages}
                   className="border-gray-600 hover:bg-discord-hover"
                 >
