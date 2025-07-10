@@ -452,8 +452,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
           </span>
         );
       
-      case 'text':
-      case 'longtext': {
+      case 'text': {
         const strValue = String(value);
         const { hashtags, plainText } = parseHashtags(strValue);
         
@@ -473,6 +472,41 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                 toast({ 
                   title: '복사 완료', 
                   description: '텍스트가 클립보드에 복사되었습니다.' 
+                });
+              } catch (error) {
+                toast({ 
+                  title: '복사 실패', 
+                  description: '클립보드 복사에 실패했습니다.', 
+                  variant: 'destructive' 
+                });
+              }
+            }}
+          >
+            {renderTextWithHashtags(strValue)}
+          </div>
+        );
+      }
+      
+      case 'longtext': {
+        const strValue = String(value);
+        const { hashtags, plainText } = parseHashtags(strValue);
+        
+        // URL 자동 감지 및 렌더링
+        if (urlPattern.test(strValue)) {
+          return renderUrl(strValue);
+        }
+        
+        return (
+          <div 
+            className="whitespace-pre-wrap text-discord-text break-words overflow-wrap-anywhere px-3 py-2 rounded transition-colors border border-gray-600 max-h-[240px] overflow-y-auto" 
+            title={`${strValue} (클릭하여 복사)`}
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                await navigator.clipboard.writeText(strValue);
+                toast({ 
+                  title: '복사 완료', 
+                  description: '긴 텍스트가 클립보드에 복사되었습니다.' 
                 });
               } catch (error) {
                 toast({ 

@@ -150,6 +150,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
   
   switch (field.type) {
     case 'text':
+    case 'longtext':
       if (typeof value === 'string' && urlPattern.test(value)) {
         return renderUrl(value);
       }

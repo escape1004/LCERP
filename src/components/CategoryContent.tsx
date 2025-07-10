@@ -496,10 +496,8 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
         return String(value);
       
       case 'text':
-      case 'longtext': {
-        const strValue = String(value);
-        return strValue;
-      }
+      case 'longtext':
+        return String(value);
       
       case 'date': {
         const dateValue = typeof value === 'string' && /^\d{4}-\d{2}$/.test(value)

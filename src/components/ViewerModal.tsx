@@ -427,7 +427,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       setFileNotFound(false);
       const files = await window.electronAPI.getArchiveFiles(filePath);
       const supportedFiles = files.filter(file => 
-        !file.isDirectory && /\.(jpg|jpeg|png|gif|webp|txt|mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(file.name)
+        !file.isDirectory && /\.(jpg|jpeg|png|gif|webp|mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(file.name)
       ).sort((a, b) => a.name.localeCompare(b.name));
       
       setArchiveFiles(supportedFiles);
