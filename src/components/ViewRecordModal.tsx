@@ -273,8 +273,8 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
               {url}
             </button>
           </TooltipTrigger>
-          <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
-            {`${url} (클릭하여 복사)`}
+          <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+            복사하기
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -289,7 +289,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
               <ExternalLink size={16} />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+          <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
             외부 브라우저에서 열기
           </TooltipContent>
         </Tooltip>
@@ -386,7 +386,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                       onClick={() => handleThumbnailClick(value)}
                     />
                   </TooltipTrigger>
-                  <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                  <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
                     썸네일 클릭 시 뷰어 모달 열기
                   </TooltipContent>
                 </Tooltip>
@@ -412,8 +412,8 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                     {value}
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
-                  경로 복사
+                <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+                  복사하기
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -440,8 +440,8 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                 {value}
               </button>
             </TooltipTrigger>
-            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
-              경로 복사
+            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+              복사하기
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -488,8 +488,8 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                   {String(value)}
                 </span>
               </TooltipTrigger>
-              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
-                {`${String(value)} (클릭하여 복사)`}
+              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+                복사하기
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -509,7 +509,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
             <Tooltip>
               <TooltipTrigger asChild>
                 <div 
-                  className="whitespace-pre-wrap text-discord-text break-words overflow-wrap-anywhere px-1 py-0.5 rounded transition-colors" 
+                  className="whitespace-pre-wrap text-discord-text break-words overflow-wrap-anywhere px-1 py-0.5 rounded transition-colors inline-block" 
                   onClick={async (e) => {
                     e.stopPropagation();
                     try {
@@ -530,8 +530,8 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                   {renderTextWithHashtags(strValue)}
                 </div>
               </TooltipTrigger>
-              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
-                {`${strValue} (클릭하여 복사)`}
+              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+                복사하기
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -552,7 +552,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
             <Tooltip>
               <TooltipTrigger asChild>
                 <div 
-                  className="whitespace-pre-wrap text-discord-text break-words overflow-wrap-anywhere px-3 py-2 rounded transition-colors border border-gray-600 max-h-[240px] overflow-y-auto" 
+                  className="whitespace-pre-wrap text-discord-text break-words overflow-wrap-anywhere px-3 py-2 rounded transition-colors border border-gray-600 max-h-[240px] overflow-y-auto inline-block" 
                   onClick={async (e) => {
                     e.stopPropagation();
                     try {
@@ -573,8 +573,8 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                   {renderTextWithHashtags(strValue)}
                 </div>
               </TooltipTrigger>
-              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
-                {`${strValue} (클릭하여 복사)`}
+              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+                복사하기
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -612,8 +612,8 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                   {dateValue}
                 </span>
               </TooltipTrigger>
-              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
-                {`${dateValue} (클릭하여 복사)`}
+              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+                복사하기
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -657,9 +657,9 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                     ))}
                   </div>
                 </TooltipTrigger>
-                <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
-                {`${String(value)} (클릭하여 복사)`}
-              </TooltipContent>
+                <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+                  복사하기
+                </TooltipContent>
             </Tooltip>
           </TooltipProvider>
         );
@@ -690,8 +690,8 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                   {String(value)}
                 </span>
               </TooltipTrigger>
-              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
-                {`${String(value)} (클릭하여 복사)`}
+              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+                복사하기
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -736,9 +736,9 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                     })}
                   </div>
                 </TooltipTrigger>
-                <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
-                {`${String(value)} (클릭하여 복사)`}
-              </TooltipContent>
+                <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+                  복사하기
+                </TooltipContent>
             </Tooltip>
           </TooltipProvider>
         );
@@ -763,7 +763,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                       {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
                     </span>
                   </TooltipTrigger>
-                  <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                  <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
                     상세 보기
                   </TooltipContent>
                 </Tooltip>
@@ -802,8 +802,8 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                   {String(value)}
                 </span>
               </TooltipTrigger>
-              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
-                {`${String(value)} (클릭하여 복사)`}
+              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+                복사하기
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -925,7 +925,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                   onClick={() => canOpenFile && handleThumbnailClick(filePath)}
                 />
               </TooltipTrigger>
-              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
                 썸네일 클릭 시 뷰어 모달 열기
               </TooltipContent>
             </Tooltip>
@@ -1017,7 +1017,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                     {regenLoading ? '재생성 중...' : '썸네일 재생성'}
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
                   썸네일 재생성
                 </TooltipContent>
               </Tooltip>
@@ -1105,8 +1105,8 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                               {record.data[field.id]}
                             </button>
                           </TooltipTrigger>
-                          <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
-                            경로 복사
+                          <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+                            복사하기
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
@@ -1157,43 +1157,25 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         <div className="flex-shrink-0 flex items-center justify-end p-6 border-t border-gray-700">
           {canOpenFile && (
             <>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="mr-2 hover:bg-discord-hover cursor-pointer"
-                      onClick={async () => {
-                        try {
-                          await window.electronAPI.openFile(filePath);
-                        } catch (e) {
-                          // TODO: 에러 안내
-                        }
-                      }}
-                      disabled={!canOpenFile}
-                    >
-                      원본 파일 열기
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
-                    원본 파일 열기
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <Button
+                variant="outline"
+                className="mr-2 hover:bg-discord-hover cursor-pointer"
+                onClick={async () => {
+                  try {
+                    await window.electronAPI.openFile(filePath);
+                  } catch (e) {
+                    // TODO: 에러 안내
+                  }
+                }}
+                disabled={!canOpenFile}
+              >
+                원본 파일 열기
+              </Button>
             </>
           )}
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button onClick={onClose} className="bg-discord-accent hover:bg-blue-600">
-                  닫기
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
-                닫기
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <Button onClick={onClose} className="bg-discord-accent hover:bg-blue-600">
+            닫기
+          </Button>
         </div>
       </div>
       {viewerModalOpen && (

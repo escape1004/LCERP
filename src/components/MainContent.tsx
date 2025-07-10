@@ -104,7 +104,9 @@ const renderUrl = (url: string) => (
             {url}
           </span>
         </TooltipTrigger>
-        <TooltipContent side="top" align="center">{`${url} (클릭하여 복사)`}</TooltipContent>
+        <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+            {`${url} (클릭하여 복사)`}
+          </TooltipContent>
       </Tooltip>
     </TooltipProvider>
     <TooltipProvider>
@@ -140,7 +142,9 @@ const renderUrl = (url: string) => (
             <ExternalLink size={16} />
           </button>
         </TooltipTrigger>
-        <TooltipContent side="top" align="center">외부 브라우저에서 열기</TooltipContent>
+        <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+          외부 브라우저에서 열기
+        </TooltipContent>
       </Tooltip>
     </TooltipProvider>
   </div>
@@ -192,8 +196,8 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
                 {typeof value === 'string' ? renderTextWithHashtags(value) : String(value)}
               </span>
             </TooltipTrigger>
-            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
-              복사: {String(value)}
+            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+              복사하기
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -226,8 +230,8 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
                 {String(value)}
               </span>
             </TooltipTrigger>
-            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
-              복사: {String(value)}
+            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+              복사하기
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -273,7 +277,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
                           {displayField ? relatedRecord.data[displayField.id] : relatedRecord.id}
                         </span>
                       </TooltipTrigger>
-                      <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                      <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
                         상세 보기
                       </TooltipContent>
                     </Tooltip>
@@ -295,7 +299,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
                         {isExpanded ? "접기" : `+${value.length - maxVisible}개 더보기`}
                       </button>
                     </TooltipTrigger>
-                    <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                    <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
                       더보기
                     </TooltipContent>
                   </Tooltip>
@@ -324,7 +328,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
                     {displayField ? relatedRecord.data[displayField.id] : relatedRecord.id}
                   </span>
                 </TooltipTrigger>
-                <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
                   상세 보기
                 </TooltipContent>
               </Tooltip>
@@ -375,8 +379,8 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
                         {String(item)}
                       </span>
                     </TooltipTrigger>
-                    <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
-                      복사: {String(item)}
+                    <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+                      복사하기
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -396,7 +400,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
                         {isExpanded ? "접기" : `+${value.length - maxVisible}개 더보기`}
                       </button>
                     </TooltipTrigger>
-                    <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                    <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
                       더보기
                     </TooltipContent>
                   </Tooltip>
@@ -435,8 +439,8 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
                 {typeof value === 'string' ? renderTextWithHashtags(value) : String(value)}
               </span>
             </TooltipTrigger>
-            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
-              복사: {String(value)}
+            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+              복사하기
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -533,7 +537,7 @@ const ThumbnailCell: React.FC<{
             )}
           </div>
         </TooltipTrigger>
-        <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+        <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
           썸네일 클릭 시 뷰어 모달 열기
         </TooltipContent>
       </Tooltip>
