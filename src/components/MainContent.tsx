@@ -790,40 +790,6 @@ export const MainContent: React.FC = () => {
     }
   };
 
-  // Ctrl+좌우 방향키 페이지 이동 핸들러
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'F5' && selectedCategoryId) {
-        e.preventDefault();
-        showLoading('데이터 새로고침 중...', 30000, true); // 30초 타임아웃, 취소 버튼 표시
-        loadRecords(selectedCategoryId).finally(() => {
-          hideLoading();
-          toast({
-            title: "새로고침 완료",
-            description: "레코드 목록이 새로고침되었습니다.",
-          });
-        });
-      } else if (e.ctrlKey && e.key === 'f') {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      } else if (e.ctrlKey && e.key === 'ArrowRight') {
-        if (currentPage < totalPages) {
-          setCurrentPage(currentPage + 1);
-          scrollTableToTop();
-        }
-      } else if (e.ctrlKey && e.key === 'ArrowLeft') {
-        if (currentPage > 1) {
-          setCurrentPage(currentPage - 1);
-          scrollTableToTop();
-        }
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [selectedCategoryId, loadRecords, currentPage, totalPages, showLoading, hideLoading]);
-
   // 썸네일 생성/삭제 시 레코드 리스트 강제 리로드
   useEffect(() => {
     const handler = () => {
@@ -869,6 +835,82 @@ export const MainContent: React.FC = () => {
   const [viewerFileType, setViewerFileType] = useState<'image' | 'video' | 'archive' | null>(null);
   const [viewerCategoryId, setViewerCategoryId] = useState<string>('');
   const [viewerRecordId, setViewerRecordId] = useState<string>('');
+
+  // Ctrl+좌우 방향키 페이지 이동 핸들러
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 모달이 열려있으면 단축키 비활성화
+      if (isRecordModalOpen || isViewModalOpen || viewerModalOpen || isConfirmDialogOpen || isAlertDialogOpen) {
+        return;
+      }
+
+      if (e.key === 'F5' && selectedCategoryId) {
+        e.preventDefault();
+        showLoading('데이터 새로고침 중...', 30000, true); // 30초 타임아웃, 취소 버튼 표시
+        loadRecords(selectedCategoryId).finally(() => {
+          hideLoading();
+          toast({
+            title: "새로고침 완료",
+            description: "레코드 목록이 새로고침되었습니다.",
+          });
+        });
+      } else if (e.ctrlKey && e.key === 'f') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.ctrlKey && e.key === 'n') {
+        e.preventDefault();
+        if (selectedCategoryId) {
+          setEditingRecord(null);
+          setIsRecordModalOpen(true);
+        }
+      } else if (e.ctrlKey && e.key === 'ArrowRight') {
+        if (currentPage < totalPages) {
+          setCurrentPage(currentPage + 1);
+          scrollTableToTop();
+        }
+      } else if (e.ctrlKey && e.key === 'ArrowLeft') {
+        if (currentPage > 1) {
+          setCurrentPage(currentPage - 1);
+          scrollTableToTop();
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedCategoryId, loadRecords, currentPage, totalPages, showLoading, hideLoading, isRecordModalOpen, isViewModalOpen, viewerModalOpen, isConfirmDialogOpen, isAlertDialogOpen]);
+
+  // Ctrl+마우스 휠 페이지 이동 핸들러
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      // 모달이 열려있으면 단축키 비활성화
+      if (isRecordModalOpen || isViewModalOpen || viewerModalOpen || isConfirmDialogOpen || isAlertDialogOpen) {
+        return;
+      }
+
+      if (e.ctrlKey && selectedCategoryId) {
+        e.preventDefault();
+        if (e.deltaY > 0) {
+          // 아래로 스크롤 (다음 페이지)
+          if (currentPage < totalPages) {
+            setCurrentPage(currentPage + 1);
+            scrollTableToTop();
+          }
+        } else if (e.deltaY < 0) {
+          // 위로 스크롤 (이전 페이지)
+          if (currentPage > 1) {
+            setCurrentPage(currentPage - 1);
+            scrollTableToTop();
+          }
+        }
+      }
+    };
+    document.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      document.removeEventListener('wheel', handleWheel);
+    };
+  }, [selectedCategoryId, currentPage, totalPages, isRecordModalOpen, isViewModalOpen, viewerModalOpen, isConfirmDialogOpen, isAlertDialogOpen]);
 
   const handleSort = (fieldId: string) => {
     if (sortField === fieldId) {

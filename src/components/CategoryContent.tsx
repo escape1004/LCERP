@@ -98,6 +98,28 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
     scrollTableToTop(); // Reset scroll position when category changes
   }, [categoryId, setCurrentPage]);
 
+  // 키보드 단축키 핸들러
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 모달이 열려있으면 단축키 비활성화
+      if (isRecordModalOpen || isViewModalOpen || isConfirmDialogOpen || isAlertDialogOpen) {
+        return;
+      }
+
+      if (e.ctrlKey && e.key === 'n') {
+        e.preventDefault();
+        if (categoryId) {
+          setEditingRecord(null);
+          setIsRecordModalOpen(true);
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [categoryId, isRecordModalOpen, isViewModalOpen, isConfirmDialogOpen, isAlertDialogOpen]);
+
   const getRecordReferenceCount = useCallback((recordId: string, categoryId: string): number => {
     let count = 0;
     
@@ -369,6 +391,37 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
   const totalPages = Math.ceil(sortedRecords.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedRecords = sortedRecords.slice(startIndex, startIndex + itemsPerPage);
+
+  // Ctrl+마우스 휠 페이지 이동 핸들러
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      // 모달이 열려있으면 단축키 비활성화
+      if (isRecordModalOpen || isViewModalOpen || isConfirmDialogOpen || isAlertDialogOpen) {
+        return;
+      }
+
+      if (e.ctrlKey && categoryId) {
+        e.preventDefault();
+        if (e.deltaY > 0) {
+          // 아래로 스크롤 (다음 페이지)
+          if (currentPage < totalPages) {
+            setCurrentPage(currentPage + 1);
+            scrollTableToTop();
+          }
+        } else if (e.deltaY < 0) {
+          // 위로 스크롤 (이전 페이지)
+          if (currentPage > 1) {
+            setCurrentPage(currentPage - 1);
+            scrollTableToTop();
+          }
+        }
+      }
+    };
+    document.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      document.removeEventListener('wheel', handleWheel);
+    };
+  }, [categoryId, currentPage, totalPages, isRecordModalOpen, isViewModalOpen, isConfirmDialogOpen, isAlertDialogOpen]);
 
   const handleSort = (fieldId: string) => {
     if (sortField === fieldId) {
