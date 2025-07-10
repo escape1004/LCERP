@@ -79,58 +79,70 @@ const renderTextWithHashtags = (text: string) => {
 // URL 렌더링 함수
 const renderUrl = (url: string) => (
   <div className="flex items-center gap-2">
-    <span
-      className="text-discord-accent px-1 py-0.5 rounded transition-colors truncate flex-1"
-      title={`${url} (클릭하여 복사)`}
-      onClick={async (e) => {
-        e.stopPropagation();
-        try {
-          await navigator.clipboard.writeText(url);
-          toast({ 
-            title: '복사 완료', 
-            description: 'URL이 클립보드에 복사되었습니다.' 
-          });
-        } catch (error) {
-          toast({ 
-            title: '복사 실패', 
-            description: '클립보드 복사에 실패했습니다.', 
-            variant: 'destructive' 
-          });
-        }
-      }}
-    >
-      {url}
-    </span>
-    <button
-      type="button"
-      onClick={async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('Attempting to open URL:', url);
-        try {
-          const result = await window.electronAPI.openExternal(url);
-          if (!result.success) {
-            console.error('Failed to open URL:', result.error);
-            toast({ 
-              title: '링크 열기 실패', 
-              description: '외부 브라우저에서 링크를 열 수 없습니다.', 
-              variant: 'destructive' 
-            });
-          }
-        } catch (error) {
-          console.error('Error opening URL:', error);
-          toast({ 
-            title: '링크 열기 실패', 
-            description: '외부 브라우저에서 링크를 열 수 없습니다.', 
-            variant: 'destructive' 
-          });
-        }
-      }}
-      className="text-discord-accent hover:text-blue-400 flex-shrink-0"
-      title="외부 브라우저에서 열기"
-    >
-      <ExternalLink size={16} />
-    </button>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            className="text-discord-accent px-1 py-0.5 rounded transition-colors truncate flex-1 cursor-pointer"
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                await navigator.clipboard.writeText(url);
+                toast({ 
+                  title: '복사 완료', 
+                  description: 'URL이 클립보드에 복사되었습니다.' 
+                });
+              } catch (error) {
+                toast({ 
+                  title: '복사 실패', 
+                  description: '클립보드 복사에 실패했습니다.', 
+                  variant: 'destructive' 
+                });
+              }
+            }}
+          >
+            {url}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" align="center">{`${url} (클릭하여 복사)`}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log('Attempting to open URL:', url);
+              try {
+                const result = await window.electronAPI.openExternal(url);
+                if (!result.success) {
+                  console.error('Failed to open URL:', result.error);
+                  toast({ 
+                    title: '링크 열기 실패', 
+                    description: '외부 브라우저에서 링크를 열 수 없습니다.', 
+                    variant: 'destructive' 
+                  });
+                }
+              } catch (error) {
+                console.error('Error opening URL:', error);
+                toast({ 
+                  title: '링크 열기 실패', 
+                  description: '외부 브라우저에서 링크를 열 수 없습니다.', 
+                  variant: 'destructive' 
+                });
+              }
+            }}
+            className="text-discord-accent hover:text-blue-400 flex-shrink-0"
+          >
+            <ExternalLink size={16} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" align="center">외부 브라우저에서 열기</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   </div>
 );
 
@@ -155,54 +167,70 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
         return renderUrl(value);
       }
       return (
-        <span 
-          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block" 
-          title={`${String(value)} (클릭하여 복사)`}
-          onClick={async (e) => {
-            e.stopPropagation();
-            try {
-              await navigator.clipboard.writeText(String(value));
-              toast({ 
-                title: '복사 완료', 
-                description: '값이 클립보드에 복사되었습니다.' 
-              });
-            } catch (error) {
-              toast({ 
-                title: '복사 실패', 
-                description: '클립보드 복사에 실패했습니다.', 
-                variant: 'destructive' 
-              });
-            }
-          }}
-        >
-          {typeof value === 'string' ? renderTextWithHashtags(value) : String(value)}
-        </span>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span 
+                className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block cursor-pointer" 
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  try {
+                    await navigator.clipboard.writeText(String(value));
+                    toast({ 
+                      title: '복사 완료', 
+                      description: '값이 클립보드에 복사되었습니다.' 
+                    });
+                  } catch (error) {
+                    toast({ 
+                      title: '복사 실패', 
+                      description: '클립보드 복사에 실패했습니다.', 
+                      variant: 'destructive' 
+                    });
+                  }
+                }}
+              >
+                {typeof value === 'string' ? renderTextWithHashtags(value) : String(value)}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+              복사: {String(value)}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       );
     
     case 'number':
       return (
-        <span 
-          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block" 
-          title={`${String(value)} (클릭하여 복사)`}
-          onClick={async (e) => {
-            e.stopPropagation();
-            try {
-              await navigator.clipboard.writeText(String(value));
-              toast({ 
-                title: '복사 완료', 
-                description: '숫자가 클립보드에 복사되었습니다.' 
-              });
-            } catch (error) {
-              toast({ 
-                title: '복사 실패', 
-                description: '클립보드 복사에 실패했습니다.', 
-                variant: 'destructive' 
-              });
-            }
-          }}
-        >
-          {String(value)}
-        </span>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span 
+                className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block cursor-pointer" 
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  try {
+                    await navigator.clipboard.writeText(String(value));
+                    toast({ 
+                      title: '복사 완료', 
+                      description: '숫자가 클립보드에 복사되었습니다.' 
+                    });
+                  } catch (error) {
+                    toast({ 
+                      title: '복사 실패', 
+                      description: '클립보드 복사에 실패했습니다.', 
+                      variant: 'destructive' 
+                    });
+                  }
+                }}
+              >
+                {String(value)}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+              복사: {String(value)}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       );
     
     case 'checkbox':
@@ -230,33 +258,48 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
                 const relatedRecord = relatedRecords.find(r => r.id === relatedId);
                 if (!relatedRecord) return null;
                 return (
-                  <span
-                    key={relatedId}
-                    className="px-2 py-1 text-xs rounded bg-green-600/20 text-green-500 cursor-pointer hover:bg-green-600/30"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (onViewRelatedRecord) {
-                        onViewRelatedRecord(relatedRecord, relatedCategory);
-                      }
-                    }}
-                    title="상세 보기"
-                  >
-                    {displayField ? relatedRecord.data[displayField.id] : relatedRecord.id}
-                  </span>
+                  <TooltipProvider key={relatedId}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span
+                          className="px-2 py-1 text-xs rounded bg-green-600/20 text-green-500 cursor-pointer hover:bg-green-600/30"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onViewRelatedRecord) {
+                              onViewRelatedRecord(relatedRecord, relatedCategory);
+                            }
+                          }}
+                        >
+                          {displayField ? relatedRecord.data[displayField.id] : relatedRecord.id}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                        상세 보기
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 );
               })}
               {hasMore && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsExpanded(!isExpanded);
-                  }}
-                  className="px-2 py-1 text-xs rounded bg-gray-600/20 text-gray-400 hover:bg-gray-600/30 cursor-pointer"
-                  title={isExpanded ? "접기" : "더보기"}
-                >
-                  {isExpanded ? "접기" : `+${value.length - maxVisible}개 더보기`}
-                </button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsExpanded(!isExpanded);
+                        }}
+                        className="px-2 py-1 text-xs rounded bg-gray-600/20 text-gray-400 hover:bg-gray-600/30 cursor-pointer"
+                      >
+                        {isExpanded ? "접기" : `+${value.length - maxVisible}개 더보기`}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                      더보기
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               )}
             </div>
           );
@@ -266,18 +309,26 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
         const relatedRecord = relatedRecords.find(r => r.id === value);
         return relatedRecord 
           ? (
-            <span
-              className="text-green-500 hover:underline cursor-pointer truncate block"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (onViewRelatedRecord) {
-                  onViewRelatedRecord(relatedRecord, relatedCategory);
-                }
-              }}
-              title="상세 보기"
-            >
-              {displayField ? relatedRecord.data[displayField.id] : relatedRecord.id}
-            </span>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className="text-green-500 hover:underline cursor-pointer truncate block"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onViewRelatedRecord) {
+                        onViewRelatedRecord(relatedRecord, relatedCategory);
+                      }
+                    }}
+                  >
+                    {displayField ? relatedRecord.data[displayField.id] : relatedRecord.id}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                  상세 보기
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )
           : <span className="truncate block">{String(value)}</span>;
       }
@@ -299,42 +350,57 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
           return (
             <div className="flex flex-wrap gap-1">
               {visibleItems.map((item, index) => (
-                <span
-                  key={index}
-                  className="px-2 py-1 text-xs rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/30"
-                  title={`${String(item)} (클릭하여 복사)`}
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    try {
-                      await navigator.clipboard.writeText(String(item));
-                      toast({ 
-                        title: '복사 완료', 
-                        description: '값이 클립보드에 복사되었습니다.' 
-                      });
-                    } catch (error) {
-                      toast({ 
-                        title: '복사 실패', 
-                        description: '클립보드 복사에 실패했습니다.', 
-                        variant: 'destructive' 
-                      });
-                    }
-                  }}
-                >
-                  {String(item)}
-                </span>
+                <TooltipProvider key={index}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span
+                        className="px-2 py-1 text-xs rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/30"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            await navigator.clipboard.writeText(String(item));
+                            toast({ 
+                              title: '복사 완료', 
+                              description: '값이 클립보드에 복사되었습니다.' 
+                            });
+                          } catch (error) {
+                            toast({ 
+                              title: '복사 실패', 
+                              description: '클립보드 복사에 실패했습니다.', 
+                              variant: 'destructive' 
+                            });
+                          }
+                        }}
+                      >
+                        {String(item)}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                      복사: {String(item)}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               ))}
               {hasMore && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsExpanded(!isExpanded);
-                  }}
-                  className="px-2 py-1 text-xs rounded bg-gray-600/20 text-gray-400 hover:bg-gray-600/30 cursor-pointer"
-                  title={isExpanded ? "접기" : "더보기"}
-                >
-                  {isExpanded ? "접기" : `+${value.length - maxVisible}개 더보기`}
-                </button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsExpanded(!isExpanded);
+                        }}
+                        className="px-2 py-1 text-xs rounded bg-gray-600/20 text-gray-400 hover:bg-gray-600/30 cursor-pointer"
+                      >
+                        {isExpanded ? "접기" : `+${value.length - maxVisible}개 더보기`}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                      더보기
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               )}
             </div>
           );
@@ -344,28 +410,36 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
       }
       
       return (
-        <span 
-          className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block" 
-          title={`${String(value)} (클릭하여 복사)`}
-          onClick={async (e) => {
-            e.stopPropagation();
-            try {
-              await navigator.clipboard.writeText(String(value));
-              toast({ 
-                title: '복사 완료', 
-                description: '값이 클립보드에 복사되었습니다.' 
-              });
-            } catch (error) {
-              toast({ 
-                title: '복사 실패', 
-                description: '클립보드 복사에 실패했습니다.', 
-                variant: 'destructive' 
-              });
-            }
-          }}
-        >
-          {typeof value === 'string' ? renderTextWithHashtags(value) : String(value)}
-        </span>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span 
+                className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block cursor-pointer" 
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  try {
+                    await navigator.clipboard.writeText(String(value));
+                    toast({ 
+                      title: '복사 완료', 
+                      description: '값이 클립보드에 복사되었습니다.' 
+                    });
+                  } catch (error) {
+                    toast({ 
+                      title: '복사 실패', 
+                      description: '클립보드 복사에 실패했습니다.', 
+                      variant: 'destructive' 
+                    });
+                  }
+                }}
+              >
+                {typeof value === 'string' ? renderTextWithHashtags(value) : String(value)}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+              복사: {String(value)}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       );
   }
 };
@@ -428,34 +502,42 @@ const ThumbnailCell: React.FC<{
   const isHashBased = record && !record.thumbnailPath;
 
   return (
-    <div className="relative w-24 h-24">
-      {dataUrl ? (
-        <>
-          <img 
-            src={dataUrl} 
-            alt="썸네일" 
-            className="w-24 h-24 object-contain rounded border border-gray-700 cursor-pointer hover:opacity-80"
-            onClick={() => filePath && onThumbnailClick(filePath)}
-            title="썸네일 클릭 시 뷰어 모달 열기"
-          />
-          {isHashBased && (
-            <div className="absolute top-1 left-1 z-10">
-              <RefreshCw size={16} className="text-[#5865F2] drop-shadow-[0_1px_4px_rgba(0,0,0,0.7)]" />
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="w-24 h-24 bg-gray-800 flex items-center justify-center text-gray-500 border border-gray-700 rounded">
-          <span className="text-2xl">🖼️</span>
-        </div>
-      )}
-      {/* 파일 확장자 표시 */}
-      {filePath && (
-        <div className="absolute bottom-1 right-1 bg-black bg-opacity-70 text-white text-xs px-1 py-0.5 rounded">
-          {getFileExtension(filePath)}
-        </div>
-      )}
-    </div>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="relative w-24 h-24">
+            {dataUrl ? (
+              <>
+                <img 
+                  src={dataUrl} 
+                  alt="썸네일" 
+                  className="w-24 h-24 object-contain rounded border border-gray-700 cursor-pointer hover:opacity-80"
+                  onClick={() => filePath && onThumbnailClick(filePath)}
+                />
+                {isHashBased && (
+                  <div className="absolute top-1 left-1 z-10">
+                    <RefreshCw size={16} className="text-[#5865F2] drop-shadow-[0_1px_4px_rgba(0,0,0,0.7)]" />
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="w-24 h-24 bg-gray-800 flex items-center justify-center text-gray-500 border border-gray-700 rounded">
+                <span className="text-2xl">🖼️</span>
+              </div>
+            )}
+            {/* 파일 확장자 표시 */}
+            {filePath && (
+              <div className="absolute bottom-1 right-1 bg-black bg-opacity-70 text-white text-xs px-1 py-0.5 rounded">
+                {getFileExtension(filePath)}
+              </div>
+            )}
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+          썸네일 클릭 시 뷰어 모달 열기
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 };
 

@@ -8,6 +8,7 @@ import { toast } from './ui/use-toast';
 import { ViewerModal } from './ViewerModal';
 import { TimeInput } from './TimeInput';
 import { format } from "date-fns";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./ui/tooltip";
 
 // 해시태그 파싱 유틸리티 함수
 const parseHashtags = (text: string): { hashtags: string[]; plainText: string } => {
@@ -246,37 +247,53 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
 
   const renderUrl = (url: string) => (
     <div className="flex items-center gap-2">
-      <button
-        type="button"
-        className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all text-left truncate"
-        title={`${url} (클릭하여 복사)`}
-        onClick={async (e) => {
-          e.stopPropagation();
-          try {
-            await navigator.clipboard.writeText(url);
-            toast({ 
-              title: '복사 완료', 
-              description: 'URL이 클립보드에 복사되었습니다.' 
-            });
-          } catch (error) {
-            toast({ 
-              title: '복사 실패', 
-              description: '클립보드 복사에 실패했습니다.', 
-              variant: 'destructive' 
-            });
-          }
-        }}
-      >
-        {url}
-      </button>
-      <button
-        type="button"
-        onClick={(e) => handleUrlClick(e, url)}
-        className="text-discord-accent hover:text-blue-400 flex-shrink-0"
-        title="외부 브라우저에서 열기"
-      >
-        <ExternalLink size={16} />
-      </button>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all text-left truncate"
+              onClick={async (e) => {
+                e.stopPropagation();
+                try {
+                  await navigator.clipboard.writeText(url);
+                  toast({ 
+                    title: '복사 완료', 
+                    description: 'URL이 클립보드에 복사되었습니다.' 
+                  });
+                } catch (error) {
+                  toast({ 
+                    title: '복사 실패', 
+                    description: '클립보드 복사에 실패했습니다.', 
+                    variant: 'destructive' 
+                  });
+                }
+              }}
+            >
+              {url}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+            {`${url} (클릭하여 복사)`}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={(e) => handleUrlClick(e, url)}
+              className="text-discord-accent hover:text-blue-400 flex-shrink-0"
+            >
+              <ExternalLink size={16} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+            외부 브라우저에서 열기
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </div>
   );
 
@@ -359,57 +376,75 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
             {loading ? (
               <div className="w-[96px] h-[96px] bg-gray-800 flex items-center justify-center text-xs text-gray-400">로딩중...</div>
             ) : thumbnailDataUrl ? (
-              <div className="relative">
-                <img
-                  src={thumbnailDataUrl}
-                  alt="썸네일"
-                  className="w-[96px] h-[96px] object-contain rounded border border-gray-700 cursor-pointer hover:opacity-80"
-                  onClick={() => handleThumbnailClick(value)}
-                  title="썸네일 클릭 시 뷰어 모달 열기"
-                />
-                {/* 파일 확장자 표시 */}
-                <div className="absolute bottom-1 right-1 bg-black bg-opacity-70 text-white text-xs px-1 py-0.5 rounded">
-                  {ext}
-                </div>
-              </div>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <img
+                      src={thumbnailDataUrl}
+                      alt="썸네일"
+                      className="w-[96px] h-[96px] object-contain rounded border border-gray-700 cursor-pointer hover:opacity-80"
+                      onClick={() => handleThumbnailClick(value)}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                    썸네일 클릭 시 뷰어 모달 열기
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             ) : (
               <div className="w-[96px] h-[96px] bg-gray-900 flex items-center justify-center text-xs text-gray-500 border border-gray-700 rounded">썸네일 없음</div>
             )}
-            <button
-              type="button"
-              className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all text-left"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(value);
-                  toast({ title: '경로가 복사되었습니다.' });
-                } catch (e) {
-                  toast({ title: '복사 실패', description: String(e), variant: 'destructive' });
-                }
-              }}
-              title="경로 복사"
-            >
-              {value}
-            </button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all text-left"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(value);
+                        toast({ title: '경로가 복사되었습니다.' });
+                      } catch (e) {
+                        toast({ title: '복사 실패', description: String(e), variant: 'destructive' });
+                      }
+                    }}
+                  >
+                    {value}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                  경로 복사
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         );
       }
       // 미지원 확장자: 기존 경로 복사 버튼만
       return (
-        <button
-          type="button"
-          className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all text-left"
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(value);
-              toast({ title: '경로가 복사되었습니다.' });
-            } catch (e) {
-              toast({ title: '복사 실패', description: String(e), variant: 'destructive' });
-            }
-          }}
-          title="경로 복사"
-        >
-          {value}
-        </button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all text-left"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(value);
+                    toast({ title: '경로가 복사되었습니다.' });
+                  } catch (e) {
+                    toast({ title: '복사 실패', description: String(e), variant: 'destructive' });
+                  }
+                }}
+              >
+                {value}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+              경로 복사
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       );
     }
 
@@ -428,28 +463,36 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
     switch (field.type) {
       case 'number':
         return (
-          <span 
-            className="text-discord-text px-1 py-0.5 rounded transition-colors" 
-            title={`${String(value)} (클릭하여 복사)`}
-            onClick={async (e) => {
-              e.stopPropagation();
-              try {
-                await navigator.clipboard.writeText(String(value));
-                toast({ 
-                  title: '복사 완료', 
-                  description: '숫자가 클립보드에 복사되었습니다.' 
-                });
-              } catch (error) {
-                toast({ 
-                  title: '복사 실패', 
-                  description: '클립보드 복사에 실패했습니다.', 
-                  variant: 'destructive' 
-                });
-              }
-            }}
-          >
-            {String(value)}
-          </span>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span 
+                  className="text-discord-text px-1 py-0.5 rounded transition-colors" 
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      await navigator.clipboard.writeText(String(value));
+                      toast({ 
+                        title: '복사 완료', 
+                        description: '숫자가 클립보드에 복사되었습니다.' 
+                      });
+                    } catch (error) {
+                      toast({ 
+                        title: '복사 실패', 
+                        description: '클립보드 복사에 실패했습니다.', 
+                        variant: 'destructive' 
+                      });
+                    }
+                  }}
+                >
+                  {String(value)}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                {`${String(value)} (클릭하여 복사)`}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         );
       
       case 'text': {
@@ -462,28 +505,36 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         }
         
         return (
-          <div 
-            className="whitespace-pre-wrap text-discord-text break-words overflow-wrap-anywhere px-1 py-0.5 rounded transition-colors" 
-            title={`${strValue} (클릭하여 복사)`}
-            onClick={async (e) => {
-              e.stopPropagation();
-              try {
-                await navigator.clipboard.writeText(strValue);
-                toast({ 
-                  title: '복사 완료', 
-                  description: '텍스트가 클립보드에 복사되었습니다.' 
-                });
-              } catch (error) {
-                toast({ 
-                  title: '복사 실패', 
-                  description: '클립보드 복사에 실패했습니다.', 
-                  variant: 'destructive' 
-                });
-              }
-            }}
-          >
-            {renderTextWithHashtags(strValue)}
-          </div>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div 
+                  className="whitespace-pre-wrap text-discord-text break-words overflow-wrap-anywhere px-1 py-0.5 rounded transition-colors" 
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      await navigator.clipboard.writeText(strValue);
+                      toast({ 
+                        title: '복사 완료', 
+                        description: '텍스트가 클립보드에 복사되었습니다.' 
+                      });
+                    } catch (error) {
+                      toast({ 
+                        title: '복사 실패', 
+                        description: '클립보드 복사에 실패했습니다.', 
+                        variant: 'destructive' 
+                      });
+                    }
+                  }}
+                >
+                  {renderTextWithHashtags(strValue)}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                {`${strValue} (클릭하여 복사)`}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         );
       }
       
@@ -497,28 +548,36 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         }
         
         return (
-          <div 
-            className="whitespace-pre-wrap text-discord-text break-words overflow-wrap-anywhere px-3 py-2 rounded transition-colors border border-gray-600 max-h-[240px] overflow-y-auto" 
-            title={`${strValue} (클릭하여 복사)`}
-            onClick={async (e) => {
-              e.stopPropagation();
-              try {
-                await navigator.clipboard.writeText(strValue);
-                toast({ 
-                  title: '복사 완료', 
-                  description: '긴 텍스트가 클립보드에 복사되었습니다.' 
-                });
-              } catch (error) {
-                toast({ 
-                  title: '복사 실패', 
-                  description: '클립보드 복사에 실패했습니다.', 
-                  variant: 'destructive' 
-                });
-              }
-            }}
-          >
-            {renderTextWithHashtags(strValue)}
-          </div>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div 
+                  className="whitespace-pre-wrap text-discord-text break-words overflow-wrap-anywhere px-3 py-2 rounded transition-colors border border-gray-600 max-h-[240px] overflow-y-auto" 
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      await navigator.clipboard.writeText(strValue);
+                      toast({ 
+                        title: '복사 완료', 
+                        description: '긴 텍스트가 클립보드에 복사되었습니다.' 
+                      });
+                    } catch (error) {
+                      toast({ 
+                        title: '복사 실패', 
+                        description: '클립보드 복사에 실패했습니다.', 
+                        variant: 'destructive' 
+                      });
+                    }
+                  }}
+                >
+                  {renderTextWithHashtags(strValue)}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                {`${strValue} (클릭하여 복사)`}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         );
       }
       
@@ -528,28 +587,36 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
           : format(new Date(value), "yyyy-MM-dd");
         
         return (
-          <span 
-            className="text-discord-text px-1 py-0.5 rounded transition-colors" 
-            title={`${dateValue} (클릭하여 복사)`}
-            onClick={async (e) => {
-              e.stopPropagation();
-              try {
-                await navigator.clipboard.writeText(dateValue);
-                toast({ 
-                  title: '복사 완료', 
-                  description: '날짜가 클립보드에 복사되었습니다.' 
-                });
-              } catch (error) {
-                toast({ 
-                  title: '복사 실패', 
-                  description: '클립보드 복사에 실패했습니다.', 
-                  variant: 'destructive' 
-                });
-              }
-            }}
-          >
-            {dateValue}
-          </span>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span 
+                  className="text-discord-text px-1 py-0.5 rounded transition-colors" 
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      await navigator.clipboard.writeText(dateValue);
+                      toast({ 
+                        title: '복사 완료', 
+                        description: '날짜가 클립보드에 복사되었습니다.' 
+                      });
+                    } catch (error) {
+                      toast({ 
+                        title: '복사 실패', 
+                        description: '클립보드 복사에 실패했습니다.', 
+                        variant: 'destructive' 
+                      });
+                    }
+                  }}
+                >
+                  {dateValue}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                {`${dateValue} (클릭하여 복사)`}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         );
       }
       
@@ -559,59 +626,75 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
       case 'select':
         if (Array.isArray(value)) {
           return (
-            <div className="flex flex-wrap gap-1">
-              {value.map((item) => (
-                <span
-                  key={item}
-                  className="px-2 py-1 text-xs rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 transition-colors"
-                  title={`${String(item)} (클릭하여 복사)`}
-                  style={{ cursor: 'pointer' }}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex flex-wrap gap-1">
+                    {value.map((item) => (
+                      <span
+                        key={item}
+                        className="px-2 py-1 text-xs rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 transition-colors"
+                        style={{ cursor: 'pointer' }}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            await navigator.clipboard.writeText(String(item));
+                            toast({
+                              title: '복사 완료',
+                              description: '값이 클립보드에 복사되었습니다.'
+                            });
+                          } catch (error) {
+                            toast({
+                              title: '복사 실패',
+                              description: '클립보드 복사에 실패했습니다.',
+                              variant: 'destructive'
+                            });
+                          }
+                        }}
+                      >
+                        {String(item)}
+                      </span>
+                    ))}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                {`${String(value)} (클릭하여 복사)`}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+        }
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span 
+                  className="text-discord-text px-1 py-0.5 rounded transition-colors" 
                   onClick={async (e) => {
                     e.stopPropagation();
                     try {
-                      await navigator.clipboard.writeText(String(item));
-                      toast({
-                        title: '복사 완료',
-                        description: '값이 클립보드에 복사되었습니다.'
+                      await navigator.clipboard.writeText(String(value));
+                      toast({ 
+                        title: '복사 완료', 
+                        description: '선택된 값이 클립보드에 복사되었습니다.' 
                       });
                     } catch (error) {
-                      toast({
-                        title: '복사 실패',
-                        description: '클립보드 복사에 실패했습니다.',
-                        variant: 'destructive'
+                      toast({ 
+                        title: '복사 실패', 
+                        description: '클립보드 복사에 실패했습니다.', 
+                        variant: 'destructive' 
                       });
                     }
                   }}
                 >
-                  {String(item)}
+                  {String(value)}
                 </span>
-              ))}
-            </div>
-          );
-        }
-        return (
-          <span 
-            className="text-discord-text px-1 py-0.5 rounded transition-colors" 
-            title={`${String(value)} (클릭하여 복사)`}
-            onClick={async (e) => {
-              e.stopPropagation();
-              try {
-                await navigator.clipboard.writeText(String(value));
-                toast({ 
-                  title: '복사 완료', 
-                  description: '선택된 값이 클립보드에 복사되었습니다.' 
-                });
-              } catch (error) {
-                toast({ 
-                  title: '복사 실패', 
-                  description: '클립보드 복사에 실패했습니다.', 
-                  variant: 'destructive' 
-                });
-              }
-            }}
-          >
-            {String(value)}
-          </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                {`${String(value)} (클릭하여 복사)`}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         );
       
       case 'relation':
@@ -627,48 +710,64 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         
         if (Array.isArray(value)) {
           return (
-            <div className="flex flex-wrap gap-1">
-              {value.map((relatedId) => {
-                const relatedRecord = relatedRecords.find(r => r.id === relatedId);
-                if (!relatedRecord) return null;
-                return (
-                  <span
-                    key={relatedId}
-                    className="px-2 py-1 text-xs rounded bg-green-600/20 text-green-500 cursor-pointer hover:bg-green-600/30"
-                    onClick={() => {
-                      onClose();
-                      setTimeout(() => {
-                        if (onViewRecord) {
-                          onViewRecord(relatedRecord, relatedCategory);
-                        }
-                      }, 200);
-                    }}
-                    title="상세 보기"
-                  >
-                    {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
-                  </span>
-                );
-              })}
-            </div>
-          );
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex flex-wrap gap-1">
+                    {value.map((relatedId) => {
+                      const relatedRecord = relatedRecords.find(r => r.id === relatedId);
+                      if (!relatedRecord) return null;
+                      return (
+                        <span
+                          key={relatedId}
+                          className="px-2 py-1 text-xs rounded bg-green-600/20 text-green-500 cursor-pointer hover:bg-green-600/30"
+                          onClick={() => {
+                            onClose();
+                            setTimeout(() => {
+                              if (onViewRecord) {
+                                onViewRecord(relatedRecord, relatedCategory);
+                              }
+                            }, 200);
+                          }}
+                        >
+                          {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                {`${String(value)} (클릭하여 복사)`}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
         } else {
           const relatedRecord = relatedRecords.find(r => r.id === value);
           return relatedRecord 
             ? (
-              <span
-                className="text-green-500 cursor-pointer hover:underline"
-                onClick={() => {
-                  onClose();
-                  setTimeout(() => {
-                    if (onViewRecord) {
-                      onViewRecord(relatedRecord, relatedCategory);
-                    }
-                  }, 200);
-                }}
-                title="상세 보기"
-              >
-                {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
-              </span>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      className="text-green-500 cursor-pointer hover:underline"
+                      onClick={() => {
+                        onClose();
+                        setTimeout(() => {
+                          if (onViewRecord) {
+                            onViewRecord(relatedRecord, relatedCategory);
+                          }
+                        }, 200);
+                      }}
+                    >
+                      {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                    상세 보기
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )
             : String(value);
         }
@@ -678,28 +777,36 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
           return renderUrl(value);
         }
         return (
-          <span 
-            className="text-discord-text px-1 py-0.5 rounded transition-colors" 
-            title={`${String(value)} (클릭하여 복사)`}
-            onClick={async (e) => {
-              e.stopPropagation();
-              try {
-                await navigator.clipboard.writeText(String(value));
-                toast({ 
-                  title: '복사 완료', 
-                  description: '값이 클립보드에 복사되었습니다.' 
-                });
-              } catch (error) {
-                toast({ 
-                  title: '복사 실패', 
-                  description: '클립보드 복사에 실패했습니다.', 
-                  variant: 'destructive' 
-                });
-              }
-            }}
-          >
-            {String(value)}
-          </span>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span 
+                  className="text-discord-text px-1 py-0.5 rounded transition-colors" 
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      await navigator.clipboard.writeText(String(value));
+                      toast({ 
+                        title: '복사 완료', 
+                        description: '값이 클립보드에 복사되었습니다.' 
+                      });
+                    } catch (error) {
+                      toast({ 
+                        title: '복사 실패', 
+                        description: '클립보드 복사에 실패했습니다.', 
+                        variant: 'destructive' 
+                      });
+                    }
+                  }}
+                >
+                  {String(value)}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                {`${String(value)} (클릭하여 복사)`}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         );
     }
   };
@@ -808,20 +915,21 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         {loading ? (
           <div className="w-[320px] h-[320px] bg-gray-800 flex items-center justify-center text-lg text-gray-400 rounded-xl border border-gray-700">로딩중...</div>
         ) : dataUrl ? (
-          <div className="relative">
-            <img
-              src={dataUrl}
-              alt="썸네일"
-              className="w-[320px] h-[320px] object-contain rounded-xl border border-gray-700 cursor-pointer hover:opacity-80 transition"
-              onClick={() => canOpenFile && handleThumbnailClick(filePath)}
-              title="썸네일 클릭 시 뷰어 모달 열기"
-              style={{ maxWidth: 480, maxHeight: 480 }}
-            />
-            {/* 파일 확장자 표시 */}
-            <div className="absolute bottom-2 right-2 bg-black bg-opacity-70 text-white text-sm px-2 py-1 rounded">
-              {ext}
-            </div>
-          </div>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <img
+                  src={dataUrl}
+                  alt="썸네일"
+                  className="w-[320px] h-[320px] object-contain rounded-xl border border-gray-700 cursor-pointer hover:opacity-80 transition"
+                  onClick={() => canOpenFile && handleThumbnailClick(filePath)}
+                />
+              </TooltipTrigger>
+              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                썸네일 클릭 시 뷰어 모달 열기
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         ) : (
           <div className="w-[320px] h-[320px] bg-gray-900 flex items-center justify-center text-lg text-gray-500 border border-gray-700 rounded-xl">썸네일 없음</div>
         )}
@@ -876,35 +984,44 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         {/* 이미지/압축파일용 썸네일 재생성 버튼 */}
         {!isVideo && fileExists === true && (
           <div className="flex items-center gap-2 mt-2">
-            <button
-              type="button"
-              onClick={async () => {
-                setRegenLoading(true);
-                showLoading('썸네일 재생성 중...', 30000, true); // 30초 타임아웃, 취소 버튼 표시
-                try {
-                  const res = await window.electronAPI.regenerateThumbnail(filePath);
-                  if (res) {
-                    toast({ title: '썸네일이 재생성되었습니다.' });
-                    reloadThumbnail();
-                    window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));
-                    if (categoryId) {
-                      await loadRecords(categoryId);
-                    }
-                  } else {
-                    toast({ title: '썸네일 재생성 실패', description: '', variant: 'destructive' });
-                  }
-                } catch (e) {
-                  toast({ title: '썸네일 재생성 실패', description: String(e), variant: 'destructive' });
-                } finally {
-                  setRegenLoading(false);
-                  hideLoading();
-                }
-              }}
-              disabled={regenLoading}
-              className="px-3 py-1 text-xs text-discord-muted bg-transparent hover:bg-discord-hover border border-gray-600 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {regenLoading ? '재생성 중...' : '썸네일 재생성'}
-            </button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setRegenLoading(true);
+                      showLoading('썸네일 재생성 중...', 30000, true); // 30초 타임아웃, 취소 버튼 표시
+                      try {
+                        const res = await window.electronAPI.regenerateThumbnail(filePath);
+                        if (res) {
+                          toast({ title: '썸네일이 재생성되었습니다.' });
+                          reloadThumbnail();
+                          window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));
+                          if (categoryId) {
+                            await loadRecords(categoryId);
+                          }
+                        } else {
+                          toast({ title: '썸네일 재생성 실패', description: '', variant: 'destructive' });
+                        }
+                      } catch (e) {
+                        toast({ title: '썸네일 재생성 실패', description: String(e), variant: 'destructive' });
+                      } finally {
+                        setRegenLoading(false);
+                        hideLoading();
+                      }
+                    }}
+                    disabled={regenLoading}
+                    className="px-3 py-1 text-xs text-discord-muted bg-transparent hover:bg-discord-hover border border-gray-600 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {regenLoading ? '재생성 중...' : '썸네일 재생성'}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                  썸네일 재생성
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         )}
       </div>
@@ -970,21 +1087,29 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                   <div className="text-discord-text text-sm">
                     {/* 파일 필드는 상세 정보에서 썸네일 대신 경로 복사 버튼만 */}
                     {field.type === 'file' && record?.data[field.id] ? (
-                      <button
-                        type="button"
-                        className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all text-left"
-                        onClick={async () => {
-                          try {
-                            await navigator.clipboard.writeText(record.data[field.id]);
-                            toast({ title: '경로가 복사되었습니다.' });
-                          } catch (e) {
-                            toast({ title: '복사 실패', description: String(e), variant: 'destructive' });
-                          }
-                        }}
-                        title="경로 복사"
-                      >
-                        {record.data[field.id]}
-                      </button>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all text-left"
+                              onClick={async () => {
+                                try {
+                                  await navigator.clipboard.writeText(record.data[field.id]);
+                                  toast({ title: '경로가 복사되었습니다.' });
+                                } catch (e) {
+                                  toast({ title: '복사 실패', description: String(e), variant: 'destructive' });
+                                }
+                              }}
+                            >
+                              {record.data[field.id]}
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                            경로 복사
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     ) : (
                       formatFieldValue(field, record.data[field.id], onViewRecord)
                     )}
@@ -1032,25 +1157,43 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         <div className="flex-shrink-0 flex items-center justify-end p-6 border-t border-gray-700">
           {canOpenFile && (
             <>
-              <Button
-                variant="outline"
-                className="mr-2 hover:bg-discord-hover cursor-pointer"
-                onClick={async () => {
-                  try {
-                    await window.electronAPI.openFile(filePath);
-                  } catch (e) {
-                    // TODO: 에러 안내
-                  }
-                }}
-                disabled={!canOpenFile}
-              >
-                원본 파일 열기
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="mr-2 hover:bg-discord-hover cursor-pointer"
+                      onClick={async () => {
+                        try {
+                          await window.electronAPI.openFile(filePath);
+                        } catch (e) {
+                          // TODO: 에러 안내
+                        }
+                      }}
+                      disabled={!canOpenFile}
+                    >
+                      원본 파일 열기
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                    원본 파일 열기
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </>
           )}
-          <Button onClick={onClose} className="bg-discord-accent hover:bg-blue-600">
-            닫기
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button onClick={onClose} className="bg-discord-accent hover:bg-blue-600">
+                  닫기
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">
+                닫기
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
       {viewerModalOpen && (

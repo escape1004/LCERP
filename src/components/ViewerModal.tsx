@@ -1,6 +1,9 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { X, ChevronLeft, ChevronRight, Download, FileImage, FileVideo, Archive, FileText, Play, Pause, Volume2, VolumeX, RotateCcw, Maximize, Minimize, Bookmark, Clock } from 'lucide-react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { X, ChevronLeft, ChevronRight, Download, FileImage, FileVideo, Archive, FileText, Play, Pause, Volume2, VolumeX, RotateCcw, RotateCw, Maximize, Minimize, Bookmark, Clock } from 'lucide-react';
 import AdmZip from 'adm-zip';
+import { Button } from './ui/button';
+import { toast } from './ui/use-toast';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./ui/tooltip";
 
 interface ViewerModalProps {
   isOpen: boolean;
@@ -945,28 +948,40 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
           {/* 회전 버튼: 바디 영역 우측 상단에 fixed 배치 */}
           {((fileType === 'image') || (fileType === 'video') || (fileType === 'archive' && (currentFileExt !== 'txt'))) && (
             <div className="absolute top-4 right-4 z-20 flex gap-2">
-              <button
-                onClick={() => {
-                  if (fileType === 'image') setImgRotation((r) => (r - 90) % 360);
-                  else if (fileType === 'video') setVideoRotation((r) => (r - 90) % 360);
-                  else if (fileType === 'archive' && (currentFileExt !== 'txt')) setArchiveImgRotation((r) => (r - 90) % 360);
-                }}
-                className="p-2 rounded bg-black/70 text-white hover:bg-black/90 transition-colors backdrop-blur-sm"
-                title="왼쪽으로 90도 회전"
-              >
-                <RotateCcw size={20} />
-              </button>
-              <button
-                onClick={() => {
-                  if (fileType === 'image') setImgRotation((r) => (r + 90) % 360);
-                  else if (fileType === 'video') setVideoRotation((r) => (r + 90) % 360);
-                  else if (fileType === 'archive' && (currentFileExt !== 'txt')) setArchiveImgRotation((r) => (r + 90) % 360);
-                }}
-                className="p-2 rounded bg-black/70 text-white hover:bg-black/90 transition-colors backdrop-blur-sm"
-                title="오른쪽으로 90도 회전"
-              >
-                <RotateCcw size={20} style={{ transform: 'scaleX(-1)' }} />
-              </button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => {
+                        if (fileType === 'image') setImgRotation((r) => (r - 90) % 360);
+                        else if (fileType === 'video') setVideoRotation((r) => (r - 90) % 360);
+                        else if (fileType === 'archive' && (currentFileExt !== 'txt')) setArchiveImgRotation((r) => (r - 90) % 360);
+                      }}
+                      className="p-2 rounded bg-black/70 text-white hover:bg-black/90 transition-colors backdrop-blur-sm"
+                    >
+                      <RotateCcw size={20} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">왼쪽으로 90도 회전</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => {
+                        if (fileType === 'image') setImgRotation((r) => (r + 90) % 360);
+                        else if (fileType === 'video') setVideoRotation((r) => (r + 90) % 360);
+                        else if (fileType === 'archive' && (currentFileExt !== 'txt')) setArchiveImgRotation((r) => (r + 90) % 360);
+                      }}
+                      className="p-2 rounded bg-black/70 text-white hover:bg-black/90 transition-colors backdrop-blur-sm"
+                    >
+                      <RotateCw size={20} style={{ transform: 'scaleX(-1)' }} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">오른쪽으로 90도 회전</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           )}
           
@@ -1203,14 +1218,28 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                       {/* 왼쪽 그룹 */}
                       <div className="flex items-center gap-5">
                         {/* 재생/정지 버튼 */}
-                        <button onClick={handlePlayPause} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors" title={isPlaying ? '일시정지' : '재생'}>
-                          {isPlaying ? <Pause size={20} /> : <Play size={20} />}
-                        </button>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button onClick={handlePlayPause} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors">
+                                {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">{isPlaying ? '일시정지' : '재생'}</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                         {/* 볼륨 컨트롤 */}
                         <div className="flex items-center gap-2">
-                          <button onClick={handleMuteToggle} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors" title={isMuted ? '음소거 해제' : '음소거'}>
-                            {isMuted || volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
-                          </button>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button onClick={handleMuteToggle} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors">
+                                  {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">{isMuted ? '음소거 해제' : '음소거'}</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                           <input
                             type="range"
                             min="0"
@@ -1224,48 +1253,63 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                         </div>
                         {/* 북마크 버튼 (일반 동영상만) */}
                         {fileType === 'video' && (
-                          <button
-                            onClick={() => {
-                              if (hasBookmarkAtCurrentTime()) {
-                                const bookmarkToRemove = bookmarks.find(bm => Math.abs(bm.time - currentTime) < 1);
-                                if (bookmarkToRemove) {
-                                  handleRemoveBookmark(bookmarkToRemove.time);
-                                }
-                              } else {
-                                handleAddBookmark();
-                              }
-                            }}
-                            className={`w-8 h-8 flex items-center justify-center transition-colors ${
-                              hasBookmarkAtCurrentTime() 
-                                ? 'text-blue-400' 
-                                : 'text-white hover:text-gray-300'
-                            }`}
-                            title={
-                              hasBookmarkAtCurrentTime() 
-                                ? '북마크 삭제' 
-                                : '현재 위치 북마크'
-                            }
-                          >
-                            <Bookmark size={20} />
-                          </button>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  onClick={() => {
+                                    if (hasBookmarkAtCurrentTime()) {
+                                      const bookmarkToRemove = bookmarks.find(bm => Math.abs(bm.time - currentTime) < 1);
+                                      if (bookmarkToRemove) {
+                                        handleRemoveBookmark(bookmarkToRemove.time);
+                                      }
+                                    } else {
+                                      handleAddBookmark();
+                                    }
+                                  }}
+                                  className={`w-8 h-8 flex items-center justify-center transition-colors ${
+                                    hasBookmarkAtCurrentTime() 
+                                      ? 'text-blue-400' 
+                                      : 'text-white hover:text-gray-300'
+                                  }`}
+                                >
+                                  <Bookmark size={20} />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">{hasBookmarkAtCurrentTime() ? '북마크 삭제' : '현재 위치 북마크'}</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         )}
                       </div>
                       {/* 오른쪽 그룹 */}
                       <div className="flex items-center gap-5">
                         {/* 루프 버튼 */}
-                        <button onClick={handleLoopToggle} className={`w-8 h-8 flex items-center justify-center transition-colors ${isLooping ? 'text-blue-400' : 'text-white hover:text-gray-300'}`} title={isLooping ? '반복 해제' : '반복 재생'}>
-                          <RotateCcw size={20} />
-                        </button>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button onClick={handleLoopToggle} className={`w-8 h-8 flex items-center justify-center transition-colors ${isLooping ? 'text-blue-400' : 'text-white hover:text-gray-300'}`}>
+                                <RotateCcw size={20} />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">{isLooping ? '반복 해제' : '반복 재생'}</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                         {/* 배속 버튼 */}
                         <div className="relative">
-                          <button
-                            onClick={handleSpeedMenuToggle}
-                            className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors"
-                            title={`재생 속도: ${playbackSpeed}x (>, < 키로 변경)`}
-                            data-speed-menu
-                          >
-                            <Clock size={20} />
-                          </button>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  onClick={handleSpeedMenuToggle}
+                                  className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors"
+                                  data-speed-menu
+                                >
+                                  <Clock size={20} />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">{`재생 속도: ${playbackSpeed}x (>, < 키로 변경)`}</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                           {showSpeedMenu && (
                             <div className="absolute bottom-full left-0 mb-2 bg-discord-sidebar border border-gray-700 rounded-lg shadow-lg z-50 min-w-[120px]" data-speed-menu>
                               <div className="p-2 text-xs text-discord-muted border-b border-gray-700">
@@ -1286,9 +1330,16 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                           )}
                         </div>
                         {/* 전체화면 버튼 */}
-                        <button onClick={handleFullscreenToggle} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors ml-auto" title={isFullscreen ? '전체화면 해제' : '전체화면'}>
-                          {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
-                        </button>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button onClick={handleFullscreenToggle} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors ml-auto">
+                                {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">{isFullscreen ? '전체화면 해제' : '전체화면'}</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
                     </div>
                   </div>
@@ -1562,14 +1613,28 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                 {/* 왼쪽 그룹 */}
                                 <div className="flex items-center gap-5">
                                   {/* 재생/정지 버튼 */}
-                                  <button onClick={handlePlayPause} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors" title={isPlaying ? '일시정지' : '재생'}>
-                                    {isPlaying ? <Pause size={20} /> : <Play size={20} />}
-                                  </button>
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button onClick={handlePlayPause} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors">
+                                          {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">{isPlaying ? '일시정지' : '재생'}</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
                                   {/* 볼륨 컨트롤 */}
                                   <div className="flex items-center gap-2">
-                                    <button onClick={handleMuteToggle} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors" title={isMuted ? '음소거 해제' : '음소거'}>
-                                      {isMuted || volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
-                                    </button>
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <button onClick={handleMuteToggle} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors">
+                                            {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+                                          </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">{isMuted ? '음소거 해제' : '음소거'}</TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
                                     <input
                                       type="range"
                                       min="0"
@@ -1583,48 +1648,63 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                   </div>
                                   {/* 북마크 버튼 (일반 동영상만) */}
                                   {fileType === 'video' && (
-                                    <button
-                                      onClick={() => {
-                                        if (hasBookmarkAtCurrentTime()) {
-                                          const bookmarkToRemove = bookmarks.find(bm => Math.abs(bm.time - currentTime) < 1);
-                                          if (bookmarkToRemove) {
-                                            handleRemoveBookmark(bookmarkToRemove.time);
-                                          }
-                                        } else {
-                                          handleAddBookmark();
-                                        }
-                                      }}
-                                      className={`w-8 h-8 flex items-center justify-center transition-colors ${
-                                        hasBookmarkAtCurrentTime() 
-                                          ? 'text-blue-400' 
-                                          : 'text-white hover:text-gray-300'
-                                      }`}
-                                      title={
-                                        hasBookmarkAtCurrentTime() 
-                                          ? '북마크 삭제' 
-                                          : '현재 위치 북마크'
-                                      }
-                                    >
-                                      <Bookmark size={20} />
-                                    </button>
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <button
+                                            onClick={() => {
+                                              if (hasBookmarkAtCurrentTime()) {
+                                                const bookmarkToRemove = bookmarks.find(bm => Math.abs(bm.time - currentTime) < 1);
+                                                if (bookmarkToRemove) {
+                                                  handleRemoveBookmark(bookmarkToRemove.time);
+                                                }
+                                              } else {
+                                                handleAddBookmark();
+                                              }
+                                            }}
+                                            className={`w-8 h-8 flex items-center justify-center transition-colors ${
+                                              hasBookmarkAtCurrentTime() 
+                                                ? 'text-blue-400' 
+                                                : 'text-white hover:text-gray-300'
+                                            }`}
+                                          >
+                                            <Bookmark size={20} />
+                                          </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">{hasBookmarkAtCurrentTime() ? '북마크 삭제' : '현재 위치 북마크'}</TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
                                   )}
                                 </div>
                                 {/* 오른쪽 그룹 */}
                                 <div className="flex items-center gap-5">
                                   {/* 루프 버튼 */}
-                                  <button onClick={handleLoopToggle} className={`w-8 h-8 flex items-center justify-center transition-colors ${isLooping ? 'text-blue-400' : 'text-white hover:text-gray-300'}`} title={isLooping ? '반복 해제' : '반복 재생'}>
-                                    <RotateCcw size={20} />
-                                  </button>
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button onClick={handleLoopToggle} className={`w-8 h-8 flex items-center justify-center transition-colors ${isLooping ? 'text-blue-400' : 'text-white hover:text-gray-300'}`}>
+                                          <RotateCcw size={20} />
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">{isLooping ? '반복 해제' : '반복 재생'}</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
                                   {/* 배속 버튼 */}
                                   <div className="relative">
-                                    <button
-                                      onClick={handleSpeedMenuToggle}
-                                      className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors"
-                                      title={`재생 속도: ${playbackSpeed}x (>, < 키로 변경)`}
-                                      data-speed-menu
-                                    >
-                                      <Clock size={20} />
-                                    </button>
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <button
+                                            onClick={handleSpeedMenuToggle}
+                                            className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors"
+                                            data-speed-menu
+                                          >
+                                            <Clock size={20} />
+                                          </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">{`재생 속도: ${playbackSpeed}x (>, < 키로 변경)`}</TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
                                     {showSpeedMenu && (
                                       <div className="absolute bottom-full left-0 mb-2 bg-discord-sidebar border border-gray-700 rounded-lg shadow-lg z-50 min-w-[120px]" data-speed-menu>
                                         <div className="p-2 text-xs text-discord-muted border-b border-gray-700">
@@ -1645,9 +1725,16 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                     )}
                                   </div>
                                   {/* 전체화면 버튼 */}
-                                  <button onClick={handleFullscreenToggle} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors ml-auto" title={isFullscreen ? '전체화면 해제' : '전체화면'}>
-                                    {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
-                                  </button>
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button onClick={handleFullscreenToggle} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors ml-auto">
+                                          {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">{isFullscreen ? '전체화면 해제' : '전체화면'}</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
                                 </div>
                               </div>
                             </div>
@@ -1697,25 +1784,29 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                     </div>
                     {/* Navigation Controls */}
                     <div className="flex-shrink-0 flex items-center justify-center gap-4 p-4">
-                      <button
-                        onClick={handlePrevious}
-                        disabled={currentArchiveIndex <= 0}
-                        className="p-2 rounded bg-discord-sidebar text-discord-text hover:bg-discord-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        title="이전 파일 (←)"
-                      >
-                        <ChevronLeft size={24} />
-                      </button>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button onClick={handlePrevious} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors">
+                              <ChevronLeft size={20} />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">이전 파일 (←)</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                       <div className="text-discord-text text-sm min-w-[200px] text-center">
                         {currentFile?.name}
                       </div>
-                      <button
-                        onClick={handleNext}
-                        disabled={currentArchiveIndex >= archiveFiles.length - 1}
-                        className="p-2 rounded bg-discord-sidebar text-discord-text hover:bg-discord-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        title="다음 파일 (→)"
-                      >
-                        <ChevronRight size={24} />
-                      </button>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button onClick={handleNext} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors">
+                              <ChevronRight size={20} />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">다음 파일 (→)</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </div>
                   </div>
                 </div>

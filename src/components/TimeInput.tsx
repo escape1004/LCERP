@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./ui/tooltip";
 
 interface TimeInputProps {
   hh: number;
@@ -260,53 +261,71 @@ export const TimeInput: React.FC<TimeInputProps> = ({
 
       {/* 시간 입력 필드들 */}
       <div className="flex items-center gap-2">
-        <input
-          key="hh-input"
-          ref={hhRef}
-          type="number"
-          min={0}
-          max={getMaxValue('hh')}
-          value={localHh}
-          onChange={e => handleInputChange('hh', e.target.value)}
-          onKeyDown={e => handleKeyDown('hh', e)}
-          onBlur={() => handleInputBlur('hh')}
-          className="w-12 px-2 py-1 rounded border border-gray-600 bg-discord-bg text-discord-text text-sm focus:outline-none focus:ring-2 focus:ring-discord-accent text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-          placeholder="시"
-          title="시"
-          disabled={disabled}
-        />
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <input
+                key="hh-input"
+                ref={hhRef}
+                type="number"
+                min={0}
+                max={getMaxValue('hh')}
+                value={localHh}
+                onChange={e => handleInputChange('hh', e.target.value)}
+                onKeyDown={e => handleKeyDown('hh', e)}
+                onBlur={() => handleInputBlur('hh')}
+                className="w-12 px-2 py-1 rounded border border-gray-600 bg-discord-bg text-discord-text text-sm focus:outline-none focus:ring-2 focus:ring-discord-accent text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                placeholder="시"
+                disabled={disabled}
+              />
+            </TooltipTrigger>
+            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">시</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         <span className="text-discord-muted">:</span>
-        <input
-          key="mm-input"
-          ref={mmRef}
-          type="number"
-          min={0}
-          max={getMaxValue('mm')}
-          value={localMm}
-          onChange={e => handleInputChange('mm', e.target.value)}
-          onKeyDown={e => handleKeyDown('mm', e)}
-          onBlur={() => handleInputBlur('mm')}
-          className="w-12 px-2 py-1 rounded border border-gray-600 bg-discord-bg text-discord-text text-sm focus:outline-none focus:ring-2 focus:ring-discord-accent text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-          placeholder="분"
-          title="분"
-          disabled={disabled}
-        />
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <input
+                key="mm-input"
+                ref={mmRef}
+                type="number"
+                min={0}
+                max={getMaxValue('mm')}
+                value={localMm}
+                onChange={e => handleInputChange('mm', e.target.value)}
+                onKeyDown={e => handleKeyDown('mm', e)}
+                onBlur={() => handleInputBlur('mm')}
+                className="w-12 px-2 py-1 rounded border border-gray-600 bg-discord-bg text-discord-text text-sm focus:outline-none focus:ring-2 focus:ring-discord-accent text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                placeholder="분"
+                disabled={disabled}
+              />
+            </TooltipTrigger>
+            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">분</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         <span className="text-discord-muted">:</span>
-        <input
-          key="ss-input"
-          ref={ssRef}
-          type="number"
-          min={0}
-          max={getMaxValue('ss')}
-          value={localSs}
-          onChange={e => handleInputChange('ss', e.target.value)}
-          onKeyDown={e => handleKeyDown('ss', e)}
-          onBlur={() => handleInputBlur('ss')}
-          className="w-12 px-2 py-1 rounded border border-gray-600 bg-discord-bg text-discord-text text-sm focus:outline-none focus:ring-2 focus:ring-discord-accent text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-          placeholder="초"
-          title="초"
-          disabled={disabled}
-        />
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <input
+                key="ss-input"
+                ref={ssRef}
+                type="number"
+                min={0}
+                max={getMaxValue('ss')}
+                value={localSs}
+                onChange={e => handleInputChange('ss', e.target.value)}
+                onKeyDown={e => handleKeyDown('ss', e)}
+                onBlur={() => handleInputBlur('ss')}
+                className="w-12 px-2 py-1 rounded border border-gray-600 bg-discord-bg text-discord-text text-sm focus:outline-none focus:ring-2 focus:ring-discord-accent text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                placeholder="초"
+                disabled={disabled}
+              />
+            </TooltipTrigger>
+            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5">초</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
 
       {/* 재생성 버튼 */}

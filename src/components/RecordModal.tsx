@@ -14,6 +14,12 @@ import { cn } from '../lib/utils';
 import { toast } from './ui/use-toast';
 import { AlertDialog } from './ui/alert-dialog';
 import { DatePicker } from './ui/date-picker';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "./ui/tooltip";
 
 // 전역 이벤트 타입 정의
 declare global {
@@ -803,31 +809,43 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                 </PopoverContent>
               </Popover>
               {Array.isArray(value) && value.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {value.map((recordId) => {
-                    const record = relatedRecords.find(r => r.id === recordId);
-                    if (!record) return null;
-                    return (
-                      <div
-                        key={recordId}
-                        className="inline-flex items-center gap-1 px-2 py-1 bg-green-600/20 text-green-500 text-xs rounded hover:bg-green-600/30"
-                      >
-                        <span className="max-w-[150px] truncate">{getRelationLabel(record, field)}</span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const newValue = value.filter((v) => v !== recordId);
-                            updateFieldValue(field.id, newValue);
-                          }}
-                          className="text-green-500 hover:text-green-400 shrink-0"
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
+                <TooltipProvider>
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {value.map((recordId) => {
+                      const record = relatedRecords.find(r => r.id === recordId);
+                      if (!record) return null;
+                      return (
+                        <Tooltip key={recordId}>
+                          <TooltipTrigger asChild>
+                            <div
+                              className="inline-flex items-center gap-1 px-2 py-1 bg-green-600/20 text-green-500 text-xs rounded hover:bg-green-600/30"
+                            >
+                              <span className="max-w-[150px] truncate cursor-pointer">{getRelationLabel(record, field)}</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const newValue = value.filter((v) => v !== recordId);
+                                  updateFieldValue(field.id, newValue);
+                                }}
+                                className="text-green-500 hover:text-green-400 shrink-0"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent
+                            side="top"
+                            align="center"
+                            className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5"
+                          >
+                            {getRelationLabel(record, field)}
+                          </TooltipContent>
+                        </Tooltip>
+                      );
+                    })}
+                  </div>
+                </TooltipProvider>
               )}
             </div>
           );

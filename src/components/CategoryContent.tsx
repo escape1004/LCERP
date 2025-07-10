@@ -12,6 +12,7 @@ import { LinkIcon } from 'lucide-react';
 import { ConfirmDialog } from './ui/confirm-dialog';
 import { AlertDialog } from './ui/alert-dialog';
 import { format } from 'date-fns';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./ui/tooltip";
 
 interface CategoryContentProps {
   categoryId: string | null;
