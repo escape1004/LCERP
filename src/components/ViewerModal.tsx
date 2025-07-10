@@ -55,10 +55,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const [codecInfo, setCodecInfo] = useState<any>(null);
 
   // 배속 관련 상태 추가
-  const [playbackSpeed, setPlaybackSpeed] = useState(() => {
-    const savedSpeed = localStorage.getItem('videoPlaybackSpeed');
-    return savedSpeed ? parseFloat(savedSpeed) : 1.0;
-  });
+  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
 
   // 일반 이미지 상태 및 핸들러
@@ -142,10 +139,12 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       setIsPlaying(false);
       setVideoError(null);
       setFileNotFound(false);
+      setPlaybackSpeed(1.0);
       return;
     }
 
     if (fileType === 'image' || fileType === 'video') {
+      setPlaybackSpeed(1.0);
       setLoading(true);
       setFileNotFound(false);
       window.electronAPI.getFileDataUrl(filePath).then((url) => {
@@ -191,11 +190,6 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   useEffect(() => {
     localStorage.setItem('videoMuted', JSON.stringify(isMuted));
   }, [isMuted]);
-
-  // 배속 설정 저장
-  useEffect(() => {
-    localStorage.setItem('videoPlaybackSpeed', playbackSpeed.toString());
-  }, [playbackSpeed]);
 
   // 동영상 볼륨 설정
   useEffect(() => {
@@ -1178,7 +1172,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                           id="seekbar"
                         />
                         {/* 북마크 마커 (일반 동영상에서만 표시) */}
-                        {fileType === 'video' && bookmarks.map(bm => (
+                        {(fileType === 'video' && Array.isArray(bookmarks)) && bookmarks.map(bm => (
                           <div
                             key={bm.time}
                             style={{
@@ -1573,7 +1567,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                     id="seekbar"
                                   />
                                   {/* 북마크 마커 (일반 동영상에서만 표시) */}
-                                  {fileType === 'video' && bookmarks.map(bm => (
+                                  {(fileType === 'video' && Array.isArray(bookmarks)) && bookmarks.map(bm => (
                                     <div
                                       key={bm.time}
                                       style={{
