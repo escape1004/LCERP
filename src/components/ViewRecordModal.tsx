@@ -918,12 +918,20 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <img
-                  src={dataUrl}
-                  alt="썸네일"
-                  className="w-[320px] h-[320px] object-contain rounded-xl border border-gray-700 cursor-pointer hover:opacity-80 transition"
-                  onClick={() => canOpenFile && handleThumbnailClick(filePath)}
-                />
+                <div className="relative">
+                  <img
+                    src={dataUrl}
+                    alt="썸네일"
+                    className="w-[320px] h-[320px] object-contain rounded-xl border border-gray-700 cursor-pointer hover:opacity-80 transition"
+                    onClick={() => canOpenFile && handleThumbnailClick(filePath)}
+                  />
+                  {/* 파일 확장자명 표시 */}
+                  {filePath && (
+                    <div className="absolute bottom-2 right-2 bg-black bg-opacity-70 text-white text-sm px-2 py-1 rounded">
+                      {ext}
+                    </div>
+                  )}
+                </div>
               </TooltipTrigger>
               <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
                 썸네일 클릭 시 뷰어 모달 열기

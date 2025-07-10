@@ -175,7 +175,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
           <Tooltip>
             <TooltipTrigger asChild>
               <span 
-                className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block cursor-pointer" 
+                className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block" 
                 onClick={async (e) => {
                   e.stopPropagation();
                   try {
@@ -209,7 +209,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
           <Tooltip>
             <TooltipTrigger asChild>
               <span 
-                className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block cursor-pointer" 
+                className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block" 
                 onClick={async (e) => {
                   e.stopPropagation();
                   try {
@@ -418,7 +418,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
           <Tooltip>
             <TooltipTrigger asChild>
               <span 
-                className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block cursor-pointer" 
+                className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block" 
                 onClick={async (e) => {
                   e.stopPropagation();
                   try {
