@@ -571,6 +571,7 @@ export const MainContent: React.FC = () => {
   const {
     showLoading,
     hideLoading,
+    setLoading: setGlobalLoading,
   } = useLoadingStore();
 
   // 검색어를 로컬 상태로 관리
@@ -647,18 +648,14 @@ export const MainContent: React.FC = () => {
           }
         });
         
-        // 로드할 카테고리가 있을 때만 로딩 표시
+        // 로드할 카테고리가 있으면 백그라운드에서 로드 (로딩 표시 없이)
         if (categoriesToLoad.length > 0) {
-          showLoading(`${category.name} 관련 데이터 로딩 중...`, 30000, true);
           const loadPromises = categoriesToLoad.map(categoryId => loadRecords(categoryId));
-          
-          Promise.all(loadPromises).finally(() => {
-            hideLoading();
-          });
+          Promise.all(loadPromises).catch(console.error);
         }
       }
     }
-  }, [selectedCategoryId, categoriesSafe, loadRecords, showLoading, hideLoading, getCategoryRecords]);
+  }, [selectedCategoryId, categoriesSafe, loadRecords, getCategoryRecords]);
 
   useEffect(() => {
     if (!selectedCategoryId && categoriesSafe.length > 0 && !showDbViewer) {
@@ -667,13 +664,7 @@ export const MainContent: React.FC = () => {
       if (firstRootCategory) {
         // 이미 선택된 카테고리가 있는지 확인
         const existingRecords = getCategoryRecords(firstRootCategory.id);
-        if (!existingRecords || existingRecords.length === 0) {
-          showLoading('초기 카테고리 로딩 중...', 15000, true);
-        }
         selectCategory(firstRootCategory.id);
-        setTimeout(() => {
-          hideLoading();
-        }, 500);
         
         // 백그라운드에서 자주 사용하는 카테고리들 프리로드
         setTimeout(() => {
@@ -688,7 +679,7 @@ export const MainContent: React.FC = () => {
         }, 1000); // 1초 후 백그라운드 로딩 시작
       }
     }
-  }, [selectedCategoryId, categoriesSafe, selectCategory, showDbViewer, showLoading, hideLoading, getCategoryRecords, loadRecords]);
+  }, [selectedCategoryId, categoriesSafe, selectCategory, showDbViewer, getCategoryRecords, loadRecords]);
 
   const [sortField, setSortField] = useState<string>('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');

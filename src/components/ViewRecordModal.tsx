@@ -92,7 +92,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   if (!isOpen || !record || !category) return null;
 
   const { categories, getCategoryRecords, selectCategory, loadRecords } = useERPStore();
-  const { showLoading, hideLoading } = useLoadingStore();
+  const { showLoading, hideLoading, setLoading: setGlobalLoading } = useLoadingStore();
 
   const [fileExists, setFileExists] = useState<boolean | null>(null);
   const [viewerModalOpen, setViewerModalOpen] = useState(false);
@@ -831,6 +831,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
     const ext = filePath ? filePath.slice(filePath.lastIndexOf('.')).toLowerCase() : '';
     const isVideo = /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(ext);
     const loadRecords = useERPStore(state => state.loadRecords);
+    const { showLoading: showGlobalLoading, hideLoading: hideGlobalLoading, setLoading: setGlobalLoading } = useLoadingStore();
 
     // duration: record에서 우선 사용, 없으면 lazy fetch
     React.useEffect(() => {
@@ -857,7 +858,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
 
     const reloadThumbnail = React.useCallback(() => {
       setLoading(true);
-      window.electronAPI.getThumbnailDataUrl(filePath)
+      return window.electronAPI.getThumbnailDataUrl(filePath)
         .then(res => {
           if (res) {
             setDataUrl(res);
@@ -867,11 +868,13 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
             setError(null);
           }
           setLoading(false);
+          return res;
         })
         .catch(e => {
           setDataUrl(null);
           setError(String(e));
           setLoading(false);
+          throw e;
         });
     }, [filePath]);
 
@@ -981,6 +984,8 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                   onRegenerate={async (newHh, newMm, newSs) => {
                     console.log('ViewRecordModal onRegenerate 호출됨:', { newHh, newMm, newSs });
                     setRegenLoading(true);
+                    // 즉시 로딩 표시 (500ms 지연 없이)
+                    setGlobalLoading(true, '썸네일 재생성 중...');
                     showLoading('썸네일 재생성 중...', 60000, true); // 60초 타임아웃, 취소 버튼 표시
                     try {
                       const totalSeconds = newHh * 3600 + newMm * 60 + newSs;
@@ -989,8 +994,8 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                       console.log('썸네일 재생성 결과:', res);
                       if (res) {
                         toast({ title: `썸네일이 ${newHh.toString().padStart(2, '0')}:${newMm.toString().padStart(2, '0')}:${newSs.toString().padStart(2, '0')} 지점에서 재생성되었습니다.` });
-                        reloadThumbnail();
                         window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));
+                        await reloadThumbnail();
                         if (categoryId) {
                           await loadRecords(categoryId);
                         }
@@ -1021,13 +1026,15 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                     type="button"
                     onClick={async () => {
                       setRegenLoading(true);
-                      showLoading('썸네일 재생성 중...', 30000, true); // 30초 타임아웃, 취소 버튼 표시
+                      // 즉시 로딩 표시 (500ms 지연 없이)
+                      setGlobalLoading(true, '썸네일 재생성 중...');
+                      showGlobalLoading('썸네일 재생성 중...', 30000, true); // 30초 타임아웃, 취소 버튼 표시
                       try {
                         const res = await window.electronAPI.regenerateThumbnail(filePath);
                         if (res) {
                           toast({ title: '썸네일이 재생성되었습니다.' });
-                          reloadThumbnail();
                           window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));
+                          await reloadThumbnail();
                           if (categoryId) {
                             await loadRecords(categoryId);
                           }
@@ -1038,7 +1045,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                         toast({ title: '썸네일 재생성 실패', description: String(e), variant: 'destructive' });
                       } finally {
                         setRegenLoading(false);
-                        hideLoading();
+                        hideGlobalLoading();
                       }
                     }}
                     disabled={regenLoading}

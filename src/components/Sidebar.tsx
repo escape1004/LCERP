@@ -15,10 +15,11 @@ export const Sidebar: React.FC = () => {
     selectCategory, 
     reorderCategories,
     setShowDbViewer,
-    getCategoryRecords
+    getCategoryRecords,
+    loadRecords
   } = useERPStore();
   
-  const { showLoading, hideLoading } = useLoadingStore();
+  const { showLoading, hideLoading, setLoading: setGlobalLoading } = useLoadingStore();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
@@ -78,17 +79,32 @@ export const Sidebar: React.FC = () => {
           style={{ paddingLeft: `${12 + level * 12}px` }}
           onMouseEnter={() => setHoveredCategory(category.id)}
           onMouseLeave={() => setHoveredCategory(null)}
-          onClick={() => {
+          onClick={async () => {
             // 이미 로드된 카테고리인지 확인
             const existingRecords = getCategoryRecords(category.id);
-            if (!existingRecords || existingRecords.length === 0) {
+            const needsLoading = !existingRecords || existingRecords.length === 0;
+            
+            if (needsLoading) {
+              // 즉시 로딩 표시 (500ms 지연 없이)
+              setGlobalLoading(true, '카테고리 로딩 중...');
               showLoading('카테고리 로딩 중...', 15000, true);
             }
+            
             selectCategory(category.id);
             setShowDbViewer(false);
-            setTimeout(() => {
-              hideLoading();
-            }, 300);
+            
+            // 로드되지 않은 경우 selectCategory가 완료될 때까지 대기 후 로딩 화면 닫기
+            if (needsLoading) {
+              // selectCategory는 내부에서 레코드를 로드하므로, 짧은 지연 후 로딩 화면 닫기
+              // 또는 loadRecords를 호출하여 확실히 로드 완료 확인
+              try {
+                await loadRecords(category.id);
+              } catch (error) {
+                console.error('카테고리 로드 오류:', error);
+              } finally {
+                hideLoading();
+              }
+            }
           }}
         >
           {level > 0 && (
@@ -145,17 +161,32 @@ export const Sidebar: React.FC = () => {
           style={{ paddingLeft: `${12 + level * 12}px` }}
           onMouseEnter={() => setHoveredCategory(category.id)}
           onMouseLeave={() => setHoveredCategory(null)}
-          onClick={() => {
+          onClick={async () => {
             // 이미 로드된 카테고리인지 확인
             const existingRecords = getCategoryRecords(category.id);
-            if (!existingRecords || existingRecords.length === 0) {
+            const needsLoading = !existingRecords || existingRecords.length === 0;
+            
+            if (needsLoading) {
+              // 즉시 로딩 표시 (500ms 지연 없이)
+              setGlobalLoading(true, '카테고리 로딩 중...');
               showLoading('카테고리 로딩 중...', 15000, true);
             }
+            
             selectCategory(category.id);
             setShowDbViewer(false);
-            setTimeout(() => {
-              hideLoading();
-            }, 300);
+            
+            // 로드되지 않은 경우 selectCategory가 완료될 때까지 대기 후 로딩 화면 닫기
+            if (needsLoading) {
+              // selectCategory는 내부에서 레코드를 로드하므로, 짧은 지연 후 로딩 화면 닫기
+              // 또는 loadRecords를 호출하여 확실히 로드 완료 확인
+              try {
+                await loadRecords(category.id);
+              } catch (error) {
+                console.error('카테고리 로드 오류:', error);
+              } finally {
+                hideLoading();
+              }
+            }
           }}
         >
           {level > 0 && (
