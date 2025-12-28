@@ -160,7 +160,6 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                   if ((window.electronAPI as any).removeAllBookmarks) {
                     const result = await (window.electronAPI as any).removeAllBookmarks(category.id, record.id);
                     if (result && result.success) {
-                      console.log('북마크가 삭제되었습니다:', filePath);
                     } else if (result && result.error) {
                       console.error('북마크 삭제 실패:', result.error);
                 }
@@ -232,7 +231,6 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
 
   const handleUrlClick = async (e: React.MouseEvent, url: string) => {
     e.preventDefault();
-    console.log('Attempting to open URL:', url);
     try {
       const result = await window.electronAPI.openExternal(url);
       if (!result.success) {
@@ -370,7 +368,6 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
       }, [value]);
 
       if (SUPPORTED_THUMBNAIL_EXTS.includes(ext)) {
-        console.log('썸네일 dataUrl:', thumbnailDataUrl, '에러:', error);
         return (
           <div className="flex flex-col items-start gap-2">
             {loading ? (
@@ -982,16 +979,13 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                     setSs(newSs);
                   }}
                   onRegenerate={async (newHh, newMm, newSs) => {
-                    console.log('ViewRecordModal onRegenerate 호출됨:', { newHh, newMm, newSs });
                     setRegenLoading(true);
                     // 즉시 로딩 표시 (500ms 지연 없이)
                     setGlobalLoading(true, '썸네일 재생성 중...');
                     showLoading('썸네일 재생성 중...', 60000, true); // 60초 타임아웃, 취소 버튼 표시
                     try {
                       const totalSeconds = newHh * 3600 + newMm * 60 + newSs;
-                      console.log('총 초 계산:', totalSeconds);
                       const res = await window.electronAPI.generateThumbnailWithTime(filePath, totalSeconds);
-                      console.log('썸네일 재생성 결과:', res);
                       if (res) {
                         toast({ title: `썸네일이 ${newHh.toString().padStart(2, '0')}:${newMm.toString().padStart(2, '0')}:${newSs.toString().padStart(2, '0')} 지점에서 재생성되었습니다.` });
                         window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { Plus, Settings, Menu, ChevronLeft, Database } from 'lucide-react';
+import { Plus, Settings, Menu, ChevronLeft, Database, LayoutDashboard } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useERPStore } from '../hooks/useERPStore';
 import { useLoadingStore } from '../hooks/useLoadingStore';
 import { Category } from '../types';
@@ -9,6 +10,8 @@ import { CategoryModal } from './CategoryModal';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export const Sidebar: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { 
     categories, 
     selectedCategoryId, 
@@ -80,6 +83,7 @@ export const Sidebar: React.FC = () => {
           onMouseEnter={() => setHoveredCategory(category.id)}
           onMouseLeave={() => setHoveredCategory(null)}
           onClick={async () => {
+            navigate('/category');
             // 이미 로드된 카테고리인지 확인
             const existingRecords = getCategoryRecords(category.id);
             const needsLoading = !existingRecords || existingRecords.length === 0;
@@ -162,6 +166,7 @@ export const Sidebar: React.FC = () => {
           onMouseEnter={() => setHoveredCategory(category.id)}
           onMouseLeave={() => setHoveredCategory(null)}
           onClick={async () => {
+            navigate('/category');
             // 이미 로드된 카테고리인지 확인
             const existingRecords = getCategoryRecords(category.id);
             const needsLoading = !existingRecords || existingRecords.length === 0;
@@ -257,6 +262,25 @@ export const Sidebar: React.FC = () => {
         >
           <ChevronLeft size={16} />
         </Button>
+      </div>
+
+      {/* Dashboard Menu */}
+      <div className="shrink-0 p-3 border-b border-gray-800">
+        <button
+          onClick={() => {
+            navigate('/dashboard');
+            setShowDbViewer(false);
+            selectCategory(null);
+          }}
+          className={`w-full flex items-center gap-3 px-3 py-2 rounded transition-colors ${
+            location.pathname === '/dashboard' || location.hash === '#/dashboard' || (location.pathname === '/' && location.hash === '')
+              ? 'bg-discord-accent text-white'
+              : 'hover:bg-discord-hover text-discord-text'
+          }`}
+        >
+          <LayoutDashboard size={18} />
+          <span className="text-sm font-medium">대시보드</span>
+        </button>
       </div>
 
       {/* Categories */}

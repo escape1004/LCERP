@@ -117,7 +117,6 @@ const renderUrl = (url: string) => (
             onClick={async (e) => {
               e.preventDefault();
               e.stopPropagation();
-              console.log('Attempting to open URL:', url);
               try {
                 const result = await window.electronAPI.openExternal(url);
                 if (!result.success) {
@@ -658,28 +657,9 @@ export const MainContent: React.FC = () => {
   }, [selectedCategoryId, categoriesSafe, loadRecords, getCategoryRecords]);
 
   useEffect(() => {
-    if (!selectedCategoryId && categoriesSafe.length > 0 && !showDbViewer) {
-      const rootCategories = categoriesSafe.filter(cat => !cat.parentId);
-      const firstRootCategory = [...rootCategories].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0];
-      if (firstRootCategory) {
-        // 이미 선택된 카테고리가 있는지 확인
-        const existingRecords = getCategoryRecords(firstRootCategory.id);
-        selectCategory(firstRootCategory.id);
-        
-        // 백그라운드에서 자주 사용하는 카테고리들 프리로드
-        setTimeout(() => {
-          const frequentlyUsedCategories = rootCategories.slice(1, 4); // 상위 3개 카테고리 (첫 번째 제외)
-          frequentlyUsedCategories.forEach(category => {
-            const existingRecords = getCategoryRecords(category.id);
-            if (!existingRecords || existingRecords.length === 0) {
-              // 백그라운드에서 로드 (로딩 표시 없이)
-              loadRecords(category.id).catch(console.error);
-            }
-          });
-        }, 1000); // 1초 후 백그라운드 로딩 시작
-      }
-    }
-  }, [selectedCategoryId, categoriesSafe, selectCategory, showDbViewer, getCategoryRecords, loadRecords]);
+    // 첫 카테고리 자동 선택 로직 제거 (대시보드가 기본 화면)
+    // 카테고리를 수동으로 선택할 때만 로드
+  }, []);
 
   const [sortField, setSortField] = useState<string>('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');

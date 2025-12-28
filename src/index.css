@@ -195,6 +195,12 @@
   transform: scale(1.1);
 }
 
+/* Recharts bar hover style */
+.recharts-bar-rectangle:hover {
+  fill: #36393f !important;
+  cursor: pointer;
+}
+
 .video-progress::-moz-range-thumb {
   height: 16px;
   width: 16px;
