@@ -38,6 +38,21 @@ if (!gotTheLock) {
       }
     });
 
+    // 네비게이션 방지 (뒤로가기 등)
+    win.webContents.on('will-navigate', (event, navigationUrl) => {
+      const currentUrl = win.webContents.getURL();
+      // 같은 도메인 내에서의 네비게이션만 허용 (HashRouter는 URL 변경 없음)
+      // 외부 링크나 뒤로가기로 인한 네비게이션은 차단
+      if (navigationUrl !== currentUrl && !navigationUrl.includes('#')) {
+        event.preventDefault();
+      }
+    });
+
+    // 새 창 열기 방지
+    win.webContents.setWindowOpenHandler(() => {
+      return { action: 'deny' };
+    });
+
     if (isDevelopment) {
       win.loadURL('http://localhost:5174');
       win.webContents.openDevTools();

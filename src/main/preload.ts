@@ -1,6 +1,61 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { NewCategory, CategoryUpdate, NewRecord, ElectronAPI } from '../types.d';
 
+// 전역 마우스 4번 버튼(뒤로가기) 기본 동작 방지
+// DOM이 로드되면 이벤트 리스너 추가
+const setupMouseBackButtonPrevention = () => {
+  const handleAuxClick = (e: MouseEvent) => {
+    // 마우스 4번 버튼(뒤로가기) = button 3
+    if (e.button === 3) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      // 히스토리도 즉시 복원
+      const currentPath = window.location.hash || '#/dashboard';
+      window.history.pushState({ preventBack: true }, '', currentPath);
+      return false;
+    }
+  };
+
+  const handleMouseDown = (e: MouseEvent) => {
+    // 마우스 4번 버튼(뒤로가기) = button 3
+    if (e.button === 3) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      // 히스토리도 즉시 복원
+      const currentPath = window.location.hash || '#/dashboard';
+      window.history.pushState({ preventBack: true }, '', currentPath);
+      return false;
+    }
+  };
+
+  const handleMouseUp = (e: MouseEvent) => {
+    // 마우스 4번 버튼(뒤로가기) = button 3
+    if (e.button === 3) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      // 히스토리도 즉시 복원
+      const currentPath = window.location.hash || '#/dashboard';
+      window.history.pushState({ preventBack: true }, '', currentPath);
+      return false;
+    }
+  };
+
+  // 캡처 단계에서 이벤트 처리 (다른 리스너보다 먼저)
+  document.addEventListener('auxclick', handleAuxClick, true);
+  document.addEventListener('mousedown', handleMouseDown, true);
+  document.addEventListener('mouseup', handleMouseUp, true);
+};
+
+// DOM이 준비되면 실행
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupMouseBackButtonPrevention);
+} else {
+  setupMouseBackButtonPrevention();
+}
+
 // API 정의
 const api: ElectronAPI = {
   getTables: () => ipcRenderer.invoke('db:getTables'),
