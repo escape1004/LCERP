@@ -1271,12 +1271,41 @@ export const MainContent: React.FC = () => {
                                 record={record}
                                 onThumbnailClick={async (filePath) => {
                                   const fileType = await window.electronAPI.getFileType(filePath);
-                                  if (fileType === 'image' || fileType === 'video' || fileType === 'archive') {
+                                  if (fileType === 'image' || fileType === 'video') {
                                     setViewerFilePath(filePath);
                                     setViewerFileType(fileType);
                                     setViewerCategoryId(selectedCategorySafe?.id || '');
                                     setViewerRecordId(record.id);
                                     setViewerModalOpen(true);
+                                  } else if (fileType === 'archive') {
+                                    // 압축파일인 경우 읽을 수 있는 파일이 있는지 확인
+                                    try {
+                                      const files = await window.electronAPI.getArchiveFiles(filePath);
+                                      const supportedFiles = files.filter(file => 
+                                        !file.isDirectory && /\.(jpg|jpeg|png|gif|webp|mp4|avi|mkv|mov|wmv|flv|webm|txt)$/i.test(file.name)
+                                      );
+                                      
+                                      if (supportedFiles.length === 0) {
+                                        toast({ 
+                                          title: '읽을 수 있는 파일이 없습니다', 
+                                          description: '압축파일 내에 이미지, 동영상, 텍스트 파일이 없습니다.', 
+                                          variant: 'destructive' 
+                                        });
+                                        return;
+                                      }
+                                      
+                                      setViewerFilePath(filePath);
+                                      setViewerFileType(fileType);
+                                      setViewerCategoryId(selectedCategorySafe?.id || '');
+                                      setViewerRecordId(record.id);
+                                      setViewerModalOpen(true);
+                                    } catch (error) {
+                                      toast({ 
+                                        title: '압축파일 열기 실패', 
+                                        description: '압축파일을 읽을 수 없습니다.', 
+                                        variant: 'destructive' 
+                                      });
+                                    }
                                   }
                                 }}
                               />
