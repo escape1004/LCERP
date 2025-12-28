@@ -70,10 +70,34 @@ const generateThumbnailForFile = async (filePath: string, timestampSec: number =
         .resize(400, 400, { fit: 'contain' })
         .toFile(thumbnailPath);
     } else if (isVideo) {
+      // 동영상 길이 확인
+      const ffprobeStatic = require('ffprobe-static');
+      if (ffprobeStatic && fs.existsSync(ffprobeStatic)) {
+        ffmpeg.setFfprobePath(ffprobeStatic);
+      }
+      
+      // 동영상 duration 확인
+      const duration = await new Promise<number | null>((resolve) => {
+        ffmpeg.ffprobe(normalizedPath, (err: any, metadata: any) => {
+          if (err || !metadata?.format?.duration) {
+            resolve(null);
+          } else {
+            resolve(metadata.format.duration);
+          }
+        });
+      });
+      
+      // timestamp 결정: duration이 timestampSec보다 짧으면 0초 또는 중간 지점 사용
+      let finalTimestampSec = timestampSec;
+      if (duration !== null && duration < timestampSec) {
+        // duration이 요청한 timestamp보다 짧으면 0초 또는 중간 지점 사용
+        finalTimestampSec = Math.max(0, duration / 2);
+      }
+      
       await new Promise((resolve, reject) => {
         ffmpeg(normalizedPath)
           .screenshots({
-            timestamps: [timestampSec],
+            timestamps: [finalTimestampSec],
             filename: path.basename(thumbnailPath),
             folder: thumbnailDir,
             size: '400x400'
