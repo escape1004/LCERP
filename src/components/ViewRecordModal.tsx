@@ -563,7 +563,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
             <Tooltip>
               <TooltipTrigger asChild>
                 <div 
-                  className="whitespace-pre-wrap text-discord-text break-words overflow-wrap-anywhere px-3 py-2 rounded transition-colors border border-gray-600 max-h-[240px] overflow-y-auto inline-block" 
+                  className="whitespace-pre-wrap text-discord-text break-words overflow-wrap-anywhere px-3 py-2 rounded transition-colors border border-gray-600 max-h-[240px] overflow-y-auto block w-full" 
                   onClick={async (e) => {
                     e.stopPropagation();
                     try {
