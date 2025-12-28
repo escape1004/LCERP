@@ -387,12 +387,23 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                     />
                   </TooltipTrigger>
                   <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-                    썸네일 클릭 시 뷰어 모달 열기
+                    {value ? (thumbnailDataUrl ? '썸네일 클릭 시 뷰어 모달 열기' : '클릭 시 뷰어 모달 열기 (썸네일 없음)') : '첨부파일이 없습니다'}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
+            ) : value ? (
+              // 파일은 있지만 썸네일이 없는 경우
+              <div 
+                className="w-[96px] h-[96px] bg-gray-900 flex items-center justify-center text-xs text-gray-500 border border-gray-700 rounded cursor-pointer hover:bg-gray-800 transition-colors"
+                onClick={() => handleThumbnailClick(value)}
+              >
+                썸네일 없음
+              </div>
             ) : (
-              <div className="w-[96px] h-[96px] bg-gray-900 flex items-center justify-center text-xs text-gray-500 border border-gray-700 rounded">썸네일 없음</div>
+              // 파일이 없는 경우
+              <div className="w-[96px] h-[96px] bg-gray-950 flex items-center justify-center text-xs text-gray-600 border border-gray-800 rounded">
+                파일 없음
+              </div>
             )}
             <TooltipProvider>
               <Tooltip>
@@ -934,12 +945,23 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                 </div>
               </TooltipTrigger>
               <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-                썸네일 클릭 시 뷰어 모달 열기
+                {filePath ? (dataUrl ? '썸네일 클릭 시 뷰어 모달 열기' : '클릭 시 뷰어 모달 열기 (썸네일 없음)') : '첨부파일이 없습니다'}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+        ) : filePath ? (
+          // 파일은 있지만 썸네일이 없는 경우
+          <div 
+            className="w-[320px] h-[320px] bg-gray-900 flex items-center justify-center text-lg text-gray-500 border border-gray-700 rounded-xl cursor-pointer hover:bg-gray-800 transition-colors"
+            onClick={() => canOpenFile && handleThumbnailClick(filePath)}
+          >
+            썸네일 없음
+          </div>
         ) : (
-          <div className="w-[320px] h-[320px] bg-gray-900 flex items-center justify-center text-lg text-gray-500 border border-gray-700 rounded-xl">썸네일 없음</div>
+          // 파일이 없는 경우
+          <div className="w-[320px] h-[320px] bg-gray-950 flex items-center justify-center text-lg text-gray-600 border border-gray-800 rounded-xl">
+            파일 없음
+          </div>
         )}
         {/* 시간 입력/슬라이더 부분만 분기 */}
         {isVideo && fileExists === true && (

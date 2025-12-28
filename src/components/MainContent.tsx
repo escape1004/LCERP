@@ -524,9 +524,18 @@ const ThumbnailCell: React.FC<{
                   </div>
                 )}
               </>
-            ) : (
-              <div className="w-24 h-24 bg-gray-800 flex items-center justify-center text-gray-500 border border-gray-700 rounded">
+            ) : filePath ? (
+              // 파일은 있지만 썸네일이 없는 경우
+              <div 
+                className="w-24 h-24 bg-gray-800 flex items-center justify-center text-gray-500 border border-gray-700 rounded cursor-pointer hover:bg-gray-700 transition-colors"
+                onClick={() => onThumbnailClick(filePath)}
+              >
                 <span className="text-2xl">🖼️</span>
+              </div>
+            ) : (
+              // 파일이 없는 경우
+              <div className="w-24 h-24 bg-gray-900 flex items-center justify-center text-gray-600 border border-gray-800 rounded">
+                <span className="text-2xl">📄</span>
               </div>
             )}
             {/* 파일 확장자 표시 */}
@@ -538,7 +547,7 @@ const ThumbnailCell: React.FC<{
           </div>
         </TooltipTrigger>
         <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-          썸네일 클릭 시 뷰어 모달 열기
+          {filePath ? (dataUrl ? '썸네일 클릭 시 뷰어 모달 열기' : '클릭 시 뷰어 모달 열기 (썸네일 없음)') : '첨부파일이 없습니다'}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
