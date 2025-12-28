@@ -1056,6 +1056,37 @@ export const MainContent: React.FC = () => {
     setIsAlertDialogOpen(true);
   };
 
+  const handlePageInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const pageNumber = parseInt(pageInputValue);
+      if (pageNumber >= 1 && pageNumber <= totalPages) {
+        setCurrentPage(pageNumber);
+        setIsPageInputMode(false);
+        setPageInputValue('');
+        scrollTableToTop();
+      }
+    } else if (e.key === 'Escape') {
+      setIsPageInputMode(false);
+      setPageInputValue('');
+    }
+  };
+
+  const handlePageInputBlur = () => {
+    const pageNumber = parseInt(pageInputValue);
+    if (pageNumber >= 1 && pageNumber <= totalPages) {
+      setCurrentPage(pageNumber);
+      scrollTableToTop();
+    }
+    setIsPageInputMode(false);
+    setPageInputValue('');
+  };
+
+  const handlePageNumberClick = () => {
+    setIsPageInputMode(true);
+    setPageInputValue(currentPage.toString());
+  };
+
   return (
     <div className="flex-1 h-full flex flex-col bg-discord-bg">
       {showDbViewer ? (
@@ -1312,9 +1343,29 @@ export const MainContent: React.FC = () => {
                       >
                         이전
                       </Button>
-                      <span className="flex items-center px-3 text-sm text-discord-text">
+                      {isPageInputMode ? (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            type="number"
+                            value={pageInputValue}
+                            onChange={(e) => setPageInputValue(e.target.value)}
+                            onKeyDown={handlePageInputKeyDown}
+                            onBlur={handlePageInputBlur}
+                            className="w-16 h-8 text-sm text-center bg-discord-sidebar border-gray-600 text-discord-text [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            min={1}
+                            max={totalPages}
+                            autoFocus
+                          />
+                          <span className="text-sm text-discord-text">/ {Math.max(totalPages, 1)}</span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={handlePageNumberClick}
+                          className="flex items-center px-3 text-sm text-discord-text hover:bg-discord-hover rounded cursor-pointer"
+                        >
                           {currentPage} / {Math.max(totalPages, 1)}
-                      </span>
+                        </button>
+                      )}
                       <Button
                         size="sm"
                         variant="outline"
