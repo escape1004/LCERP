@@ -617,6 +617,7 @@ export const MainContent: React.FC = () => {
     setCurrentPage(1); // Reset pagination when category changes
     setSortField(''); // Reset sort field when category changes
     setSortDirection('asc'); // Reset sort direction when category changes
+    setFileTypeFilter('all'); // Reset file type filter when category changes
     scrollTableToTop(); // Reset scroll position when category changes
   }, [selectedCategoryId, setCurrentPage]);
 
@@ -692,13 +693,40 @@ export const MainContent: React.FC = () => {
   const [sortField, setSortField] = useState<string>('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [searchField, setSearchField] = useState<string>('all');
+  const [fileTypeFilter, setFileTypeFilter] = useState<string>('all'); // 'all', 'image', 'video', 'archive'
 
-  // Custom filtered records based on field-specific search
+  // 파일 필드 존재 여부
+  const fileField = selectedCategorySafe?.fields.find(f => f.type === 'file');
+
+  // 파일 확장자로 타입 확인 함수
+  const getFileTypeFromPath = (filePath: string): 'image' | 'video' | 'archive' | 'other' => {
+    if (!filePath || typeof filePath !== 'string') return 'other';
+    const ext = filePath.slice(filePath.lastIndexOf('.')).toLowerCase();
+    if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)) return 'image';
+    if (['.mp4', '.avi', '.mkv', '.mov'].includes(ext)) return 'video';
+    if (['.zip', '.7z'].includes(ext)) return 'archive';
+    return 'other';
+  };
+
+  // Custom filtered records based on field-specific search and file type filter
   const customFilteredRecords = useMemo(() => {
     if (!selectedCategoryId) return [];
-    if (!searchTerm) return currentRecordsSafe;
+    
+    // 먼저 파일 타입 필터 적용
+    let filteredByFileType = currentRecordsSafe;
+    if (fileField && fileTypeFilter !== 'all') {
+      filteredByFileType = currentRecordsSafe.filter((record) => {
+        const filePath = record.data[fileField.id];
+        if (!filePath || filePath === '' || filePath === '-') return false;
+        const fileType = getFileTypeFromPath(filePath);
+        return fileType === fileTypeFilter;
+      });
+    }
+    
+    // 검색어가 없으면 파일 타입 필터만 적용한 결과 반환
+    if (!searchTerm) return filteredByFileType;
 
-    return currentRecordsSafe.filter((record) => {
+    return filteredByFileType.filter((record) => {
       if (searchField === 'all') {
         const visibleFields = selectedCategorySafe?.fields.filter(f => !f.hidden) || [];
         return visibleFields.some((field) => {
@@ -764,10 +792,7 @@ export const MainContent: React.FC = () => {
         return String(value || '').toLowerCase().includes(searchTerm.toLowerCase());
       }
     });
-  }, [selectedCategoryId, searchTerm, searchField, currentRecordsSafe, selectedCategorySafe, categoriesSafe, getCategoryRecords]);
-
-  // 파일 필드 존재 여부
-  const fileField = selectedCategorySafe?.fields.find(f => f.type === 'file');
+  }, [selectedCategoryId, searchTerm, searchField, fileTypeFilter, currentRecordsSafe, selectedCategorySafe, categoriesSafe, getCategoryRecords, fileField]);
 
   // Sorting
   const sortedRecords = useMemo(() => {
@@ -1151,6 +1176,21 @@ export const MainContent: React.FC = () => {
                   ))}
                 </SelectContent>
               </Select>
+              {/* 파일 확장자 필터 - 파일 필드가 있는 경우에만 표시 */}
+              {fileField && (
+                <Select value={fileTypeFilter} onValueChange={setFileTypeFilter}>
+                  <SelectTrigger className="w-40 bg-discord-sidebar border-gray-600 text-discord-text">
+                    <FileText size={16} className="mr-2" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-discord-sidebar border-gray-600">
+                    <SelectItem value="all">전체 파일</SelectItem>
+                    <SelectItem value="image">이미지</SelectItem>
+                    <SelectItem value="video">동영상</SelectItem>
+                    <SelectItem value="archive">압축파일</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
 
