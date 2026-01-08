@@ -778,16 +778,34 @@ export const MainContent: React.FC = () => {
 
       if (sortField === '__thumbnail') {
         // 썸네일 유무에 따른 정렬
-        const hasThumbnailA = fileField && a.data[fileField.id] && a.data[fileField.id] !== '' && a.data[fileField.id] !== '-';
-        const hasThumbnailB = fileField && b.data[fileField.id] && b.data[fileField.id] !== '' && b.data[fileField.id] !== '-';
+        if (!fileField) return 0; // 파일 필드가 없으면 정렬하지 않음
         
+        const getFileValue = (record: DataRecord): string | null => {
+          const value = record.data[fileField.id];
+          if (!value || value === '' || value === '-') return null;
+          return String(value);
+        };
+        
+        const fileValueA = getFileValue(a);
+        const fileValueB = getFileValue(b);
+        
+        const hasThumbnailA = fileValueA !== null;
+        const hasThumbnailB = fileValueB !== null;
+        
+        // 둘 다 썸네일이 있거나 둘 다 없는 경우
+        if (hasThumbnailA === hasThumbnailB) {
+          return 0;
+        }
+        
+        // 썸네일 유무에 따라 정렬
         if (hasThumbnailA && !hasThumbnailB) {
           return sortDirection === 'asc' ? -1 : 1; // 오름차순: 썸네일 있는 것 먼저, 내림차순: 썸네일 없는 것 먼저
         }
         if (!hasThumbnailA && hasThumbnailB) {
-          return sortDirection === 'asc' ? 1 : -1;
+          return sortDirection === 'asc' ? 1 : -1; // 오름차순: 썸네일 없는 것 나중, 내림차순: 썸네일 없는 것 먼저
         }
-        return 0; // 둘 다 썸네일이 있거나 둘 다 없는 경우
+        
+        return 0;
       }
 
       let aValue = a.data[sortField];
