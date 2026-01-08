@@ -970,7 +970,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                       }}
                       className="p-2 rounded bg-black/70 text-white hover:bg-black/90 transition-colors backdrop-blur-sm"
                     >
-                      <RotateCw size={20} style={{ transform: 'scaleX(-1)' }} />
+                      <RotateCw size={20} />
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">오른쪽으로 90도 회전</TooltipContent>
