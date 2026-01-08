@@ -6,6 +6,7 @@ import { Category, DataRecord } from '../types';
 import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipProps } from 'recharts';
 import { FileText, Image, Video, Archive, Folder, Calendar } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { ViewRecordModal } from '../components/ViewRecordModal';
 
 const COLORS = ['#5865F2', '#57F287', '#FEE75C', '#ED4245', '#EB459E', '#95A5A6'];
 
@@ -72,6 +73,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [categoryStats, setCategoryStats] = useState<CategoryStats[]>([]);
   const [dateUnit, setDateUnit] = useState<'day' | 'month' | 'year'>('day');
+  const [viewRecordModalOpen, setViewRecordModalOpen] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<DataRecord | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
 
   useEffect(() => {
     const loadAllData = async () => {
@@ -552,7 +556,14 @@ export default function Dashboard() {
                             return (
                               <div key={record.id} className="text-xs text-discord-text flex items-center gap-2">
                                 <Calendar size={12} className="text-discord-muted" />
-                                <span>
+                                <span
+                                  className="cursor-pointer hover:text-discord-accent transition-colors"
+                                  onClick={() => {
+                                    setSelectedRecord(record);
+                                    setSelectedCategory(stat.category);
+                                    setViewRecordModalOpen(true);
+                                  }}
+                                >
                                   {displayValue}
                                   <span className="text-gray-500 text-[10px] ml-1">({dateStr})</span>
                                 </span>
@@ -574,6 +585,18 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+      {selectedRecord && selectedCategory && (
+        <ViewRecordModal
+          isOpen={viewRecordModalOpen}
+          onClose={() => {
+            setViewRecordModalOpen(false);
+            setSelectedRecord(null);
+            setSelectedCategory(null);
+          }}
+          category={selectedCategory}
+          record={selectedRecord}
+        />
+      )}
     </div>
   );
 }
