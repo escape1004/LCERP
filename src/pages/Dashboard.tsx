@@ -358,8 +358,14 @@ export default function Dashboard() {
               {categoryRecordData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
                   <style>{`
-                    .recharts-bar-rectangle:hover {
-                      fill: #42464d !important;
+                    .recharts-wrapper:hover {
+                      background-color: transparent !important;
+                    }
+                    .recharts-surface:hover {
+                      background-color: transparent !important;
+                    }
+                    .recharts-tooltip-wrapper {
+                      background-color: #2F3136 !important;
                     }
                   `}</style>
                   <BarChart 
@@ -538,15 +544,15 @@ export default function Dashboard() {
                     <div className="grid grid-cols-3 gap-4">
                       <div className="flex items-center gap-2">
                         <Image size={16} className="text-purple-400" />
-                        <span className="text-sm text-discord-muted">이미지: {formatNumber(stat.imageCount)}</span>
+                        <span className="text-sm text-white">이미지: {formatNumber(stat.imageCount)}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Video size={16} className="text-red-400" />
-                        <span className="text-sm text-discord-muted">동영상: {formatNumber(stat.videoCount)}</span>
+                        <span className="text-sm text-white">동영상: {formatNumber(stat.videoCount)}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Archive size={16} className="text-yellow-400" />
-                        <span className="text-sm text-discord-muted">압축파일: {formatNumber(stat.archiveCount)}</span>
+                        <span className="text-sm text-white">압축파일: {formatNumber(stat.archiveCount)}</span>
                       </div>
                     </div>
                     {stat.recentRecords.length > 0 && (

@@ -201,6 +201,13 @@
   cursor: pointer;
 }
 
+/* Recharts wrapper and surface hover - remove background color change */
+.recharts-wrapper:hover,
+.recharts-surface:hover {
+  background-color: transparent !important;
+  background: transparent !important;
+}
+
 .video-progress::-moz-range-thumb {
   height: 16px;
   width: 16px;
