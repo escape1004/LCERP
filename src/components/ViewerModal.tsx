@@ -105,9 +105,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
         try {
           if ((window.electronAPI as any).removeAllBookmarks) {
             const res = await (window.electronAPI as any).removeAllBookmarks(categoryId, recordId);
-            if (res && res.success) {
-              console.log('파일 없음으로 인한 북마크 자동 삭제 완료');
-            } else if (res && res.error) {
+            if (res && res.error) {
               console.error('북마크 자동 삭제 실패:', res.error);
             }
           }
@@ -1108,23 +1106,15 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                           onTimeUpdate={handleTimeUpdate}
                           onClick={handleVideoClick}
                           onError={(e) => {
-                            console.error('동영상 재생 에러:', e);
-                            console.error('동영상 소스:', dataUrl?.substring(0, 100) + '...');
-                            console.error('파일 경로:', filePath);
-                            // 에러 정보를 더 자세히 로깅
                             const video = e.target as HTMLVideoElement;
                             if (video.error) {
-                              console.error('비디오 에러 코드:', video.error.code);
-                              console.error('비디오 에러 메시지:', video.error.message);
+                              console.error('동영상 재생 에러:', video.error.message);
                             }
                             setVideoError('동영상을 재생할 수 없습니다.');
                             setCodecInfo(null);
                             if (filePath) {
                               window.electronAPI.getVideoCodecInfo(filePath).then(setCodecInfo);
                             }
-                          }}
-                          onLoadStart={() => {
-                            // 동영상 로딩 시작
                           }}
                           onCanPlay={() => {
                             setVideoError(null);
@@ -1503,24 +1493,15 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                   onTimeUpdate={handleTimeUpdate}
                                   onClick={handleVideoClick}
                                   onError={(e) => {
-                                    console.error('동영상 재생 에러:', e);
-                                    console.error('동영상 소스:', currentArchiveDataUrl?.substring(0, 100) + '...');
-                                    console.error('파일 경로:', filePath);
-                                    console.error('압축 파일 내 파일명:', currentFile?.name);
-                                    // 에러 정보를 더 자세히 로깅
                                     const video = e.target as HTMLVideoElement;
                                     if (video.error) {
-                                      console.error('비디오 에러 코드:', video.error.code);
-                                      console.error('비디오 에러 메시지:', video.error.message);
+                                      console.error('동영상 재생 에러:', video.error.message);
                                     }
                                     setVideoError('동영상을 재생할 수 없습니다.');
                                     setCodecInfo(null);
                                     if (filePath) {
                                       window.electronAPI.getVideoCodecInfo(filePath).then(setCodecInfo);
                                     }
-                                  }}
-                                  onLoadStart={() => {
-                                    // 동영상 로딩 시작
                                   }}
                                   onCanPlay={() => {
                                     setVideoError(null);

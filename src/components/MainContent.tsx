@@ -650,7 +650,9 @@ export const MainContent: React.FC = () => {
         // 로드할 카테고리가 있으면 백그라운드에서 로드 (로딩 표시 없이)
         if (categoriesToLoad.length > 0) {
           const loadPromises = categoriesToLoad.map(categoryId => loadRecords(categoryId));
-          Promise.all(loadPromises).catch(console.error);
+          Promise.all(loadPromises).catch((error) => {
+            console.error('카테고리 로드 중 오류:', error);
+          });
         }
       }
     }

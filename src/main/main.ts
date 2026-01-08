@@ -92,8 +92,6 @@ if (!gotTheLock) {
           FOREIGN KEY (categoryId) REFERENCES categories (id)
         )
       `).run();
-
-      console.log('Database initialized successfully');
     } catch (error) {
       console.error('Failed to initialize database:', error);
     }
@@ -101,36 +99,27 @@ if (!gotTheLock) {
 
   app.whenReady().then(() => {
     initializeDatabase();
-    console.log('=== Database initialized ===');
     if (db) {
-      console.log('=== Registering handlers directly in main.ts ===');
-      
       // 핸들러들을 main.ts에서 직접 등록
       const { getFileType } = require('../lib/fileHandler');
       
       // db:getFileType 핸들러 등록
-      console.log('=== Registering db:getFileType ===');
       ipcMain.handle('db:getFileType', async (_, filePath) => {
         try {
-          console.log('=== db:getFileType called with:', filePath);
           return getFileType(filePath);
         } catch (e) {
-          console.error('=== db:getFileType error:', e);
+          console.error('db:getFileType error:', e);
           return 'other';
         }
       });
       
       // db:getCategories 핸들러 등록
-      console.log('=== Registering db:getCategories ===');
       ipcMain.handle('db:getCategories', async () => {
-        console.log('Getting categories...');
         const categories = db.prepare('SELECT * FROM categories ORDER BY order_num').all();
-        console.log('Categories found:', { count: categories.length });
         return categories;
       });
       
       // db:getRecords 핸들러 등록
-      console.log('=== Registering db:getRecords ===');
       ipcMain.handle('db:getRecords', async (_, categoryId) => {
         if (!db) throw new Error('Database not initialized');
         if (!categoryId) throw new Error('No categoryId provided');
@@ -142,7 +131,6 @@ if (!gotTheLock) {
       });
       
       // getFileSize 핸들러 등록
-      console.log('=== Registering getFileSize ===');
       ipcMain.handle('getFileSize', async (_, filePath) => {
         try {
           if (!fs.existsSync(filePath)) {
@@ -160,7 +148,6 @@ if (!gotTheLock) {
       });
       
       // getConfig 핸들러 등록
-      console.log('=== Registering getConfig ===');
       ipcMain.handle('getConfig', async () => {
         try {
           const configPath = path.join(process.cwd(), 'config.json');
@@ -191,7 +178,6 @@ if (!gotTheLock) {
       });
       
       // deleteThumbnail 핸들러 등록
-      console.log('=== Registering deleteThumbnail ===');
       ipcMain.handle('deleteThumbnail', async (_, filePath) => {
         try {
           const thumbnailDir = path.join(process.cwd(), 'save', 'thumbnails');
