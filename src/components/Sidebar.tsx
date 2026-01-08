@@ -19,7 +19,8 @@ export const Sidebar: React.FC = () => {
     reorderCategories,
     setShowDbViewer,
     getCategoryRecords,
-    loadRecords
+    loadRecords,
+    showDbViewer
   } = useERPStore();
   
   const { showLoading, hideLoading, setLoading: setGlobalLoading } = useLoadingStore();
@@ -273,7 +274,7 @@ export const Sidebar: React.FC = () => {
             selectCategory(null);
           }}
           className={`w-full flex items-center gap-3 px-3 py-2 rounded transition-colors ${
-            location.pathname === '/dashboard' || location.hash === '#/dashboard' || (location.pathname === '/' && location.hash === '')
+            (location.pathname === '/dashboard' || location.hash === '#/dashboard' || (location.pathname === '/' && location.hash === '')) && !showDbViewer
               ? 'bg-discord-accent text-white'
               : 'hover:bg-discord-hover text-discord-text'
           }`}

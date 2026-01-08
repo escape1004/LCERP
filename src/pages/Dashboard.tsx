@@ -7,6 +7,7 @@ import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Cart
 import { FileText, Image, Video, Archive, Folder, Calendar } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { ViewRecordModal } from '../components/ViewRecordModal';
+import { DatabaseViewer } from '../components/DatabaseViewer';
 
 const COLORS = ['#5865F2', '#57F287', '#FEE75C', '#ED4245', '#EB459E', '#95A5A6'];
 
@@ -69,7 +70,7 @@ const StatCard: React.FC<{ title: string; value: string | number; icon: React.Re
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { categories, loadCategories, loadRecords, getCategoryRecords, selectCategory } = useERPStore();
+  const { categories, loadCategories, loadRecords, getCategoryRecords, selectCategory, showDbViewer } = useERPStore();
   const [loading, setLoading] = useState(true);
   const [categoryStats, setCategoryStats] = useState<CategoryStats[]>([]);
   const [dateUnit, setDateUnit] = useState<'day' | 'month' | 'year'>('day');
@@ -306,9 +307,14 @@ export default function Dashboard() {
   return (
     <div className="flex h-full overflow-hidden">
       <Sidebar />
-      <div className="flex-1 overflow-y-auto bg-discord-bg discord-scrollbar">
-        <div className="p-6">
-          <h1 className="text-2xl font-bold text-discord-text mb-6">대시보드</h1>
+      {showDbViewer ? (
+        <div className="flex-1 flex flex-col min-h-0">
+          <DatabaseViewer />
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto bg-discord-bg discord-scrollbar">
+          <div className="p-6">
+            <h1 className="text-2xl font-bold text-discord-text mb-6">대시보드</h1>
           
           {/* 전체 통계 카드 */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
@@ -584,7 +590,8 @@ export default function Dashboard() {
             )}
           </div>
         </div>
-      </div>
+        </div>
+      )}
       {selectedRecord && selectedCategory && (
         <ViewRecordModal
           isOpen={viewRecordModalOpen}
