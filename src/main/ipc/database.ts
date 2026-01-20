@@ -73,8 +73,6 @@ const backupDatabase = () => {
           fs.unlinkSync(path.join(config.backupDir, file));
         });
       }
-      
-      console.log(`Database backed up to: ${backupPath}`);
     }
   } catch (error) {
     console.error('Failed to backup database:', error);

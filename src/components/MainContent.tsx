@@ -1150,6 +1150,18 @@ export const MainContent: React.FC = () => {
                     >
                       항목 다중 추가
                     </ContextMenuItem>
+                    <ContextMenuItem disabled>
+                      CSV 내보내기 (개발중)
+                    </ContextMenuItem>
+                    <ContextMenuItem disabled>
+                      Excel 내보내기 (개발중)
+                    </ContextMenuItem>
+                    <ContextMenuItem disabled>
+                      CSV 가져오기 (개발중)
+                    </ContextMenuItem>
+                    <ContextMenuItem disabled>
+                      Excel 가져오기 (개발중)
+                    </ContextMenuItem>
                   </ContextMenuContent>
                 </ContextMenu>
               </div>

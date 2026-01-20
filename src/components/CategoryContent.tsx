@@ -709,15 +709,6 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
             </p>
           </div>
           <div className="flex gap-3">
-            <Button
-              onClick={exportToCSV}
-              variant="outline"
-              className="border-gray-600 hover:bg-discord-hover"
-              disabled={sortedRecords.length === 0}
-            >
-              <Download size={16} className="mr-2" />
-              CSV 다운로드
-            </Button>
             <ContextMenu>
               <ContextMenuTrigger asChild>
                 <Button
@@ -739,6 +730,18 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
                   }}
                 >
                   항목 다중 추가
+                </ContextMenuItem>
+                <ContextMenuItem disabled>
+                  CSV 내보내기 (개발중)
+                </ContextMenuItem>
+                <ContextMenuItem disabled>
+                  Excel 내보내기 (개발중)
+                </ContextMenuItem>
+                <ContextMenuItem disabled>
+                  CSV 가져오기 (개발중)
+                </ContextMenuItem>
+                <ContextMenuItem disabled>
+                  Excel 가져오기 (개발중)
                 </ContextMenuItem>
               </ContextMenuContent>
             </ContextMenu>
