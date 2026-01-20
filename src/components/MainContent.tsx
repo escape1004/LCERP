@@ -24,6 +24,13 @@ import { ConfirmDialog } from './ui/confirm-dialog';
 import { AlertDialog } from './ui/alert-dialog';
 import { CategoryModal } from './CategoryModal';
 import { format } from "date-fns";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "./ui/context-menu";
+import { BulkAddModal } from './BulkAddModal';
 
 // 해시태그 파싱 유틸리티 함수
 const parseHashtags = (text: string): { hashtags: string[]; plainText: string } => {
@@ -946,6 +953,7 @@ export const MainContent: React.FC = () => {
   const [viewerFileType, setViewerFileType] = useState<'image' | 'video' | 'archive' | null>(null);
   const [viewerCategoryId, setViewerCategoryId] = useState<string>('');
   const [viewerRecordId, setViewerRecordId] = useState<string>('');
+  const [isBulkAddModalOpen, setIsBulkAddModalOpen] = useState(false);
 
   // Ctrl+좌우 방향키 페이지 이동 핸들러
   useEffect(() => {
@@ -1120,16 +1128,30 @@ export const MainContent: React.FC = () => {
                   </h1>
               </div>
               <div className="flex gap-3">
-                <Button
-                  onClick={() => {
-                    setEditingRecord(null);
-                    setIsRecordModalOpen(true);
-                  }}
-                  className="bg-discord-accent hover:bg-blue-600"
-                >
-                  <Plus size={16} className="mr-2" />
-                  새 항목 추가
-                </Button>
+                <ContextMenu>
+                  <ContextMenuTrigger asChild>
+                    <Button
+                      onClick={() => {
+                        setEditingRecord(null);
+                        setIsRecordModalOpen(true);
+                      }}
+                      className="bg-discord-accent hover:bg-blue-600"
+                    >
+                      <Plus size={16} className="mr-2" />
+                      새 항목 추가
+                    </Button>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent>
+                    <ContextMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsBulkAddModalOpen(true);
+                      }}
+                    >
+                      항목 다중 추가
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
               </div>
             </div>
 
@@ -1504,6 +1526,12 @@ export const MainContent: React.FC = () => {
             title={alertDialogProps.title}
             message={alertDialogProps.message}
             variant={alertDialogProps.variant}
+          />
+
+          <BulkAddModal
+            isOpen={isBulkAddModalOpen}
+            onClose={() => setIsBulkAddModalOpen(false)}
+            category={selectedCategorySafe}
           />
         </div>
       )}

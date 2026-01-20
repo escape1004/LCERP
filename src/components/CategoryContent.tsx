@@ -13,6 +13,13 @@ import { ConfirmDialog } from './ui/confirm-dialog';
 import { AlertDialog } from './ui/alert-dialog';
 import { format } from 'date-fns';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./ui/tooltip";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "./ui/context-menu";
+import { BulkAddModal } from './BulkAddModal';
 
 interface CategoryContentProps {
   categoryId: string | null;
@@ -51,6 +58,7 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
   const [recordToDelete, setRecordToDelete] = useState<DataRecord | null>(null);
   const [isPageInputMode, setIsPageInputMode] = useState(false);
   const [pageInputValue, setPageInputValue] = useState('');
+  const [isBulkAddModalOpen, setIsBulkAddModalOpen] = useState(false);
 
   // 테이블 컨테이너 ref 선언
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
@@ -710,16 +718,30 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
               <Download size={16} className="mr-2" />
               CSV 다운로드
             </Button>
-            <Button
-              onClick={() => {
-                setEditingRecord(null);
-                setIsRecordModalOpen(true);
-              }}
-              className="bg-discord-accent hover:bg-blue-600"
-            >
-              <Plus size={16} className="mr-2" />
-              새 항목 추가
-            </Button>
+            <ContextMenu>
+              <ContextMenuTrigger asChild>
+                <Button
+                  onClick={() => {
+                    setEditingRecord(null);
+                    setIsRecordModalOpen(true);
+                  }}
+                  className="bg-discord-accent hover:bg-blue-600"
+                >
+                  <Plus size={16} className="mr-2" />
+                  새 항목 추가
+                </Button>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <ContextMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsBulkAddModalOpen(true);
+                  }}
+                >
+                  항목 다중 추가
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
           </div>
         </div>
 
@@ -995,6 +1017,12 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
         title={alertDialogProps.title}
         message={alertDialogProps.message}
         variant={alertDialogProps.variant}
+      />
+
+      <BulkAddModal
+        isOpen={isBulkAddModalOpen}
+        onClose={() => setIsBulkAddModalOpen(false)}
+        category={selectedCategory}
       />
     </div>
   );
