@@ -72,6 +72,7 @@ const api: ElectronAPI = {
   deleteRecord: (id: string) => ipcRenderer.invoke('db:deleteRecord', id),
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
   openFileDialog: () => ipcRenderer.invoke('openFileDialog'),
+  openDirectoryDialog: () => ipcRenderer.invoke('openDirectoryDialog'),
   send: (channel: string, ...args: any[]) => ipcRenderer.send(channel, ...args),
   openFile: (filePath: string) => ipcRenderer.invoke('openFile', filePath),
   checkFileExists: (filePath: string) => ipcRenderer.invoke('checkFileExists', filePath),

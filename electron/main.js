@@ -7,6 +7,23 @@ const crypto = require('crypto');
 const unzipper = require('unzipper');
 const url = require('url');
 const http = require('http');
+const { execSync } = require('child_process');
+
+// 콘솔 출력 인코딩을 UTF-8로 고정 (Windows 환경 한글 깨짐 방지)
+if (process.stdout && typeof process.stdout.setDefaultEncoding === 'function') {
+  process.stdout.setDefaultEncoding('utf8');
+}
+if (process.stderr && typeof process.stderr.setDefaultEncoding === 'function') {
+  process.stderr.setDefaultEncoding('utf8');
+}
+if (process.platform === 'win32') {
+  try {
+    execSync('chcp 65001', { stdio: 'ignore' });
+    process.env.LANG = 'ko_KR.UTF-8';
+  } catch (e) {
+    // 콘솔 코드페이지 변경 실패 시 무시
+  }
+}
 
 // 로그 파일 설정
 const logPath = path.join(app.getPath('userData'), 'app.log');
@@ -1347,6 +1364,13 @@ ipcMain.handle('openFileDialog', async () => {
   });
 });
 
+ipcMain.handle('openDirectoryDialog', async () => {
+  return await dialog.showOpenDialog({
+    properties: ['openDirectory'],
+    title: '폴더 선택'
+  });
+});
+
 ipcMain.handle('openFile', async (_, filePath) => {
   if (!filePath) {
     return { success: false, error: '파일 경로 없음' };
@@ -1428,7 +1452,7 @@ ipcMain.handle('getFileDataUrl', async (_, filePath) => {
       const fileSizeInMB = stats.size / (1024 * 1024);
       
       if (fileSizeInMB > 50) {
-        log('대용량 동영상 파일 감지, 스트리밍 방식 사용:', { filePath, sizeMB: fileSizeInMB });
+        log('Large video detected, using streaming mode:', { filePath, sizeMB: fileSizeInMB });
         return 'stream'; // 스트리밍 방식 사용을 나타내는 특별한 값
       }
     }
@@ -1736,7 +1760,7 @@ ipcMain.handle('deleteThumbnail', async (_, filePath) => {
   }
 });
 
-ipcMain.handle('generateThumbnailWithTime', async (_, filePath, timestampSec) => {
+const generateVideoThumbnailWithTime = async (filePath, timestampSec) => {
   try {
     const sharp = require('sharp');
     const ffmpeg = require('fluent-ffmpeg');
@@ -1766,7 +1790,7 @@ ipcMain.handle('generateThumbnailWithTime', async (_, filePath, timestampSec) =>
     const ffprobePath = ffprobeCandidates.find(fs.existsSync);
     console.log('ffmpegPath:', ffmpegPath);
     console.log('ffprobePath:', ffprobePath);
-    if (!fs.existsSync(ffmpegPath) || !fs.existsSync(ffprobePath)) {
+    if (!ffmpegPath || !ffprobePath || !fs.existsSync(ffmpegPath) || !fs.existsSync(ffprobePath)) {
       log('ffmpeg/ffprobe 경로를 찾을 수 없음', { ffmpegPath, ffprobePath });
       return null;
     }
@@ -1809,10 +1833,14 @@ ipcMain.handle('generateThumbnailWithTime', async (_, filePath, timestampSec) =>
   } catch (e) {
     return null;
   }
+};
+
+ipcMain.handle('generateThumbnailWithTime', async (_, filePath, timestampSec) => {
+  return await generateVideoThumbnailWithTime(filePath, timestampSec);
 });
 
 // 이미지/압축파일용 썸네일 재생성 함수
-ipcMain.handle('regenerateThumbnail', async (_, filePath) => {
+const regenerateImageOrArchiveThumbnail = async (filePath) => {
   try {
     const sharp = require('sharp');
     const AdmZip = require('adm-zip');
@@ -1884,6 +1912,10 @@ ipcMain.handle('regenerateThumbnail', async (_, filePath) => {
     log('썸네일 재생성 에러:', e);
     return null;
   }
+};
+
+ipcMain.handle('regenerateThumbnail', async (_, filePath) => {
+  return await regenerateImageOrArchiveThumbnail(filePath);
 });
 
 ipcMain.handle('getVideoDuration', async (_, filePath) => {
@@ -1979,16 +2011,55 @@ const getUnpackedFfprobePath = () => {
 // 새로운 하이브리드 썸네일 데이터 URL 핸들러
 ipcMain.handle('getThumbnailDataUrlHybrid', async (_, record, filePath) => {
   try {
-    const { getThumbnailPathHybrid } = require('./lib/fileHandler');
-    
-    // 하이브리드 방식으로 썸네일 경로 결정
-    const thumbnailPath = getThumbnailPathHybrid(record, filePath);
-    
+    if (!filePath) return null;
+    let normalizedPath = filePath;
+    if (!path.isAbsolute(filePath)) {
+      normalizedPath = path.join(appDataDir, filePath);
+    }
+
+    const thumbnailDir = path.join(appDataDir, 'thumbnails');
+    let thumbnailPath = null;
+
+    if (record && record.thumbnailPath && fs.existsSync(record.thumbnailPath)) {
+      thumbnailPath = record.thumbnailPath;
+    } else {
+      const hash = getThumbnailHash(normalizedPath);
+      thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
+    }
+
+    if (!thumbnailPath || !fs.existsSync(thumbnailPath)) {
+      if (!fs.existsSync(normalizedPath)) {
+        log('원본 파일이 존재하지 않음:', normalizedPath);
+        return null;
+      }
+
+      const ext = path.extname(normalizedPath).toLowerCase();
+      const isVideo = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'].includes(ext);
+      const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext);
+      const isArchive = ['.zip', '.7z'].includes(ext);
+
+      if (isVideo) {
+        const tsRaw = record?.data?.__thumbnailTimestamp;
+        const timestampSec = Number.isFinite(Number(tsRaw)) ? Number(tsRaw) : 1;
+        thumbnailPath = await generateVideoThumbnailWithTime(normalizedPath, timestampSec);
+      } else if (isImage || isArchive) {
+        thumbnailPath = await regenerateImageOrArchiveThumbnail(normalizedPath);
+      }
+
+      if (thumbnailPath && record?.id) {
+        try {
+          db.prepare('UPDATE records SET thumbnailPath = ? WHERE id = ?').run(thumbnailPath, record.id);
+        } catch (e) {
+          log('썸네일 경로 업데이트 실패:', e);
+        }
+      }
+    }
+
     if (!thumbnailPath || !fs.existsSync(thumbnailPath)) {
       log('하이브리드 썸네일 파일이 존재하지 않음:', thumbnailPath);
       return null;
     }
-    
+
     const buffer = fs.readFileSync(thumbnailPath);
     const base64 = buffer.toString('base64');
     return `data:image/jpeg;base64,${base64}`;

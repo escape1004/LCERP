@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, Upload, FileText, ChevronDown, ChevronUp, ArrowUpWideNarrow, ArrowDownWideNarrow, ArrowUp01, ArrowDown01, SortAsc, SortDesc, Check, RefreshCw } from 'lucide-react';
+import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, Upload, FileText, ChevronDown, ChevronUp, ArrowUpWideNarrow, ArrowDownWideNarrow, ArrowUp01, ArrowDown01, SortAsc, SortDesc, Check, RefreshCw, HelpCircle } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { useLoadingStore } from '../hooks/useLoadingStore';
 import { DataRecord, FieldDefinition, Category } from '../types';
@@ -31,6 +31,7 @@ import {
   ContextMenuTrigger,
 } from "./ui/context-menu";
 import { BulkAddModal } from './BulkAddModal';
+import { resolveFilePath } from '../lib/pathResolver';
 
 // 해시태그 파싱 유틸리티 함수
 const parseHashtags = (text: string): { hashtags: string[]; plainText: string } => {
@@ -469,12 +470,12 @@ const ThumbnailCell: React.FC<{
   onThumbnailClick: (filePath: string) => void;
 }> = ({ filePath, record, onThumbnailClick }) => {
   const [dataUrl, setDataUrl] = React.useState<string | null>(null);
+  const [fileExists, setFileExists] = React.useState<boolean | null>(null);
   
   React.useEffect(() => {
     let ignore = false;
-    if (filePath) {
-      // 임시로 기존 방식 사용 (하이브리드 시스템 완성 전까지)
-      window.electronAPI.getThumbnailDataUrl(filePath).then(res => {
+    if (filePath && record) {
+      window.electronAPI.getThumbnailDataUrlHybrid(record, filePath).then(res => {
         if (!ignore) setDataUrl(res);
       });
     } else {
@@ -483,6 +484,18 @@ const ThumbnailCell: React.FC<{
     return () => { ignore = true; };
   }, [filePath, record]);
 
+  React.useEffect(() => {
+    let ignore = false;
+    if (filePath) {
+      window.electronAPI.checkFileExists(filePath).then(exists => {
+        if (!ignore) setFileExists(exists);
+      });
+    } else {
+      setFileExists(null);
+    }
+    return () => { ignore = true; };
+  }, [filePath]);
+
   // 썸네일 삭제 이벤트 감지하여 캐시 초기화
   React.useEffect(() => {
     const handleThumbnailRegenerated = (event: CustomEvent<{ filePath: string }>) => {
@@ -490,9 +503,11 @@ const ThumbnailCell: React.FC<{
         // 해당 파일의 썸네일이 변경되었으므로 캐시 초기화
         setDataUrl(null);
         // 새로운 썸네일 데이터 다시 로드
-        window.electronAPI.getThumbnailDataUrl(filePath).then(res => {
-          setDataUrl(res);
-        });
+        if (record) {
+          window.electronAPI.getThumbnailDataUrlHybrid(record, filePath).then(res => {
+            setDataUrl(res);
+          });
+        }
       }
     };
 
@@ -510,6 +525,8 @@ const ThumbnailCell: React.FC<{
 
   // 썸네일이 해시 기반인지 여부
   const isHashBased = record && !record.thumbnailPath;
+  const missingFile = !!filePath && fileExists === false;
+  const canOpen = !!filePath && fileExists !== false;
 
   return (
     <TooltipProvider>
@@ -521,27 +538,32 @@ const ThumbnailCell: React.FC<{
                 <img 
                   src={dataUrl} 
                   alt="썸네일" 
-                  className="w-24 h-24 object-contain rounded border border-gray-700 cursor-pointer hover:opacity-80"
-                  onClick={() => filePath && onThumbnailClick(filePath)}
+                  className={`w-24 h-24 object-contain rounded border border-gray-700 cursor-pointer hover:opacity-80 ${missingFile ? 'opacity-40' : ''}`}
+                  onClick={() => filePath && canOpen && onThumbnailClick(filePath)}
                 />
                 {isHashBased && (
                   <div className="absolute top-1 left-1 z-10">
                     <RefreshCw size={16} className="text-[#5865F2] drop-shadow-[0_1px_4px_rgba(0,0,0,0.7)]" />
                   </div>
                 )}
+                {missingFile && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <HelpCircle size={20} className="text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]" />
+                  </div>
+                )}
               </>
             ) : filePath ? (
               // 파일은 있지만 썸네일이 없는 경우
               <div 
-                className="w-24 h-24 bg-gray-800 flex items-center justify-center text-gray-500 border border-gray-700 rounded cursor-pointer hover:bg-gray-700 transition-colors"
-                onClick={() => onThumbnailClick(filePath)}
+                className={`w-24 h-24 bg-gray-800 flex items-center justify-center text-gray-500 border border-gray-700 rounded cursor-pointer hover:bg-gray-700 transition-colors ${missingFile ? 'opacity-40' : ''}`}
+                onClick={() => canOpen && onThumbnailClick(filePath)}
               >
-                <span className="text-2xl">🖼️</span>
+                <span className="text-2xl">{missingFile ? '?' : '🖼️'}</span>
               </div>
             ) : (
               // 파일이 없는 경우
               <div className="w-24 h-24 bg-gray-900 flex items-center justify-center text-gray-600 border border-gray-800 rounded">
-                <span className="text-2xl">📄</span>
+                <span className="text-2xl">-</span>
               </div>
             )}
             {/* 파일 확장자 표시 */}
@@ -553,7 +575,7 @@ const ThumbnailCell: React.FC<{
           </div>
         </TooltipTrigger>
         <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-          {filePath ? (dataUrl ? '썸네일 클릭 시 뷰어 모달 열기' : '클릭 시 뷰어 모달 열기 (썸네일 없음)') : '첨부파일이 없습니다'}
+          {filePath ? (missingFile ? '원본 파일이 존재하지 않습니다' : dataUrl ? '썸네일 클릭 시 뷰어 모달 열기' : '클릭 시 뷰어 모달 열기 (썸네일 없음)') : '첨부파일이 없습니다'}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
@@ -696,7 +718,7 @@ export const MainContent: React.FC = () => {
     let filteredByFileType = currentRecordsSafe;
     if (fileField && fileTypeFilter !== 'all') {
       filteredByFileType = currentRecordsSafe.filter((record) => {
-        const filePath = record.data[fileField.id];
+        const filePath = resolveFilePath(record.data[fileField.id], fileField);
         if (!filePath || filePath === '' || filePath === '-') return false;
         const fileType = getFileTypeFromPath(filePath);
         return fileType === fileTypeFilter;
@@ -790,7 +812,7 @@ export const MainContent: React.FC = () => {
         if (!fileField) return 0; // 파일 필드가 없으면 정렬하지 않음
         
         const getFileValue = (record: DataRecord): string | null => {
-          const value = record.data[fileField.id];
+          const value = resolveFilePath(record.data[fileField.id], fileField);
           if (!value || value === '' || value === '-') return null;
           return String(value);
         };
@@ -1321,7 +1343,7 @@ export const MainContent: React.FC = () => {
                           {fileField && (
                             <td className="px-2 py-3 text-xs text-discord-text w-[112px] overflow-hidden relative">
                               <ThumbnailCell
-                                filePath={record.data[fileField.id]}
+                                filePath={resolveFilePath(record.data[fileField.id], fileField) || undefined}
                                 record={record}
                                 onThumbnailClick={async (filePath) => {
                                   const fileType = await window.electronAPI.getFileType(filePath);

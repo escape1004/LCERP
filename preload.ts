@@ -44,6 +44,7 @@ const api: ElectronAPI = {
   getThumbnailDataUrl: (filePath: string) => ipcRenderer.invoke('getThumbnailDataUrl', filePath),
   getThumbnailDataUrlHybrid: (record: any, filePath: string) => ipcRenderer.invoke('getThumbnailDataUrlHybrid', record, filePath),
   openFileDialog: () => ipcRenderer.invoke('openFileDialog'),
+  openDirectoryDialog: () => ipcRenderer.invoke('openDirectoryDialog'),
   getAppRoot: () => ipcRenderer.invoke('getAppRoot'),
   getFileDataUrl: (filePath: string) => ipcRenderer.invoke('getFileDataUrl', filePath),
   getVideoStream: (filePath: string) => ipcRenderer.invoke('getVideoStream', filePath),

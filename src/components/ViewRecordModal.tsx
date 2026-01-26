@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { X, ExternalLink, ChevronRight, Check } from 'lucide-react';
+import { X, ExternalLink, ChevronRight, Check, HelpCircle } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { useLoadingStore } from '../hooks/useLoadingStore';
 import { Category, DataRecord, FieldDefinition } from '../types';
@@ -9,6 +9,7 @@ import { ViewerModal } from './ViewerModal';
 import { TimeInput } from './TimeInput';
 import { format } from "date-fns";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./ui/tooltip";
+import { resolveFilePath } from '../lib/pathResolver';
 
 // 해시태그 파싱 유틸리티 함수
 const parseHashtags = (text: string): { hashtags: string[]; plainText: string } => {
@@ -143,7 +144,22 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
 
   // Footer 관련 변수들
   const fileField = category.fields.find(f => f.type === 'file');
-  const filePath = fileField ? record?.data[fileField.id] : null;
+  const filePath = resolveFilePath(fileField ? record?.data[fileField.id] : null, fileField);
+
+  React.useEffect(() => {
+    if (!isOpen || !record || !fileField || !filePath) return;
+    const isVideoFile = /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(filePath);
+    if (!isVideoFile) return;
+    const ts = record.data?.__thumbnailTimestamp;
+    if (!Number.isFinite(Number(ts))) return;
+    const total = Math.max(0, Number(ts));
+    const newHh = Math.floor(total / 3600);
+    const newMm = Math.floor((total % 3600) / 60);
+    const newSs = Math.floor(total % 60);
+    setHh(newHh);
+    setMm(newMm);
+    setSs(newSs);
+  }, [isOpen, record, fileField, filePath]);
 
   useEffect(() => {
     let ignore = false;
@@ -325,18 +341,26 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   const formatFieldValue = (field: FieldDefinition, value: any, onViewRecord?: (record: DataRecord, category: Category) => void) => {
     // 파일 필드 특별 처리
     if (field.type === 'file') {
-      if (!value || value === '' || value === '-') return '-';
+      const resolvedPath = resolveFilePath(value, field);
+      if (!resolvedPath) return '-';
       
-      const ext = value ? value.slice(value.lastIndexOf('.')).toLowerCase() : '';
+      const ext = resolvedPath ? resolvedPath.slice(resolvedPath.lastIndexOf('.')).toLowerCase() : '';
       const [thumbnailDataUrl, setThumbnailDataUrl] = React.useState<string | null>(null);
       const [loading, setLoading] = React.useState(false);
       const [error, setError] = React.useState<string | null>(null);
+      const [resolvedExists, setResolvedExists] = React.useState<boolean | null>(null);
 
       React.useEffect(() => {
         let ignore = false;
-        if (SUPPORTED_THUMBNAIL_EXTS.includes(ext) && value) {
+        if (SUPPORTED_THUMBNAIL_EXTS.includes(ext) && resolvedPath) {
           setLoading(true);
-          window.electronAPI.getThumbnailDataUrl(value)
+          if (!record) {
+            setLoading(false);
+            setThumbnailDataUrl(null);
+            setError(null);
+            return () => { ignore = true; };
+          }
+          window.electronAPI.getThumbnailDataUrlHybrid(record, resolvedPath)
             .then(res => {
               if (!ignore) {
                 if (res) {
@@ -361,15 +385,33 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
           setError(null);
         }
         return () => { ignore = true; };
-      }, [value]);
+      }, [resolvedPath, record, ext]);
+
+      React.useEffect(() => {
+        let ignore = false;
+        if (resolvedPath) {
+          window.electronAPI.checkFileExists(resolvedPath).then(exists => {
+            if (!ignore) setResolvedExists(exists);
+          });
+        } else {
+          setResolvedExists(null);
+        }
+        return () => { ignore = true; };
+      }, [resolvedPath]);
 
       // 썸네일 재생성 이벤트 처리
       React.useEffect(() => {
         const handleThumbnailRegenerated = (event: CustomEvent<{ filePath: string }>) => {
-          if (event.detail.filePath === value) {
+          if (event.detail.filePath === resolvedPath) {
             // 해당 파일의 썸네일이 재생성되었으므로 다시 로드
             setLoading(true);
-            window.electronAPI.getThumbnailDataUrl(value)
+            if (!record) {
+              setLoading(false);
+              setThumbnailDataUrl(null);
+              setError(null);
+              return;
+            }
+            window.electronAPI.getThumbnailDataUrlHybrid(record, resolvedPath)
               .then(res => {
                 if (res) {
                   setThumbnailDataUrl(res);
@@ -392,7 +434,10 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         return () => {
           window.removeEventListener('thumbnail:regenerated', handleThumbnailRegenerated as EventListener);
         };
-      }, [value]);
+      }, [resolvedPath, record]);
+
+      const missingFile = resolvedExists === false;
+      const canOpen = resolvedExists !== false;
 
       if (SUPPORTED_THUMBNAIL_EXTS.includes(ext)) {
         return (
@@ -403,25 +448,32 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <img
-                      src={thumbnailDataUrl}
-                      alt="썸네일"
-                      className="w-[96px] h-[96px] object-contain rounded border border-gray-700 cursor-pointer hover:opacity-80"
-                      onClick={() => handleThumbnailClick(value)}
-                    />
+                    <div className="relative">
+                      <img
+                        src={thumbnailDataUrl}
+                        alt="썸네일"
+                        className={`w-[96px] h-[96px] object-contain rounded border border-gray-700 cursor-pointer hover:opacity-80 ${missingFile ? 'opacity-40' : ''}`}
+                        onClick={() => canOpen && handleThumbnailClick(resolvedPath)}
+                      />
+                      {missingFile && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <HelpCircle size={16} className="text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]" />
+                        </div>
+                      )}
+                    </div>
                   </TooltipTrigger>
                   <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-                    {value ? (thumbnailDataUrl ? '썸네일 클릭 시 뷰어 모달 열기' : '클릭 시 뷰어 모달 열기 (썸네일 없음)') : '첨부파일이 없습니다'}
+                    {resolvedPath ? (missingFile ? '원본 파일이 존재하지 않습니다' : thumbnailDataUrl ? '썸네일 클릭 시 뷰어 모달 열기' : '클릭 시 뷰어 모달 열기 (썸네일 없음)') : '첨부파일이 없습니다'}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-            ) : value ? (
+            ) : resolvedPath ? (
               // 파일은 있지만 썸네일이 없는 경우
               <div 
-                className="w-[96px] h-[96px] bg-gray-900 flex items-center justify-center text-xs text-gray-500 border border-gray-700 rounded cursor-pointer hover:bg-gray-800 transition-colors"
-                onClick={() => handleThumbnailClick(value)}
+                className={`w-[96px] h-[96px] bg-gray-900 flex items-center justify-center text-xs text-gray-500 border border-gray-700 rounded cursor-pointer hover:bg-gray-800 transition-colors ${missingFile ? 'opacity-40' : ''}`}
+                onClick={() => canOpen && handleThumbnailClick(resolvedPath)}
               >
-                썸네일 없음
+                {missingFile ? '파일 없음' : '썸네일 없음'}
               </div>
             ) : (
               // 파일이 없는 경우
@@ -437,14 +489,14 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                     className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all text-left"
                     onClick={async () => {
                       try {
-                        await navigator.clipboard.writeText(value);
+                        await navigator.clipboard.writeText(resolvedPath);
                         toast({ title: '경로가 복사되었습니다.' });
                       } catch (e) {
                         toast({ title: '복사 실패', description: String(e), variant: 'destructive' });
                       }
                     }}
                   >
-                    {value}
+                    {resolvedPath}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
@@ -465,14 +517,14 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                 className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all text-left"
                 onClick={async () => {
                   try {
-                    await navigator.clipboard.writeText(value);
+                    await navigator.clipboard.writeText(resolvedPath);
                     toast({ title: '경로가 복사되었습니다.' });
                   } catch (e) {
                     toast({ title: '복사 실패', description: String(e), variant: 'destructive' });
                   }
                 }}
               >
-                {value}
+                {resolvedPath}
               </button>
             </TooltipTrigger>
             <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
@@ -856,6 +908,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
     const isVideo = /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(ext);
     const loadRecords = useERPStore(state => state.loadRecords);
     const { showLoading: showGlobalLoading, hideLoading: hideGlobalLoading, setLoading: setGlobalLoading } = useLoadingStore();
+    const missingFile = fileExists === false;
 
     // duration: record에서 우선 사용, 없으면 lazy fetch
     React.useEffect(() => {
@@ -882,7 +935,13 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
 
     const reloadThumbnail = React.useCallback(() => {
       setLoading(true);
-      return window.electronAPI.getThumbnailDataUrl(filePath)
+      if (!record) {
+        setLoading(false);
+        setDataUrl(null);
+        setError(null);
+        return Promise.resolve(null);
+      }
+      return window.electronAPI.getThumbnailDataUrlHybrid(record, filePath)
         .then(res => {
           if (res) {
             setDataUrl(res);
@@ -960,9 +1019,14 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                   <img
                     src={dataUrl}
                     alt="썸네일"
-                    className="w-[320px] h-[320px] object-contain rounded-xl border border-gray-700 cursor-pointer hover:opacity-80 transition"
+                    className={`w-[320px] h-[320px] object-contain rounded-xl border border-gray-700 cursor-pointer hover:opacity-80 transition ${missingFile ? 'opacity-40' : ''}`}
                     onClick={() => canOpenFile && handleThumbnailClick(filePath)}
                   />
+                  {missingFile && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <HelpCircle size={32} className="text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]" />
+                    </div>
+                  )}
                   {/* 파일 확장자명 표시 */}
                   {filePath && (
                     <div className="absolute bottom-2 right-2 bg-black bg-opacity-70 text-white text-sm px-2 py-1 rounded">
@@ -972,17 +1036,17 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                 </div>
               </TooltipTrigger>
               <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-                {filePath ? (dataUrl ? '썸네일 클릭 시 뷰어 모달 열기' : '클릭 시 뷰어 모달 열기 (썸네일 없음)') : '첨부파일이 없습니다'}
+                {filePath ? (missingFile ? '원본 파일이 존재하지 않습니다' : dataUrl ? '썸네일 클릭 시 뷰어 모달 열기' : '클릭 시 뷰어 모달 열기 (썸네일 없음)') : '첨부파일이 없습니다'}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
         ) : filePath ? (
           // 파일은 있지만 썸네일이 없는 경우
           <div 
-            className="w-[320px] h-[320px] bg-gray-900 flex items-center justify-center text-lg text-gray-500 border border-gray-700 rounded-xl cursor-pointer hover:bg-gray-800 transition-colors"
+            className={`w-[320px] h-[320px] bg-gray-900 flex items-center justify-center text-lg text-gray-500 border border-gray-700 rounded-xl cursor-pointer hover:bg-gray-800 transition-colors ${missingFile ? 'opacity-40' : ''}`}
             onClick={() => canOpenFile && handleThumbnailClick(filePath)}
           >
-            썸네일 없음
+            {missingFile ? '파일 없음' : '썸네일 없음'}
           </div>
         ) : (
           // 파일이 없는 경우
@@ -1015,6 +1079,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                       const res = await window.electronAPI.generateThumbnailWithTime(filePath, totalSeconds);
                       if (res) {
                         toast({ title: `썸네일이 ${newHh.toString().padStart(2, '0')}:${newMm.toString().padStart(2, '0')}:${newSs.toString().padStart(2, '0')} 지점에서 재생성되었습니다.` });
+                        await window.electronAPI.updateRecord(record.id, { ...record.data, __thumbnailTimestamp: totalSeconds });
                         window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));
                         await reloadThumbnail();
                         if (categoryId) {
@@ -1145,29 +1210,35 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                   <div className="text-discord-text text-sm">
                     {/* 파일 필드는 상세 정보에서 썸네일 대신 경로 복사 버튼만 */}
                     {field.type === 'file' && record?.data[field.id] ? (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all text-left"
-                              onClick={async () => {
-                                try {
-                                  await navigator.clipboard.writeText(record.data[field.id]);
-                                  toast({ title: '경로가 복사되었습니다.' });
-                                } catch (e) {
-                                  toast({ title: '복사 실패', description: String(e), variant: 'destructive' });
-                                }
-                              }}
-                            >
-                              {record.data[field.id]}
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-                            복사하기
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+                      (() => {
+                        const displayPath = resolveFilePath(record.data[field.id], field);
+                        if (!displayPath) return '-';
+                        return (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all text-left"
+                                  onClick={async () => {
+                                    try {
+                                      await navigator.clipboard.writeText(displayPath);
+                                      toast({ title: '경로가 복사되었습니다.' });
+                                    } catch (e) {
+                                      toast({ title: '복사 실패', description: String(e), variant: 'destructive' });
+                                    }
+                                  }}
+                                >
+                                  {displayPath}
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+                                복사하기
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        );
+                      })()
                     ) : (
                       formatFieldValue(field, record.data[field.id], onViewRecord)
                     )}

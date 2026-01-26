@@ -227,6 +227,8 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
       required: false,
       unique: false,
       order: formData.fields.length,
+      pathMode: 'direct',
+      basePath: '',
     };
     setFormData(prev => {
       const updated = { ...prev, fields: [...prev.fields, newField] };
@@ -251,6 +253,9 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     }
     const newFields = [...formData.fields];
     newFields[index] = { ...newFields[index], ...updates };
+    if (updates.type === 'file' && !newFields[index].pathMode) {
+      newFields[index] = { ...newFields[index], pathMode: 'direct', basePath: '' };
+    }
     setFormData(prev => ({ ...prev, fields: newFields }));
     
     // Clear field name error when user starts typing
@@ -499,6 +504,57 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                         </div>
                                       </div>
                                     </div>
+
+                                    {field.type === 'file' && (
+                                      <div>
+                                        <Label className="text-sm text-gray-400 mb-2 block">첨부파일 경로 설정</Label>
+                                        <div className="flex items-center gap-3">
+                                          <Select
+                                            value={field.pathMode ?? 'direct'}
+                                            onValueChange={(value) => updateField(index, { pathMode: value as 'direct' | 'base' })}
+                                          >
+                                            <SelectTrigger className="w-[200px] bg-[#2b2d31] border-gray-600 text-gray-200">
+                                              <SelectValue placeholder="경로 방식 선택" />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-[#2b2d31] border-gray-600">
+                                              <SelectItem value="direct">직접 경로</SelectItem>
+                                              <SelectItem value="base">상대 경로</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                        {field.pathMode === 'base' && (
+                                          <div className="mt-2 flex items-center gap-2">
+                                            <Input
+                                              value={field.basePath || ''}
+                                              onChange={(e) => updateField(index, { basePath: e.target.value })}
+                                              placeholder="베이스 경로"
+                                              className="h-10 px-3 w-full bg-[#2b2d31] border-gray-600 text-gray-200"
+                                            />
+                                            <Button
+                                              type="button"
+                                              variant="outline"
+                                              size="sm"
+                                              className="border-gray-600 text-gray-200 hover:bg-[#3a3d44]"
+                                              onClick={async () => {
+                                                try {
+                                                  const result = await window.electronAPI.openDirectoryDialog();
+                                                  if (!result.canceled && result.filePaths.length > 0) {
+                                                    updateField(index, { basePath: result.filePaths[0], pathMode: 'base' });
+                                                  }
+                                                } catch (e) {
+                                                  toast({ title: '폴더 선택 실패', description: String(e), variant: 'destructive' });
+                                                }
+                                              }}
+                                            >
+                                              폴더 선택
+                                            </Button>
+                                          </div>
+                                        )}
+                                        <p className="text-xs text-gray-500 mt-2">
+                                          상대 경로를 선택하면 DB에 저장된 파일명만 사용해 베이스 경로와 결합합니다.
+                                        </p>
+                                      </div>
+                                    )}
 
                                     {field.type === 'select' && (
                                       <div>

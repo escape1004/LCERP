@@ -31,6 +31,7 @@ export interface ElectronAPI {
   
   // File dialog methods
   openFileDialog: () => Promise<{ canceled: boolean; filePaths: string[] }>;
+  openDirectoryDialog: () => Promise<{ canceled: boolean; filePaths: string[] }>;
   getAppRoot: () => Promise<string>;
 
   // Utility methods

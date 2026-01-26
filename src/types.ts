@@ -34,6 +34,8 @@ export interface FieldDefinition {
   required: boolean;
   unique: boolean;
   order: number;
+  pathMode?: 'direct' | 'base';
+  basePath?: string;
   options?: string[];
   relationCategoryId?: string;
   multiple?: boolean;

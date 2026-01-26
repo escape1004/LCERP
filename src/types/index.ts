@@ -5,6 +5,8 @@ export interface FieldDefinition {
   required: boolean;
   unique: boolean;
   order: number;
+  pathMode?: 'direct' | 'base';
+  basePath?: string;
   multiSelect?: boolean;
   selectOptions?: string[];
   relationCategoryId?: string;

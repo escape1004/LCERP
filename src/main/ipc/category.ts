@@ -455,6 +455,15 @@ export const registerCategoryHandlers = (database: Database) => {
     return result;
   });
 
+  ipcMain.handle('openDirectoryDialog', async () => {
+    const { dialog } = await import('electron');
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory'],
+      title: '폴더 선택'
+    });
+    return result;
+  });
+
   ipcMain.handle('checkFileExists', async (_, filePath) => {
     try {
       const thumbnailDir = path.join(process.cwd(), 'save', 'thumbnails');

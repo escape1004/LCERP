@@ -32,6 +32,7 @@ export interface ElectronAPI {
   getArchiveFileStreamInfo: (filePath: string, fileName: string) => Promise<string | null>;
   getArchiveFileText: (filePath: string, fileName: string) => Promise<string | null>;
   openFileDialog: () => Promise<Electron.OpenDialogReturnValue>;
+  openDirectoryDialog: () => Promise<Electron.OpenDialogReturnValue>;
   getFileType: (filePath: string) => Promise<'image' | 'video' | 'archive' | 'other'>;
   getAppRoot: () => Promise<string>;
   getVideoBlobUrl: (filePath: string) => Promise<{ base64: string; mimeType: string } | null>;
@@ -77,6 +78,8 @@ export interface Field {
   required: boolean;
   unique: boolean;
   order: number;
+  pathMode?: 'direct' | 'base';
+  basePath?: string;
   multiple?: boolean;
   options?: string[];
   relationCategoryId?: string;

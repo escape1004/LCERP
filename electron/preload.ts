@@ -35,6 +35,7 @@ const api: ElectronAPI = {
   setBackupDir: () => ipcRenderer.invoke('setBackupDir'),
   setBackupInterval: (minutes: number) => ipcRenderer.invoke('setBackupInterval', minutes),
   openFileDialog: () => ipcRenderer.invoke('openFileDialog'),
+  openDirectoryDialog: () => ipcRenderer.invoke('openDirectoryDialog'),
   getAppRoot: () => ipcRenderer.invoke('getAppRoot'),
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
   send: (channel: string, ...args: any[]) => ipcRenderer.send(channel, ...args),
