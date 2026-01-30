@@ -38,6 +38,9 @@ export const DatabaseViewer: React.FC = () => {
   const [dbPath, setDbPath] = useState<string>('');
   const [config, setConfig] = useState<Config | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetInput, setResetInput] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
   const [fileSize, setFileSize] = useState<string>('');
   const [syncCheckResult, setSyncCheckResult] = useState<ThumbnailSyncCheckResult | null>(null);
   const [isCheckingSync, setIsCheckingSync] = useState(false);
@@ -204,6 +207,29 @@ export const DatabaseViewer: React.FC = () => {
       }
     } catch (error) {
       handleApiError(error, '백업 주기 변경에 실패했습니다.');
+    }
+  };
+
+  const handleResetDatabase = async () => {
+    try {
+      setIsResetting(true);
+      const result = await window.electronAPI.resetDatabase();
+      if (!result.success) {
+        throw new Error(result.error || '데이터베이스 초기화에 실패했습니다.');
+      }
+
+      showSuccessToast('데이터베이스가 초기화되었습니다.');
+      setShowResetConfirm(false);
+      setResetInput('');
+      setSelectedTable(null);
+      setTableData(null);
+      setSyncCheckResult(null);
+      await loadConfig();
+      await loadTables();
+    } catch (error) {
+      handleApiError(error, '데이터베이스 초기화에 실패했습니다.');
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -589,6 +615,25 @@ export const DatabaseViewer: React.FC = () => {
                       </FormItem>
                     )}
                   />
+
+                  <div className="border border-red-800/60 bg-[#2a1f1f] rounded-lg p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <div className="text-sm font-medium text-red-300">데이터베이스 초기화</div>
+                        <div className="text-xs text-red-200/80 mt-1">
+                          모든 카테고리와 레코드가 삭제됩니다. 이 작업은 되돌릴 수 없습니다.
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        className="bg-discord-danger hover:bg-red-900"
+                        onClick={() => setShowResetConfirm(true)}
+                      >
+                        초기화
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </Form>
             </div>
@@ -613,6 +658,62 @@ export const DatabaseViewer: React.FC = () => {
           </div>
         </div>
       )}
+
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60">
+          <div className="bg-discord-bg rounded-lg p-6 w-full max-w-md border border-gray-700 flex flex-col items-center">
+            <div className="mb-6 text-center text-discord-text">
+              <div className="text-base font-medium mb-2">
+                정말로 데이터베이스를 초기화하시겠습니까?
+              </div>
+              <div className="text-red-400 font-semibold mb-2">
+                이 작업은 되돌릴 수 없습니다.
+              </div>
+              <div className="text-discord-muted text-sm">
+                아래에 <span className="font-semibold">데이터베이스를 초기화하겠습니다</span>를 입력하세요.
+              </div>
+            </div>
+
+            {isResetting && (
+              <div className="mb-4 p-4 bg-discord-sidebar rounded-lg border border-gray-600">
+                <div className="flex items-center justify-center gap-3">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-discord-accent"></div>
+                  <div className="text-discord-text text-sm">
+                    데이터베이스 초기화 중...
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <Input
+              type="text"
+              value={resetInput}
+              onChange={(e) => setResetInput(e.target.value)}
+              className="w-full mb-3 bg-discord-sidebar border-gray-600 text-discord-text"
+              placeholder="데이터베이스를 초기화하겠습니다"
+              disabled={isResetting}
+            />
+            <div className="flex w-full gap-2">
+              <Button
+                variant="ghost"
+                className="flex-1 text-discord-text hover:bg-discord-hover"
+                onClick={() => { setShowResetConfirm(false); setResetInput(''); }}
+                disabled={isResetting}
+              >
+                취소
+              </Button>
+              <Button
+                variant="destructive"
+                className="flex-1 bg-discord-danger hover:bg-red-900 text-white disabled:bg-red-800 disabled:text-red-300 disabled:cursor-not-allowed"
+                disabled={resetInput !== '데이터베이스를 초기화하겠습니다' || isResetting}
+                onClick={handleResetDatabase}
+              >
+                {isResetting ? '초기화 중...' : '초기화'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
-}; 
+};

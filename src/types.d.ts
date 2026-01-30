@@ -12,6 +12,7 @@ export interface ElectronAPI {
   deleteRecord: (id: string) => Promise<void>;
   getCategories: () => Promise<Category[]>;
   backupDatabase: () => Promise<{ success: boolean; path?: string; error?: string }>;
+  resetDatabase: () => Promise<{ success: boolean; backupPath?: string; error?: string }>;
   openBackupLocation: () => Promise<{ success: boolean }>;
   getConfig: () => Promise<any>;
   setDbPath: () => Promise<{ success: boolean; path?: string }>;

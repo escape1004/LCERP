@@ -1313,6 +1313,34 @@ ipcMain.handle('backupDatabase', () => {
   }
 });
 
+ipcMain.handle('resetDatabase', () => {
+  try {
+    const backupDir = path.join(path.join(os.homedir(), 'AppData', 'Local'), 'backups');
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupPath = path.join(backupDir, `backup-before-reset-${timestamp}.db`);
+    if (fs.existsSync(dbPath)) {
+      fs.copyFileSync(dbPath, backupPath);
+    }
+
+    db.exec('PRAGMA foreign_keys = OFF');
+    db.exec('DROP TABLE IF EXISTS records');
+    db.exec('DROP TABLE IF EXISTS categories');
+    db.exec('PRAGMA foreign_keys = ON');
+
+    initializeDatabase();
+    db.exec('VACUUM');
+
+    return { success: true, backupPath };
+  } catch (error) {
+    log('Reset database failed:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('openBackupLocation', () => {
   const backupDir = path.join(path.join(os.homedir(), 'AppData', 'Local'), 'backups');
   shell.openPath(backupDir);
