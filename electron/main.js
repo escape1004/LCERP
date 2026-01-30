@@ -1313,6 +1313,155 @@ ipcMain.handle('backupDatabase', () => {
   }
 });
 
+function getCategorySubtree(rootId, allCategories) {
+  const childrenMap = new Map();
+  for (const cat of allCategories) {
+    const parentKey = cat.parentId || null;
+    if (!childrenMap.has(parentKey)) {
+      childrenMap.set(parentKey, []);
+    }
+    childrenMap.get(parentKey).push(cat);
+  }
+  // preserve order within parent
+  for (const [key, list] of childrenMap.entries()) {
+    list.sort((a, b) => (a.order_num || 0) - (b.order_num || 0));
+  }
+
+  const result = [];
+  const stack = [rootId];
+  const visited = new Set();
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || visited.has(current)) continue;
+    visited.add(current);
+    const node = allCategories.find(c => c.id === current);
+    if (!node) continue;
+    result.push(node);
+    const children = childrenMap.get(current) || [];
+    for (let i = children.length - 1; i >= 0; i--) {
+      stack.push(children[i].id);
+    }
+  }
+  return result;
+}
+
+ipcMain.handle('category:export', async (_, categoryId) => {
+  try {
+    const categories = db.prepare('SELECT id, name, parentId, fields, order_num, createdAt, updatedAt FROM categories').all();
+    const subtree = getCategorySubtree(categoryId, categories);
+    if (subtree.length === 0) {
+      return { success: false, error: 'Category not found' };
+    }
+
+    const payload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      rootCategoryId: categoryId,
+      categories: subtree.map(cat => ({
+        id: cat.id,
+        name: cat.name,
+        parentId: cat.parentId,
+        fields: JSON.parse(cat.fields),
+        order_num: cat.order_num ?? 0,
+        createdAt: cat.createdAt,
+        updatedAt: cat.updatedAt
+      }))
+    };
+
+    const { filePath, canceled } = await dialog.showSaveDialog({
+      title: '카테고리 추출 저장',
+      defaultPath: `category-${categoryId}.json`,
+      filters: [{ name: 'Category Export', extensions: ['json'] }]
+    });
+    if (canceled || !filePath) return { success: false };
+
+    fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf-8');
+    return { success: true, path: filePath };
+  } catch (error) {
+    log('Error exporting category:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('category:import', async () => {
+  try {
+    const { filePaths, canceled } = await dialog.showOpenDialog({
+      title: '카테고리 붙여넣기',
+      filters: [{ name: 'Category Export', extensions: ['json'] }],
+      properties: ['openFile']
+    });
+    if (canceled || !filePaths || filePaths.length === 0) return { success: false };
+
+    const raw = fs.readFileSync(filePaths[0], 'utf-8');
+    const data = JSON.parse(raw);
+    if (!data || !Array.isArray(data.categories)) {
+      return { success: false, error: 'Invalid category export file' };
+    }
+
+    const now = new Date().toISOString();
+    const oldToNew = new Map();
+    const categories = data.categories;
+    const categoryMap = new Map(categories.map(c => [c.id, c]));
+    const childrenMap = new Map();
+    for (const cat of categories) {
+      const parentKey = categoryMap.has(cat.parentId) ? cat.parentId : null;
+      if (!childrenMap.has(parentKey)) childrenMap.set(parentKey, []);
+      childrenMap.get(parentKey).push(cat);
+    }
+    for (const [key, list] of childrenMap.entries()) {
+      list.sort((a, b) => (a.order_num || 0) - (b.order_num || 0));
+    }
+
+    const getNextOrder = (() => {
+      const cache = new Map();
+      return (parentId) => {
+        const key = parentId || null;
+        if (!cache.has(key)) {
+          const row = parentId
+            ? db.prepare('SELECT MAX(order_num) as maxOrder FROM categories WHERE parentId = ?').get(parentId)
+            : db.prepare('SELECT MAX(order_num) as maxOrder FROM categories WHERE parentId IS NULL').get();
+          cache.set(key, Number.isFinite(row?.maxOrder) ? row.maxOrder + 1 : 0);
+        }
+        const next = cache.get(key);
+        cache.set(key, next + 1);
+        return next;
+      };
+    })();
+
+    const insertStmt = db.prepare(`
+      INSERT INTO categories (id, name, parentId, fields, order_num, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const dfsInsert = (parentId) => {
+      const children = childrenMap.get(parentId || null) || [];
+      for (const child of children) {
+        const newId = generateUUID();
+        oldToNew.set(child.id, newId);
+        const newParentId = parentId ? oldToNew.get(parentId) : null;
+        const orderNum = getNextOrder(newParentId || null);
+        insertStmt.run(
+          newId,
+          child.name,
+          newParentId,
+          JSON.stringify(child.fields),
+          orderNum,
+          now,
+          now
+        );
+        dfsInsert(child.id);
+      }
+    };
+
+    dfsInsert(null);
+
+    return { success: true, importedCount: oldToNew.size };
+  } catch (error) {
+    log('Error importing category:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('resetDatabase', () => {
   try {
     const backupDir = path.join(path.join(os.homedir(), 'AppData', 'Local'), 'backups');

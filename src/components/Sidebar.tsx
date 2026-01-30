@@ -29,7 +29,8 @@ export const Sidebar: React.FC = () => {
     getCategoryRecords,
     loadRecords,
     showDbViewer,
-    deleteCategory
+    deleteCategory,
+    loadCategories
   } = useERPStore();
   
   const { showLoading, hideLoading, setLoading: setGlobalLoading } = useLoadingStore();
@@ -78,6 +79,36 @@ export const Sidebar: React.FC = () => {
   const handleEditCategory = (category: Category) => {
     setEditingCategory(category);
     setIsModalOpen(true);
+  };
+
+  const handleExportCategory = async (category: Category) => {
+    try {
+      const result = await window.electronAPI.exportCategory(category.id);
+      if (!result.success && !result.error) return;
+      if (!result.success) {
+        throw new Error(result.error || '카테고리 추출에 실패했습니다.');
+      }
+      toast({ title: '카테고리 추출 완료', description: result.path || '' });
+    } catch (error) {
+      toast({ title: '카테고리 추출 중 오류가 발생했습니다.', variant: 'destructive' });
+    }
+  };
+
+  const handleImportCategories = async () => {
+    try {
+      const result = await window.electronAPI.importCategories();
+      if (!result.success && !result.error) return;
+      if (!result.success) {
+        throw new Error(result.error || '카테고리 붙여넣기에 실패했습니다.');
+      }
+      await loadCategories();
+      toast({
+        title: '카테고리 붙여넣기 완료',
+        description: result.importedCount ? `${result.importedCount}개 카테고리를 추가했습니다.` : undefined,
+      });
+    } catch (error) {
+      toast({ title: '카테고리 붙여넣기 중 오류가 발생했습니다.', variant: 'destructive' });
+    }
   };
 
   const openDeleteConfirm = (category: Category) => {
@@ -176,6 +207,9 @@ export const Sidebar: React.FC = () => {
             <ContextMenuItem onClick={() => handleEditCategory(category)}>
               카테고리 수정
             </ContextMenuItem>
+            <ContextMenuItem onClick={() => handleExportCategory(category)}>
+              카테고리 추출
+            </ContextMenuItem>
             <ContextMenuItem
               className="text-red-400 focus:text-red-300"
               onClick={() => openDeleteConfirm(category)}
@@ -262,6 +296,9 @@ export const Sidebar: React.FC = () => {
             <ContextMenuItem onClick={() => handleEditCategory(category)}>
               카테고리 수정
             </ContextMenuItem>
+            <ContextMenuItem onClick={() => handleExportCategory(category)}>
+              카테고리 추출
+            </ContextMenuItem>
             <ContextMenuItem
               className="text-red-400 focus:text-red-300"
               onClick={() => openDeleteConfirm(category)}
@@ -346,17 +383,26 @@ export const Sidebar: React.FC = () => {
             <h2 className="text-sm font-semibold text-discord-muted uppercase tracking-wide">
               카테고리
             </h2>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setEditingCategory(null);
-                setIsModalOpen(true);
-              }}
-              className="h-6 w-6 p-0 hover:bg-discord-hover"
-            >
-              <Plus size={14} />
-            </Button>
+            <ContextMenu>
+              <ContextMenuTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setEditingCategory(null);
+                    setIsModalOpen(true);
+                  }}
+                  className="h-6 w-6 p-0 hover:bg-discord-hover"
+                >
+                  <Plus size={14} />
+                </Button>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <ContextMenuItem onClick={handleImportCategories}>
+                  카테고리 붙여넣기
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
           </div>
 
           <DragDropContext onDragEnd={handleDragEnd}>

@@ -20,6 +20,8 @@ declare global {
       addRecord: (record: NewRecord) => Promise<string>;
       updateRecord: (id: string, data: any) => Promise<void>;
       deleteRecord: (id: string) => Promise<void>;
+      exportCategory: (categoryId: string) => Promise<{ success: boolean; path?: string; error?: string }>;
+      importCategories: () => Promise<{ success: boolean; importedCount?: number; error?: string }>;
       getCategories: () => Promise<Category[]>;
       backupDatabase: () => Promise<{ success: boolean; path?: string; error?: string }>;
       openBackupLocation: () => Promise<{ success: boolean }>;

@@ -10,6 +10,8 @@ export interface ElectronAPI {
   addRecord: (record: NewRecord) => Promise<string>;
   updateRecord: (id: string, data: Record<string, any>) => Promise<void>;
   deleteRecord: (id: string) => Promise<void>;
+  exportCategory: (categoryId: string) => Promise<{ success: boolean; path?: string; error?: string }>;
+  importCategories: () => Promise<{ success: boolean; importedCount?: number; error?: string }>;
   getCategories: () => Promise<Category[]>;
   backupDatabase: () => Promise<{ success: boolean; path?: string; error?: string }>;
   resetDatabase: () => Promise<{ success: boolean; backupPath?: string; error?: string }>;
