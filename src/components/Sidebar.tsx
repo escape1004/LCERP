@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { Plus, Settings, Menu, ChevronLeft, Database, LayoutDashboard } from 'lucide-react';
+import { Plus, Menu, ChevronLeft, Database, LayoutDashboard } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useERPStore } from '../hooks/useERPStore';
 import { useLoadingStore } from '../hooks/useLoadingStore';
@@ -8,6 +8,14 @@ import { Category } from '../types';
 import { Button } from './ui/button';
 import { CategoryModal } from './CategoryModal';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Input } from './ui/input';
+import { useToast } from './ui/use-toast';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from './ui/context-menu';
 
 export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
@@ -20,15 +28,20 @@ export const Sidebar: React.FC = () => {
     setShowDbViewer,
     getCategoryRecords,
     loadRecords,
-    showDbViewer
+    showDbViewer,
+    deleteCategory
   } = useERPStore();
   
   const { showLoading, hideLoading, setLoading: setGlobalLoading } = useLoadingStore();
+  const { toast } = useToast();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-  const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteInput, setDeleteInput] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
 
   const rootCategories = categories.filter(cat => !cat.parentId).sort((a, b) => a.order - b.order);
   
@@ -67,6 +80,42 @@ export const Sidebar: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const openDeleteConfirm = (category: Category) => {
+    setDeleteTarget(category);
+    setDeleteInput('');
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDeleteCategory = async () => {
+    if (!deleteTarget) return;
+    try {
+      setIsDeleting(true);
+      const result = await deleteCategory(deleteTarget.id);
+
+      let message = '카테고리가 삭제되었습니다.';
+      if (result.thumbnailCleanupCount > 0) {
+        message += `\n${result.thumbnailCleanupCount}개의 썸네일 파일을 정리했습니다.`;
+      }
+      if (result.relationCleanupCount > 0) {
+        message += `\n${result.relationCleanupCount}개의 관계형 참조를 정리했습니다.`;
+      }
+
+      toast({
+        title: '카테고리 삭제 완료',
+        description: message,
+        duration: 5000,
+      });
+
+      setShowDeleteConfirm(false);
+      setDeleteInput('');
+      setDeleteTarget(null);
+    } catch (error) {
+      toast({ title: '카테고리 삭제 중 오류가 발생했습니다.', variant: 'destructive' });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const renderCategory = (category: Category, level = 0) => {
     const subCategories = getSubCategories(category.id);
     const isSelected = selectedCategoryId === category.id;
@@ -74,7 +123,9 @@ export const Sidebar: React.FC = () => {
 
     return (
       <div key={category.id}>
-        <div
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <div
           className={`flex items-center py-2 px-3 mb-1 rounded cursor-pointer transition-colors group ${
             isSelected 
               ? 'bg-discord-accent text-white' 
@@ -119,19 +170,20 @@ export const Sidebar: React.FC = () => {
           <span className="flex-1 text-sm font-medium truncate">
             {category.name}
           </span>
-          
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleEditCategory(category);
-            }}
-            className={`ml-2 p-1 rounded transition-opacity hover:bg-discord-bg ${
-              hoveredCategory === category.id || isSelected ? 'opacity-70 hover:opacity-100' : 'opacity-0'
-            }`}
-          >
-            <Settings size={14} />
-          </button>
-        </div>
+            </div>
+          </ContextMenuTrigger>
+          <ContextMenuContent>
+            <ContextMenuItem onClick={() => handleEditCategory(category)}>
+              카테고리 수정
+            </ContextMenuItem>
+            <ContextMenuItem
+              className="text-red-400 focus:text-red-300"
+              onClick={() => openDeleteConfirm(category)}
+            >
+              카테고리 삭제
+            </ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
         
         <AnimatePresence>
           {showSubCategories && subCategories.length > 0 && (
@@ -157,7 +209,9 @@ export const Sidebar: React.FC = () => {
 
     return (
       <div key={category.id}>
-        <div
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <div
           className={`flex items-center py-2 px-3 mb-1 rounded cursor-pointer transition-colors group ${
             isSelected 
               ? 'bg-discord-accent text-white' 
@@ -202,19 +256,20 @@ export const Sidebar: React.FC = () => {
           <span className="flex-1 text-sm font-medium truncate">
             {category.name}
           </span>
-          
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleEditCategory(category);
-            }}
-            className={`ml-2 p-1 rounded transition-opacity hover:bg-discord-bg ${
-              hoveredCategory === category.id || isSelected ? 'opacity-70 hover:opacity-100' : 'opacity-0'
-            }`}
-          >
-            <Settings size={14} />
-          </button>
-        </div>
+            </div>
+          </ContextMenuTrigger>
+          <ContextMenuContent>
+            <ContextMenuItem onClick={() => handleEditCategory(category)}>
+              카테고리 수정
+            </ContextMenuItem>
+            <ContextMenuItem
+              className="text-red-400 focus:text-red-300"
+              onClick={() => openDeleteConfirm(category)}
+            >
+              카테고리 삭제
+            </ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
         
         <AnimatePresence>
           {showSubCategories && subCategories.length > 0 && (
@@ -347,6 +402,65 @@ export const Sidebar: React.FC = () => {
           데이터베이스 보기
         </Button>
       </div>
+
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-discord-bg rounded-lg p-6 w-full max-w-md border border-gray-700 flex flex-col items-center">
+            <div className="mb-6 text-center text-discord-text">
+              <div className="text-base font-medium mb-2">
+                정말로 이 카테고리를 삭제하시겠습니까?
+              </div>
+              <div className="text-red-400 font-semibold mb-2">
+                이 작업은 되돌릴 수 없습니다.
+              </div>
+              <div className="text-discord-muted text-sm">
+                아래에 <span className="font-semibold">카테고리를 삭제하겠습니다</span>를 입력하세요.
+              </div>
+            </div>
+
+            {isDeleting && (
+              <div className="mb-4 p-4 bg-discord-sidebar rounded-lg border border-gray-600">
+                <div className="flex items-center justify-center gap-3">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-discord-accent"></div>
+                  <div className="text-discord-text text-sm">
+                    카테고리 삭제 중...
+                    <div className="text-discord-muted text-xs mt-1">
+                      썸네일 및 관계형 데이터 정리 중
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <Input
+              type="text"
+              value={deleteInput}
+              onChange={(e) => setDeleteInput(e.target.value)}
+              className="w-full mb-3 bg-discord-sidebar border-gray-600 text-discord-text"
+              placeholder="카테고리를 삭제하겠습니다"
+              disabled={isDeleting}
+            />
+            <div className="flex w-full gap-2">
+              <Button
+                variant="ghost"
+                className="flex-1 text-discord-text hover:bg-discord-hover"
+                onClick={() => { setShowDeleteConfirm(false); setDeleteInput(''); setDeleteTarget(null); }}
+                disabled={isDeleting}
+              >
+                취소
+              </Button>
+              <Button
+                variant="destructive"
+                className="flex-1 bg-discord-danger hover:bg-red-900 text-white disabled:bg-red-800 disabled:text-red-300 disabled:cursor-not-allowed"
+                disabled={deleteInput !== '카테고리를 삭제하겠습니다' || isDeleting}
+                onClick={handleDeleteCategory}
+              >
+                {isDeleting ? '삭제 중...' : '삭제'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Category Modal */}
       <CategoryModal
