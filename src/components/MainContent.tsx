@@ -1377,7 +1377,7 @@ export const MainContent: React.FC = () => {
                                   ? 'bg-discord-accent' 
                                   : 'bg-transparent hover:bg-discord-accent'
                               }`}
-                              style={{ marginRight: '-4px' }}
+                              style={{ right: '0px' }}
                               onMouseDown={(e) => handleResizeStart('__thumbnail', e)}
                             />
                           </th>
@@ -1409,7 +1409,7 @@ export const MainContent: React.FC = () => {
                                   ? 'bg-discord-accent' 
                                   : 'bg-transparent hover:bg-discord-accent'
                               }`}
-                              style={{ marginRight: '-4px' }}
+                              style={{ right: '0px' }}
                               onMouseDown={(e) => handleResizeStart(field.id, e)}
                             />
                           </th>
@@ -1441,7 +1441,7 @@ export const MainContent: React.FC = () => {
                                   ? 'bg-discord-accent' 
                                   : 'bg-transparent hover:bg-discord-accent'
                               }`}
-                              style={{ marginRight: '-4px' }}
+                              style={{ right: '0px' }}
                               onMouseDown={(e) => handleResizeStart('__refCount', e)}
                             />
                           </th>
@@ -1458,44 +1458,13 @@ export const MainContent: React.FC = () => {
                                   <ThumbnailCell
                                     filePath={resolveFilePath(record.data[fileField.id], fileField) || undefined}
                                     record={record}
-                                    onThumbnailClick={async (filePath) => {
-                                      const fileType = await window.electronAPI.getFileType(filePath);
-                                      if (fileType === 'image' || fileType === 'video') {
-                                        setViewerFilePath(filePath);
-                                        setViewerFileType(fileType);
-                                        setViewerCategoryId(selectedCategorySafe?.id || '');
-                                        setViewerRecordId(record.id);
-                                        setViewerModalOpen(true);
-                                      } else if (fileType === 'archive') {
-                                        // 압축파일인 경우 읽을 수 있는 파일이 있는지 확인
-                                        try {
-                                          const files = await window.electronAPI.getArchiveFiles(filePath);
-                                          const supportedFiles = files.filter(file => 
-                                            !file.isDirectory && /\.(jpg|jpeg|png|gif|webp|mp4|avi|mkv|mov|wmv|flv|webm|txt)$/i.test(file.name)
-                                          );
-                                          
-                                          if (supportedFiles.length === 0) {
-                                            toast({ 
-                                              title: '읽을 수 있는 파일이 없습니다', 
-                                              description: '압축파일 내에 이미지, 동영상, 텍스트 파일이 없습니다.', 
-                                              variant: 'destructive' 
-                                            });
-                                            return;
-                                          }
-                                          
-                                          setViewerFilePath(filePath);
-                                          setViewerFileType(fileType);
-                                          setViewerCategoryId(selectedCategorySafe?.id || '');
-                                          setViewerRecordId(record.id);
-                                          setViewerModalOpen(true);
-                                        } catch (error) {
-                                          toast({ 
-                                            title: '압축파일 열기 실패', 
-                                            description: '압축파일을 읽을 수 없습니다.', 
-                                            variant: 'destructive' 
-                                          });
-                                        }
-                                      }
+                                    onThumbnailClick={(filePath) => {
+                                      // 즉시 모달 열기 (파일 타입 확인은 모달 내에서 처리)
+                                      setViewerFilePath(filePath);
+                                      setViewerFileType(null); // null로 설정하여 모달 내에서 타입 확인
+                                      setViewerCategoryId(selectedCategorySafe?.id || '');
+                                      setViewerRecordId(record.id);
+                                      setViewerModalOpen(true);
                                     }}
                                   />
                                 </td>

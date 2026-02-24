@@ -28,6 +28,8 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const [currentArchiveDataUrl, setCurrentArchiveDataUrl] = useState<string | null>(null);
   const [currentArchiveText, setCurrentArchiveText] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // fileType이 null일 때 감지된 파일 타입을 저장
+  const [detectedFileType, setDetectedFileType] = useState<'image' | 'video' | 'archive' | null>(null);
   
   // 비디오 관련 상태
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -128,7 +130,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   }, [fileType, isOpen, filePath, categoryId, recordId]);
 
   useEffect(() => {
-    if (!isOpen || !filePath || !fileType) {
+    if (!isOpen || !filePath) {
       setDataUrl(null);
       setArchiveFiles([]);
       setCurrentArchiveIndex(0);
@@ -138,6 +140,56 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       setVideoError(null);
       setFileNotFound(false);
       setPlaybackSpeed(1.0);
+      setDetectedFileType(null);
+      return;
+    }
+
+    // fileType이 null이면 파일 타입을 확인
+    if (!fileType) {
+      setLoading(true);
+      setFileNotFound(false);
+      setDetectedFileType(null);
+      window.electronAPI.getFileType(filePath).then((detectedType) => {
+        setDetectedFileType(detectedType);
+        if (detectedType === 'image' || detectedType === 'video') {
+          // 이미지나 동영상인 경우 로드
+          setPlaybackSpeed(1.0);
+          window.electronAPI.getFileDataUrl(filePath).then((url) => {
+            if (url === null || url === 'error') {
+              setFileNotFound(true);
+              setDataUrl(null);
+            } else if (detectedType === 'video' && url === 'stream') {
+              const port = (window as any).videoServerPort || 17345;
+              const streamUrl = `http://localhost:${port}/video?path=${encodeURIComponent(filePath)}`;
+              setDataUrl(streamUrl);
+            } else {
+              setDataUrl(url);
+            }
+            setLoading(false);
+          }).catch((error) => {
+            console.error('파일 로드 실패:', error);
+            setFileNotFound(true);
+            setDataUrl(null);
+            setLoading(false);
+          });
+        } else if (detectedType === 'archive') {
+          // 압축파일인 경우 읽을 수 있는 파일이 있는지 확인
+          loadArchiveFiles().catch((error) => {
+            console.error('압축파일 로드 실패:', error);
+            setFileNotFound(true);
+            setLoading(false);
+          });
+        } else {
+          setFileNotFound(true);
+          setDataUrl(null);
+          setLoading(false);
+        }
+      }).catch((error) => {
+        console.error('파일 타입 확인 실패:', error);
+        setFileNotFound(true);
+        setDataUrl(null);
+        setLoading(false);
+      });
       return;
     }
 
@@ -175,10 +227,11 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   }, [isOpen, filePath, fileType]);
 
   useEffect(() => {
-    if (fileType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
+    const effectiveType = fileType || detectedFileType;
+    if (effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
       loadCurrentArchiveFile();
     }
-  }, [currentArchiveIndex, archiveFiles, fileType]);
+  }, [currentArchiveIndex, archiveFiles, fileType, detectedFileType]);
 
   // 볼륨 설정 저장
   useEffect(() => {
@@ -422,11 +475,16 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       setFileNotFound(false);
       const files = await window.electronAPI.getArchiveFiles(filePath);
       const supportedFiles = files.filter(file => 
-        !file.isDirectory && /\.(jpg|jpeg|png|gif|webp|mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(file.name)
+        !file.isDirectory && /\.(jpg|jpeg|png|gif|webp|mp4|avi|mkv|mov|wmv|flv|webm|txt)$/i.test(file.name)
       ).sort((a, b) => a.name.localeCompare(b.name));
       
-      setArchiveFiles(supportedFiles);
-      setCurrentArchiveIndex(0);
+      if (supportedFiles.length === 0) {
+        setFileNotFound(true);
+        setArchiveFiles([]);
+      } else {
+        setArchiveFiles(supportedFiles);
+        setCurrentArchiveIndex(0);
+      }
     } catch (error) {
       console.error('압축 파일 로드 실패:', error);
       setFileNotFound(true);
@@ -900,11 +958,16 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     setShowSpeedMenu(!showSpeedMenu);
   };
 
-  if (!isOpen || !filePath || !fileType) return null;
+  if (!isOpen || !filePath) return null;
 
   const currentFile = archiveFiles[currentArchiveIndex];
   const fileName = filePath.split(/[\\/]/).pop() || '';
   const currentFileExt = currentFile?.name.toLowerCase().split('.').pop();
+  
+  // fileType이 null이면 로딩 중이므로 로딩 UI만 표시
+  const isDetectingType = !fileType;
+  // 실제 사용할 파일 타입 (prop이 null이면 감지된 타입 사용)
+  const effectiveFileType = fileType || detectedFileType;
 
   return (
     <div 
@@ -917,11 +980,11 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
         {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-700">
           <div className="flex items-center gap-3">
-            {fileType === 'image' && <FileImage size={20} className="text-blue-400" />}
-            {fileType === 'video' && <FileVideo size={20} className="text-green-400" />}
-            {fileType === 'archive' && <Archive size={20} className="text-orange-400" />}
+            {effectiveFileType === 'image' && <FileImage size={20} className="text-blue-400" />}
+            {effectiveFileType === 'video' && <FileVideo size={20} className="text-green-400" />}
+            {effectiveFileType === 'archive' && <Archive size={20} className="text-orange-400" />}
             <span className="text-discord-text font-medium truncate max-w-md">{fileName}</span>
-            {fileType === 'archive' && (
+            {effectiveFileType === 'archive' && (
               <span className="text-discord-muted text-sm">
                 ({currentArchiveIndex + 1} / {archiveFiles.length})
               </span>
@@ -938,16 +1001,16 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
         {/* Content (Body) */}
         <div className="flex-1 min-h-0 flex items-center justify-center relative" style={{ overflow: 'hidden' }}>
           {/* 회전 버튼: 바디 영역 우측 상단에 fixed 배치 */}
-          {((fileType === 'image') || (fileType === 'video') || (fileType === 'archive' && (currentFileExt !== 'txt'))) && (
+          {((effectiveFileType === 'image') || (effectiveFileType === 'video') || (effectiveFileType === 'archive' && (currentFileExt !== 'txt'))) && (
             <div className="absolute top-4 right-4 z-20 flex gap-2">
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
                       onClick={() => {
-                        if (fileType === 'image') setImgRotation((r) => (r - 90) % 360);
-                        else if (fileType === 'video') setVideoRotation((r) => (r - 90) % 360);
-                        else if (fileType === 'archive' && (currentFileExt !== 'txt')) setArchiveImgRotation((r) => (r - 90) % 360);
+                        if (effectiveFileType === 'image') setImgRotation((r) => (r - 90) % 360);
+                        else if (effectiveFileType === 'video') setVideoRotation((r) => (r - 90) % 360);
+                        else if (effectiveFileType === 'archive' && (currentFileExt !== 'txt')) setArchiveImgRotation((r) => (r - 90) % 360);
                       }}
                       className="p-2 rounded bg-black/70 text-white hover:bg-black/90 transition-colors backdrop-blur-sm"
                     >
@@ -962,9 +1025,9 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                   <TooltipTrigger asChild>
                     <button
                       onClick={() => {
-                        if (fileType === 'image') setImgRotation((r) => (r + 90) % 360);
-                        else if (fileType === 'video') setVideoRotation((r) => (r + 90) % 360);
-                        else if (fileType === 'archive' && (currentFileExt !== 'txt')) setArchiveImgRotation((r) => (r + 90) % 360);
+                        if (effectiveFileType === 'image') setImgRotation((r) => (r + 90) % 360);
+                        else if (effectiveFileType === 'video') setVideoRotation((r) => (r + 90) % 360);
+                        else if (effectiveFileType === 'archive' && (currentFileExt !== 'txt')) setArchiveImgRotation((r) => (r + 90) % 360);
                       }}
                       className="p-2 rounded bg-black/70 text-white hover:bg-black/90 transition-colors backdrop-blur-sm"
                     >
@@ -996,7 +1059,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
           ) : (
             <>
               {/* Image Viewer */}
-              {fileType === 'image' && dataUrl && (
+              {effectiveFileType === 'image' && dataUrl && (
                 <div className="w-full h-full flex flex-col items-center justify-center">
                   <div
                     ref={imgContainerRef}
@@ -1042,7 +1105,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
               )}
 
               {/* Video Player */}
-              {fileType === 'video' && dataUrl && (
+              {effectiveFileType === 'video' && dataUrl && (
                 <div 
                   className="relative w-full h-full flex flex-col items-center justify-center"
                   onMouseMove={handleMouseMove}
@@ -1162,7 +1225,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                           id="seekbar"
                         />
                         {/* 북마크 마커 (일반 동영상에서만 표시) */}
-                        {(fileType === 'video' && Array.isArray(bookmarks)) && bookmarks.map(bm => (
+                        {(effectiveFileType === 'video' && Array.isArray(bookmarks)) && bookmarks.map(bm => (
                           <div
                             key={bm.time}
                             style={{
@@ -1236,7 +1299,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                           />
                         </div>
                         {/* 북마크 버튼 (일반 동영상만) */}
-                        {fileType === 'video' && (
+                        {effectiveFileType === 'video' && (
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -1331,7 +1394,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
               )}
 
               {/* Archive Viewer */}
-              {fileType === 'archive' && (
+              {effectiveFileType === 'archive' && (
                 <div className="w-full h-full flex flex-row">
                   {/* 사이드 파일 리스트 */}
                   <div className="h-full w-48 bg-discord-sidebar border-r border-gray-700 overflow-y-auto flex-shrink-0">
@@ -1548,7 +1611,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                     id="seekbar"
                                   />
                                   {/* 북마크 마커 (일반 동영상에서만 표시) */}
-                                  {(fileType === 'video' && Array.isArray(bookmarks)) && bookmarks.map(bm => (
+                                  {(effectiveFileType === 'video' && Array.isArray(bookmarks)) && bookmarks.map(bm => (
                                     <div
                                       key={bm.time}
                                       style={{
@@ -1622,7 +1685,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                     />
                                   </div>
                                   {/* 북마크 버튼 (일반 동영상만) */}
-                                  {fileType === 'video' && (
+                                  {effectiveFileType === 'video' && (
                                     <TooltipProvider>
                                       <Tooltip>
                                         <TooltipTrigger asChild>
