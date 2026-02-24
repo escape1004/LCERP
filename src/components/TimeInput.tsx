@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo, ReactNode } from 'react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./ui/tooltip";
 
 interface TimeInputProps {
@@ -10,6 +10,7 @@ interface TimeInputProps {
   onRegenerate: (hh: number, mm: number, ss: number) => void;
   disabled?: boolean;
   loading?: boolean;
+  rightAddon?: ReactNode; // 재생성 버튼 오른쪽에 붙일 추가 요소 (예: 업로드 버튼)
 }
 
 export const TimeInput: React.FC<TimeInputProps> = ({
@@ -20,7 +21,8 @@ export const TimeInput: React.FC<TimeInputProps> = ({
   onChange,
   onRegenerate,
   disabled = false,
-  loading = false
+  loading = false,
+  rightAddon
 }) => {
   const hhRef = useRef<HTMLInputElement>(null);
   const mmRef = useRef<HTMLInputElement>(null);
@@ -328,28 +330,31 @@ export const TimeInput: React.FC<TimeInputProps> = ({
         </TooltipProvider>
       </div>
 
-      {/* 재생성 버튼 */}
-      <button
-        type="button"
-        onMouseDown={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        }}
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          e.nativeEvent.stopImmediatePropagation();
-          handleRegenerateClick();
-        }}
-        onMouseUp={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        }}
-        disabled={disabled || loading}
-        className="px-3 py-1 text-xs text-discord-muted bg-transparent hover:bg-discord-hover border border-gray-600 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {loading ? '재생성 중...' : '썸네일 재생성'}
-      </button>
+      {/* 재생성 버튼 + 우측 추가 요소 (예: 업로드 버튼) */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            e.nativeEvent.stopImmediatePropagation();
+            handleRegenerateClick();
+          }}
+          onMouseUp={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          disabled={disabled || loading}
+          className="px-3 py-1 text-xs text-discord-muted bg-transparent hover:bg-discord-hover border border-gray-600 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {loading ? '재생성 중...' : '썸네일 재생성'}
+        </button>
+        {rightAddon}
+      </div>
     </div>
   );
 }; 

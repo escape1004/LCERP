@@ -36,6 +36,7 @@ export interface ElectronAPI {
   getArchiveFileText: (filePath: string, fileName: string) => Promise<string | null>;
   openFileDialog: () => Promise<Electron.OpenDialogReturnValue>;
   openDirectoryDialog: () => Promise<Electron.OpenDialogReturnValue>;
+  openImageFileDialog: () => Promise<Electron.OpenDialogReturnValue>;
   getFileType: (filePath: string) => Promise<'image' | 'video' | 'archive' | 'other'>;
   getAppRoot: () => Promise<string>;
   getVideoBlobUrl: (filePath: string) => Promise<{ base64: string; mimeType: string } | null>;
@@ -44,6 +45,7 @@ export interface ElectronAPI {
   deleteThumbnail: (filePath: string) => Promise<boolean>;
   generateThumbnailWithTime: (filePath: string, timestampSec: number) => Promise<string | null>;
   regenerateThumbnail: (filePath: string) => Promise<string | null>;
+  setCustomThumbnail: (filePath: string, imagePath: string) => Promise<string | null>;
   getVideoDuration: (filePath: string) => Promise<number | null>;
   getVideoCodecInfo: (filePath: string) => Promise<{ video?: { codec?: string; profile?: string; pix_fmt?: string }; audio?: { codec?: string; sample_rate?: string; channels?: number }; error?: string }>;
   getBookmarks: (categoryId: string, recordId: string) => Promise<{ success: boolean; bookmarks: { time: number; createdAt: string }[]; error?: string }>;

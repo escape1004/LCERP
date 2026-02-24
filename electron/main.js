@@ -1526,6 +1526,17 @@ ipcMain.handle('openDirectoryDialog', async () => {
   });
 });
 
+// 이미지 전용 파일 선택 다이얼로그
+ipcMain.handle('openImageFileDialog', async () => {
+  return await dialog.showOpenDialog({
+    properties: ['openFile'],
+    title: '이미지 파일 선택',
+    filters: [
+      { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp'] }
+    ]
+  });
+});
+
 ipcMain.handle('openFile', async (_, filePath) => {
   if (!filePath) {
     return { success: false, error: '파일 경로 없음' };
@@ -2093,8 +2104,65 @@ const regenerateImageOrArchiveThumbnail = async (filePath) => {
   }
 };
 
+// 사용자가 직접 선택한 이미지 파일로 썸네일을 교체하는 함수
+const setCustomThumbnailFromImage = async (targetFilePath, imagePath) => {
+  try {
+    const sharp = require('sharp');
+    const path = require('path');
+    const fs = require('fs');
+
+    if (!imagePath) {
+      log('커스텀 썸네일 이미지 경로가 비어 있습니다.');
+      return null;
+    }
+
+    if (!fs.existsSync(imagePath)) {
+      log('커스텀 썸네일 이미지 파일이 존재하지 않습니다:', imagePath);
+      return null;
+    }
+
+    let normalizedTargetPath = targetFilePath;
+    if (!path.isAbsolute(targetFilePath)) {
+      normalizedTargetPath = path.join(appDataDir, targetFilePath);
+    }
+
+    const ext = path.extname(imagePath).toLowerCase();
+    const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext);
+    if (!isImage) {
+      log('커스텀 썸네일로 지원하지 않는 이미지 형식:', ext);
+      return null;
+    }
+
+    const thumbnailDir = path.join(appDataDir, 'thumbnails');
+    if (!fs.existsSync(thumbnailDir)) {
+      fs.mkdirSync(thumbnailDir, { recursive: true });
+    }
+
+    const hash = getThumbnailHash(normalizedTargetPath);
+    const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
+
+    log('커스텀 썸네일 생성 시작:', { targetFilePath: normalizedTargetPath, imagePath, thumbnailPath });
+
+    await sharp(imagePath)
+      .resize(400, 400, { fit: 'contain' })
+      .toFile(thumbnailPath);
+
+    log('커스텀 썸네일 생성 완료:', thumbnailPath);
+
+    return thumbnailPath;
+  } catch (e) {
+    log('커스텀 썸네일 생성 에러:', e);
+    return null;
+  }
+};
+
 ipcMain.handle('regenerateThumbnail', async (_, filePath) => {
   return await regenerateImageOrArchiveThumbnail(filePath);
+});
+
+// 사용자가 선택한 이미지로 썸네일을 직접 등록
+ipcMain.handle('setCustomThumbnail', async (_, filePath, imagePath) => {
+  return await setCustomThumbnailFromImage(filePath, imagePath);
 });
 
 ipcMain.handle('getVideoDuration', async (_, filePath) => {

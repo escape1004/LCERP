@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { X, ExternalLink, ChevronRight, Check, HelpCircle } from 'lucide-react';
+import { X, ExternalLink, ChevronRight, Check, HelpCircle, Upload } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { useLoadingStore } from '../hooks/useLoadingStore';
 import { Category, DataRecord, FieldDefinition } from '../types';
@@ -1056,55 +1056,114 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         )}
         {/* 시간 입력/슬라이더 부분만 분기 */}
         {isVideo && fileExists === true && (
-          <div className="flex items-center gap-2 mt-2">
-            {(!effectiveDuration || effectiveDuration === 0)
-              ? <div className="text-xs text-gray-500">동영상 길이 불러오는 중...</div>
-              : <TimeInput
-                  hh={hh}
-                  mm={mm}
-                  ss={ss}
-                  maxDuration={effectiveDuration}
-                  onChange={(newHh, newMm, newSs) => {
-                    setHh(newHh);
-                    setMm(newMm);
-                    setSs(newSs);
-                  }}
-                  onRegenerate={async (newHh, newMm, newSs) => {
-                    setRegenLoading(true);
-                    // 즉시 로딩 표시 (500ms 지연 없이)
-                    setGlobalLoading(true, '썸네일 재생성 중...');
-                    showLoading('썸네일 재생성 중...', 60000, true); // 60초 타임아웃, 취소 버튼 표시
-                    try {
-                      const totalSeconds = newHh * 3600 + newMm * 60 + newSs;
-                      const res = await window.electronAPI.generateThumbnailWithTime(filePath, totalSeconds);
-                      if (res) {
-                        toast({ title: `썸네일이 ${newHh.toString().padStart(2, '0')}:${newMm.toString().padStart(2, '0')}:${newSs.toString().padStart(2, '0')} 지점에서 재생성되었습니다.` });
-                        await window.electronAPI.updateRecord(record.id, { ...record.data, __thumbnailTimestamp: totalSeconds });
-                        window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));
-                        await reloadThumbnail();
-                        if (categoryId) {
-                          await loadRecords(categoryId);
-                        }
-                      } else {
-                        toast({ title: '썸네일 재생성 실패', description: '', variant: 'destructive' });
+          <div className="flex items-center justify-center mt-2">
+            {(!effectiveDuration || effectiveDuration === 0) ? (
+              <div className="text-xs text-gray-500">동영상 길이 불러오는 중...</div>
+            ) : (
+              <TimeInput
+                hh={hh}
+                mm={mm}
+                ss={ss}
+                maxDuration={effectiveDuration}
+                onChange={(newHh, newMm, newSs) => {
+                  setHh(newHh);
+                  setMm(newMm);
+                  setSs(newSs);
+                }}
+                onRegenerate={async (newHh, newMm, newSs) => {
+                  setRegenLoading(true);
+                  // 즉시 로딩 표시 (500ms 지연 없이)
+                  setGlobalLoading(true, '썸네일 재생성 중...');
+                  showLoading('썸네일 재생성 중...', 60000, true); // 60초 타임아웃, 취소 버튼 표시
+                  try {
+                    const totalSeconds = newHh * 3600 + newMm * 60 + newSs;
+                    const res = await window.electronAPI.generateThumbnailWithTime(filePath, totalSeconds);
+                    if (res) {
+                      toast({ title: `썸네일이 ${newHh.toString().padStart(2, '0')}:${newMm.toString().padStart(2, '0')}:${newSs.toString().padStart(2, '0')} 지점에서 재생성되었습니다.` });
+                      await window.electronAPI.updateRecord(record.id, { ...record.data, __thumbnailTimestamp: totalSeconds });
+                      window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));
+                      await reloadThumbnail();
+                      if (categoryId) {
+                        await loadRecords(categoryId);
                       }
-                    } catch (e) {
-                      console.error('썸네일 재생성 오류:', e);
-                      toast({ title: '썸네일 재생성 실패', description: String(e), variant: 'destructive' });
-                    } finally {
-                      setRegenLoading(false);
-                      hideLoading();
+                    } else {
+                      toast({ title: '썸네일 재생성 실패', description: '', variant: 'destructive' });
                     }
-                  }}
-                  disabled={regenLoading}
-                  loading={regenLoading}
-                />}
+                  } catch (e) {
+                    console.error('썸네일 재생성 오류:', e);
+                    toast({ title: '썸네일 재생성 실패', description: String(e), variant: 'destructive' });
+                  } finally {
+                    setRegenLoading(false);
+                    hideLoading();
+                  }
+                }}
+                disabled={regenLoading}
+                loading={regenLoading}
+                rightAddon={(
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const result = await window.electronAPI.openImageFileDialog();
+                              if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+                                return;
+                              }
+                              const imagePath = result.filePaths[0];
+
+                              setRegenLoading(true);
+                              setGlobalLoading(true, '커스텀 썸네일 적용 중...');
+                              showGlobalLoading('커스텀 썸네일 적용 중...', 30000, true);
+
+                              const res = await window.electronAPI.setCustomThumbnail(filePath, imagePath);
+                              if (res) {
+                                toast({ title: '커스텀 썸네일이 적용되었습니다.' });
+                                window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));
+                                await reloadThumbnail();
+                                if (categoryId) {
+                                  await loadRecords(categoryId);
+                                }
+                              } else {
+                                toast({
+                                  title: '커스텀 썸네일 적용 실패',
+                                  description: '이미지를 썸네일로 변환하지 못했습니다.',
+                                  variant: 'destructive',
+                                });
+                              }
+                            } catch (e) {
+                              toast({
+                                title: '커스텀 썸네일 적용 실패',
+                                description: String(e),
+                                variant: 'destructive',
+                              });
+                            } finally {
+                              setRegenLoading(false);
+                              hideGlobalLoading();
+                            }
+                          }}
+                          disabled={regenLoading}
+                          className="p-1.5 rounded border border-gray-600 text-discord-muted hover:bg-discord-hover hover:text-discord-text transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Upload size={12} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+                        이미지 파일을 선택해 썸네일로 등록
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              />
+            )}
           </div>
         )}
         
-        {/* 이미지/압축파일용 썸네일 재생성 버튼 */}
+        {/* 이미지/압축파일용 썸네일 재생성 / 커스텀 업로드 버튼 영역 */}
         {!isVideo && fileExists === true && (
           <div className="flex items-center gap-2 mt-2">
+            {/* 이미지/압축파일 자동 재생성 버튼 */}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -1142,6 +1201,62 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                 </TooltipTrigger>
                 <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
                   썸네일 재생성
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* 직접 업로드 버튼 (동영상/이미지/압축 공통) */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const result = await window.electronAPI.openImageFileDialog();
+                        if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+                          return;
+                        }
+                        const imagePath = result.filePaths[0];
+
+                        setRegenLoading(true);
+                        setGlobalLoading(true, '커스텀 썸네일 적용 중...');
+                        showGlobalLoading('커스텀 썸네일 적용 중...', 30000, true);
+
+                        const res = await window.electronAPI.setCustomThumbnail(filePath, imagePath);
+                        if (res) {
+                          toast({ title: '커스텀 썸네일이 적용되었습니다.' });
+                          window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));
+                          await reloadThumbnail();
+                          if (categoryId) {
+                            await loadRecords(categoryId);
+                          }
+                        } else {
+                          toast({
+                            title: '커스텀 썸네일 적용 실패',
+                            description: '이미지를 썸네일로 변환하지 못했습니다.',
+                            variant: 'destructive',
+                          });
+                        }
+                      } catch (e) {
+                        toast({
+                          title: '커스텀 썸네일 적용 실패',
+                          description: String(e),
+                          variant: 'destructive',
+                        });
+                      } finally {
+                        setRegenLoading(false);
+                        hideGlobalLoading();
+                      }
+                    }}
+                    disabled={regenLoading}
+                    className="p-1.5 rounded border border-gray-600 text-discord-muted hover:bg-discord-hover hover:text-discord-text transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Upload size={12} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+                  이미지 파일을 선택해 썸네일로 등록
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
