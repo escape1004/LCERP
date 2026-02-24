@@ -163,8 +163,6 @@ export const Sidebar: React.FC = () => {
               : 'hover:bg-discord-hover text-discord-text'
           }`}
           style={{ paddingLeft: `${12 + level * 12}px` }}
-          onMouseEnter={() => setHoveredCategory(category.id)}
-          onMouseLeave={() => setHoveredCategory(null)}
           onClick={async () => {
             navigate('/category');
             // 이미 로드된 카테고리인지 확인
@@ -236,7 +234,7 @@ export const Sidebar: React.FC = () => {
     );
   };
 
-  const renderDraggableCategory = (category: Category, level = 0) => {
+  const renderDraggableCategory = (category: Category, level = 0, dragHandleProps?: any) => {
     const subCategories = getSubCategories(category.id);
     const isSelected = selectedCategoryId === category.id;
     const showSubCategories = shouldShowSubCategories(category.id);
@@ -252,8 +250,6 @@ export const Sidebar: React.FC = () => {
               : 'hover:bg-discord-hover text-discord-text'
           }`}
           style={{ paddingLeft: `${12 + level * 12}px` }}
-          onMouseEnter={() => setHoveredCategory(category.id)}
-          onMouseLeave={() => setHoveredCategory(null)}
           onClick={async () => {
             navigate('/category');
             // 이미 로드된 카테고리인지 확인
@@ -282,6 +278,7 @@ export const Sidebar: React.FC = () => {
               }
             }
           }}
+          {...dragHandleProps}
         >
           {level > 0 && (
             <span className="mr-2 text-gray-400">└</span>
@@ -419,9 +416,8 @@ export const Sidebar: React.FC = () => {
                         <div
                           ref={provided.innerRef}
                           {...provided.draggableProps}
-                          {...provided.dragHandleProps}
                         >
-                          {renderDraggableCategory(category)}
+                          {renderDraggableCategory(category, 0, provided.dragHandleProps)}
                         </div>
                       )}
                     </Draggable>
