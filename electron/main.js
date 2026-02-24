@@ -338,7 +338,7 @@ function startVideoHttpServer() {
         fs.createReadStream(resolvedPath).pipe(res);
       }
     } else if (urlObj.pathname === '/archive-video') {
-      // 압축파일 내 동영상 스트리밍
+      // 압축파일 내 동영상 스트리밍 (대용량 대응: 전체 버퍼링 없이 스트림으로 전달)
       const archivePath = decodeURIComponent(urlObj.searchParams.get('archive') || '');
       const fileName = decodeURIComponent(urlObj.searchParams.get('file') || '');
       
@@ -383,66 +383,44 @@ function startVideoHttpServer() {
       };
       const mimeType = mimeTypes[fileExt] || 'application/octet-stream';
       
-      // unzipper를 사용하여 압축파일 내 동영상 스트리밍
       const unzipper = require('unzipper');
-      const range = req.headers.range;
+      let responded = false;
       
       fs.createReadStream(resolvedArchivePath)
         .pipe(unzipper.Parse())
-        .on('entry', function (entry) {
+        .on('entry', (entry) => {
+          if (responded) {
+            entry.autodrain();
+            return;
+          }
+          
           if (entry.path === fileName && entry.type === 'File') {
-            // 파일 크기 계산을 위해 전체 파일을 메모리에 로드 (개선 필요)
-            const chunks = [];
-            entry.on('data', chunk => chunks.push(chunk));
-            entry.on('end', () => {
-              const buffer = Buffer.concat(chunks);
-              const fileSize = buffer.length;
-              
-              if (range) {
-                const parts = range.replace(/bytes=/, '').split('-');
-                const start = parseInt(parts[0], 10);
-                const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-                const chunkSize = (end - start) + 1;
-                
-                res.writeHead(206, {
-                  'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-                  'Accept-Ranges': 'bytes',
-                  'Content-Length': chunkSize,
-                  'Content-Type': mimeType,
-                  'Access-Control-Allow-Origin': '*',
-                  'Access-Control-Allow-Methods': 'GET, HEAD',
-                  'Access-Control-Allow-Headers': 'Range'
-                });
-                
-                res.end(buffer.slice(start, end + 1));
-              } else {
-                res.writeHead(200, {
-                  'Content-Length': fileSize,
-                  'Content-Type': mimeType,
-                  'Accept-Ranges': 'bytes',
-                  'Access-Control-Allow-Origin': '*',
-                  'Access-Control-Allow-Methods': 'GET, HEAD'
-                });
-                
-                res.end(buffer);
-              }
+            responded = true;
+            res.writeHead(200, {
+              'Content-Type': mimeType,
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, HEAD'
             });
-            entry.on('error', (err) => {
-              res.writeHead(500);
+            
+            entry.on('error', () => {
+              if (!res.headersSent) {
+                res.writeHead(500);
+              }
               res.end('Error reading file from archive');
             });
+            
+            entry.pipe(res);
           } else {
             entry.autodrain();
           }
         })
         .on('close', () => {
-          // 파일을 찾지 못한 경우
-          if (!res.headersSent) {
+          if (!responded && !res.headersSent) {
             res.writeHead(404);
             res.end('File not found in archive');
           }
         })
-        .on('error', (err) => {
+        .on('error', () => {
           if (!res.headersSent) {
             res.writeHead(500);
             res.end('Error reading archive');
