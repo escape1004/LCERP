@@ -1334,107 +1334,109 @@ export const MainContent: React.FC = () => {
                             </div>
                           </th>
                         )}
-                        <th className="px-2 py-2 text-left text-xs font-semibold text-discord-text w-32">작업</th>
                       </tr>
                     </thead>
                     <tbody>
                       {paginatedRecords.map((record) => (
-                        <tr key={record.id} className="hover:bg-discord-hover group">
-                          {fileField && (
-                            <td className="px-2 py-3 text-xs text-discord-text w-[112px] overflow-hidden relative">
-                              <ThumbnailCell
-                                filePath={resolveFilePath(record.data[fileField.id], fileField) || undefined}
-                                record={record}
-                                onThumbnailClick={async (filePath) => {
-                                  const fileType = await window.electronAPI.getFileType(filePath);
-                                  if (fileType === 'image' || fileType === 'video') {
-                                    setViewerFilePath(filePath);
-                                    setViewerFileType(fileType);
-                                    setViewerCategoryId(selectedCategorySafe?.id || '');
-                                    setViewerRecordId(record.id);
-                                    setViewerModalOpen(true);
-                                  } else if (fileType === 'archive') {
-                                    // 압축파일인 경우 읽을 수 있는 파일이 있는지 확인
-                                    try {
-                                      const files = await window.electronAPI.getArchiveFiles(filePath);
-                                      const supportedFiles = files.filter(file => 
-                                        !file.isDirectory && /\.(jpg|jpeg|png|gif|webp|mp4|avi|mkv|mov|wmv|flv|webm|txt)$/i.test(file.name)
-                                      );
-                                      
-                                      if (supportedFiles.length === 0) {
-                                        toast({ 
-                                          title: '읽을 수 있는 파일이 없습니다', 
-                                          description: '압축파일 내에 이미지, 동영상, 텍스트 파일이 없습니다.', 
-                                          variant: 'destructive' 
-                                        });
-                                        return;
+                        <ContextMenu key={record.id}>
+                          <ContextMenuTrigger asChild>
+                            <tr className="hover:bg-discord-hover group cursor-default">
+                              {fileField && (
+                                <td className="px-2 py-3 text-xs text-discord-text w-[112px] overflow-hidden relative">
+                                  <ThumbnailCell
+                                    filePath={resolveFilePath(record.data[fileField.id], fileField) || undefined}
+                                    record={record}
+                                    onThumbnailClick={async (filePath) => {
+                                      const fileType = await window.electronAPI.getFileType(filePath);
+                                      if (fileType === 'image' || fileType === 'video') {
+                                        setViewerFilePath(filePath);
+                                        setViewerFileType(fileType);
+                                        setViewerCategoryId(selectedCategorySafe?.id || '');
+                                        setViewerRecordId(record.id);
+                                        setViewerModalOpen(true);
+                                      } else if (fileType === 'archive') {
+                                        // 압축파일인 경우 읽을 수 있는 파일이 있는지 확인
+                                        try {
+                                          const files = await window.electronAPI.getArchiveFiles(filePath);
+                                          const supportedFiles = files.filter(file => 
+                                            !file.isDirectory && /\.(jpg|jpeg|png|gif|webp|mp4|avi|mkv|mov|wmv|flv|webm|txt)$/i.test(file.name)
+                                          );
+                                          
+                                          if (supportedFiles.length === 0) {
+                                            toast({ 
+                                              title: '읽을 수 있는 파일이 없습니다', 
+                                              description: '압축파일 내에 이미지, 동영상, 텍스트 파일이 없습니다.', 
+                                              variant: 'destructive' 
+                                            });
+                                            return;
+                                          }
+                                          
+                                          setViewerFilePath(filePath);
+                                          setViewerFileType(fileType);
+                                          setViewerCategoryId(selectedCategorySafe?.id || '');
+                                          setViewerRecordId(record.id);
+                                          setViewerModalOpen(true);
+                                        } catch (error) {
+                                          toast({ 
+                                            title: '압축파일 열기 실패', 
+                                            description: '압축파일을 읽을 수 없습니다.', 
+                                            variant: 'destructive' 
+                                          });
+                                        }
                                       }
-                                      
-                                      setViewerFilePath(filePath);
-                                      setViewerFileType(fileType);
-                                      setViewerCategoryId(selectedCategorySafe?.id || '');
-                                      setViewerRecordId(record.id);
-                                      setViewerModalOpen(true);
-                                    } catch (error) {
-                                      toast({ 
-                                        title: '압축파일 열기 실패', 
-                                        description: '압축파일을 읽을 수 없습니다.', 
-                                        variant: 'destructive' 
-                                      });
-                                    }
-                                  }
-                                }}
-                              />
-                            </td>
-                          )}
-                          {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
-                            <td key={field.id} className={`${
-                              field.type === 'checkbox'
-                                ? 'min-w-[40px] max-w-[160px] px-2 py-3 text-xs text-discord-text text-left overflow-hidden'
-                                : 'px-2 py-3 text-xs text-discord-text overflow-hidden'
-                            }`}>
-                              {formatFieldValue(field, record.data[field.id], categoriesSafe, getCategoryRecords, handleViewRelatedRecord)}
-                            </td>
-                          ))}
-                          {/* 참조되는 카테고리인 경우에만 참조 횟수 표시 */}
-                          {selectedCategorySafe && categoriesSafe.some(cat => 
-                            cat.fields.some(field => 
-                              field.type === 'relation' && field.relationCategoryId === selectedCategorySafe.id
-                            )
-                          ) && (
-                            <td className="px-2 py-3 text-xs text-discord-text w-24 text-left">
-                              {getRecordReferenceCount(record.id, selectedCategorySafe.id)}
-                            </td>
-                          )}
-                          <td className="px-2 py-3 text-xs text-discord-text w-32">
-                            <div className="flex gap-1">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleView(record)}
-                                className="h-8 w-8 p-0 hover:bg-discord-bg"
-                              >
-                                <Eye size={14} />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleEdit(record)}
-                                className="h-8 w-8 p-0 hover:bg-discord-bg"
-                              >
-                                <Edit size={14} />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleDelete(record)}
-                                className="h-8 w-8 p-0 hover:bg-red-900 text-discord-danger"
-                              >
-                                <Trash2 size={14} />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
+                                    }}
+                                  />
+                                </td>
+                              )}
+                              {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
+                                <td key={field.id} className={`${
+                                  field.type === 'checkbox'
+                                    ? 'min-w-[40px] max-w-[160px] px-2 py-3 text-xs text-discord-text text-left overflow-hidden'
+                                    : 'px-2 py-3 text-xs text-discord-text overflow-hidden'
+                                }`}>
+                                  {formatFieldValue(field, record.data[field.id], categoriesSafe, getCategoryRecords, handleViewRelatedRecord)}
+                                </td>
+                              ))}
+                              {/* 참조되는 카테고리인 경우에만 참조 횟수 표시 */}
+                              {selectedCategorySafe && categoriesSafe.some(cat => 
+                                cat.fields.some(field => 
+                                  field.type === 'relation' && field.relationCategoryId === selectedCategorySafe.id
+                                )
+                              ) && (
+                                <td className="px-2 py-3 text-xs text-discord-text w-24 text-left">
+                                  {getRecordReferenceCount(record.id, selectedCategorySafe.id)}
+                                </td>
+                              )}
+                            </tr>
+                          </ContextMenuTrigger>
+                          <ContextMenuContent>
+                            <ContextMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleView(record);
+                              }}
+                            >
+                              상세
+                            </ContextMenuItem>
+                            <ContextMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEdit(record);
+                              }}
+                            >
+                              수정
+                            </ContextMenuItem>
+                            <ContextMenuItem
+                              className="text-discord-danger focus:text-discord-danger"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(record);
+                              }}
+                            >
+                              삭제
+                            </ContextMenuItem>
+                          </ContextMenuContent>
+                        </ContextMenu>
                       ))}
                     </tbody>
                   </table>
