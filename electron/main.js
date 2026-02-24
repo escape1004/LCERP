@@ -2020,9 +2020,9 @@ ipcMain.handle('generateThumbnailWithTime', async (_, filePath, timestampSec) =>
 const regenerateImageOrArchiveThumbnail = async (filePath) => {
   try {
     const sharp = require('sharp');
-    const AdmZip = require('adm-zip');
     const path = require('path');
     const fs = require('fs');
+    const unzipper = require('unzipper');
     
     let normalizedPath = filePath;
     if (!path.isAbsolute(filePath)) {
@@ -2060,26 +2060,50 @@ const regenerateImageOrArchiveThumbnail = async (filePath) => {
         .toFile(thumbnailPath);
       log('이미지 썸네일 재생성 완료:', thumbnailPath);
     } else if (isArchive) {
-      // 압축파일 썸네일 재생성
-      const zip = new AdmZip(normalizedPath);
-      const zipEntries = zip.getEntries();
-      const imageEntry = zipEntries.find(entry => 
-        /\.(jpg|jpeg|png|gif|webp)$/i.test(entry.entryName) && !entry.isDirectory
-      );
-      
-      if (imageEntry) {
-        const buffer = zip.readFile(imageEntry);
-        if (buffer) {
-          await sharp(buffer)
-            .resize(400, 400, { fit: 'contain' })
-            .toFile(thumbnailPath);
-          log('압축파일 썸네일 재생성 완료:', thumbnailPath);
-        } else {
-          log('압축파일 내 이미지 버퍼 읽기 실패');
-          return null;
-        }
-      } else {
-        log('압축파일 내 이미지 파일을 찾을 수 없음');
+      // 압축파일 썸네일 재생성 (대용량 대응을 위해 스트리밍 처리)
+      let found = false;
+      await new Promise((resolve, reject) => {
+        fs.createReadStream(normalizedPath)
+          .pipe(unzipper.Parse())
+          .on('entry', async (entry) => {
+            const fileName = entry.path;
+            if (/\.(jpg|jpeg|png|gif|webp)$/i.test(fileName) && !found && entry.type === 'File') {
+              found = true;
+              const chunks = [];
+              entry.on('data', (chunk) => chunks.push(chunk));
+              entry.on('end', async () => {
+                const buffer = Buffer.concat(chunks);
+                try {
+                  await sharp(buffer)
+                    .resize(400, 400, { fit: 'contain' })
+                    .toFile(thumbnailPath);
+                  log('압축파일 썸네일 재생성 완료:', thumbnailPath);
+                  resolve(null);
+                } catch (err) {
+                  log('압축파일 썸네일 재생성 실패:', err);
+                  reject(err);
+                }
+              });
+              entry.on('error', (err) => {
+                log('압축파일 엔트리 처리 실패:', err);
+                reject(err);
+              });
+            } else {
+              entry.autodrain();
+            }
+          })
+          .on('close', () => {
+            if (!found) {
+              log('압축파일 내 이미지 파일을 찾을 수 없음');
+            }
+            resolve(null);
+          })
+          .on('error', (err) => {
+            log('압축파일 처리 실패:', err);
+            reject(err);
+          });
+      });
+      if (!found) {
         return null;
       }
     }
