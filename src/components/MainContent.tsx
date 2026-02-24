@@ -605,6 +605,13 @@ export const MainContent: React.FC = () => {
   // 검색어를 로컬 상태로 관리
   const [searchTerm, setSearchTerm] = useState('');
 
+  // 컬럼 너비 관리 (카테고리별로 저장)
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const [isResizing, setIsResizing] = useState<string | null>(null);
+  const [resizeStartX, setResizeStartX] = useState(0);
+  const [resizeStartWidth, setResizeStartWidth] = useState(0);
+  const tableRef = useRef<HTMLTableElement>(null);
+
   // categories, selectedCategory, currentRecords에 기본값 보장
   const categoriesSafe = categories || [];
   const selectedCategorySafe = categoriesSafe.find(cat => cat.id === selectedCategoryId) || null;
@@ -639,6 +646,30 @@ export const MainContent: React.FC = () => {
     return count;
   }, [categoriesSafe, getCategoryRecords]);
   
+  // 카테고리별 컬럼 너비 불러오기
+  useEffect(() => {
+    if (selectedCategoryId) {
+      const savedWidths = localStorage.getItem(`columnWidths_${selectedCategoryId}`);
+      if (savedWidths) {
+        try {
+          const widths = JSON.parse(savedWidths);
+          setColumnWidths(widths);
+        } catch (e) {
+          console.error('컬럼 너비 불러오기 실패:', e);
+        }
+      } else {
+        setColumnWidths({});
+      }
+    }
+  }, [selectedCategoryId]);
+
+  // 컬럼 너비 변경 시 저장
+  useEffect(() => {
+    if (selectedCategoryId && Object.keys(columnWidths).length > 0) {
+      localStorage.setItem(`columnWidths_${selectedCategoryId}`, JSON.stringify(columnWidths));
+    }
+  }, [columnWidths, selectedCategoryId]);
+
   // Reset search field to 'all' when category changes
   useEffect(() => {
     setSearchField('all');
@@ -696,6 +727,57 @@ export const MainContent: React.FC = () => {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [searchField, setSearchField] = useState<string>('all');
   const [fileTypeFilter, setFileTypeFilter] = useState<string>('all'); // 'all', 'image', 'video', 'archive'
+
+  // 컬럼 리사이즈 핸들러
+  const handleResizeStart = useCallback((columnId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizing(columnId);
+    setResizeStartX(e.clientX);
+    const currentWidth = columnWidths[columnId] || getDefaultColumnWidth(columnId);
+    setResizeStartWidth(currentWidth);
+  }, [columnWidths]);
+
+  const handleResizeMove = useCallback((e: MouseEvent) => {
+    if (!isResizing) return;
+    const diff = e.clientX - resizeStartX;
+    const newWidth = Math.max(50, resizeStartWidth + diff); // 최소 너비 50px
+    setColumnWidths(prev => ({
+      ...prev,
+      [isResizing]: newWidth
+    }));
+  }, [isResizing, resizeStartX, resizeStartWidth]);
+
+  const handleResizeEnd = useCallback(() => {
+    setIsResizing(null);
+  }, []);
+
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener('mousemove', handleResizeMove);
+      document.addEventListener('mouseup', handleResizeEnd);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      return () => {
+        document.removeEventListener('mousemove', handleResizeMove);
+        document.removeEventListener('mouseup', handleResizeEnd);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+    }
+  }, [isResizing, handleResizeMove, handleResizeEnd]);
+
+  // 기본 컬럼 너비 반환
+  const getDefaultColumnWidth = useCallback((columnId: string): number => {
+    if (columnId === '__thumbnail') return 112;
+    if (columnId === '__refCount') return 96;
+    return 150; // 기본 필드 너비
+  }, []);
+
+  // 컬럼 너비 가져오기
+  const getColumnWidth = useCallback((columnId: string): number => {
+    return columnWidths[columnId] || getDefaultColumnWidth(columnId);
+  }, [columnWidths, getDefaultColumnWidth]);
 
   // 파일 필드 존재 여부
   const fileField = selectedCategorySafe?.fields.find(f => f.type === 'file');
@@ -1270,12 +1352,13 @@ export const MainContent: React.FC = () => {
               <div className="flex-1 flex flex-col min-h-0">
                 {/* Table Container */}
                 <div ref={tableContainerRef} className="flex-1 min-h-0 overflow-auto discord-scrollbar">
-                  <table className="w-full table-fixed">
+                  <table ref={tableRef} className="w-full table-fixed">
                     <thead className="sticky top-0 z-10 bg-discord-sidebar border-b border-gray-700">
                       <tr>
                         {fileField && (
                           <th 
-                            className="px-2 py-2 text-left text-xs font-semibold text-discord-text w-[112px] cursor-pointer hover:bg-discord-hover"
+                            className="px-2 py-2 text-left text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover relative"
+                            style={{ width: `${getColumnWidth('__thumbnail')}px` }}
                             onClick={() => handleSort('__thumbnail')}
                           >
                             <div className="flex items-center gap-1 select-none">
@@ -1288,6 +1371,15 @@ export const MainContent: React.FC = () => {
                                 )
                               )}
                             </div>
+                            <div
+                              className={`absolute top-0 right-0 w-2 h-full cursor-col-resize transition-colors ${
+                                isResizing === '__thumbnail' 
+                                  ? 'bg-discord-accent' 
+                                  : 'bg-transparent hover:bg-discord-accent'
+                              }`}
+                              style={{ marginRight: '-4px' }}
+                              onMouseDown={(e) => handleResizeStart('__thumbnail', e)}
+                            />
                           </th>
                         )}
                         {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
@@ -1295,9 +1387,10 @@ export const MainContent: React.FC = () => {
                             key={field.id}
                             className={
                               field.type === 'checkbox'
-                                ? 'min-w-[40px] max-w-[160px] px-2 py-2 text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover text-left truncate'
-                                : 'px-2 py-2 text-left text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover'
+                                ? 'px-2 py-2 text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover text-left truncate relative'
+                                : 'px-2 py-2 text-left text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover relative'
                             }
+                            style={{ width: `${getColumnWidth(field.id)}px` }}
                             onClick={() => handleSort(field.id)}
                           >
                             <div className="flex items-center gap-1 select-none">
@@ -1310,6 +1403,15 @@ export const MainContent: React.FC = () => {
                                 )
                               )}
                             </div>
+                            <div
+                              className={`absolute top-0 right-0 w-2 h-full cursor-col-resize transition-colors ${
+                                isResizing === field.id 
+                                  ? 'bg-discord-accent' 
+                                  : 'bg-transparent hover:bg-discord-accent'
+                              }`}
+                              style={{ marginRight: '-4px' }}
+                              onMouseDown={(e) => handleResizeStart(field.id, e)}
+                            />
                           </th>
                         ))}
                         {/* 참조되는 카테고리인 경우에만 참조 횟수 컬럼 표시 */}
@@ -1319,7 +1421,8 @@ export const MainContent: React.FC = () => {
                           )
                         ) && (
                           <th 
-                            className="px-2 py-2 text-left text-xs font-semibold text-discord-text w-24 cursor-pointer hover:bg-discord-hover"
+                            className="px-2 py-2 text-left text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover relative"
+                            style={{ width: `${getColumnWidth('__refCount')}px` }}
                             onClick={() => handleSort('__refCount')}
                           >
                             <div className="flex items-center gap-1 select-none">
@@ -1332,6 +1435,15 @@ export const MainContent: React.FC = () => {
                                 )
                               )}
                             </div>
+                            <div
+                              className={`absolute top-0 right-0 w-2 h-full cursor-col-resize transition-colors ${
+                                isResizing === '__refCount' 
+                                  ? 'bg-discord-accent' 
+                                  : 'bg-transparent hover:bg-discord-accent'
+                              }`}
+                              style={{ marginRight: '-4px' }}
+                              onMouseDown={(e) => handleResizeStart('__refCount', e)}
+                            />
                           </th>
                         )}
                       </tr>
@@ -1342,7 +1454,7 @@ export const MainContent: React.FC = () => {
                           <ContextMenuTrigger asChild>
                             <tr className="hover:bg-discord-hover group cursor-default">
                               {fileField && (
-                                <td className="px-2 py-3 text-xs text-discord-text w-[112px] overflow-hidden relative">
+                                <td className="px-2 py-3 text-xs text-discord-text overflow-hidden relative" style={{ width: `${getColumnWidth('__thumbnail')}px` }}>
                                   <ThumbnailCell
                                     filePath={resolveFilePath(record.data[fileField.id], fileField) || undefined}
                                     record={record}
@@ -1391,9 +1503,9 @@ export const MainContent: React.FC = () => {
                               {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
                                 <td key={field.id} className={`${
                                   field.type === 'checkbox'
-                                    ? 'min-w-[40px] max-w-[160px] px-2 py-3 text-xs text-discord-text text-left overflow-hidden'
+                                    ? 'px-2 py-3 text-xs text-discord-text text-left overflow-hidden'
                                     : 'px-2 py-3 text-xs text-discord-text overflow-hidden'
-                                }`}>
+                                }`} style={{ width: `${getColumnWidth(field.id)}px` }}>
                                   {formatFieldValue(field, record.data[field.id], categoriesSafe, getCategoryRecords, handleViewRelatedRecord)}
                                 </td>
                               ))}
@@ -1403,7 +1515,7 @@ export const MainContent: React.FC = () => {
                                   field.type === 'relation' && field.relationCategoryId === selectedCategorySafe.id
                                 )
                               ) && (
-                                <td className="px-2 py-3 text-xs text-discord-text w-24 text-left">
+                                <td className="px-2 py-3 text-xs text-discord-text text-left overflow-hidden" style={{ width: `${getColumnWidth('__refCount')}px` }}>
                                   {getRecordReferenceCount(record.id, selectedCategorySafe.id)}
                                 </td>
                               )}
