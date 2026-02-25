@@ -300,14 +300,15 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
 
   // 비디오 이벤트 핸들러
   const handlePlayPause = () => {
-    if (videoRef.current && fileType === 'video') {
+    const effectiveType = fileType || detectedFileType;
+    if (videoRef.current && effectiveType === 'video') {
       if (isPlaying) {
         videoRef.current.pause();
       } else {
         videoRef.current.play();
       }
     }
-    if (archiveVideoRef.current && fileType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
+    if (archiveVideoRef.current && effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
       const currentFile = archiveFiles[currentArchiveIndex];
       if (currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name)) {
         if (isPlaying) {
@@ -349,10 +350,11 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
 
   const handleLoopToggle = () => {
     setIsLooping(!isLooping);
-    if (videoRef.current && fileType === 'video') {
+    const effectiveType = fileType || detectedFileType;
+    if (videoRef.current && effectiveType === 'video') {
       videoRef.current.loop = !isLooping;
     }
-    if (archiveVideoRef.current && fileType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
+    if (archiveVideoRef.current && effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
       const currentFile = archiveFiles[currentArchiveIndex];
       if (currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name)) {
         archiveVideoRef.current.loop = !isLooping;
@@ -361,14 +363,15 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   };
 
   const handleFullscreenToggle = () => {
-    if (videoRef.current && fileType === 'video') {
+    const effectiveType = fileType || detectedFileType;
+    if (videoRef.current && effectiveType === 'video') {
       if (!isFullscreen) {
         videoRef.current.requestFullscreen();
       } else {
         document.exitFullscreen();
       }
     }
-    if (archiveVideoRef.current && fileType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
+    if (archiveVideoRef.current && effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
       const currentFile = archiveFiles[currentArchiveIndex];
       if (currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name)) {
         if (!isFullscreen) {
@@ -406,10 +409,11 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
 
   // 재생바 관련 핸들러 추가
   const handleTimeUpdate = () => {
-    if (videoRef.current && fileType === 'video') {
+    const effectiveType = fileType || detectedFileType;
+    if (videoRef.current && effectiveType === 'video') {
       setCurrentTime(videoRef.current.currentTime);
     }
-    if (archiveVideoRef.current && fileType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
+    if (archiveVideoRef.current && effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
       const currentFile = archiveFiles[currentArchiveIndex];
       if (currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name)) {
         setCurrentTime(archiveVideoRef.current.currentTime);
@@ -440,10 +444,11 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTime = parseFloat(e.target.value);
     setCurrentTime(newTime);
-    if (videoRef.current && fileType === 'video') {
+    const effectiveType = fileType || detectedFileType;
+    if (videoRef.current && effectiveType === 'video') {
       videoRef.current.currentTime = newTime;
     }
-    if (archiveVideoRef.current && fileType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
+    if (archiveVideoRef.current && effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
       const currentFile = archiveFiles[currentArchiveIndex];
       if (currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name)) {
         archiveVideoRef.current.currentTime = newTime;
@@ -560,7 +565,8 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     }
     
     // 동영상 플레이어 키보드 단축키
-    if (fileType === 'video') {
+    const effectiveType = fileType || detectedFileType;
+    if (effectiveType === 'video') {
       switch (e.key) {
         case ' ':
           e.preventDefault();
@@ -612,7 +618,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     }
     
     // 압축파일 내 동영상 키보드 단축키
-    if (fileType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
+    if (effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
       const currentFile = archiveFiles[currentArchiveIndex];
       if (currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name)) {
         switch (e.key) {
@@ -1242,7 +1248,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                             }}
                             className="bg-red-500/60 shadow-md shadow-red-500/30 border border-white/10 hover:bg-red-500 hover:shadow-lg hover:shadow-red-500/60"
                             onClick={() => {
-                              if (videoRef.current && fileType === 'video') {
+                              if (videoRef.current && effectiveFileType === 'video') {
                                 videoRef.current.currentTime = bm.time;
                                 setCurrentTime(bm.time);
                               }
@@ -1628,7 +1634,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                       }}
                                       className="bg-red-500/60 shadow-md shadow-red-500/30 border border-white/10 hover:bg-red-500 hover:shadow-lg hover:shadow-red-500/60"
                                       onClick={() => {
-                                        if (videoRef.current && fileType === 'video') {
+                                        if (videoRef.current && effectiveFileType === 'video') {
                                           videoRef.current.currentTime = bm.time;
                                           setCurrentTime(bm.time);
                                         }
