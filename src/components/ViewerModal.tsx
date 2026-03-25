@@ -127,7 +127,8 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   }, [fileNotFound, fileType, categoryId, recordId]);
 
   useEffect(() => {
-    if (fileType === 'video' && isOpen && filePath && categoryId && recordId) {
+    const effectiveType = fileType || detectedFileType;
+    if (effectiveType === 'video' && isOpen && filePath && categoryId && recordId) {
       window.electronAPI.getBookmarks(categoryId, recordId).then(res => {
         if (res.success) setBookmarks(res.bookmarks);
         else setBookmarks([]);
@@ -135,7 +136,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     } else {
       setBookmarks([]);
     }
-  }, [fileType, isOpen, filePath, categoryId, recordId]);
+  }, [fileType, detectedFileType, isOpen, filePath, categoryId, recordId]);
 
   useEffect(() => {
     videoScaleRef.current = videoScale;
@@ -268,31 +269,33 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
 
   // 동영상 볼륨 설정
   useEffect(() => {
-    if (videoRef.current && fileType === 'video') {
+    const effectiveType = fileType || detectedFileType;
+    if (videoRef.current && effectiveType === 'video') {
       videoRef.current.volume = isMuted ? 0 : volume;
       videoRef.current.muted = isMuted;
     }
-    if (archiveVideoRef.current && fileType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
+    if (archiveVideoRef.current && effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
       const currentFile = archiveFiles[currentArchiveIndex];
       if (currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name)) {
         archiveVideoRef.current.volume = isMuted ? 0 : volume;
         archiveVideoRef.current.muted = isMuted;
       }
     }
-  }, [volume, isMuted, fileType, archiveFiles, currentArchiveIndex]);
+  }, [volume, isMuted, fileType, detectedFileType, archiveFiles, currentArchiveIndex]);
 
   // 동영상 배속 설정
   useEffect(() => {
-    if (videoRef.current && fileType === 'video') {
+    const effectiveType = fileType || detectedFileType;
+    if (videoRef.current && effectiveType === 'video') {
       videoRef.current.playbackRate = playbackSpeed;
     }
-    if (archiveVideoRef.current && fileType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
+    if (archiveVideoRef.current && effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
       const currentFile = archiveFiles[currentArchiveIndex];
       if (currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name)) {
         archiveVideoRef.current.playbackRate = playbackSpeed;
       }
     }
-  }, [playbackSpeed, fileType, archiveFiles, currentArchiveIndex]);
+  }, [playbackSpeed, fileType, detectedFileType, archiveFiles, currentArchiveIndex]);
 
   // 배속 메뉴 외부 클릭 시 닫기
   useEffect(() => {
@@ -314,13 +317,14 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
 
   // 동영상 플레이어 포커스 설정
   useEffect(() => {
-    if (fileType === 'video' && isOpen) {
+    const effectiveType = fileType || detectedFileType;
+    if (effectiveType === 'video' && isOpen) {
       const videoContainer = document.querySelector('[data-video-container]') as HTMLElement;
       if (videoContainer) {
         videoContainer.focus();
       }
     }
-  }, [fileType, isOpen]);
+  }, [fileType, detectedFileType, isOpen]);
 
   // 비디오 이벤트 핸들러
   const handlePlayPause = () => {
@@ -345,14 +349,22 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   };
 
   const handleVolumeChange = (newVolume: number) => {
+    const effectiveType = fileType || detectedFileType;
+    const nextMuted = newVolume === 0;
+
     setVolume(newVolume);
-    if (videoRef.current) {
+    setIsMuted(nextMuted);
+
+    if (videoRef.current && effectiveType === 'video') {
       videoRef.current.volume = newVolume;
+      videoRef.current.muted = nextMuted;
     }
-    if (newVolume === 0) {
-      setIsMuted(true);
-    } else if (isMuted) {
-      setIsMuted(false);
+    if (archiveVideoRef.current && effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
+      const currentFile = archiveFiles[currentArchiveIndex];
+      if (currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name)) {
+        archiveVideoRef.current.volume = newVolume;
+        archiveVideoRef.current.muted = nextMuted;
+      }
     }
     
     // 볼륨 오버레이 표시
@@ -366,9 +378,18 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   };
 
   const handleMuteToggle = () => {
-    setIsMuted(!isMuted);
-    if (videoRef.current) {
-      videoRef.current.muted = !isMuted;
+    const effectiveType = fileType || detectedFileType;
+    const nextMuted = !isMuted;
+
+    setIsMuted(nextMuted);
+    if (videoRef.current && effectiveType === 'video') {
+      videoRef.current.muted = nextMuted;
+    }
+    if (archiveVideoRef.current && effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
+      const currentFile = archiveFiles[currentArchiveIndex];
+      if (currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name)) {
+        archiveVideoRef.current.muted = nextMuted;
+      }
     }
   };
 
@@ -463,14 +484,15 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   };
 
   const handleLoadedMetadata = () => {
-    if (videoRef.current) {
+    const effectiveType = fileType || detectedFileType;
+    if (videoRef.current && effectiveType === 'video') {
       setDuration(videoRef.current.duration);
       videoRef.current.volume = isMuted ? 0 : volume;
       videoRef.current.muted = isMuted;
       videoRef.current.loop = isLooping;
       videoRef.current.playbackRate = playbackSpeed;
     }
-    if (archiveVideoRef.current && fileType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
+    if (archiveVideoRef.current && effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
       const currentFile = archiveFiles[currentArchiveIndex];
       if (currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name)) {
         setDuration(archiveVideoRef.current.duration);
@@ -1001,7 +1023,8 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
 
   // 2. 북마크 추가/삭제 함수 (일반 동영상에서만 작동)
   const handleAddBookmark = () => {
-    if (fileType !== 'video') return; // 일반 동영상에서만 북마크 추가 가능
+    const effectiveType = fileType || detectedFileType;
+    if (effectiveType !== 'video') return; // 일반 동영상에서만 북마크 추가 가능
     window.electronAPI.addBookmark(categoryId, recordId, currentTime).then(res => {
       if (res.success) {
         setBookmarks(prev => [...prev, res.bookmark].sort((a, b) => a.time - b.time));
@@ -1012,7 +1035,8 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     });
   };
   const handleRemoveBookmark = (time: number) => {
-    if (fileType !== 'video') return; // 일반 동영상에서만 북마크 삭제 가능
+    const effectiveType = fileType || detectedFileType;
+    if (effectiveType !== 'video') return; // 일반 동영상에서만 북마크 삭제 가능
     window.electronAPI.removeBookmark(categoryId, recordId, time).then(res => {
       if (res.success) {
         setBookmarks(prev => prev.filter(b => Math.abs(b.time - time) >= 1));
