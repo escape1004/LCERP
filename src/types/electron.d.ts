@@ -32,6 +32,7 @@ export interface ElectronAPI {
   setAppPassword: (password: string) => Promise<{ success: boolean; error?: string }>;
   clearAppPassword: () => Promise<{ success: boolean; error?: string }>;
   verifyAppPassword: (password: string) => Promise<{ success: boolean; error?: string }>;
+  setVideoSeekSeconds: (seconds: number) => Promise<{ success: boolean; error?: string }>;
   
   // File dialog methods
   openFileDialog: () => Promise<{ canceled: boolean; filePaths: string[] }>;

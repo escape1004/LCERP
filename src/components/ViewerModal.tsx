@@ -110,6 +110,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const playbackOverlayTimeoutRef = useRef<NodeJS.Timeout>();
   const playbackOverlayFadeTimeoutRef = useRef<NodeJS.Timeout>();
   const [playbackOverlayVisible, setPlaybackOverlayVisible] = useState(false);
+  const [videoSeekSeconds, setVideoSeekSeconds] = useState(5);
 
   // 1. 북마크 상태 및 불러오기
   const [bookmarks, setBookmarks] = useState<{ time: number; createdAt: string }[]>([]);
@@ -133,6 +134,26 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       window.removeEventListener('mousedown', handleMouseBack, true);
     };
   }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let cancelled = false;
+
+    window.electronAPI.getConfig().then((config) => {
+      if (!cancelled) {
+        setVideoSeekSeconds(Math.max(1, Number(config?.videoSeekSeconds ?? 5)));
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setVideoSeekSeconds(5);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (filePath) {
@@ -708,7 +729,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
         case 'ArrowLeft':
           e.preventDefault();
           if (videoRef.current) {
-            const newTime = Math.max(0, videoRef.current.currentTime - 5);
+            const newTime = Math.max(0, videoRef.current.currentTime - videoSeekSeconds);
             videoRef.current.currentTime = newTime;
             setCurrentTime(newTime);
           }
@@ -716,7 +737,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
         case 'ArrowRight':
           e.preventDefault();
           if (videoRef.current) {
-            const newTime = Math.min(duration, videoRef.current.currentTime + 5);
+            const newTime = Math.min(duration, videoRef.current.currentTime + videoSeekSeconds);
             videoRef.current.currentTime = newTime;
             setCurrentTime(newTime);
           }
@@ -762,7 +783,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
           case 'ArrowLeft':
             e.preventDefault();
             if (archiveVideoRef.current) {
-              const newTime = Math.max(0, archiveVideoRef.current.currentTime - 5);
+              const newTime = Math.max(0, archiveVideoRef.current.currentTime - videoSeekSeconds);
               archiveVideoRef.current.currentTime = newTime;
               setCurrentTime(newTime);
             }
@@ -770,7 +791,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
           case 'ArrowRight':
             e.preventDefault();
             if (archiveVideoRef.current) {
-              const newTime = Math.min(duration, archiveVideoRef.current.currentTime + 5);
+              const newTime = Math.min(duration, archiveVideoRef.current.currentTime + videoSeekSeconds);
               archiveVideoRef.current.currentTime = newTime;
               setCurrentTime(newTime);
             }
@@ -1297,7 +1318,6 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                   className="relative w-full h-full flex flex-col items-center justify-center"
                   onMouseMove={handleMouseMove}
                   onMouseLeave={() => setShowControls(false)}
-                  onKeyDown={handleKeyDown}
                   tabIndex={0}
                   data-video-container
                 >
@@ -1715,7 +1735,6 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                             className="relative w-full h-full flex items-center justify-center"
                             onMouseMove={handleMouseMove}
                             onMouseLeave={() => setShowControls(false)}
-                            onKeyDown={handleKeyDown}
                             tabIndex={0}
                             data-video-container
                           >

@@ -51,6 +51,7 @@ export interface Config {
   backupInterval: number;
   rememberWindowBounds?: boolean;
   hasAppPassword?: boolean;
+  videoSeekSeconds?: number;
 }
 
 export {}; 

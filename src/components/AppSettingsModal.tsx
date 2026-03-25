@@ -21,7 +21,7 @@ type SettingsSection = {
 const sections: SettingsSection[] = [
   { id: 'general', label: '일반', description: '앱 기본 동작과 창 옵션', icon: Settings },
   { id: 'viewer', label: '뷰어', description: '이미지와 동영상 보기 환경', icon: Monitor },
-  { id: 'security', label: '보안', description: '접근 제어와 기록 관리', icon: Shield },
+  { id: 'security', label: '보안', description: '접근 제어와 비밀번호 관리', icon: Shield },
 ];
 
 export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) {
@@ -31,6 +31,8 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [securityMessage, setSecurityMessage] = useState('');
+  const [viewerSeekSeconds, setViewerSeekSeconds] = useState('5');
+  const [viewerMessage, setViewerMessage] = useState('');
 
   const currentSection = useMemo(
     () => sections.find((section) => section.id === activeSection) ?? sections[0],
@@ -64,12 +66,13 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
     let cancelled = false;
 
     window.electronAPI.getConfig().then((nextConfig) => {
-      if (!cancelled) {
-        setConfig(nextConfig);
-        setPassword('');
-        setPasswordConfirm('');
-        setSecurityMessage('');
-      }
+      if (cancelled) return;
+      setConfig(nextConfig);
+      setPassword('');
+      setPasswordConfirm('');
+      setSecurityMessage('');
+      setViewerSeekSeconds(String(nextConfig.videoSeekSeconds ?? 5));
+      setViewerMessage('');
     }).catch((error) => {
       console.error('Failed to load app settings:', error);
     });
@@ -78,6 +81,49 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
       cancelled = true;
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !config) return;
+
+    const rawValue = viewerSeekSeconds.trim();
+    if (!rawValue) {
+      setViewerMessage('');
+      return;
+    }
+
+    const seconds = Number(rawValue);
+    if (!Number.isFinite(seconds) || seconds < 1) {
+      setViewerMessage('이동 간격은 1초 이상이어야 합니다.');
+      return;
+    }
+
+    const normalized = Math.floor(seconds);
+    if ((config.videoSeekSeconds ?? 5) === normalized) {
+      setViewerMessage('');
+      return;
+    }
+
+    const timeoutId = window.setTimeout(async () => {
+      setIsSaving(true);
+      try {
+        const result = await window.electronAPI.setVideoSeekSeconds(normalized);
+        if (result.success) {
+          setConfig((prev) => prev ? { ...prev, videoSeekSeconds: normalized } : prev);
+          setViewerSeekSeconds(String(normalized));
+          setViewerMessage('');
+          return;
+        }
+
+        setViewerMessage(result.error || '뷰어 설정 저장에 실패했습니다.');
+      } finally {
+        setIsSaving(false);
+      }
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [config, open, viewerSeekSeconds]);
 
   const handleRememberWindowBoundsChange = async (checked: boolean) => {
     setConfig((prev) => prev ? { ...prev, rememberWindowBounds: checked } : prev);
@@ -88,52 +134,6 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
       setIsSaving(false);
     }
   };
-
-  const renderGeneralSection = () => (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-sm font-medium text-white">프로그램 위치 기억</div>
-            <p className="text-sm text-discord-muted mt-2 leading-6">
-              프로그램을 다시 실행할 때 마지막으로 사용한 창 위치와 크기를 그대로 복원합니다.
-            </p>
-          </div>
-          <Switch
-            checked={Boolean(config?.rememberWindowBounds)}
-            onCheckedChange={handleRememberWindowBoundsChange}
-            disabled={!config || isSaving}
-            className="data-[state=checked]:bg-discord-accent data-[state=unchecked]:bg-gray-600"
-          />
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderPlaceholderSection = () => (
-    <div className="grid gap-4 md:grid-cols-2">
-      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
-        <div className="text-sm font-medium text-white">준비 중</div>
-        <p className="text-sm text-discord-muted mt-2 leading-6">
-          이 영역에 {currentSection.label} 설정 항목을 배치하면 됩니다.
-        </p>
-      </div>
-
-      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
-        <div className="text-sm font-medium text-white">레이아웃 자리</div>
-        <p className="text-sm text-discord-muted mt-2 leading-6">
-          좌측 메뉴를 유지한 채 우측 상세 화면을 섹션별로 확장할 수 있게 비워 두었습니다.
-        </p>
-      </div>
-
-      <div className="rounded-xl border border-dashed border-gray-700 bg-discord-sidebar p-5 md:col-span-2 min-h-[280px]">
-        <div className="text-sm font-medium text-white">상세 설정 패널</div>
-        <p className="text-sm text-discord-muted mt-2 leading-6">
-          폼, 토글, 경로 선택, 단축키 설정 같은 실제 옵션을 이 영역에 추가하면 됩니다.
-        </p>
-      </div>
-    </div>
-  );
 
   const handleSavePassword = async () => {
     if (!password || password.length < 4) {
@@ -175,6 +175,59 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
 
     setSecurityMessage(result.error || '비밀번호 해제에 실패했습니다.');
   };
+
+  const renderGeneralSection = () => (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-sm font-medium text-white">프로그램 위치 기억</div>
+            <p className="text-sm text-discord-muted mt-2 leading-6">
+              프로그램을 다시 실행할 때 마지막으로 사용한 창 위치와 크기를 그대로 복원합니다.
+            </p>
+          </div>
+          <Switch
+            checked={Boolean(config?.rememberWindowBounds)}
+            onCheckedChange={handleRememberWindowBoundsChange}
+            disabled={!config || isSaving}
+            className="data-[state=checked]:bg-discord-accent data-[state=unchecked]:bg-gray-600"
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderViewerSection = () => (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+        <div className="text-sm font-medium text-white">동영상 좌우키 이동 간격</div>
+        <p className="text-sm text-discord-muted mt-2 leading-6">
+          동영상 재생 중 좌우 방향키를 눌렀을 때 몇 초 단위로 이동할지 설정합니다.
+        </p>
+
+        <div className="mt-5 flex items-end gap-3 max-w-md">
+          <div className="flex-1">
+            <div className="text-xs text-discord-muted mb-2">이동 간격</div>
+            <Input
+              type="number"
+              min="1"
+              value={viewerSeekSeconds}
+              onChange={(e) => {
+                setViewerSeekSeconds(e.target.value);
+                setViewerMessage('');
+              }}
+              className="bg-discord-bg border-gray-600 text-discord-text"
+            />
+          </div>
+          <div className="text-sm text-discord-muted pb-2">초</div>
+        </div>
+
+        {viewerMessage && (
+          <p className="text-sm text-discord-muted mt-2">{viewerMessage}</p>
+        )}
+      </div>
+    </div>
+  );
 
   const renderSecuritySection = () => (
     <div className="space-y-4">
@@ -296,9 +349,9 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
             <div className="flex-1 min-h-0 overflow-y-auto p-6 bg-discord-bg">
               {currentSection.id === 'general'
                 ? renderGeneralSection()
-                : currentSection.id === 'security'
-                  ? renderSecuritySection()
-                  : renderPlaceholderSection()}
+                : currentSection.id === 'viewer'
+                  ? renderViewerSection()
+                  : renderSecuritySection()}
             </div>
           </section>
         </div>

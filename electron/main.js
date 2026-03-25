@@ -43,7 +43,8 @@ const configPath = path.join(app.getPath('userData'), 'config.json');
 const defaultConfig = {
   rememberWindowBounds: false,
   windowBounds: null,
-  passwordHash: null
+  passwordHash: null,
+  videoSeekSeconds: 5
 };
 
 let appConfig = { ...defaultConfig };
@@ -1343,7 +1344,8 @@ ipcMain.handle('getConfig', () => {
     backupDir: backupDir,
     backupInterval: 60,
     rememberWindowBounds: appConfig.rememberWindowBounds,
-    hasAppPassword: Boolean(appConfig.passwordHash)
+    hasAppPassword: Boolean(appConfig.passwordHash),
+    videoSeekSeconds: appConfig.videoSeekSeconds || 5
   };
 });
 
@@ -1397,6 +1399,17 @@ ipcMain.handle('verifyAppPassword', (_event, password) => {
   return isValid
     ? { success: true }
     : { success: false, error: 'Invalid password.' };
+});
+
+ipcMain.handle('setVideoSeekSeconds', (_event, seconds) => {
+  const normalized = Number(seconds);
+  if (!Number.isFinite(normalized) || normalized < 1) {
+    return { success: false, error: 'Seconds must be at least 1.' };
+  }
+
+  appConfig.videoSeekSeconds = Math.floor(normalized);
+  saveAppConfig();
+  return { success: true };
 });
 
 ipcMain.handle('backupDatabase', () => {

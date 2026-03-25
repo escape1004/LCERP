@@ -38,6 +38,7 @@ const api: ElectronAPI = {
   setAppPassword: (password: string) => ipcRenderer.invoke('setAppPassword', password),
   clearAppPassword: () => ipcRenderer.invoke('clearAppPassword'),
   verifyAppPassword: (password: string) => ipcRenderer.invoke('verifyAppPassword', password),
+  setVideoSeekSeconds: (seconds: number) => ipcRenderer.invoke('setVideoSeekSeconds', seconds),
   openFileDialog: () => ipcRenderer.invoke('openFileDialog'),
   openDirectoryDialog: () => ipcRenderer.invoke('openDirectoryDialog'),
   getAppRoot: () => ipcRenderer.invoke('getAppRoot'),
