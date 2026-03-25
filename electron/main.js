@@ -123,7 +123,13 @@ function createWindow() {
     });
   }
 
-  mainWindow.webContents.setZoomFactor(1);
+  const resetZoomToDefault = () => {
+    mainWindow.webContents.setZoomLevel(0);
+    mainWindow.webContents.setZoomFactor(1);
+  };
+
+  resetZoomToDefault();
+  mainWindow.webContents.on('did-finish-load', resetZoomToDefault);
   mainWindow.webContents.setVisualZoomLevelLimits(1, 1);
   mainWindow.webContents.on('before-input-event', (event, input) => {
     const isZoomShortcut =
