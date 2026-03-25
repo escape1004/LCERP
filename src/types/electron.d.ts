@@ -28,6 +28,7 @@ export interface ElectronAPI {
   setDbPath: () => Promise<{ success: boolean; path?: string }>;
   setBackupDir: () => Promise<{ success: boolean; path?: string }>;
   setBackupInterval: (minutes: number) => Promise<{ success: boolean }>;
+  setRememberWindowBounds: (enabled: boolean) => Promise<{ success: boolean }>;
   
   // File dialog methods
   openFileDialog: () => Promise<{ canceled: boolean; filePaths: string[] }>;

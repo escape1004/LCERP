@@ -49,6 +49,7 @@ export interface Config {
   dbPath: string;
   backupDir: string;
   backupInterval: number;
+  rememberWindowBounds?: boolean;
 }
 
 export {}; 

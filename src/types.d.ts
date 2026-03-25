@@ -20,6 +20,7 @@ export interface ElectronAPI {
   setDbPath: () => Promise<{ success: boolean; path?: string }>;
   setBackupDir: () => Promise<{ success: boolean; path?: string }>;
   setBackupInterval: (minutes: number) => Promise<{ success: boolean }>;
+  setRememberWindowBounds: (enabled: boolean) => Promise<{ success: boolean }>;
   openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
   checkFileExists: (filePath: string) => Promise<boolean>;
   checkDuplicate: (categoryId: string, fieldId: string, value: any, recordId?: string) => Promise<{ isDuplicate: boolean }>;

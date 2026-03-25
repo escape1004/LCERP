@@ -95,6 +95,7 @@ const api: ElectronAPI = {
   setDbPath: () => ipcRenderer.invoke('setDbPath'),
   setBackupDir: () => ipcRenderer.invoke('setBackupDir'),
   setBackupInterval: (minutes: number) => ipcRenderer.invoke('setBackupInterval', minutes),
+  setRememberWindowBounds: (enabled: boolean) => ipcRenderer.invoke('setRememberWindowBounds', enabled),
   checkDuplicate: (categoryId: string, fieldId: string, value: any, recordId?: string) => ipcRenderer.invoke('db:checkDuplicate', categoryId, fieldId, value, recordId),
   getAppRoot: () => ipcRenderer.invoke('getAppRoot'),
   getFileType: (filePath: string) => ipcRenderer.invoke('db:getFileType', filePath),

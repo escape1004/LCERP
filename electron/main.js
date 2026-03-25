@@ -38,6 +38,14 @@ const projectRoot = isDev ? path.resolve(__dirname, '..') : path.join(os.homedir
 const appDataDir = path.join(projectRoot, isDev ? 'save' : 'Local ERP');
 const dbPath = path.join(appDataDir, 'erp.db');
 const backupDir = path.join(path.join(os.homedir(), 'AppData', 'Local'), 'backups');
+const configPath = path.join(app.getPath('userData'), 'config.json');
+
+const defaultConfig = {
+  rememberWindowBounds: false,
+  windowBounds: null
+};
+
+let appConfig = { ...defaultConfig };
 
 // save 폴더가 없으면 생성
 if (!fs.existsSync(appDataDir)) {
@@ -48,6 +56,27 @@ if (!fs.existsSync(appDataDir)) {
 if (!fs.existsSync(backupDir)) {
   fs.mkdirSync(backupDir, { recursive: true });
 }
+
+function loadAppConfig() {
+  try {
+    if (fs.existsSync(configPath)) {
+      const savedConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      appConfig = { ...defaultConfig, ...savedConfig };
+    }
+  } catch (error) {
+    console.error('Failed to load app config:', error);
+  }
+}
+
+function saveAppConfig() {
+  try {
+    fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2), 'utf8');
+  } catch (error) {
+    console.error('Failed to save app config:', error);
+  }
+}
+
+loadAppConfig();
 
 // 로깅 함수
 function log(message, data = '') {
@@ -80,9 +109,12 @@ function getThumbnailHash(filePath) {
 }
 
 function createWindow() {
+  const rememberedBounds = appConfig.rememberWindowBounds ? appConfig.windowBounds : null;
   const mainWindow = new BrowserWindow({
-    width: 1920,
-    height: 1080,
+    width: rememberedBounds?.width || 1920,
+    height: rememberedBounds?.height || 1080,
+    x: typeof rememberedBounds?.x === 'number' ? rememberedBounds.x : undefined,
+    y: typeof rememberedBounds?.y === 'number' ? rememberedBounds.y : undefined,
     frame: false,
     webPreferences: {
       nodeIntegration: true,
@@ -92,6 +124,24 @@ function createWindow() {
     },
     icon: iconPath
   });
+
+  let saveBoundsTimer = null;
+  const saveWindowBounds = () => {
+    if (!appConfig.rememberWindowBounds) return;
+    if (mainWindow.isDestroyed() || mainWindow.isMinimized() || mainWindow.isMaximized() || mainWindow.isFullScreen()) return;
+    appConfig.windowBounds = mainWindow.getBounds();
+    saveAppConfig();
+  };
+
+  const queueSaveWindowBounds = () => {
+    if (saveBoundsTimer) {
+      clearTimeout(saveBoundsTimer);
+    }
+    saveBoundsTimer = setTimeout(() => {
+      saveWindowBounds();
+      saveBoundsTimer = null;
+    }, 150);
+  };
 
   // CSP 설정
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
@@ -156,7 +206,12 @@ function createWindow() {
 
   mainWindow.on('unmaximize', () => {
     mainWindow.webContents.send('window-state-change', { maximized: false });
+    queueSaveWindowBounds();
   });
+
+  mainWindow.on('move', queueSaveWindowBounds);
+  mainWindow.on('resize', queueSaveWindowBounds);
+  mainWindow.on('close', saveWindowBounds);
 
   // 창 제어 이벤트 처리
   ipcMain.on('window-control', (_, command) => {
@@ -173,6 +228,16 @@ function createWindow() {
       case 'close':
         mainWindow.close();
         break;
+    }
+  });
+
+  ipcMain.removeAllListeners('settings:setRememberWindowBounds');
+  ipcMain.on('settings:setRememberWindowBounds', (_event, enabled) => {
+    appConfig.rememberWindowBounds = !!enabled;
+    if (appConfig.rememberWindowBounds) {
+      saveWindowBounds();
+    } else {
+      saveAppConfig();
     }
   });
 }
@@ -1270,7 +1335,8 @@ ipcMain.handle('getConfig', () => {
   return {
     dbPath: dbPath,
     backupDir: backupDir,
-    backupInterval: 60
+    backupInterval: 60,
+    rememberWindowBounds: appConfig.rememberWindowBounds
   };
 });
 

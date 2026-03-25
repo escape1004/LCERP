@@ -34,6 +34,7 @@ const api: ElectronAPI = {
   setDbPath: () => ipcRenderer.invoke('setDbPath'),
   setBackupDir: () => ipcRenderer.invoke('setBackupDir'),
   setBackupInterval: (minutes: number) => ipcRenderer.invoke('setBackupInterval', minutes),
+  setRememberWindowBounds: (enabled: boolean) => ipcRenderer.invoke('setRememberWindowBounds', enabled),
   openFileDialog: () => ipcRenderer.invoke('openFileDialog'),
   openDirectoryDialog: () => ipcRenderer.invoke('openDirectoryDialog'),
   getAppRoot: () => ipcRenderer.invoke('getAppRoot'),

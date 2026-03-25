@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Bell, Database, Monitor, Settings, Shield, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
+import { Switch } from './ui/switch';
+import type { Config } from '../types';
 
 interface AppSettingsModalProps {
   open: boolean;
@@ -15,7 +17,7 @@ type SettingsSection = {
 };
 
 const sections: SettingsSection[] = [
-  { id: 'general', label: '일반', description: '앱 기본 동작과 화면 옵션', icon: Settings },
+  { id: 'general', label: '일반', description: '앱 기본 동작과 창 옵션', icon: Settings },
   { id: 'viewer', label: '뷰어', description: '이미지와 동영상 보기 환경', icon: Monitor },
   { id: 'data', label: '데이터', description: '백업과 파일 경로 관련 설정', icon: Database },
   { id: 'notifications', label: '알림', description: '알림 표시 방식과 우선순위', icon: Bell },
@@ -24,6 +26,8 @@ const sections: SettingsSection[] = [
 
 export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) {
   const [activeSection, setActiveSection] = useState('general');
+  const [config, setConfig] = useState<Config | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const currentSection = useMemo(
     () => sections.find((section) => section.id === activeSection) ?? sections[0],
@@ -50,6 +54,79 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
       window.removeEventListener('auxclick', preventMouseBackClose, true);
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    let cancelled = false;
+
+    window.electronAPI.getConfig().then((nextConfig) => {
+      if (!cancelled) {
+        setConfig(nextConfig);
+      }
+    }).catch((error) => {
+      console.error('Failed to load app settings:', error);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const handleRememberWindowBoundsChange = (checked: boolean) => {
+    setConfig((prev) => prev ? { ...prev, rememberWindowBounds: checked } : prev);
+    setIsSaving(true);
+    window.electronAPI.send('settings:setRememberWindowBounds', checked);
+    window.setTimeout(() => {
+      setIsSaving(false);
+    }, 100);
+  };
+
+  const renderGeneralSection = () => (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-sm font-medium text-white">프로그램 위치 기억</div>
+            <p className="text-sm text-discord-muted mt-2 leading-6">
+              프로그램을 다시 실행할 때 마지막으로 사용한 창 위치와 크기를 그대로 복원합니다.
+            </p>
+          </div>
+          <Switch
+            checked={Boolean(config?.rememberWindowBounds)}
+            onCheckedChange={handleRememberWindowBoundsChange}
+            disabled={!config || isSaving}
+            className="data-[state=checked]:bg-discord-accent data-[state=unchecked]:bg-gray-600"
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderPlaceholderSection = () => (
+    <div className="grid gap-4 md:grid-cols-2">
+      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+        <div className="text-sm font-medium text-white">준비 중</div>
+        <p className="text-sm text-discord-muted mt-2 leading-6">
+          이 영역에 {currentSection.label} 설정 항목을 배치하면 됩니다.
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+        <div className="text-sm font-medium text-white">레이아웃 자리</div>
+        <p className="text-sm text-discord-muted mt-2 leading-6">
+          좌측 메뉴를 유지한 채 우측 상세 화면을 섹션별로 확장할 수 있게 비워 두었습니다.
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-dashed border-gray-700 bg-discord-sidebar p-5 md:col-span-2 min-h-[280px]">
+        <div className="text-sm font-medium text-white">상세 설정 패널</div>
+        <p className="text-sm text-discord-muted mt-2 leading-6">
+          폼, 토글, 경로 선택, 단축키 설정 같은 실제 옵션을 이 영역에 추가하면 됩니다.
+        </p>
+      </div>
+    </div>
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -109,28 +186,7 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
             </header>
 
             <div className="flex-1 min-h-0 overflow-y-auto p-6 bg-discord-bg">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
-                  <div className="text-sm font-medium text-white">준비 중</div>
-                  <p className="text-sm text-discord-muted mt-2 leading-6">
-                    이 영역에 {currentSection.label} 설정 항목을 배치하면 됩니다.
-                  </p>
-                </div>
-
-                <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
-                  <div className="text-sm font-medium text-white">레이아웃 자리</div>
-                  <p className="text-sm text-discord-muted mt-2 leading-6">
-                    좌측 메뉴를 유지한 채 우측 상세 화면을 섹션별로 확장할 수 있게 비워 두었습니다.
-                  </p>
-                </div>
-
-                <div className="rounded-xl border border-dashed border-gray-700 bg-discord-sidebar p-5 md:col-span-2 min-h-[280px]">
-                  <div className="text-sm font-medium text-white">상세 설정 패널</div>
-                  <p className="text-sm text-discord-muted mt-2 leading-6">
-                    폼, 토글, 경로 선택, 단축키 설정 같은 실제 옵션을 이 영역에 추가하면 됩니다.
-                  </p>
-                </div>
-              </div>
+              {currentSection.id === 'general' ? renderGeneralSection() : renderPlaceholderSection()}
             </div>
           </section>
         </div>
