@@ -1,11 +1,16 @@
 import { useState, useEffect } from 'react';
+import { Settings } from 'lucide-react';
 import type { ElectronAPI } from '../types';
 
 interface CSSPropertiesWithWebkit extends React.CSSProperties {
   WebkitAppRegion?: 'drag' | 'no-drag';
 }
 
-export function TitleBar() {
+interface TitleBarProps {
+  onOpenSettings: () => void;
+}
+
+export function TitleBar({ onOpenSettings }: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false);
   const electronAPI = window.electronAPI as ElectronAPI;
 
@@ -57,6 +62,13 @@ export function TitleBar() {
         className="flex h-full"
         style={{ WebkitAppRegion: 'no-drag' } as CSSPropertiesWithWebkit}
       >
+        <button
+          onClick={onOpenSettings}
+          className="w-12 h-full hover:bg-[#404249] hover:text-white transition-colors flex items-center justify-center"
+          aria-label="환경설정"
+        >
+          <Settings className="w-4 h-4" />
+        </button>
         <button
           onClick={handleMinimize}
           className="w-12 h-full hover:bg-[#404249] hover:text-white transition-colors flex items-center justify-center"

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
 import { TitleBar } from './components/TitleBar';
 import { LoadingOverlay } from './components/ui/loading-overlay';
+import { AppSettingsModal } from './components/AppSettingsModal';
 
 const queryClient = new QueryClient();
 
@@ -51,6 +52,8 @@ const RouterContent = () => {
 };
 
 const App = () => {
+  const [isAppSettingsOpen, setIsAppSettingsOpen] = useState(false);
+
   // 전역 마우스 4번 버튼(뒤로가기) 기본 동작 방지
   useEffect(() => {
     const handleAuxClick = (e: MouseEvent) => {
@@ -85,7 +88,7 @@ const App = () => {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <div className="h-screen w-screen flex flex-col bg-discord-bg font-noto">
-          <TitleBar />
+          <TitleBar onOpenSettings={() => setIsAppSettingsOpen(true)} />
           <div className="flex-1 min-h-0">
             <HashRouter>
               <RouterContent />
@@ -93,6 +96,7 @@ const App = () => {
             <Toaster />
             <Sonner />
           </div>
+          <AppSettingsModal open={isAppSettingsOpen} onOpenChange={setIsAppSettingsOpen} />
           <LoadingOverlay />
         </div>
       </TooltipProvider>
