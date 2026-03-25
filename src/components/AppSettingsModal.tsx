@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Bell, Database, Monitor, Settings, Shield, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
 
@@ -30,16 +30,39 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
     [activeSection]
   );
 
+  useEffect(() => {
+    if (!open) return;
+
+    const preventMouseBackClose = (e: MouseEvent) => {
+      if (e.button !== 3) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    };
+
+    window.addEventListener('mousedown', preventMouseBackClose, true);
+    window.addEventListener('mouseup', preventMouseBackClose, true);
+    window.addEventListener('auxclick', preventMouseBackClose, true);
+
+    return () => {
+      window.removeEventListener('mousedown', preventMouseBackClose, true);
+      window.removeEventListener('mouseup', preventMouseBackClose, true);
+      window.removeEventListener('auxclick', preventMouseBackClose, true);
+    };
+  }, [open]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[min(1400px,96vw)] h-[88vh] p-0 gap-0 bg-discord-bg border-gray-700 text-discord-text overflow-hidden [&>button]:hidden">
+      <DialogContent
+        className="max-w-[min(1400px,96vw)] h-[88vh] p-0 gap-0 bg-discord-bg border-gray-700 text-discord-text overflow-hidden [&>button]:hidden"
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <DialogTitle className="sr-only">환경설정</DialogTitle>
 
         <div className="flex h-full min-h-0">
           <aside className="w-[280px] shrink-0 border-r border-gray-700 bg-discord-sidebar">
             <div className="px-5 py-4 border-b border-gray-700">
               <h2 className="text-base font-semibold text-white">환경설정</h2>
-              <p className="text-xs text-discord-muted mt-1">앱 전반 옵션을 관리합니다.</p>
             </div>
 
             <nav className="p-3 space-y-1">
