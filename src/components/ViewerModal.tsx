@@ -112,6 +112,23 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   // 파일 없음 상태 추가
   const [fileNotFound, setFileNotFound] = useState(false);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleMouseBack = (e: MouseEvent) => {
+      if (e.button !== 3) return;
+      e.preventDefault();
+      e.stopPropagation();
+      onClose();
+    };
+
+    window.addEventListener('mousedown', handleMouseBack, true);
+
+    return () => {
+      window.removeEventListener('mousedown', handleMouseBack, true);
+    };
+  }, [isOpen, onClose]);
+
   // 파일이 없을 때 북마크 자동 삭제
   useEffect(() => {
     if (fileNotFound && fileType === 'video' && categoryId && recordId) {
