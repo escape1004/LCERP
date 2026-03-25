@@ -1486,7 +1486,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                             </Tooltip>
                           </TooltipProvider>
                           {showSpeedMenu && (
-                            <div className="absolute bottom-full left-0 mb-2 bg-discord-sidebar border border-gray-700 rounded-lg shadow-lg z-50 min-w-[120px]" data-speed-menu>
+                            <div className="absolute bottom-full right-0 mb-2 bg-discord-sidebar border border-gray-700 rounded-lg shadow-lg z-50 min-w-[120px]" data-speed-menu>
                               <div className="p-2 text-xs text-discord-muted border-b border-gray-700">
                                 재생 속도
                               </div>
@@ -1887,7 +1887,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                       </Tooltip>
                                     </TooltipProvider>
                                     {showSpeedMenu && (
-                                      <div className="absolute bottom-full left-0 mb-2 bg-discord-sidebar border border-gray-700 rounded-lg shadow-lg z-50 min-w-[120px]" data-speed-menu>
+                                      <div className="absolute bottom-full right-0 mb-2 bg-discord-sidebar border border-gray-700 rounded-lg shadow-lg z-50 min-w-[120px]" data-speed-menu>
                                         <div className="p-2 text-xs text-discord-muted border-b border-gray-700">
                                           재생 속도
                                         </div>
