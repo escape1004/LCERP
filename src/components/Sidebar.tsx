@@ -509,7 +509,9 @@ export const Sidebar: React.FC = () => {
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
-          setEditingCategory(null);
+          window.setTimeout(() => {
+            setEditingCategory(null);
+          }, 200);
         }}
         category={editingCategory}
       />
