@@ -123,6 +123,26 @@ function createWindow() {
     });
   }
 
+  mainWindow.webContents.setZoomFactor(1);
+  mainWindow.webContents.setVisualZoomLevelLimits(1, 1);
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    const isZoomShortcut =
+      input.control &&
+      !input.alt &&
+      !input.meta &&
+      ['+', '=', '-', '_', '0'].includes(input.key);
+
+    const isNumpadZoomShortcut =
+      input.control &&
+      !input.alt &&
+      !input.meta &&
+      ['numadd', 'numsub', 'num0'].includes((input.code || '').toLowerCase());
+
+    if (isZoomShortcut || isNumpadZoomShortcut) {
+      event.preventDefault();
+    }
+  });
+
   // 창 상태 변경 이벤트 처리
   mainWindow.on('maximize', () => {
     mainWindow.webContents.send('window-state-change', { maximized: true });
