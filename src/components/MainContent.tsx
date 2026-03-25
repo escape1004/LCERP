@@ -85,7 +85,7 @@ const renderTextWithHashtags = (text: string) => {
 };
 
 // URL 렌더링 함수
-const renderUrl = (url: string) => (
+const renderUrl = (url: string, onSelectRow?: () => void) => (
   <div className="flex items-center gap-2">
     <TooltipProvider>
       <Tooltip>
@@ -93,6 +93,7 @@ const renderUrl = (url: string) => (
           <span
             className="text-discord-accent px-1 py-0.5 rounded transition-colors truncate flex-1 cursor-pointer"
             onClick={async (e) => {
+              onSelectRow?.();
               e.stopPropagation();
               try {
                 await navigator.clipboard.writeText(url);
@@ -158,7 +159,7 @@ const renderUrl = (url: string) => (
 );
 
 // 필드 값 포맷팅 함수
-const formatFieldValue = (field: FieldDefinition, value: any, categories: Category[], getCategoryRecords: (categoryId: string) => DataRecord[], onViewRelatedRecord?: (record: DataRecord, category: Category) => void) => {
+const formatFieldValue = (field: FieldDefinition, value: any, categories: Category[], getCategoryRecords: (categoryId: string) => DataRecord[], onViewRelatedRecord?: (record: DataRecord, category: Category) => void, onSelectRow?: () => void) => {
   const urlPattern = /^https?:\/\/.+/;
   
   // 빈 값 처리 - 레코드 리스트 테이블과 동일하게
@@ -175,7 +176,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
     case 'text':
     case 'longtext':
       if (typeof value === 'string' && urlPattern.test(value)) {
-        return renderUrl(value);
+        return renderUrl(value, onSelectRow);
       }
       return (
         <TooltipProvider>
@@ -184,6 +185,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
               <span 
                 className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block" 
                 onClick={async (e) => {
+                  onSelectRow?.();
                   e.stopPropagation();
                   try {
                     await navigator.clipboard.writeText(String(value));
@@ -218,6 +220,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
               <span 
                 className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block" 
                 onClick={async (e) => {
+                  onSelectRow?.();
                   e.stopPropagation();
                   try {
                     await navigator.clipboard.writeText(String(value));
@@ -346,7 +349,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
     
     default:
       if (typeof value === 'string' && urlPattern.test(value)) {
-        return renderUrl(value);
+        return renderUrl(value, onSelectRow);
       }
       
       // 배열 값 처리 (다중 선택 필드들)
@@ -367,6 +370,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
                       <span
                         className="px-2 py-1 text-xs rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/30"
                         onClick={async (e) => {
+                          onSelectRow?.();
                           e.stopPropagation();
                           try {
                             await navigator.clipboard.writeText(String(item));
@@ -427,6 +431,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
               <span 
                 className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block" 
                 onClick={async (e) => {
+                  onSelectRow?.();
                   e.stopPropagation();
                   try {
                     await navigator.clipboard.writeText(String(value));
@@ -1050,6 +1055,7 @@ export const MainContent: React.FC = () => {
   const [recordToDelete, setRecordToDelete] = useState<DataRecord | null>(null);
   const [isPageInputMode, setIsPageInputMode] = useState(false);
   const [pageInputValue, setPageInputValue] = useState('');
+  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
 
   // 뷰어 모달 상태
   const [viewerModalOpen, setViewerModalOpen] = useState(false);
@@ -1086,6 +1092,13 @@ export const MainContent: React.FC = () => {
           setEditingRecord(null);
           setIsRecordModalOpen(true);
         }
+      } else if (e.key === 'F2' && selectedCategoryId && selectedRecordId) {
+        e.preventDefault();
+        const selectedRecord = paginatedRecords.find(record => record.id === selectedRecordId)
+          || sortedRecords.find(record => record.id === selectedRecordId);
+        if (selectedRecord) {
+          handleEdit(selectedRecord);
+        }
       } else if (e.ctrlKey && e.key === 'ArrowRight') {
         if (currentPage < totalPages) {
           setCurrentPage(currentPage + 1);
@@ -1102,7 +1115,15 @@ export const MainContent: React.FC = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedCategoryId, loadRecords, currentPage, totalPages, showLoading, hideLoading, isRecordModalOpen, isViewModalOpen, viewerModalOpen, isConfirmDialogOpen, isAlertDialogOpen]);
+  }, [selectedCategoryId, selectedRecordId, paginatedRecords, sortedRecords, loadRecords, currentPage, totalPages, showLoading, hideLoading, isRecordModalOpen, isViewModalOpen, viewerModalOpen, isConfirmDialogOpen, isAlertDialogOpen]);
+
+  useEffect(() => {
+    if (!selectedRecordId) return;
+    const exists = sortedRecords.some(record => record.id === selectedRecordId);
+    if (!exists) {
+      setSelectedRecordId(null);
+    }
+  }, [selectedRecordId, sortedRecords]);
 
   // Ctrl+마우스 휠 페이지 이동 핸들러
   useEffect(() => {
@@ -1452,7 +1473,10 @@ export const MainContent: React.FC = () => {
                       {paginatedRecords.map((record) => (
                         <ContextMenu key={record.id}>
                           <ContextMenuTrigger asChild>
-                            <tr className="hover:bg-discord-hover group cursor-default">
+                            <tr
+                              className={`${selectedRecordId === record.id ? 'bg-discord-hover' : 'hover:bg-discord-hover'} group cursor-default`}
+                              onClick={() => setSelectedRecordId(record.id)}
+                            >
                               {fileField && (
                                 <td className="px-2 py-3 text-xs text-discord-text overflow-hidden relative" style={{ width: `${getColumnWidth('__thumbnail')}px` }}>
                                   <ThumbnailCell
@@ -1475,7 +1499,7 @@ export const MainContent: React.FC = () => {
                                     ? 'px-2 py-3 text-xs text-discord-text text-left overflow-hidden'
                                     : 'px-2 py-3 text-xs text-discord-text overflow-hidden'
                                 }`} style={{ width: `${getColumnWidth(field.id)}px` }}>
-                                  {formatFieldValue(field, record.data[field.id], categoriesSafe, getCategoryRecords, handleViewRelatedRecord)}
+                                  {formatFieldValue(field, record.data[field.id], categoriesSafe, getCategoryRecords, handleViewRelatedRecord, () => setSelectedRecordId(record.id))}
                                 </td>
                               ))}
                               {/* 참조되는 카테고리인 경우에만 참조 횟수 표시 */}
@@ -1494,6 +1518,7 @@ export const MainContent: React.FC = () => {
                             <ContextMenuItem
                               onClick={(e) => {
                                 e.stopPropagation();
+                                setSelectedRecordId(record.id);
                                 handleView(record);
                               }}
                             >
@@ -1502,6 +1527,7 @@ export const MainContent: React.FC = () => {
                             <ContextMenuItem
                               onClick={(e) => {
                                 e.stopPropagation();
+                                setSelectedRecordId(record.id);
                                 handleEdit(record);
                               }}
                             >
@@ -1511,6 +1537,7 @@ export const MainContent: React.FC = () => {
                               className="text-discord-danger focus:text-discord-danger"
                               onClick={(e) => {
                                 e.stopPropagation();
+                                setSelectedRecordId(record.id);
                                 handleDelete(record);
                               }}
                             >

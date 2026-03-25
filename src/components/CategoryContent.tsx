@@ -59,6 +59,7 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
   const [isPageInputMode, setIsPageInputMode] = useState(false);
   const [pageInputValue, setPageInputValue] = useState('');
   const [isBulkAddModalOpen, setIsBulkAddModalOpen] = useState(false);
+  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
 
   // 테이블 컨테이너 ref 선언
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
@@ -121,13 +122,28 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
           setEditingRecord(null);
           setIsRecordModalOpen(true);
         }
+      } else if (e.key === 'F2' && selectedRecordId) {
+        e.preventDefault();
+        const selectedRecord = paginatedRecords.find(record => record.id === selectedRecordId)
+          || sortedRecords.find(record => record.id === selectedRecordId);
+        if (selectedRecord) {
+          handleEdit(selectedRecord);
+        }
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [categoryId, isRecordModalOpen, isViewModalOpen, isConfirmDialogOpen, isAlertDialogOpen]);
+  }, [categoryId, selectedRecordId, paginatedRecords, sortedRecords, isRecordModalOpen, isViewModalOpen, isConfirmDialogOpen, isAlertDialogOpen]);
+
+  useEffect(() => {
+    if (!selectedRecordId) return;
+    const exists = sortedRecords.some(record => record.id === selectedRecordId);
+    if (!exists) {
+      setSelectedRecordId(null);
+    }
+  }, [selectedRecordId, sortedRecords]);
 
   const getRecordReferenceCount = useCallback((recordId: string, categoryId: string): number => {
     let count = 0;
@@ -861,7 +877,8 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
                   {paginatedRecords.map((record) => (
                     <tr
                       key={record.id}
-                      className="border-b border-gray-800 hover:bg-discord-hover transition-colors"
+                      className={`border-b border-gray-800 transition-colors ${selectedRecordId === record.id ? 'bg-discord-hover' : 'hover:bg-discord-hover'}`}
+                      onClick={() => setSelectedRecordId(record.id)}
                     >
                       {selectedCategory.fields.filter(f => !f.hidden).map(field => {
                         const value = record.data[field.id];
@@ -889,7 +906,10 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => handleView(record)}
+                            onClick={() => {
+                              setSelectedRecordId(record.id);
+                              handleView(record);
+                            }}
                             className="h-8 w-8 p-0 hover:bg-discord-bg"
                           >
                             <Eye size={14} />
@@ -897,7 +917,10 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => handleEdit(record)}
+                            onClick={() => {
+                              setSelectedRecordId(record.id);
+                              handleEdit(record);
+                            }}
                             className="h-8 w-8 p-0 hover:bg-discord-bg"
                           >
                             <Edit size={14} />
@@ -905,7 +928,10 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => handleDelete(record)}
+                            onClick={() => {
+                              setSelectedRecordId(record.id);
+                              handleDelete(record);
+                            }}
                             className="h-8 w-8 p-0 hover:bg-red-900 text-discord-danger"
                           >
                             <Trash2 size={14} />
