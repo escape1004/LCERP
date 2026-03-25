@@ -100,6 +100,11 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   // 볼륨 오버레이 상태 추가
   const [showVolumeOverlay, setShowVolumeOverlay] = useState(false);
   const volumeOverlayTimeoutRef = useRef<NodeJS.Timeout>();
+  const [showPlaybackOverlay, setShowPlaybackOverlay] = useState(false);
+  const [playbackOverlayState, setPlaybackOverlayState] = useState<'play' | 'pause'>('play');
+  const playbackOverlayTimeoutRef = useRef<NodeJS.Timeout>();
+  const playbackOverlayFadeTimeoutRef = useRef<NodeJS.Timeout>();
+  const [playbackOverlayVisible, setPlaybackOverlayVisible] = useState(false);
 
   // 1. 북마크 상태 및 불러오기
   const [bookmarks, setBookmarks] = useState<{ time: number; createdAt: string }[]>([]);
@@ -329,6 +334,8 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   // 비디오 이벤트 핸들러
   const handlePlayPause = () => {
     const effectiveType = fileType || detectedFileType;
+    const nextAction = isPlaying ? 'pause' : 'play';
+
     if (videoRef.current && effectiveType === 'video') {
       if (isPlaying) {
         videoRef.current.pause();
@@ -346,6 +353,23 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
         }
       }
     }
+
+    setPlaybackOverlayState(nextAction);
+    setShowPlaybackOverlay(true);
+    setPlaybackOverlayVisible(true);
+    if (playbackOverlayFadeTimeoutRef.current) {
+      clearTimeout(playbackOverlayFadeTimeoutRef.current);
+    }
+    if (playbackOverlayTimeoutRef.current) {
+      clearTimeout(playbackOverlayTimeoutRef.current);
+    }
+    playbackOverlayFadeTimeoutRef.current = setTimeout(() => {
+      setPlaybackOverlayVisible(false);
+    }, 420);
+    playbackOverlayTimeoutRef.current = setTimeout(() => {
+      setShowPlaybackOverlay(false);
+      setPlaybackOverlayVisible(false);
+    }, 700);
   };
 
   const handleVolumeChange = (newVolume: number) => {
@@ -996,6 +1020,12 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       if (volumeOverlayTimeoutRef.current) {
         clearTimeout(volumeOverlayTimeoutRef.current);
       }
+      if (playbackOverlayTimeoutRef.current) {
+        clearTimeout(playbackOverlayTimeoutRef.current);
+      }
+      if (playbackOverlayFadeTimeoutRef.current) {
+        clearTimeout(playbackOverlayFadeTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -1336,6 +1366,16 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                       </div>
                     </div>
                   )}
+
+                  {showPlaybackOverlay && (
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                      <div className={`flex h-20 w-20 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-all duration-300 ${
+                        playbackOverlayVisible ? 'scale-100 opacity-100' : 'scale-90 opacity-0'
+                      }`}>
+                        {playbackOverlayState === 'pause' ? <Pause size={34} fill="currentColor" /> : <Play size={34} fill="currentColor" className="ml-1" />}
+                      </div>
+                    </div>
+                  )}
                   
                   {/* 커스텀 컨트롤 */}
                   <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
@@ -1476,7 +1516,9 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                               <TooltipTrigger asChild>
                                 <button
                                   onClick={handleSpeedMenuToggle}
-                                  className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors"
+                                  className={`w-8 h-8 flex items-center justify-center transition-colors ${
+                                    playbackSpeed !== 1 ? 'text-blue-400' : 'text-white hover:text-gray-300'
+                                  }`}
                                   data-speed-menu
                                 >
                                   <Clock size={20} />
@@ -1737,6 +1779,16 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                 </div>
                               </div>
                             )}
+
+                            {showPlaybackOverlay && (
+                              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                                <div className={`flex h-20 w-20 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-all duration-300 ${
+                                  playbackOverlayVisible ? 'scale-100 opacity-100' : 'scale-90 opacity-0'
+                                }`}>
+                                  {playbackOverlayState === 'pause' ? <Pause size={34} fill="currentColor" /> : <Play size={34} fill="currentColor" className="ml-1" />}
+                                </div>
+                              </div>
+                            )}
                             
                             {/* 커스텀 컨트롤 */}
                             <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
@@ -1877,7 +1929,9 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                         <TooltipTrigger asChild>
                                           <button
                                             onClick={handleSpeedMenuToggle}
-                                            className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors"
+                                            className={`w-8 h-8 flex items-center justify-center transition-colors ${
+                                              playbackSpeed !== 1 ? 'text-blue-400' : 'text-white hover:text-gray-300'
+                                            }`}
                                             data-speed-menu
                                           >
                                             <Clock size={20} />
