@@ -879,6 +879,10 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
                       key={record.id}
                       className={`border-b border-gray-800 transition-colors ${selectedRecordId === record.id ? 'bg-discord-hover' : 'hover:bg-discord-hover'}`}
                       onClick={() => setSelectedRecordId(record.id)}
+                      onDoubleClick={() => {
+                        setSelectedRecordId(record.id);
+                        handleView(record);
+                      }}
                     >
                       {selectedCategory.fields.filter(f => !f.hidden).map(field => {
                         const value = record.data[field.id];

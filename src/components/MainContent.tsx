@@ -1476,6 +1476,10 @@ export const MainContent: React.FC = () => {
                             <tr
                               className={`${selectedRecordId === record.id ? 'bg-discord-hover' : 'hover:bg-discord-hover'} group cursor-default`}
                               onClick={() => setSelectedRecordId(record.id)}
+                              onDoubleClick={() => {
+                                setSelectedRecordId(record.id);
+                                handleView(record);
+                              }}
                             >
                               {fileField && (
                                 <td className="px-2 py-3 text-xs text-discord-text overflow-hidden relative" style={{ width: `${getColumnWidth('__thumbnail')}px` }}>
@@ -1516,6 +1520,7 @@ export const MainContent: React.FC = () => {
                           </ContextMenuTrigger>
                           <ContextMenuContent>
                             <ContextMenuItem
+                              className="hidden"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedRecordId(record.id);
