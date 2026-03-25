@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bell, Database, Monitor, Settings, Shield, X } from 'lucide-react';
+import { Monitor, Settings, Shield, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
 import { Switch } from './ui/switch';
+import { Input } from './ui/input';
+import { Button } from './ui/button';
 import type { Config } from '../types';
 
 interface AppSettingsModalProps {
@@ -19,8 +21,6 @@ type SettingsSection = {
 const sections: SettingsSection[] = [
   { id: 'general', label: '일반', description: '앱 기본 동작과 창 옵션', icon: Settings },
   { id: 'viewer', label: '뷰어', description: '이미지와 동영상 보기 환경', icon: Monitor },
-  { id: 'data', label: '데이터', description: '백업과 파일 경로 관련 설정', icon: Database },
-  { id: 'notifications', label: '알림', description: '알림 표시 방식과 우선순위', icon: Bell },
   { id: 'security', label: '보안', description: '접근 제어와 기록 관리', icon: Shield },
 ];
 
@@ -28,6 +28,9 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
   const [activeSection, setActiveSection] = useState('general');
   const [config, setConfig] = useState<Config | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [password, setPassword] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
+  const [securityMessage, setSecurityMessage] = useState('');
 
   const currentSection = useMemo(
     () => sections.find((section) => section.id === activeSection) ?? sections[0],
@@ -63,6 +66,9 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
     window.electronAPI.getConfig().then((nextConfig) => {
       if (!cancelled) {
         setConfig(nextConfig);
+        setPassword('');
+        setPasswordConfirm('');
+        setSecurityMessage('');
       }
     }).catch((error) => {
       console.error('Failed to load app settings:', error);
@@ -73,13 +79,14 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
     };
   }, [open]);
 
-  const handleRememberWindowBoundsChange = (checked: boolean) => {
+  const handleRememberWindowBoundsChange = async (checked: boolean) => {
     setConfig((prev) => prev ? { ...prev, rememberWindowBounds: checked } : prev);
     setIsSaving(true);
-    window.electronAPI.send('settings:setRememberWindowBounds', checked);
-    window.setTimeout(() => {
+    try {
+      await window.electronAPI.setRememberWindowBounds(checked);
+    } finally {
       setIsSaving(false);
-    }, 100);
+    }
   };
 
   const renderGeneralSection = () => (
@@ -124,6 +131,107 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
         <p className="text-sm text-discord-muted mt-2 leading-6">
           폼, 토글, 경로 선택, 단축키 설정 같은 실제 옵션을 이 영역에 추가하면 됩니다.
         </p>
+      </div>
+    </div>
+  );
+
+  const handleSavePassword = async () => {
+    if (!password || password.length < 4) {
+      setSecurityMessage('비밀번호는 4자 이상이어야 합니다.');
+      return;
+    }
+    if (password !== passwordConfirm) {
+      setSecurityMessage('비밀번호 확인이 일치하지 않습니다.');
+      return;
+    }
+
+    setIsSaving(true);
+    const result = await window.electronAPI.setAppPassword(password);
+    setIsSaving(false);
+
+    if (result.success) {
+      setConfig((prev) => prev ? { ...prev, hasAppPassword: true } : prev);
+      setPassword('');
+      setPasswordConfirm('');
+      setSecurityMessage('비밀번호가 설정되었습니다.');
+      return;
+    }
+
+    setSecurityMessage(result.error || '비밀번호 설정에 실패했습니다.');
+  };
+
+  const handleClearPassword = async () => {
+    setIsSaving(true);
+    const result = await window.electronAPI.clearAppPassword();
+    setIsSaving(false);
+
+    if (result.success) {
+      setConfig((prev) => prev ? { ...prev, hasAppPassword: false } : prev);
+      setPassword('');
+      setPasswordConfirm('');
+      setSecurityMessage('비밀번호가 해제되었습니다.');
+      return;
+    }
+
+    setSecurityMessage(result.error || '비밀번호 해제에 실패했습니다.');
+  };
+
+  const renderSecuritySection = () => (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+        <div className="text-sm font-medium text-white">프로그램 비밀번호</div>
+        <p className="text-sm text-discord-muted mt-2 leading-6">
+          비밀번호를 설정하면 프로그램을 실행할 때마다 먼저 비밀번호를 입력해야 접근할 수 있습니다.
+        </p>
+
+        <div className="mt-5 grid gap-3 max-w-md">
+          <Input
+            type="password"
+            value={password}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setSecurityMessage('');
+            }}
+            placeholder={config?.hasAppPassword ? '새 비밀번호' : '비밀번호'}
+            className="bg-discord-bg border-gray-600 text-discord-text"
+          />
+          <Input
+            type="password"
+            value={passwordConfirm}
+            onChange={(e) => {
+              setPasswordConfirm(e.target.value);
+              setSecurityMessage('');
+            }}
+            placeholder="비밀번호 확인"
+            className="bg-discord-bg border-gray-600 text-discord-text"
+          />
+
+          {securityMessage && (
+            <p className="text-sm text-discord-muted">{securityMessage}</p>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <Button
+              type="button"
+              onClick={() => void handleSavePassword()}
+              className="bg-discord-accent hover:bg-blue-600 text-white"
+              disabled={isSaving}
+            >
+              {config?.hasAppPassword ? '비밀번호 변경' : '비밀번호 설정'}
+            </Button>
+            {config?.hasAppPassword && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleClearPassword()}
+                className="border-gray-600 hover:bg-discord-hover text-discord-text"
+                disabled={isSaving}
+              >
+                비밀번호 해제
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -186,7 +294,11 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
             </header>
 
             <div className="flex-1 min-h-0 overflow-y-auto p-6 bg-discord-bg">
-              {currentSection.id === 'general' ? renderGeneralSection() : renderPlaceholderSection()}
+              {currentSection.id === 'general'
+                ? renderGeneralSection()
+                : currentSection.id === 'security'
+                  ? renderSecuritySection()
+                  : renderPlaceholderSection()}
             </div>
           </section>
         </div>

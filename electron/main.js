@@ -42,7 +42,8 @@ const configPath = path.join(app.getPath('userData'), 'config.json');
 
 const defaultConfig = {
   rememberWindowBounds: false,
-  windowBounds: null
+  windowBounds: null,
+  passwordHash: null
 };
 
 let appConfig = { ...defaultConfig };
@@ -74,6 +75,10 @@ function saveAppConfig() {
   } catch (error) {
     console.error('Failed to save app config:', error);
   }
+}
+
+function hashPassword(password) {
+  return crypto.createHash('sha256').update(String(password)).digest('hex');
 }
 
 loadAppConfig();
@@ -231,14 +236,15 @@ function createWindow() {
     }
   });
 
-  ipcMain.removeAllListeners('settings:setRememberWindowBounds');
-  ipcMain.on('settings:setRememberWindowBounds', (_event, enabled) => {
+  ipcMain.removeHandler?.('setRememberWindowBounds');
+  ipcMain.handle('setRememberWindowBounds', (_event, enabled) => {
     appConfig.rememberWindowBounds = !!enabled;
     if (appConfig.rememberWindowBounds) {
       saveWindowBounds();
     } else {
       saveAppConfig();
     }
+    return { success: true };
   });
 }
 
@@ -1336,7 +1342,8 @@ ipcMain.handle('getConfig', () => {
     dbPath: dbPath,
     backupDir: backupDir,
     backupInterval: 60,
-    rememberWindowBounds: appConfig.rememberWindowBounds
+    rememberWindowBounds: appConfig.rememberWindowBounds,
+    hasAppPassword: Boolean(appConfig.passwordHash)
   };
 });
 
@@ -1363,6 +1370,33 @@ ipcMain.handle('setBackupDir', async () => {
 
 ipcMain.handle('setBackupInterval', (event, minutes) => {
   return { success: true };
+});
+
+ipcMain.handle('setAppPassword', (_event, password) => {
+  if (!password || String(password).trim().length < 4) {
+    return { success: false, error: 'Password must be at least 4 characters.' };
+  }
+
+  appConfig.passwordHash = hashPassword(password);
+  saveAppConfig();
+  return { success: true };
+});
+
+ipcMain.handle('clearAppPassword', () => {
+  appConfig.passwordHash = null;
+  saveAppConfig();
+  return { success: true };
+});
+
+ipcMain.handle('verifyAppPassword', (_event, password) => {
+  if (!appConfig.passwordHash) {
+    return { success: true };
+  }
+
+  const isValid = hashPassword(password) === appConfig.passwordHash;
+  return isValid
+    ? { success: true }
+    : { success: false, error: 'Invalid password.' };
 });
 
 ipcMain.handle('backupDatabase', () => {

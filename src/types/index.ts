@@ -50,6 +50,7 @@ export interface Config {
   backupDir: string;
   backupInterval: number;
   rememberWindowBounds?: boolean;
+  hasAppPassword?: boolean;
 }
 
 export {}; 

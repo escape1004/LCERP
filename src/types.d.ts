@@ -21,6 +21,9 @@ export interface ElectronAPI {
   setBackupDir: () => Promise<{ success: boolean; path?: string }>;
   setBackupInterval: (minutes: number) => Promise<{ success: boolean }>;
   setRememberWindowBounds: (enabled: boolean) => Promise<{ success: boolean }>;
+  setAppPassword: (password: string) => Promise<{ success: boolean; error?: string }>;
+  clearAppPassword: () => Promise<{ success: boolean; error?: string }>;
+  verifyAppPassword: (password: string) => Promise<{ success: boolean; error?: string }>;
   openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
   checkFileExists: (filePath: string) => Promise<boolean>;
   checkDuplicate: (categoryId: string, fieldId: string, value: any, recordId?: string) => Promise<{ isDuplicate: boolean }>;
