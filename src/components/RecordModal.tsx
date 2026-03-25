@@ -14,6 +14,7 @@ import { cn } from '../lib/utils';
 import { toast } from './ui/use-toast';
 import { AlertDialog } from './ui/alert-dialog';
 import { DatePicker } from './ui/date-picker';
+import { AnimatedModal } from './ui/animated-modal';
 import {
   Tooltip,
   TooltipContent,
@@ -107,11 +108,6 @@ export const RecordModal: React.FC<RecordModalProps> = ({
   }, [isOpen, record, category]);
 
   // 모달이 닫힐 때 formData를 초기화하여 이전 모달 상태가 남지 않도록 함
-  useEffect(() => {
-    if (!isOpen) {
-      setFormData({});
-    }
-  }, [isOpen]);
 
   // ESC 키로 모달 닫기
   useEffect(() => {
@@ -1024,11 +1020,11 @@ export const RecordModal: React.FC<RecordModalProps> = ({
   }, [selectCategory, onClose]);
 
   // formData가 준비되지 않았으면 렌더링하지 않기
-  if (!isOpen || !formData || Object.keys(formData).length === 0) return null;
+  if (isOpen && (!formData || Object.keys(formData).length === 0)) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-discord-bg rounded-lg w-full max-w-2xl flex flex-col max-h-[90vh]">
+    <>
+      <AnimatedModal isOpen={isOpen} contentClassName="bg-discord-bg rounded-lg w-full max-w-2xl flex flex-col max-h-[90vh]">
         <div className="flex-shrink-0 flex items-center justify-between p-6 border-b border-gray-700">
           <div className="flex items-end">
             <h2 className="text-xl font-bold text-discord-text">
@@ -1104,7 +1100,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
              record ? '수정' : '추가'}
           </Button>
         </div>
-      </div>
+      </AnimatedModal>
       
       {/* 커스텀 알럿 다이얼로그 */}
       <AlertDialog
@@ -1117,8 +1113,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
 
       {/* 중복 항목 선택 모달 */}
       {ambiguousDialogOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-discord-bg rounded-lg w-full max-w-2xl flex flex-col max-h-[90vh]">
+        <AnimatedModal isOpen={ambiguousDialogOpen} contentClassName="bg-discord-bg rounded-lg w-full max-w-2xl flex flex-col max-h-[90vh]">
             <div className="flex-shrink-0 flex items-center justify-between p-6 border-b border-gray-700">
               <div>
                 <h2 className="text-xl font-bold text-discord-text">
@@ -1211,9 +1206,8 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                 취소
               </Button>
             </div>
-          </div>
-        </div>
+          </AnimatedModal>
       )}
-    </div>
+    </>
   );
 };

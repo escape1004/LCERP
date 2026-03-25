@@ -11,6 +11,7 @@ import { Checkbox } from './ui/checkbox';
 import { toast } from './ui/use-toast';
 import { Switch } from './ui/switch';
 import { TagInput } from './ui/tag-input';
+import { AnimatedModal } from './ui/animated-modal';
 
 interface CategoryModalProps {
   isOpen: boolean;
@@ -296,11 +297,8 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     return path;
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-discord-bg rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden">
+    <AnimatedModal isOpen={isOpen} contentClassName="bg-discord-bg rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-700">
           <h2 className="text-xl font-bold text-discord-text">
@@ -751,7 +749,6 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
             {isValidating ? '검증 중...' : category ? '수정' : '생성'}
           </Button>
         </div>
-      </div>
-    </div>
+    </AnimatedModal>
   );
 };

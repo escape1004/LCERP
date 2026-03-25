@@ -4,6 +4,7 @@ import AdmZip from 'adm-zip';
 import { Button } from './ui/button';
 import { toast } from './ui/use-toast';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./ui/tooltip";
+import { AnimatedModal } from './ui/animated-modal';
 
 interface ViewerModalProps {
   isOpen: boolean;
@@ -22,6 +23,10 @@ interface ArchiveFile {
 }
 
 export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, fileType, categoryId = '', recordId = '', onClose }) => {
+  const [displayFilePath, setDisplayFilePath] = useState(filePath);
+  const [displayFileType, setDisplayFileType] = useState(fileType);
+  const [displayCategoryId, setDisplayCategoryId] = useState(categoryId);
+  const [displayRecordId, setDisplayRecordId] = useState(recordId);
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [archiveFiles, setArchiveFiles] = useState<ArchiveFile[]>([]);
   const [currentArchiveIndex, setCurrentArchiveIndex] = useState<number>(0);
@@ -129,6 +134,30 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     };
   }, [isOpen, onClose]);
 
+  useEffect(() => {
+    if (filePath) {
+      setDisplayFilePath(filePath);
+    }
+  }, [filePath]);
+
+  useEffect(() => {
+    if (fileType !== undefined) {
+      setDisplayFileType(fileType);
+    }
+  }, [fileType]);
+
+  useEffect(() => {
+    if (categoryId) {
+      setDisplayCategoryId(categoryId);
+    }
+  }, [categoryId]);
+
+  useEffect(() => {
+    if (recordId) {
+      setDisplayRecordId(recordId);
+    }
+  }, [recordId]);
+
   // 파일이 없을 때 북마크 자동 삭제
   useEffect(() => {
     if (fileNotFound && fileType === 'video' && categoryId && recordId) {
@@ -177,7 +206,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   }, [archiveVideoScale]);
 
   useEffect(() => {
-    if (!isOpen || !filePath) {
+    if (!displayFilePath) {
       setDataUrl(null);
       setArchiveFiles([]);
       setCurrentArchiveIndex(0);
@@ -192,22 +221,22 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     }
 
     // fileType이 null이면 파일 타입을 확인
-    if (!fileType) {
+    if (!displayFileType) {
       setLoading(true);
       setFileNotFound(false);
       setDetectedFileType(null);
-      window.electronAPI.getFileType(filePath).then((detectedType) => {
+      window.electronAPI.getFileType(displayFilePath).then((detectedType) => {
         setDetectedFileType(detectedType);
         if (detectedType === 'image' || detectedType === 'video') {
           // 이미지나 동영상인 경우 로드
           setPlaybackSpeed(1.0);
-          window.electronAPI.getFileDataUrl(filePath).then((url) => {
+          window.electronAPI.getFileDataUrl(displayFilePath).then((url) => {
             if (url === null || url === 'error') {
               setFileNotFound(true);
               setDataUrl(null);
             } else if (detectedType === 'video' && url === 'stream') {
               const port = (window as any).videoServerPort || 17345;
-              const streamUrl = `http://localhost:${port}/video?path=${encodeURIComponent(filePath)}`;
+              const streamUrl = `http://localhost:${port}/video?path=${encodeURIComponent(displayFilePath)}`;
               setDataUrl(streamUrl);
             } else {
               setDataUrl(url);
@@ -240,19 +269,19 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       return;
     }
 
-    if (fileType === 'image' || fileType === 'video') {
+    if (displayFileType === 'image' || displayFileType === 'video') {
       setPlaybackSpeed(1.0);
       setLoading(true);
       setFileNotFound(false);
-      window.electronAPI.getFileDataUrl(filePath).then((url) => {
+      window.electronAPI.getFileDataUrl(displayFilePath).then((url) => {
         if (url === null || url === 'error') {
           setFileNotFound(true);
           setDataUrl(null);
-        } else if (fileType === 'video' && url === 'stream') {
+        } else if (displayFileType === 'video' && url === 'stream') {
           // 스트리밍 서버 URL로 연결
           // filePath에 한글/공백 등 특수문자 있을 수 있으므로 encodeURIComponent 적용
           const port = (window as any).videoServerPort || 17345;
-          const streamUrl = `http://localhost:${port}/video?path=${encodeURIComponent(filePath)}`;
+          const streamUrl = `http://localhost:${port}/video?path=${encodeURIComponent(displayFilePath)}`;
           setDataUrl(streamUrl);
         } else {
           setDataUrl(url);
@@ -264,14 +293,14 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
         setDataUrl(null);
         setLoading(false);
       });
-    } else if (fileType === 'archive') {
+    } else if (displayFileType === 'archive') {
       setLoading(true);
       setFileNotFound(false);
       loadArchiveFiles();
     } else {
       setDataUrl(null);
     }
-  }, [isOpen, filePath, fileType]);
+  }, [displayFilePath, displayFileType]);
 
   useEffect(() => {
     const effectiveType = fileType || detectedFileType;
@@ -1110,27 +1139,31 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     setShowSpeedMenu(!showSpeedMenu);
   };
 
-  if (!isOpen || !filePath) return null;
+  if (!displayFilePath) return null;
 
   const currentFile = archiveFiles[currentArchiveIndex];
-  const fileName = filePath.split(/[\\/]/).pop() || '';
+  const fileName = displayFilePath.split(/[\\/]/).pop() || '';
   const currentFileExt = currentFile?.name.toLowerCase().split('.').pop();
   const isFirstArchiveFile = currentArchiveIndex <= 0;
   const isLastArchiveFile = currentArchiveIndex >= archiveFiles.length - 1;
   
   // fileType이 null이면 로딩 중이므로 로딩 UI만 표시
-  const isDetectingType = !fileType;
+  const isDetectingType = !displayFileType;
   // 실제 사용할 파일 타입 (prop이 null이면 감지된 타입 사용)
-  const effectiveFileType = fileType || detectedFileType;
+  const effectiveFileType = displayFileType || detectedFileType;
 
   return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/95"
-      onKeyDown={handleKeyDown}
-      tabIndex={0}
-      data-modal-container
+    <AnimatedModal
+      isOpen={isOpen}
+      className="bg-black/95"
+      contentClassName="relative bg-discord-bg rounded-lg shadow-2xl w-[95vw] h-[95vh] flex flex-col"
     >
-      <div className="relative bg-discord-bg rounded-lg shadow-2xl w-[95vw] h-[95vh] flex flex-col">
+      <div
+        className="relative bg-discord-bg rounded-lg shadow-2xl w-[95vw] h-[95vh] flex flex-col"
+        onKeyDown={handleKeyDown}
+        tabIndex={0}
+        data-modal-container
+      >
         {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-700">
           <div className="flex items-center gap-3">
@@ -2075,6 +2108,6 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
           )}
         </div>
       </div>
-    </div>
+    </AnimatedModal>
   );
-}; 
+};

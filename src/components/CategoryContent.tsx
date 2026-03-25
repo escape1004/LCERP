@@ -1022,8 +1022,10 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
         isOpen={isViewModalOpen}
         onClose={() => {
           setIsViewModalOpen(false);
-          setViewingRecord(null);
-          setViewingCategory('');
+          window.setTimeout(() => {
+            setViewingRecord(null);
+            setViewingCategory('');
+          }, 200);
         }}
         category={categories.find(cat => cat.id === viewingCategory) || selectedCategory}
         record={viewingRecord}

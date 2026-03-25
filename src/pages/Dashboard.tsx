@@ -598,18 +598,18 @@ export default function Dashboard() {
         </div>
         </div>
       )}
-      {selectedRecord && selectedCategory && (
-        <ViewRecordModal
-          isOpen={viewRecordModalOpen}
-          onClose={() => {
-            setViewRecordModalOpen(false);
+      <ViewRecordModal
+        isOpen={viewRecordModalOpen}
+        onClose={() => {
+          setViewRecordModalOpen(false);
+          window.setTimeout(() => {
             setSelectedRecord(null);
             setSelectedCategory(null);
-          }}
-          category={selectedCategory}
-          record={selectedRecord}
-        />
-      )}
+          }, 200);
+        }}
+        category={selectedCategory}
+        record={selectedRecord}
+      />
     </div>
   );
 }

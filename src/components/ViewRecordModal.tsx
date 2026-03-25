@@ -10,6 +10,7 @@ import { TimeInput } from './TimeInput';
 import { format } from "date-fns";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./ui/tooltip";
 import { resolveFilePath } from '../lib/pathResolver';
+import { AnimatedModal } from './ui/animated-modal';
 
 // 해시태그 파싱 유틸리티 함수
 const parseHashtags = (text: string): { hashtags: string[]; plainText: string } => {
@@ -90,7 +91,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   record,
   onViewRecord,
 }) => {
-  if (!isOpen || !record || !category) return null;
+  if (!record || !category) return null;
 
   const { categories, getCategoryRecords, selectCategory, loadRecords } = useERPStore();
   const { showLoading, hideLoading, setLoading: setGlobalLoading } = useLoadingStore();
@@ -1235,8 +1236,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-discord-bg rounded-lg w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+    <AnimatedModal isOpen={isOpen} contentClassName="bg-discord-bg rounded-lg w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between p-6 border-b border-gray-700">
           <div className="flex items-end">
@@ -1389,7 +1389,6 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
             닫기
           </Button>
         </div>
-      </div>
       {viewerModalOpen && (
         <ViewerModal
           isOpen={viewerModalOpen}
@@ -1397,9 +1396,9 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
           filePath={viewerFilePath}
           fileType={viewerFileType}
           categoryId={category.id}
-          recordId={record?.id || ''}
+          recordId={record.id}
         />
       )}
-    </div>
+    </AnimatedModal>
   );
 };

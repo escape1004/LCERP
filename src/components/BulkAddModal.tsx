@@ -8,6 +8,7 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Textarea } from './ui/textarea';
 import { toast } from './ui/use-toast';
+import { AnimatedModal } from './ui/animated-modal';
 
 interface BulkAddModalProps {
   isOpen: boolean;
@@ -50,7 +51,7 @@ export const BulkAddModal: React.FC<BulkAddModalProps> = ({
     };
   }, [isOpen, onClose]);
 
-  if (!isOpen || !category) return null;
+  if (!category) return null;
 
   const selectedField = category.fields.find(f => f.id === selectedFieldId);
   const isInputEnabled = !!selectedFieldId;
@@ -203,8 +204,7 @@ export const BulkAddModal: React.FC<BulkAddModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-discord-bg rounded-lg w-full max-w-2xl flex flex-col max-h-[90vh]">
+    <AnimatedModal isOpen={isOpen} contentClassName="bg-discord-bg rounded-lg w-full max-w-2xl flex flex-col max-h-[90vh]">
         <div className="flex-shrink-0 flex items-center justify-between p-6 border-b border-gray-700">
           <h2 className="text-xl font-bold text-discord-text">
             항목 다중 추가
@@ -287,7 +287,6 @@ export const BulkAddModal: React.FC<BulkAddModalProps> = ({
             {isSubmitting ? '추가 중...' : '추가'}
           </Button>
         </div>
-      </div>
-    </div>
+      </AnimatedModal>
   );
 };

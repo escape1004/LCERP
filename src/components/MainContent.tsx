@@ -1631,8 +1631,10 @@ export const MainContent: React.FC = () => {
             isOpen={isViewModalOpen}
             onClose={() => {
               setIsViewModalOpen(false);
-              setViewingRecord(null);
-              setViewingCategory('');
+              window.setTimeout(() => {
+                setViewingRecord(null);
+                setViewingCategory('');
+              }, 200);
             }}
             category={categoriesSafe.find(cat => cat.id === viewingCategory) || selectedCategorySafe}
             record={viewingRecord}
