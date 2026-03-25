@@ -59,6 +59,11 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   // 배속 관련 상태 추가
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
+  const [videoScale, setVideoScale] = useState(1);
+  const [videoOffset, setVideoOffset] = useState({ x: 0, y: 0 });
+  const [videoIsPanning, setVideoIsPanning] = useState(false);
+  const videoPanStart = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
+  const videoScaleRef = useRef(1);
 
   // 일반 이미지 상태 및 핸들러
   const [imgScale, setImgScale] = useState(1);
@@ -66,6 +71,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const [isPanning, setIsPanning] = useState(false);
   const panStart = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
+  const imgScaleRef = useRef(1);
 
   // 압축 이미지 상태 및 핸들러
   const [archiveImgScale, setArchiveImgScale] = useState(1);
@@ -73,6 +79,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const [archiveIsPanning, setArchiveIsPanning] = useState(false);
   const archivePanStart = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
   const archiveImgRef = useRef<HTMLImageElement>(null);
+  const archiveImgScaleRef = useRef(1);
 
   // 압축 동영상 상태 및 핸들러
   const [archiveVideoScale, setArchiveVideoScale] = useState(1);
@@ -80,6 +87,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const [archiveVideoIsPanning, setArchiveVideoIsPanning] = useState(false);
   const archiveVideoPanStart = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
   const archiveVideoRef = useRef<HTMLVideoElement>(null);
+  const archiveVideoScaleRef = useRef(1);
 
   // 이미지 컨테이너 ref
   const imgContainerRef = useRef<HTMLDivElement>(null);
@@ -128,6 +136,22 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       setBookmarks([]);
     }
   }, [fileType, isOpen, filePath, categoryId, recordId]);
+
+  useEffect(() => {
+    videoScaleRef.current = videoScale;
+  }, [videoScale]);
+
+  useEffect(() => {
+    imgScaleRef.current = imgScale;
+  }, [imgScale]);
+
+  useEffect(() => {
+    archiveImgScaleRef.current = archiveImgScale;
+  }, [archiveImgScale]);
+
+  useEffect(() => {
+    archiveVideoScaleRef.current = archiveVideoScale;
+  }, [archiveVideoScale]);
 
   useEffect(() => {
     if (!isOpen || !filePath) {
@@ -384,6 +408,23 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   };
 
   const handleVideoClick = () => {
+    const effectiveType = fileType || detectedFileType;
+    const currentFile = archiveFiles[currentArchiveIndex];
+    const isArchiveVideo =
+      effectiveType === 'archive' &&
+      !!currentFile &&
+      /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name);
+
+    if (effectiveType === 'video' && videoScale > 1) {
+      setShowControls(true);
+      return;
+    }
+
+    if (isArchiveVideo && archiveVideoScale > 1) {
+      setShowControls(true);
+      return;
+    }
+
     // 재생/정지 토글
     handlePlayPause();
     
@@ -682,6 +723,8 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
 
   // 파일이 바뀌면 확대/위치/회전 초기화 (압축/일반 모두)
   useEffect(() => {
+    setVideoScale(1);
+    setVideoOffset({ x: 0, y: 0 });
     setImgScale(1);
     setImgOffset({ x: 0, y: 0 });
     setImgRotation(0);
@@ -693,27 +736,45 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     setArchiveVideoOffset({ x: 0, y: 0 });
   }, [filePath, fileType, currentArchiveIndex]);
 
+  useEffect(() => {
+    const effectiveType = fileType || detectedFileType;
+    if (effectiveType !== 'video' || !dataUrl) return;
+    const video = videoRef.current;
+    const container = imgContainerRef.current;
+    if (!video || !container) return;
+
+    const wheelHandler = (e: WheelEvent) => {
+      e.preventDefault();
+      const nextScale = Math.max(1, Math.min(5, videoScaleRef.current - e.deltaY * 0.001));
+      setVideoScale(nextScale);
+      setVideoOffset(prevOffset => {
+        if (nextScale === 1) return { x: 0, y: 0 };
+        return clampImgOffset(prevOffset, nextScale);
+      });
+    };
+
+    video.addEventListener('wheel', wheelHandler, { passive: false });
+
+    return () => {
+      video.removeEventListener('wheel', wheelHandler);
+    };
+  }, [fileType, detectedFileType, dataUrl]);
+
   // 일반 이미지 휠 확대/축소
   useEffect(() => {
-    if (fileType !== 'image' || !dataUrl) return;
+    const effectiveType = fileType || detectedFileType;
+    if (effectiveType !== 'image' || !dataUrl) return;
     const img = imgRef.current;
     const container = imgContainerRef.current;
     if (!img || !container) return;
     
     const wheelHandler = (e: WheelEvent) => {
       e.preventDefault();
-      setImgScale(prevScale => {
-        let nextScale = prevScale - e.deltaY * 0.001;
-        nextScale = Math.max(1, Math.min(5, nextScale));
-        return nextScale;
-      });
+      const nextScale = Math.max(1, Math.min(5, imgScaleRef.current - e.deltaY * 0.001));
+      setImgScale(nextScale);
       setImgOffset(prevOffset => {
-        const newScale = imgScale - e.deltaY * 0.001;
-        const nextScale = Math.max(1, Math.min(5, newScale));
-        let nextOffset = prevOffset;
-        if (nextScale === 1) nextOffset = { x: 0, y: 0 };
-        else nextOffset = clampImgOffset(nextOffset, nextScale);
-        return nextOffset;
+        if (nextScale === 1) return { x: 0, y: 0 };
+        return clampImgOffset(prevOffset, nextScale);
       });
     };
     
@@ -724,29 +785,25 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       img.removeEventListener('wheel', wheelHandler);
       container.removeEventListener('wheel', wheelHandler);
     };
-  }, [fileType, dataUrl]);
+  }, [fileType, detectedFileType, dataUrl]);
 
   // 압축 이미지 휠 확대/축소
   useEffect(() => {
-    if (fileType !== 'archive') return;
+    const effectiveType = fileType || detectedFileType;
+    const currentFile = archiveFiles[currentArchiveIndex];
+    const isArchiveImage = !!currentFile && /\.(jpg|jpeg|png|gif|webp)$/i.test(currentFile.name);
+    if (effectiveType !== 'archive' || !currentArchiveDataUrl || !isArchiveImage) return;
     const img = archiveImgRef.current;
     const container = imgContainerRef.current;
     if (!img || !container) return;
     
     const wheelHandler = (e: WheelEvent) => {
       e.preventDefault();
-      setArchiveImgScale(prevScale => {
-        let nextScale = prevScale - e.deltaY * 0.001;
-        nextScale = Math.max(1, Math.min(5, nextScale));
-        return nextScale;
-      });
+      const nextScale = Math.max(1, Math.min(5, archiveImgScaleRef.current - e.deltaY * 0.001));
+      setArchiveImgScale(nextScale);
       setArchiveImgOffset(prevOffset => {
-        const newScale = archiveImgScale - e.deltaY * 0.001;
-        const nextScale = Math.max(1, Math.min(5, newScale));
-        let nextOffset = prevOffset;
-        if (nextScale === 1) nextOffset = { x: 0, y: 0 };
-        else nextOffset = clampImgOffset(nextOffset, nextScale);
-        return nextOffset;
+        if (nextScale === 1) return { x: 0, y: 0 };
+        return clampImgOffset(prevOffset, nextScale);
       });
     };
     
@@ -757,42 +814,60 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       img.removeEventListener('wheel', wheelHandler);
       container.removeEventListener('wheel', wheelHandler);
     };
-  }, [fileType]);
+  }, [fileType, detectedFileType, archiveFiles, currentArchiveIndex, currentArchiveDataUrl]);
 
   // 압축 동영상 휠 확대/축소
   useEffect(() => {
-    if (fileType !== 'archive') return;
+    const effectiveType = fileType || detectedFileType;
+    const currentFile = archiveFiles[currentArchiveIndex];
+    const isArchiveVideo = !!currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name);
+    if (effectiveType !== 'archive' || !currentArchiveDataUrl || !isArchiveVideo) return;
     const video = archiveVideoRef.current;
     const container = imgContainerRef.current;
     if (!video || !container) return;
     
     const wheelHandler = (e: WheelEvent) => {
       e.preventDefault();
-      setArchiveVideoScale(prevScale => {
-        let nextScale = prevScale - e.deltaY * 0.001;
-        nextScale = Math.max(1, Math.min(5, nextScale));
-        return nextScale;
-      });
+      const nextScale = Math.max(1, Math.min(5, archiveVideoScaleRef.current - e.deltaY * 0.001));
+      setArchiveVideoScale(nextScale);
       setArchiveVideoOffset(prevOffset => {
-        const newScale = archiveVideoScale - e.deltaY * 0.001;
-        const nextScale = Math.max(1, Math.min(5, newScale));
-        let nextOffset = prevOffset;
-        if (nextScale === 1) nextOffset = { x: 0, y: 0 };
-        else nextOffset = clampImgOffset(nextOffset, nextScale);
-        return nextOffset;
+        if (nextScale === 1) return { x: 0, y: 0 };
+        return clampImgOffset(prevOffset, nextScale);
       });
     };
     
     video.addEventListener('wheel', wheelHandler, { passive: false });
-    container.addEventListener('wheel', wheelHandler, { passive: false });
-    
+
     return () => {
       video.removeEventListener('wheel', wheelHandler);
-      container.removeEventListener('wheel', wheelHandler);
     };
-  }, [fileType]);
+  }, [fileType, detectedFileType, archiveFiles, currentArchiveIndex, currentArchiveDataUrl]);
 
   // 일반 이미지 드래그 패닝
+  const handleVideoMouseDown = (e: React.MouseEvent) => {
+    if (videoScale === 1) return;
+    setVideoIsPanning(true);
+    videoPanStart.current = {
+      x: e.clientX,
+      y: e.clientY,
+      offsetX: videoOffset.x,
+      offsetY: videoOffset.y,
+    };
+  };
+  const handleVideoMouseMove = (e: React.MouseEvent) => {
+    if (!videoIsPanning || !videoPanStart.current) return;
+    const dx = e.clientX - videoPanStart.current.x;
+    const dy = e.clientY - videoPanStart.current.y;
+    const next = {
+      x: videoPanStart.current.offsetX + dx,
+      y: videoPanStart.current.offsetY + dy,
+    };
+    setVideoOffset(clampImgOffset(next, videoScale));
+  };
+  const handleVideoMouseUp = () => {
+    setVideoIsPanning(false);
+  };
+
   const handleImgMouseDown = (e: React.MouseEvent) => {
     if (imgScale === 1) return;
     setIsPanning(true);
@@ -969,6 +1044,8 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const currentFile = archiveFiles[currentArchiveIndex];
   const fileName = filePath.split(/[\\/]/).pop() || '';
   const currentFileExt = currentFile?.name.toLowerCase().split('.').pop();
+  const isFirstArchiveFile = currentArchiveIndex <= 0;
+  const isLastArchiveFile = currentArchiveIndex >= archiveFiles.length - 1;
   
   // fileType이 null이면 로딩 중이므로 로딩 UI만 표시
   const isDetectingType = !fileType;
@@ -1120,10 +1197,14 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                   tabIndex={0}
                   data-video-container
                 >
-                  <div className="flex-1 w-full h-full flex items-center justify-center">
+                  <div
+                    ref={imgContainerRef}
+                    className="flex-1 w-full h-full flex items-center justify-center"
+                    style={{ overflow: videoScale > 1 ? 'hidden' : 'visible' }}
+                  >
                     <div style={{ 
-                      transform: `rotate(${videoRotation}deg)`,
-                      transition: 'transform 0.2s'
+                      transform: `scale(${videoScale}) translate(${videoOffset.x / videoScale}px, ${videoOffset.y / videoScale}px) rotate(${videoRotation}deg)`,
+                      transition: videoIsPanning ? 'none' : 'transform 0.2s'
                     }}>
                       {videoError ? (
                         <div className="flex flex-col items-center justify-center bg-black text-white p-8 rounded-lg">
@@ -1168,6 +1249,23 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                           style={{
                             maxWidth: videoRotation % 180 !== 0 ? '80vh' : '100%',
                             maxHeight: videoRotation % 180 !== 0 ? '95vw' : '80vh',
+                            cursor: videoScale > 1 ? (videoIsPanning ? 'grabbing' : 'grab') : 'default',
+                          }}
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            handleVideoMouseDown(e);
+                          }}
+                          onMouseMove={(e) => {
+                            e.stopPropagation();
+                            handleVideoMouseMove(e);
+                          }}
+                          onMouseUp={(e) => {
+                            e.stopPropagation();
+                            handleVideoMouseUp();
+                          }}
+                          onMouseLeave={(e) => {
+                            e.stopPropagation();
+                            handleVideoMouseUp();
                           }}
                           onPlay={() => setIsPlaying(true)}
                           onPause={() => setIsPlaying(false)}
@@ -1436,24 +1534,39 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                   {/* 파일 내용 영역 */}
                   <div className="flex-1 flex flex-col h-full">
                     <div 
+                      ref={imgContainerRef}
                       className="flex-1 flex items-center justify-center relative"
                       style={{ 
-                        overflow: currentFileExt !== 'txt' && archiveImgScale > 1 ? 'hidden' : 'auto'
+                        overflow: currentFileExt !== 'txt' && (archiveImgScale > 1 || archiveVideoScale > 1) ? 'hidden' : 'auto'
                       }}
                     >
                       {/* 좌/우 투명 클릭 영역 */}
                       {currentFileExt !== 'txt' && !/\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile?.name || '') && archiveImgScale === 1 && archiveVideoScale === 1 && (
                         <>
-                          <div
-                            className="absolute top-0 left-0 h-full w-1/2 z-10 cursor-pointer"
-                            style={{ background: 'transparent', pointerEvents: 'auto' }}
-                            onClick={handlePrevious}
-                          />
-                          <div
-                            className="absolute top-0 right-0 h-full w-1/2 z-10 cursor-pointer"
-                            style={{ background: 'transparent', pointerEvents: 'auto' }}
-                            onClick={handleNext}
-                          />
+                          {!isFirstArchiveFile && (
+                            <button
+                              type="button"
+                              className="group absolute top-0 left-0 h-full w-16 z-10 flex items-center justify-center bg-transparent"
+                              onClick={handlePrevious}
+                              aria-label="이전 파일"
+                            >
+                              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/0 transition-all group-hover:bg-black/55">
+                                <ChevronLeft size={24} className="text-white/0 transition-all group-hover:scale-110 group-hover:text-white/90" />
+                              </span>
+                            </button>
+                          )}
+                          {!isLastArchiveFile && (
+                            <button
+                              type="button"
+                              className="group absolute top-0 right-0 h-full w-16 z-10 flex items-center justify-center bg-transparent"
+                              onClick={handleNext}
+                              aria-label="다음 파일"
+                            >
+                              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/0 transition-all group-hover:bg-black/55">
+                                <ChevronRight size={24} className="text-white/0 transition-all group-hover:scale-110 group-hover:text-white/90" />
+                              </span>
+                            </button>
+                          )}
                         </>
                       )}
                       {currentFileExt !== 'txt' && !/\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile?.name || '') && (archiveImgScale > 1 || archiveVideoScale > 1) && (
@@ -1831,7 +1944,11 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <button onClick={handlePrevious} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors">
+                            <button
+                              onClick={handlePrevious}
+                              disabled={isFirstArchiveFile}
+                              className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors disabled:text-white/30 disabled:hover:text-white/30"
+                            >
                               <ChevronLeft size={20} />
                             </button>
                           </TooltipTrigger>
@@ -1844,7 +1961,11 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <button onClick={handleNext} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors">
+                            <button
+                              onClick={handleNext}
+                              disabled={isLastArchiveFile}
+                              className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors disabled:text-white/30 disabled:hover:text-white/30"
+                            >
                               <ChevronRight size={20} />
                             </button>
                           </TooltipTrigger>
