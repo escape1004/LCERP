@@ -38,6 +38,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   
   // 비디오 관련 상태
   const videoRef = useRef<HTMLVideoElement>(null);
+  const modalContainerRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(() => {
     const savedVolume = localStorage.getItem('videoVolume');
@@ -388,16 +389,6 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   }, [showSpeedMenu]);
 
   // 동영상 플레이어 포커스 설정
-  useEffect(() => {
-    const effectiveType = fileType || detectedFileType;
-    if (effectiveType === 'video' && isOpen) {
-      const videoContainer = document.querySelector('[data-video-container]') as HTMLElement;
-      if (videoContainer) {
-        videoContainer.focus();
-      }
-    }
-  }, [fileType, detectedFileType, isOpen]);
-
   // 비디오 이벤트 핸들러
   const handlePlayPause = () => {
     const effectiveType = fileType || detectedFileType;
@@ -1073,13 +1064,21 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
 
   // 모달이 열릴 때 포커스 설정
   useEffect(() => {
-    if (isOpen) {
-      const modalContainer = document.querySelector('[data-modal-container]') as HTMLElement;
-      if (modalContainer) {
-        modalContainer.focus();
-      }
-    }
-  }, [isOpen]);
+    if (!isOpen) return;
+
+    const focusModal = () => {
+      modalContainerRef.current?.focus();
+    };
+
+    focusModal();
+    const timeoutId = window.setTimeout(focusModal, 0);
+    const rafId = window.requestAnimationFrame(focusModal);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.cancelAnimationFrame(rafId);
+    };
+  }, [isOpen, detectedFileType, dataUrl, currentArchiveDataUrl]);
 
   // 컴포넌트 언마운트 시 타이머 정리
   useEffect(() => {
@@ -1180,6 +1179,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       contentClassName="relative bg-discord-bg rounded-lg shadow-2xl w-[95vw] h-[95vh] flex flex-col"
     >
       <div
+        ref={modalContainerRef}
         className="relative bg-discord-bg rounded-lg shadow-2xl w-[95vw] h-[95vh] flex flex-col"
         onKeyDown={handleKeyDown}
         tabIndex={0}
