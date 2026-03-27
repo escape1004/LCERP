@@ -90,6 +90,8 @@ export interface Field {
   required: boolean;
   unique: boolean;
   order: number;
+  textPrefix?: string;
+  textSuffix?: string;
   pathMode?: 'direct' | 'base';
   basePath?: string;
   multiple?: boolean;

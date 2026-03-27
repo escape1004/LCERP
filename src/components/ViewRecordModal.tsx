@@ -11,6 +11,7 @@ import { format } from "date-fns";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./ui/tooltip";
 import { resolveFilePath } from '../lib/pathResolver';
 import { AnimatedModal } from './ui/animated-modal';
+import { formatFieldDisplayValue } from '../lib/fieldFormat';
 
 // 해시태그 파싱 유틸리티 함수
 const parseHashtags = (text: string): { hashtags: string[]; plainText: string } => {
@@ -281,7 +282,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
     }
   };
 
-  const renderUrl = (url: string) => (
+  const renderUrl = (url: string, displayText?: string) => (
     <div className="flex items-center gap-2">
       <TooltipProvider>
         <Tooltip>
@@ -306,7 +307,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                 }
               }}
             >
-              {url}
+              {displayText || url}
             </button>
           </TooltipTrigger>
           <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
@@ -578,7 +579,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         );
       
       case 'text': {
-        const strValue = String(value);
+        const strValue = formatFieldDisplayValue(field, value);
         const { hashtags, plainText } = parseHashtags(strValue);
         
         // URL 자동 감지 및 렌더링

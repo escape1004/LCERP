@@ -32,6 +32,7 @@ import {
 } from "./ui/context-menu";
 import { BulkAddModal } from './BulkAddModal';
 import { resolveFilePath } from '../lib/pathResolver';
+import { formatFieldDisplayValue } from '../lib/fieldFormat';
 
 // 해시태그 파싱 유틸리티 함수
 const parseHashtags = (text: string): { hashtags: string[]; plainText: string } => {
@@ -113,7 +114,7 @@ const copyOnCtrlClick = async (
 };
 
 // URL 렌더링 함수
-const renderUrl = (url: string, onSelectRow?: () => void) => (
+const renderUrl = (url: string, onSelectRow?: () => void, displayText?: string) => (
   <div className="flex items-center gap-2">
     <TooltipProvider>
       <Tooltip>
@@ -138,7 +139,7 @@ const renderUrl = (url: string, onSelectRow?: () => void) => (
               }
             }}
           >
-            {url}
+            {displayText || url}
           </span>
         </TooltipTrigger>
         <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
@@ -202,9 +203,10 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
   
   switch (field.type) {
     case 'text':
-    case 'longtext':
-      if (typeof value === 'string' && urlPattern.test(value)) {
-        return renderUrl(value, onSelectRow);
+    case 'longtext': {
+      const formattedValue = formatFieldDisplayValue(field, value);
+      if (urlPattern.test(formattedValue)) {
+        return renderUrl(formattedValue, onSelectRow);
       }
       return (
         <TooltipProvider>
@@ -213,10 +215,10 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
               <span 
                 className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block" 
                 onClick={async (e) => {
-                  await copyOnCtrlClick(e, String(value), '값이 클립보드에 복사되었습니다.', onSelectRow);
+                  await copyOnCtrlClick(e, formattedValue, '값이 클립보드에 복사되었습니다.', onSelectRow);
                 }}
               >
-                {typeof value === 'string' ? renderTextWithHashtags(value) : String(value)}
+                {typeof formattedValue === 'string' ? renderTextWithHashtags(formattedValue) : String(formattedValue)}
               </span>
             </TooltipTrigger>
             <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
@@ -225,6 +227,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
           </Tooltip>
         </TooltipProvider>
       );
+    }
     
     case 'number':
       return (

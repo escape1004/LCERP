@@ -5,6 +5,8 @@ export interface FieldDefinition {
   required: boolean;
   unique: boolean;
   order: number;
+  textPrefix?: string;
+  textSuffix?: string;
   pathMode?: 'direct' | 'base';
   basePath?: string;
   multiSelect?: boolean;

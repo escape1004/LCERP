@@ -1,5 +1,3 @@
-import type { ElectronAPI } from './types.d';
-
 export interface Category {
   id: string;
   name: string;
@@ -34,6 +32,8 @@ export interface FieldDefinition {
   required: boolean;
   unique: boolean;
   order: number;
+  textPrefix?: string;
+  textSuffix?: string;
   pathMode?: 'direct' | 'base';
   basePath?: string;
   options?: string[];

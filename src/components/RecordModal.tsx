@@ -16,6 +16,7 @@ import { toast } from './ui/use-toast';
 import { AlertDialog } from './ui/alert-dialog';
 import { DatePicker } from './ui/date-picker';
 import { AnimatedModal } from './ui/animated-modal';
+import { formatFieldDisplayValue, hasTextAffixes } from '../lib/fieldFormat';
 import {
   Tooltip,
   TooltipContent,
@@ -407,16 +408,48 @@ export const RecordModal: React.FC<RecordModalProps> = ({
 
     switch (field.type) {
       case 'text':
+        if (!field.textPrefix && !field.textSuffix) {
+          return (
+            <div className="space-y-1">
+              <Input
+                type="text"
+                placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
+                value={value}
+                onChange={(e) => updateFieldValue(field.id, e.target.value)}
+                className={inputClassName}
+                ref={isFirstField ? firstFieldRef as React.Ref<HTMLInputElement> : undefined}
+              />
+              {renderError()}
+            </div>
+          );
+        }
+
         return (
           <div className="space-y-1">
-            <Input
-              type="text"
-              placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
-              value={value}
-              onChange={(e) => updateFieldValue(field.id, e.target.value)}
-              className={inputClassName}
-              ref={isFirstField ? firstFieldRef as React.Ref<HTMLInputElement> : undefined}
-            />
+            <div className="flex items-stretch overflow-hidden rounded-md border border-gray-600 bg-discord-sidebar">
+              {field.textPrefix && (
+                <div className="flex items-center px-2 text-discord-muted text-sm whitespace-nowrap leading-none">
+                  {field.textPrefix}
+                </div>
+              )}
+              <Input
+                type="text"
+                placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
+                value={value}
+                onChange={(e) => updateFieldValue(field.id, e.target.value)}
+                className={cn(
+                  inputClassName,
+                  'h-10 border-0 shadow-none rounded-none bg-transparent px-0',
+                  'focus-visible:ring-0 focus-visible:ring-offset-0'
+                )}
+                ref={isFirstField ? firstFieldRef as React.Ref<HTMLInputElement> : undefined}
+              />
+              {field.textSuffix && (
+                <div className="flex items-center px-2 text-discord-muted text-sm whitespace-nowrap leading-none">
+                  {field.textSuffix}
+                </div>
+              )}
+            </div>
             {renderError()}
           </div>
         );
@@ -1088,6 +1121,11 @@ export const RecordModal: React.FC<RecordModalProps> = ({
               <div key={field.id} className="space-y-2">
                 <Label className="text-sm font-medium text-discord-text">
                   {field.name}
+                  {hasTextAffixes(field) && (
+                    <span className="text-gray-400 ml-2 text-xs">
+                      {formatFieldDisplayValue(field, '예시값')}
+                    </span>
+                  )}
                   {field.required && <span className="text-red-500 ml-1">*</span>}
                   {field.unique && <span className="text-gray-400 ml-1 text-xs">(중복 불가)</span>}
                 </Label>

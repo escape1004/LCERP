@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
-import { X, GripVertical, Plus, Trash2 } from 'lucide-react';
+import { X, GripVertical, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { useERPStore } from '../hooks/useERPStore';
 import { Category, FieldDefinition, NewCategory } from '../types';
@@ -35,6 +35,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   const [duplicateErrors, setDuplicateErrors] = useState<Record<string, string>>({});
   const [isValidating, setIsValidating] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  const [expandedTextDecorations, setExpandedTextDecorations] = useState<Record<string, boolean>>({});
   
   // 카테고리 이름 입력 필드 ref
   const categoryNameRef = useRef<HTMLInputElement>(null);
@@ -94,6 +95,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     setErrors({});
     setDuplicateErrors({});
     setIsDirty(false);
+    setExpandedTextDecorations({});
   }, [category, isOpen]);
 
   // formData가 변경될 때마다 isDirty 상태 업데이트
@@ -225,6 +227,8 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
       required: false,
       unique: false,
       order: formData.fields.length,
+      textPrefix: '',
+      textSuffix: '',
       pathMode: 'direct',
       basePath: '',
     };
@@ -284,6 +288,13 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   const handleFieldDragEnd = (result: any) => {
     if (!result.destination) return;
     moveField(result.source.index, result.destination.index);
+  };
+
+  const toggleTextDecorationSection = (fieldId: string) => {
+    setExpandedTextDecorations(prev => ({
+      ...prev,
+      [fieldId]: !prev[fieldId],
+    }));
   };
 
   // 카테고리 경로 구하는 함수
@@ -548,6 +559,70 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                         <p className="text-xs text-gray-500 mt-2">
                                           상대 경로를 선택하면 DB에 저장된 파일명만 사용해 베이스 경로와 결합합니다.
                                         </p>
+                                      </div>
+                                    )}
+
+                                    {field.type === 'text' && (
+                                      <div>
+                                        <div className="flex items-center gap-2 mb-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleTextDecorationSection(field.id)}
+                                            className="text-sm text-gray-400 hover:text-gray-200 transition-colors"
+                                          >
+                                            텍스트 꾸밈
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleTextDecorationSection(field.id)}
+                                            className="text-gray-400 hover:text-gray-200 transition-colors"
+                                            aria-label={expandedTextDecorations[field.id] ? '텍스트 꾸밈 접기' : '텍스트 꾸밈 펼치기'}
+                                          >
+                                            {expandedTextDecorations[field.id] ? (
+                                              <ChevronUp size={16} />
+                                            ) : (
+                                              <ChevronDown size={16} />
+                                            )}
+                                          </button>
+                                          {(field.textPrefix || field.textSuffix) && (
+                                            <p className="text-xs text-gray-500 truncate">
+                                              {`${field.textPrefix || ''}예시값${field.textSuffix || ''}`}
+                                            </p>
+                                          )}
+                                        </div>
+                                        <div
+                                          className={`grid transition-all duration-200 ease-out ${
+                                            expandedTextDecorations[field.id]
+                                              ? 'grid-rows-[1fr] opacity-100'
+                                              : 'grid-rows-[0fr] opacity-0'
+                                          }`}
+                                        >
+                                          <div className="overflow-hidden">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                              <div>
+                                                <Label className="text-xs text-gray-500 mb-1 block">접두사</Label>
+                                                <Input
+                                                  value={field.textPrefix || ''}
+                                                  onChange={(e) => updateField(index, { textPrefix: e.target.value })}
+                                                  placeholder="예: @, No., ["
+                                                  className="bg-[#2b2d31] border-gray-600 text-gray-200"
+                                                />
+                                              </div>
+                                              <div>
+                                                <Label className="text-xs text-gray-500 mb-1 block">접미사</Label>
+                                                <Input
+                                                  value={field.textSuffix || ''}
+                                                  onChange={(e) => updateField(index, { textSuffix: e.target.value })}
+                                                  placeholder="예: 님, 호, ]"
+                                                  className="bg-[#2b2d31] border-gray-600 text-gray-200"
+                                                />
+                                              </div>
+                                            </div>
+                                            <p className="text-xs text-gray-500 mt-2">
+                                              입력값은 원본 그대로 저장하고, 화면에는 접두사/접미사를 붙여 표시합니다.
+                                            </p>
+                                          </div>
+                                        </div>
                                       </div>
                                     )}
 
