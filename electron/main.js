@@ -44,7 +44,8 @@ const defaultConfig = {
   rememberWindowBounds: false,
   windowBounds: null,
   passwordHash: null,
-  videoSeekSeconds: 5
+  videoSeekSeconds: 5,
+  videoAutoPlay: true
 };
 
 let appConfig = { ...defaultConfig };
@@ -1345,7 +1346,8 @@ ipcMain.handle('getConfig', () => {
     backupInterval: 60,
     rememberWindowBounds: appConfig.rememberWindowBounds,
     hasAppPassword: Boolean(appConfig.passwordHash),
-    videoSeekSeconds: appConfig.videoSeekSeconds || 5
+    videoSeekSeconds: appConfig.videoSeekSeconds || 5,
+    videoAutoPlay: appConfig.videoAutoPlay !== false
   };
 });
 
@@ -1408,6 +1410,12 @@ ipcMain.handle('setVideoSeekSeconds', (_event, seconds) => {
   }
 
   appConfig.videoSeekSeconds = Math.floor(normalized);
+  saveAppConfig();
+  return { success: true };
+});
+
+ipcMain.handle('setVideoAutoPlay', (_event, enabled) => {
+  appConfig.videoAutoPlay = enabled !== false;
   saveAppConfig();
   return { success: true };
 });

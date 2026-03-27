@@ -52,6 +52,7 @@ export interface Config {
   rememberWindowBounds?: boolean;
   hasAppPassword?: boolean;
   videoSeekSeconds?: number;
+  videoAutoPlay?: boolean;
 }
 
 export {}; 

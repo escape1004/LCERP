@@ -25,6 +25,7 @@ export interface ElectronAPI {
   clearAppPassword: () => Promise<{ success: boolean; error?: string }>;
   verifyAppPassword: (password: string) => Promise<{ success: boolean; error?: string }>;
   setVideoSeekSeconds: (seconds: number) => Promise<{ success: boolean; error?: string }>;
+  setVideoAutoPlay: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
   openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
   checkFileExists: (filePath: string) => Promise<boolean>;
   checkDuplicate: (categoryId: string, fieldId: string, value: any, recordId?: string) => Promise<{ isDuplicate: boolean }>;

@@ -112,6 +112,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const playbackOverlayFadeTimeoutRef = useRef<NodeJS.Timeout>();
   const [playbackOverlayVisible, setPlaybackOverlayVisible] = useState(false);
   const [videoSeekSeconds, setVideoSeekSeconds] = useState(5);
+  const [videoAutoPlay, setVideoAutoPlay] = useState(true);
 
   // 1. 북마크 상태 및 불러오기
   const [bookmarks, setBookmarks] = useState<{ time: number; createdAt: string }[]>([]);
@@ -144,10 +145,12 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     window.electronAPI.getConfig().then((config) => {
       if (!cancelled) {
         setVideoSeekSeconds(Math.max(1, Number(config?.videoSeekSeconds ?? 5)));
+        setVideoAutoPlay(config?.videoAutoPlay !== false);
       }
     }).catch(() => {
       if (!cancelled) {
         setVideoSeekSeconds(5);
+        setVideoAutoPlay(true);
       }
     });
 
@@ -573,6 +576,11 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       videoRef.current.muted = isMuted;
       videoRef.current.loop = isLooping;
       videoRef.current.playbackRate = playbackSpeed;
+      if (!videoAutoPlay) {
+        videoRef.current.pause();
+        videoRef.current.currentTime = 0;
+        setIsPlaying(false);
+      }
     }
     if (archiveVideoRef.current && effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
       const currentFile = archiveFiles[currentArchiveIndex];
@@ -582,6 +590,11 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
         archiveVideoRef.current.muted = isMuted;
         archiveVideoRef.current.loop = isLooping;
         archiveVideoRef.current.playbackRate = playbackSpeed;
+        if (!videoAutoPlay) {
+          archiveVideoRef.current.pause();
+          archiveVideoRef.current.currentTime = 0;
+          setIsPlaying(false);
+        }
       }
     }
   };
@@ -1368,7 +1381,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                         <video
                           ref={videoRef}
                           src={dataUrl}
-                          autoPlay
+                          autoPlay={videoAutoPlay}
                           className="max-w-full max-h-[80vh] h-full object-contain bg-black"
                           style={{
                             maxWidth: videoRotation % 180 !== 0 ? '80vh' : '100%',
@@ -1786,7 +1799,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                     cursor: archiveVideoScale > 1 ? (archiveVideoIsPanning ? 'grabbing' : 'grab') : 'default',
                                   }}
                                   controls={false}
-                                  autoPlay
+                                  autoPlay={videoAutoPlay}
                                   ref={archiveVideoRef}
                                   onMouseDown={(e) => {
                                     e.stopPropagation();

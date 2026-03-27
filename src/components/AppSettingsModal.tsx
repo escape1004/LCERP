@@ -33,6 +33,7 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
   const [securityMessage, setSecurityMessage] = useState('');
   const [viewerSeekSeconds, setViewerSeekSeconds] = useState('5');
   const [viewerMessage, setViewerMessage] = useState('');
+  const [viewerAutoPlayMessage, setViewerAutoPlayMessage] = useState('');
 
   const currentSection = useMemo(
     () => sections.find((section) => section.id === activeSection) ?? sections[0],
@@ -73,6 +74,7 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
       setSecurityMessage('');
       setViewerSeekSeconds(String(nextConfig.videoSeekSeconds ?? 5));
       setViewerMessage('');
+      setViewerAutoPlayMessage('');
     }).catch((error) => {
       console.error('Failed to load app settings:', error);
     });
@@ -130,6 +132,21 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
     setIsSaving(true);
     try {
       await window.electronAPI.setRememberWindowBounds(checked);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleVideoAutoPlayChange = async (checked: boolean) => {
+    setConfig((prev) => prev ? { ...prev, videoAutoPlay: checked } : prev);
+    setViewerAutoPlayMessage('');
+    setIsSaving(true);
+    try {
+      const result = await window.electronAPI.setVideoAutoPlay(checked);
+      if (!result.success) {
+        setConfig((prev) => prev ? { ...prev, videoAutoPlay: !checked } : prev);
+        setViewerAutoPlayMessage(result.error || '뷰어 설정 저장에 실패했습니다.');
+      }
     } finally {
       setIsSaving(false);
     }
@@ -199,6 +216,27 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
 
   const renderViewerSection = () => (
     <div className="space-y-4">
+      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-sm font-medium text-white">동영상 자동 재생</div>
+            <p className="text-sm text-discord-muted mt-2 leading-6">
+              동영상 파일 또는 압축파일 안의 동영상을 열었을 때 바로 재생할지 설정합니다.
+            </p>
+          </div>
+          <Switch
+            checked={config?.videoAutoPlay !== false}
+            onCheckedChange={handleVideoAutoPlayChange}
+            disabled={!config || isSaving}
+            className="data-[state=checked]:bg-discord-accent data-[state=unchecked]:bg-gray-600"
+          />
+        </div>
+
+        {viewerAutoPlayMessage && (
+          <p className="text-sm text-discord-muted mt-2">{viewerAutoPlayMessage}</p>
+        )}
+      </div>
+
       <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
         <div className="text-sm font-medium text-white">동영상 좌우키 이동 간격</div>
         <p className="text-sm text-discord-muted mt-2 leading-6">

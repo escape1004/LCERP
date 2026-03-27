@@ -100,6 +100,7 @@ const api: ElectronAPI = {
   clearAppPassword: () => ipcRenderer.invoke('clearAppPassword'),
   verifyAppPassword: (password: string) => ipcRenderer.invoke('verifyAppPassword', password),
   setVideoSeekSeconds: (seconds: number) => ipcRenderer.invoke('setVideoSeekSeconds', seconds),
+  setVideoAutoPlay: (enabled: boolean) => ipcRenderer.invoke('setVideoAutoPlay', enabled),
   checkDuplicate: (categoryId: string, fieldId: string, value: any, recordId?: string) => ipcRenderer.invoke('db:checkDuplicate', categoryId, fieldId, value, recordId),
   getAppRoot: () => ipcRenderer.invoke('getAppRoot'),
   getFileType: (filePath: string) => ipcRenderer.invoke('db:getFileType', filePath),
