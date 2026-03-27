@@ -2,14 +2,12 @@
 
 import * as React from "react"
 import { format, isValid, parse } from "date-fns"
-import { Calendar as CalendarIcon } from "lucide-react"
-import { ko } from "date-fns/locale";
+import { ko } from "date-fns/locale"
 
 import { cn } from "../../lib/utils"
-import { Button } from "./button"
 import { Calendar } from "./calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "./popover"
 import { Input } from "./input"
+import { Popover, PopoverContent, PopoverTrigger } from "./popover"
 
 interface DatePickerProps {
   value: string;
@@ -18,38 +16,147 @@ interface DatePickerProps {
   placeholder?: string;
 }
 
+const SUPPORTED_DATE_FORMATS = [
+  "yyyy-MM-dd",
+  "yyyy.MM.dd",
+  "yyyy/MM/dd",
+  "MM/dd/yyyy",
+  "MM-dd-yyyy",
+] as const;
+
+const SUPPORTED_YEAR_MONTH_FORMATS = [
+  /^(\d{4})-(\d{1,2})$/,
+  /^(\d{4})\.(\d{1,2})$/,
+  /^(\d{4})\/(\d{1,2})$/,
+  /^(\d{4})년\s*(\d{1,2})월$/,
+] as const;
+
+const SUPPORTED_KOREAN_DATE_PATTERNS = [
+  /^(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일$/,
+  /^(\d{2})년\s*(\d{1,2})월\s*(\d{1,2})일$/,
+] as const;
+
+const toNormalizedDateString = (inputValue: string): string | null => {
+  const trimmedValue = inputValue.trim();
+
+  if (!trimmedValue) {
+    return "";
+  }
+
+  for (const pattern of SUPPORTED_YEAR_MONTH_FORMATS) {
+    const match = trimmedValue.match(pattern);
+    if (!match) continue;
+
+    const [, yearStr, monthStr] = match;
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+
+    if (year >= 1900 && year <= 2100 && month >= 1 && month <= 12) {
+      return `${yearStr}-${monthStr.padStart(2, "0")}`;
+    }
+
+    return null;
+  }
+
+  for (const pattern of SUPPORTED_KOREAN_DATE_PATTERNS) {
+    const match = trimmedValue.match(pattern);
+    if (!match) continue;
+
+    const [, yearStr, monthStr, dayStr] = match;
+    const year = yearStr.length === 2 ? parseInt(`20${yearStr}`, 10) : parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10) - 1;
+    const day = parseInt(dayStr, 10);
+    const parsedDate = new Date(year, month, day);
+
+    if (isValid(parsedDate)) {
+      return format(parsedDate, "yyyy-MM-dd");
+    }
+
+    return null;
+  }
+
+  const twoDigitYearPatterns = [
+    /^(\d{2})-(\d{1,2})-(\d{1,2})$/,
+    /^(\d{2})\.(\d{1,2})\.(\d{1,2})$/,
+    /^(\d{2})\/(\d{1,2})\/(\d{1,2})$/,
+  ];
+
+  for (const pattern of twoDigitYearPatterns) {
+    const match = trimmedValue.match(pattern);
+    if (!match) continue;
+
+    const [, yearStr, monthStr, dayStr] = match;
+    const year = parseInt(`20${yearStr}`, 10);
+    const month = parseInt(monthStr, 10) - 1;
+    const day = parseInt(dayStr, 10);
+    const parsedDate = new Date(year, month, day);
+
+    if (isValid(parsedDate)) {
+      return format(parsedDate, "yyyy-MM-dd");
+    }
+
+    return null;
+  }
+
+  for (const dateFormat of SUPPORTED_DATE_FORMATS) {
+    const parsedDate = parse(trimmedValue, dateFormat, new Date());
+    if (isValid(parsedDate)) {
+      return format(parsedDate, "yyyy-MM-dd");
+    }
+  }
+
+  if (/^\d{6,8}$/.test(trimmedValue)) {
+    const year = trimmedValue.length === 8
+      ? parseInt(trimmedValue.substring(0, 4), 10)
+      : parseInt(`20${trimmedValue.substring(0, 2)}`, 10);
+    const month = parseInt(trimmedValue.substring(trimmedValue.length - 4, trimmedValue.length - 2), 10) - 1;
+    const day = parseInt(trimmedValue.substring(trimmedValue.length - 2), 10);
+    const parsedDate = new Date(year, month, day);
+
+    if (isValid(parsedDate)) {
+      return format(parsedDate, "yyyy-MM-dd");
+    }
+  }
+
+  return null;
+};
+
 export function DatePicker({ value, onChange, className, placeholder }: DatePickerProps) {
   const [open, setOpen] = React.useState(false)
-  
+
   const date = React.useMemo(() => {
     if (!value) return undefined;
     const parsedDate = new Date(value);
     return isValid(parsedDate) ? parsedDate : undefined;
   }, [value]);
 
-  // 캘린더가 열려있을 때 전역 붙여넣기 이벤트 처리
+  const handleInputChange = React.useCallback((inputValue: string) => {
+    const normalizedValue = toNormalizedDateString(inputValue);
+
+    if (normalizedValue !== null) {
+      onChange(normalizedValue);
+      return;
+    }
+
+    onChange(inputValue);
+  }, [onChange]);
+
   React.useEffect(() => {
     if (!open) return;
 
-    const handleGlobalPaste = async (event: ClipboardEvent) => {
+    const handleGlobalPaste = (event: ClipboardEvent) => {
       const pastedText = event.clipboardData?.getData("text");
       if (!pastedText) return;
 
-      // handleInputChange 함수를 사용하여 동일한 로직 적용
-      const originalValue = value;
+      event.preventDefault();
       handleInputChange(pastedText);
-      
-      // 값이 변경되었으면 캘린더 닫기
-      if (value !== originalValue) {
-        setOpen(false);
-      }
     };
 
     document.addEventListener("paste", handleGlobalPaste);
     return () => {
       document.removeEventListener("paste", handleGlobalPaste);
     };
-  }, [open, onChange, value]);
+  }, [handleInputChange, open]);
 
   const handleDaySelect = (selectedDate: Date | undefined) => {
     if (selectedDate) {
@@ -59,99 +166,6 @@ export function DatePicker({ value, onChange, className, placeholder }: DatePick
     }
     setOpen(false);
   }
-
-  const handleInputChange = (inputValue: string) => {
-    // 빈 값이면 그대로 설정
-    if (!inputValue.trim()) {
-      onChange("");
-      return;
-    }
-
-    // YYYY. MM 형식 처리 (월까지만 입력된 경우)
-    const yyyyMmMatch = inputValue.match(/^(\d{4})\.\s*(\d{1,2})$/);
-    if (yyyyMmMatch) {
-      const [, yearStr, monthStr] = yyyyMmMatch;
-      const year = parseInt(yearStr, 10);
-      const month = parseInt(monthStr, 10);
-      if (year >= 1900 && year <= 2100 && month >= 1 && month <= 12) {
-        onChange(`${year}-${month.toString().padStart(2, '0')}`);
-        return;
-      }
-    }
-
-    // YY-MM-DD 형식을 먼저 수동으로 처리
-    const yyMmDdMatch = inputValue.match(/^(\d{2})-(\d{1,2})-(\d{1,2})$/);
-    if (yyMmDdMatch) {
-      const [, yearStr, monthStr, dayStr] = yyMmDdMatch;
-      const year = parseInt(`20${yearStr}`, 10);
-      const month = parseInt(monthStr, 10) - 1;
-      const day = parseInt(dayStr, 10);
-      const d = new Date(year, month, day);
-      if (isValid(d)) {
-        onChange(format(d, "yyyy-MM-dd"));
-        return;
-      }
-    }
-
-    // YY.MM.DD 형식 처리
-    const yyMmDdDotMatch = inputValue.match(/^(\d{2})\.(\d{1,2})\.(\d{1,2})$/);
-    if (yyMmDdDotMatch) {
-      const [, yearStr, monthStr, dayStr] = yyMmDdDotMatch;
-      const year = parseInt(`20${yearStr}`, 10);
-      const month = parseInt(monthStr, 10) - 1;
-      const day = parseInt(dayStr, 10);
-      const d = new Date(year, month, day);
-      if (isValid(d)) {
-        onChange(format(d, "yyyy-MM-dd"));
-        return;
-      }
-    }
-
-    // YY/MM/DD 형식 처리
-    const yyMmDdSlashMatch = inputValue.match(/^(\d{2})\/(\d{1,2})\/(\d{1,2})$/);
-    if (yyMmDdSlashMatch) {
-      const [, yearStr, monthStr, dayStr] = yyMmDdSlashMatch;
-      const year = parseInt(`20${yearStr}`, 10);
-      const month = parseInt(monthStr, 10) - 1;
-      const day = parseInt(dayStr, 10);
-      const d = new Date(year, month, day);
-      if (isValid(d)) {
-        onChange(format(d, "yyyy-MM-dd"));
-        return;
-      }
-    }
-
-    // 여러 형식의 날짜를 파싱 시도 (YYYY 형식들)
-    const formats = ["yyyy-MM-dd", "yyyy.MM.dd", "yyyy/MM/dd", "MM/dd/yyyy", "MM-dd-yyyy"];
-    let parsedDate: Date | null = null;
-    
-    for (const fmt of formats) {
-        const d = parse(inputValue, fmt, new Date());
-        if(isValid(d)) {
-            parsedDate = d;
-            break;
-        }
-    }
-    
-    // YYYYMMDD 또는 YYMMDD 형식 처리
-    if (!parsedDate && /^\d{6,8}$/.test(inputValue)) {
-      const year = inputValue.length === 8 ? parseInt(inputValue.substring(0, 4), 10) : parseInt(`20${inputValue.substring(0, 2)}`, 10);
-      const month = parseInt(inputValue.substring(inputValue.length - 4, inputValue.length - 2), 10) - 1;
-      const day = parseInt(inputValue.substring(inputValue.length - 2), 10);
-      const d = new Date(year, month, day);
-      if (isValid(d)) {
-        parsedDate = d;
-      }
-    }
-
-    // 유효한 날짜가 파싱되면 yyyy-MM-dd 형식으로 변환
-    if (parsedDate) {
-      onChange(format(parsedDate, "yyyy-MM-dd"));
-    } else {
-      // 파싱되지 않으면 원본 값 그대로 설정 (사용자가 입력 중일 수 있음)
-      onChange(inputValue);
-    }
-  };
 
   const handlePaste = (event: React.ClipboardEvent<HTMLInputElement>) => {
     event.preventDefault();
@@ -215,4 +229,4 @@ export function DatePicker({ value, onChange, className, placeholder }: DatePick
       </PopoverContent>
     </Popover>
   )
-} 
+}

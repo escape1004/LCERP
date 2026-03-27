@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { format, isValid, parse } from 'date-fns';
 import { X, Search, Check, ChevronsUpDown, ChevronRight, CheckCircle2, XCircle } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import type { Category, DataRecord, FieldDefinition, NewRecord } from '../types';
@@ -35,6 +36,19 @@ interface RecordModalProps {
   category: Category;
   record?: DataRecord | null;
 }
+
+const DATE_STORAGE_FORMAT = 'yyyy-MM-dd';
+const YEAR_MONTH_STORAGE_FORMAT = 'yyyy-MM';
+
+const isStoredDateValue = (value: string) => {
+  const parsedFullDate = parse(value, DATE_STORAGE_FORMAT, new Date());
+  if (isValid(parsedFullDate) && format(parsedFullDate, DATE_STORAGE_FORMAT) === value) {
+    return true;
+  }
+
+  const parsedYearMonth = parse(value, YEAR_MONTH_STORAGE_FORMAT, new Date());
+  return isValid(parsedYearMonth) && format(parsedYearMonth, YEAR_MONTH_STORAGE_FORMAT) === value;
+};
 
 export const RecordModal: React.FC<RecordModalProps> = ({
   isOpen,
@@ -158,11 +172,17 @@ export const RecordModal: React.FC<RecordModalProps> = ({
   const validateForm = useCallback(() => {
     const newErrors: Record<string, string> = {};
     (category?.fields ?? []).forEach(field => {
+      const value = formData[field.id];
+
       if (field.required) {
-        const value = formData[field.id];
         if (!value && value !== 0 && value !== false) {
           newErrors[field.id] = `${field.name}은(는) 필수 입력 항목입니다.`;
+          return;
         }
+      }
+
+      if (field.type === 'date' && typeof value === 'string' && value && !isStoredDateValue(value)) {
+        newErrors[field.id] = `${field.name}은(는) yyyy-MM 또는 yyyy-MM-dd 형식의 유효한 날짜여야 합니다.`;
       }
     });
     setErrors(newErrors);
