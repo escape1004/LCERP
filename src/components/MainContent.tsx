@@ -465,6 +465,7 @@ declare global {
   interface WindowEventMap {
     'erp:categoryChange': CustomEvent<{ categoryId: string }>;
     'thumbnail:regenerated': CustomEvent<{ filePath: string }>;
+    'config:updated': CustomEvent<{ listThumbnailFit?: 'cover' | 'contain' }>;
   }
 }
 
@@ -473,9 +474,20 @@ const ThumbnailCell: React.FC<{
   filePath: string | undefined;
   record: DataRecord | undefined;
   onThumbnailClick: (filePath: string) => void;
-}> = ({ filePath, record, onThumbnailClick }) => {
+  thumbnailFit: 'cover' | 'contain';
+}> = ({ filePath, record, onThumbnailClick, thumbnailFit }) => {
   const [dataUrl, setDataUrl] = React.useState<string | null>(null);
   const [fileExists, setFileExists] = React.useState<boolean | null>(null);
+  const reloadThumbnail = React.useCallback(() => {
+    if (!filePath || !record) {
+      setDataUrl(null);
+      return;
+    }
+
+    window.electronAPI.getThumbnailDataUrlHybrid(record, filePath).then((res) => {
+      setDataUrl(res);
+    });
+  }, [filePath, record]);
   
   React.useEffect(() => {
     let ignore = false;
@@ -501,6 +513,30 @@ const ThumbnailCell: React.FC<{
     return () => { ignore = true; };
   }, [filePath]);
 
+  React.useEffect(() => {
+    if (!filePath || !record) return;
+
+    const isRegeneratableThumbnail = /\.(png|jpe?g|gif|webp|bmp|avif|zip|rar|7z|cbz|cbr)$/i.test(filePath);
+    if (!isRegeneratableThumbnail) {
+      return;
+    }
+
+    let ignore = false;
+    setDataUrl(null);
+
+    window.electronAPI.regenerateThumbnail(filePath)
+      .catch(() => null)
+      .finally(() => {
+        if (!ignore) {
+          reloadThumbnail();
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [filePath, record, reloadThumbnail, thumbnailFit]);
+
   // 썸네일 삭제 이벤트 감지하여 캐시 초기화
   React.useEffect(() => {
     const handleThumbnailRegenerated = (event: CustomEvent<{ filePath: string }>) => {
@@ -508,11 +544,7 @@ const ThumbnailCell: React.FC<{
         // 해당 파일의 썸네일이 변경되었으므로 캐시 초기화
         setDataUrl(null);
         // 새로운 썸네일 데이터 다시 로드
-        if (record) {
-          window.electronAPI.getThumbnailDataUrlHybrid(record, filePath).then(res => {
-            setDataUrl(res);
-          });
-        }
+        reloadThumbnail();
       }
     };
 
@@ -520,7 +552,7 @@ const ThumbnailCell: React.FC<{
     return () => {
       window.removeEventListener('thumbnail:regenerated', handleThumbnailRegenerated as EventListener);
     };
-  }, [filePath, record]);
+  }, [filePath, record, reloadThumbnail]);
 
   // 파일 확장자 추출
   const getFileExtension = (path: string) => {
@@ -543,7 +575,7 @@ const ThumbnailCell: React.FC<{
                 <img 
                   src={dataUrl} 
                   alt="썸네일" 
-                  className={`w-24 h-24 object-contain rounded border border-gray-700 cursor-pointer hover:opacity-80 ${missingFile ? 'opacity-40' : ''}`}
+                  className={`w-24 h-24 ${thumbnailFit === 'contain' ? 'object-contain bg-black' : 'object-cover'} rounded border border-gray-700 cursor-pointer hover:opacity-80 ${missingFile ? 'opacity-40' : ''}`}
                   onClick={() => filePath && canOpen && onThumbnailClick(filePath)}
                 />
                 {isHashBased && (
@@ -1064,6 +1096,34 @@ export const MainContent: React.FC = () => {
   const [viewerCategoryId, setViewerCategoryId] = useState<string>('');
   const [viewerRecordId, setViewerRecordId] = useState<string>('');
   const [isBulkAddModalOpen, setIsBulkAddModalOpen] = useState(false);
+  const [listThumbnailFit, setListThumbnailFit] = useState<'cover' | 'contain'>('cover');
+
+  useEffect(() => {
+    let cancelled = false;
+
+    window.electronAPI.getConfig().then((config) => {
+      if (!cancelled) {
+        setListThumbnailFit(config?.listThumbnailFit === 'contain' ? 'contain' : 'cover');
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setListThumbnailFit('cover');
+      }
+    });
+
+    const handleConfigUpdated = (event: CustomEvent<{ listThumbnailFit?: 'cover' | 'contain' }>) => {
+      if (event.detail.listThumbnailFit) {
+        setListThumbnailFit(event.detail.listThumbnailFit);
+      }
+    };
+
+    window.addEventListener('config:updated', handleConfigUpdated as EventListener);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('config:updated', handleConfigUpdated as EventListener);
+    };
+  }, []);
 
   // Ctrl+좌우 방향키 페이지 이동 핸들러
   useEffect(() => {
@@ -1486,6 +1546,7 @@ export const MainContent: React.FC = () => {
                                   <ThumbnailCell
                                     filePath={resolveFilePath(record.data[fileField.id], fileField) || undefined}
                                     record={record}
+                                    thumbnailFit={listThumbnailFit}
                                     onThumbnailClick={(filePath) => {
                                       // 즉시 모달 열기 (파일 타입 확인은 모달 내에서 처리)
                                       setViewerFilePath(filePath);

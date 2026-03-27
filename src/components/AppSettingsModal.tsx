@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Monitor, Settings, Shield, X } from 'lucide-react';
+import { HelpCircle, List, Monitor, Settings, Shield, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
 import { Switch } from './ui/switch';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import type { Config } from '../types';
 
 interface AppSettingsModalProps {
@@ -19,9 +21,10 @@ type SettingsSection = {
 };
 
 const sections: SettingsSection[] = [
-  { id: 'general', label: '일반', description: '앱 기본 동작과 창 옵션', icon: Settings },
+  { id: 'general', label: '일반', description: '기본 동작과 창 옵션', icon: Settings },
+  { id: 'list', label: '리스트', description: '레코드 리스트 표시 방식', icon: List },
   { id: 'viewer', label: '뷰어', description: '이미지와 동영상 보기 환경', icon: Monitor },
-  { id: 'security', label: '보안', description: '접근 제어와 비밀번호 관리', icon: Shield },
+  { id: 'security', label: '보안', description: '프로그램 비밀번호 관리', icon: Shield },
 ];
 
 export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) {
@@ -34,6 +37,7 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
   const [viewerSeekSeconds, setViewerSeekSeconds] = useState('5');
   const [viewerMessage, setViewerMessage] = useState('');
   const [viewerAutoPlayMessage, setViewerAutoPlayMessage] = useState('');
+  const [listMessage, setListMessage] = useState('');
 
   const currentSection = useMemo(
     () => sections.find((section) => section.id === activeSection) ?? sections[0],
@@ -75,6 +79,7 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
       setViewerSeekSeconds(String(nextConfig.videoSeekSeconds ?? 5));
       setViewerMessage('');
       setViewerAutoPlayMessage('');
+      setListMessage('');
     }).catch((error) => {
       console.error('Failed to load app settings:', error);
     });
@@ -132,6 +137,26 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
     setIsSaving(true);
     try {
       await window.electronAPI.setRememberWindowBounds(checked);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleListThumbnailFitChange = async (fit: 'cover' | 'contain') => {
+    const previousFit = config?.listThumbnailFit === 'contain' ? 'contain' : 'cover';
+    setConfig((prev) => prev ? { ...prev, listThumbnailFit: fit } : prev);
+    setListMessage('');
+    setIsSaving(true);
+
+    try {
+      const result = await window.electronAPI.setListThumbnailFit(fit);
+      if (result.success) {
+        window.dispatchEvent(new CustomEvent('config:updated', { detail: { listThumbnailFit: fit } }));
+        return;
+      }
+
+      setConfig((prev) => prev ? { ...prev, listThumbnailFit: previousFit } : prev);
+      setListMessage(result.error || '리스트 설정 저장에 실패했습니다.');
     } finally {
       setIsSaving(false);
     }
@@ -200,7 +225,7 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
           <div>
             <div className="text-sm font-medium text-white">프로그램 위치 기억</div>
             <p className="text-sm text-discord-muted mt-2 leading-6">
-              프로그램을 다시 실행할 때 마지막으로 사용한 창 위치와 크기를 그대로 복원합니다.
+              프로그램을 다시 실행했을 때 마지막으로 사용한 창의 위치와 크기를 그대로 복원합니다.
             </p>
           </div>
           <Switch
@@ -210,6 +235,61 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
             className="data-[state=checked]:bg-discord-accent data-[state=unchecked]:bg-gray-600"
           />
         </div>
+      </div>
+    </div>
+  );
+
+  const renderListSection = () => (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+        <div className="flex items-center gap-2">
+          <div className="text-sm font-medium text-white">썸네일 표시 방법</div>
+          <TooltipProvider delayDuration={0}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="text-discord-muted hover:text-discord-text transition-colors"
+                  aria-label="썸네일 표시 방법 설명"
+                >
+                  <HelpCircle size={15} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+                <div>Cover: 썸네일 영역을 꽉 채웁니다. 일부 가장자리가 잘릴 수 있습니다.</div>
+                <div className="mt-1">Contain: 원본 전체가 보이도록 맞춥니다. 여백이 생길 수 있습니다.</div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+        <p className="text-sm text-discord-muted mt-2 leading-6">
+          리스트에서 썸네일을 셀에 꽉 채워 보여줄지, 원본 비율을 유지하며 전체가 보이도록 보여줄지 선택합니다.
+        </p>
+
+        <div className="mt-5 max-w-md">
+          <div className="text-xs text-discord-muted mb-2">표시 방식</div>
+          <Select
+            value={config?.listThumbnailFit === 'contain' ? 'contain' : 'cover'}
+            onValueChange={(value: 'cover' | 'contain') => void handleListThumbnailFitChange(value)}
+            disabled={!config || isSaving}
+          >
+            <SelectTrigger className="bg-discord-sidebar border-gray-600 text-discord-text">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-discord-sidebar border-gray-600 text-discord-text">
+              <SelectItem value="cover" className="text-discord-text focus:bg-discord-hover focus:text-discord-text hover:bg-discord-hover">
+                Cover
+              </SelectItem>
+              <SelectItem value="contain" className="text-discord-text focus:bg-discord-hover focus:text-discord-text hover:bg-discord-hover">
+                Contain
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {listMessage && (
+          <p className="text-sm text-discord-muted mt-2">{listMessage}</p>
+        )}
       </div>
     </div>
   );
@@ -387,9 +467,11 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
             <div className="flex-1 min-h-0 overflow-y-auto p-6 bg-discord-bg">
               {currentSection.id === 'general'
                 ? renderGeneralSection()
-                : currentSection.id === 'viewer'
-                  ? renderViewerSection()
-                  : renderSecuritySection()}
+                : currentSection.id === 'list'
+                  ? renderListSection()
+                  : currentSection.id === 'viewer'
+                    ? renderViewerSection()
+                    : renderSecuritySection()}
             </div>
           </section>
         </div>

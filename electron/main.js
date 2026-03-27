@@ -45,7 +45,8 @@ const defaultConfig = {
   windowBounds: null,
   passwordHash: null,
   videoSeekSeconds: 5,
-  videoAutoPlay: true
+  videoAutoPlay: true,
+  listThumbnailFit: 'cover'
 };
 
 let appConfig = { ...defaultConfig };
@@ -693,10 +694,15 @@ async function generateThumbnail(filePath) {
     
     if (isImage) {
       await sharp(normalizedPath)
-        .resize(400, 400, { fit: 'contain' })
+        .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
         .toFile(thumbnailPath);
       log('이미지 썸네일 생성 완료:', thumbnailPath);
     } else if (isVideo) {
+      const embeddedCoverPath = await extractEmbeddedVideoCover(normalizedPath, thumbnailPath);
+      if (embeddedCoverPath) {
+        log('비디오 메타데이터 커버 썸네일 생성 완료:', embeddedCoverPath);
+        return embeddedCoverPath;
+      }
       await new Promise((resolve, reject) => {
         ffmpeg(normalizedPath)
           .screenshots({
@@ -730,7 +736,7 @@ async function generateThumbnail(filePath) {
                 const buffer = Buffer.concat(chunks);
                 try {
                   await sharp(buffer)
-                    .resize(400, 400, { fit: 'contain' })
+                    .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
                     .toFile(thumbnailPath);
                   log('아카이브 썸네일 생성 완료:', thumbnailPath);
                   resolve();
@@ -1347,7 +1353,8 @@ ipcMain.handle('getConfig', () => {
     rememberWindowBounds: appConfig.rememberWindowBounds,
     hasAppPassword: Boolean(appConfig.passwordHash),
     videoSeekSeconds: appConfig.videoSeekSeconds || 5,
-    videoAutoPlay: appConfig.videoAutoPlay !== false
+    videoAutoPlay: appConfig.videoAutoPlay !== false,
+    listThumbnailFit: appConfig.listThumbnailFit === 'contain' ? 'contain' : 'cover'
   };
 });
 
@@ -1416,6 +1423,16 @@ ipcMain.handle('setVideoSeekSeconds', (_event, seconds) => {
 
 ipcMain.handle('setVideoAutoPlay', (_event, enabled) => {
   appConfig.videoAutoPlay = enabled !== false;
+  saveAppConfig();
+  return { success: true };
+});
+
+ipcMain.handle('setListThumbnailFit', (_event, fit) => {
+  if (fit !== 'cover' && fit !== 'contain') {
+    return { success: false, error: 'Thumbnail fit must be cover or contain.' };
+  }
+
+  appConfig.listThumbnailFit = fit;
   saveAppConfig();
   return { success: true };
 });
@@ -2126,6 +2143,10 @@ const generateVideoThumbnailWithTime = async (filePath, timestampSec) => {
         resolve(Math.floor(metadata.format.duration));
       });
     });
+    const embeddedCoverPath = await extractEmbeddedVideoCover(normalizedPath, thumbnailPath);
+    if (embeddedCoverPath) {
+      return embeddedCoverPath;
+    }
     let ts = Number(timestampSec);
     if (duration && ts > duration) {
       ts = duration - 1;
@@ -2192,7 +2213,7 @@ const regenerateImageOrArchiveThumbnail = async (filePath) => {
     if (isImage) {
       // 이미지 썸네일 재생성
       await sharp(normalizedPath)
-        .resize(400, 400, { fit: 'contain' })
+        .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
         .toFile(thumbnailPath);
       log('이미지 썸네일 재생성 완료:', thumbnailPath);
     } else if (isArchive) {
@@ -2211,7 +2232,7 @@ const regenerateImageOrArchiveThumbnail = async (filePath) => {
                 const buffer = Buffer.concat(chunks);
                 try {
                   await sharp(buffer)
-                    .resize(400, 400, { fit: 'contain' })
+                    .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
                     .toFile(thumbnailPath);
                   log('압축파일 썸네일 재생성 완료:', thumbnailPath);
                   resolve(null);
@@ -2291,10 +2312,16 @@ const setCustomThumbnailFromImage = async (targetFilePath, imagePath) => {
     log('커스텀 썸네일 생성 시작:', { targetFilePath: normalizedTargetPath, imagePath, thumbnailPath });
 
     await sharp(imagePath)
-      .resize(400, 400, { fit: 'contain' })
+      .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
       .toFile(thumbnailPath);
 
     log('커스텀 썸네일 생성 완료:', thumbnailPath);
+
+    const targetExt = path.extname(normalizedTargetPath).toLowerCase();
+    const isVideoTarget = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v'].includes(targetExt);
+    if (isVideoTarget) {
+      await persistCustomThumbnailToVideoMetadata(normalizedTargetPath, thumbnailPath);
+    }
 
     return thumbnailPath;
   } catch (e) {
@@ -2403,6 +2430,130 @@ const getUnpackedFfprobePath = () => {
 };
 
 // 새로운 하이브리드 썸네일 데이터 URL 핸들러
+const getFfmpegToolPaths = () => {
+  const ffmpegCandidates = [
+    path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe'),
+    path.join(__dirname, '..', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe'),
+    path.join(__dirname, '..', 'node_modules', '.bin', 'ffmpeg.exe')
+  ];
+  const ffprobeCandidates = [
+    getUnpackedFfprobePath(),
+    path.join(__dirname, '..', 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+    path.join(__dirname, '..', 'node_modules', '.bin', 'ffprobe.exe')
+  ];
+
+  return {
+    ffmpegPath: ffmpegCandidates.find(fs.existsSync),
+    ffprobePath: ffprobeCandidates.find(fs.existsSync)
+  };
+};
+
+const extractEmbeddedVideoCover = async (filePath, outputPath) => {
+  try {
+    const ffmpeg = require('fluent-ffmpeg');
+    const { ffmpegPath, ffprobePath } = getFfmpegToolPaths();
+
+    if (!ffmpegPath || !ffprobePath) {
+      return null;
+    }
+
+    ffmpeg.setFfmpegPath(ffmpegPath);
+    ffmpeg.setFfprobePath(ffprobePath);
+
+    const attachedPicStreamIndex = await new Promise((resolve) => {
+      ffmpeg.ffprobe(filePath, (err, metadata) => {
+        if (err || !metadata?.streams) {
+          return resolve(null);
+        }
+
+        const stream = metadata.streams.find((item) => item?.disposition?.attached_pic === 1);
+        resolve(stream?.index ?? null);
+      });
+    });
+
+    if (attachedPicStreamIndex === null || attachedPicStreamIndex === undefined) {
+      return null;
+    }
+
+    await new Promise((resolve, reject) => {
+      ffmpeg(filePath)
+        .outputOptions([`-map 0:${attachedPicStreamIndex}`, '-frames:v 1'])
+        .save(outputPath)
+        .on('end', resolve)
+        .on('error', reject);
+    });
+
+    return fs.existsSync(outputPath) ? outputPath : null;
+  } catch (error) {
+    log('비디오 메타데이터 커버 추출 실패:', { filePath, outputPath, error: error.message });
+    return null;
+  }
+};
+
+const persistCustomThumbnailToVideoMetadata = async (targetFilePath, imagePath) => {
+  try {
+    const ext = path.extname(targetFilePath).toLowerCase();
+    const supportedFormats = ['.mp4', '.m4v', '.mov', '.mkv'];
+    if (!supportedFormats.includes(ext)) {
+      return false;
+    }
+
+    const ffmpeg = require('fluent-ffmpeg');
+    const { ffmpegPath, ffprobePath } = getFfmpegToolPaths();
+    if (!ffmpegPath || !ffprobePath) {
+      return false;
+    }
+
+    ffmpeg.setFfmpegPath(ffmpegPath);
+    ffmpeg.setFfprobePath(ffprobePath);
+
+    const tempOutputPath = `${targetFilePath}.cover-tmp${ext}`;
+
+    await new Promise((resolve, reject) => {
+      ffmpeg()
+        .input(targetFilePath)
+        .input(imagePath)
+        .outputOptions([
+          '-map 0',
+          '-map 1',
+          '-c copy',
+          '-c:v:1 mjpeg',
+          '-disposition:v:1 attached_pic'
+        ])
+        .save(tempOutputPath)
+        .on('end', resolve)
+        .on('error', reject);
+    });
+
+    if (!fs.existsSync(tempOutputPath)) {
+      return false;
+    }
+
+    const backupPath = `${targetFilePath}.cover-backup`;
+    try {
+      if (fs.existsSync(backupPath)) {
+        fs.unlinkSync(backupPath);
+      }
+      fs.renameSync(targetFilePath, backupPath);
+      fs.renameSync(tempOutputPath, targetFilePath);
+      fs.unlinkSync(backupPath);
+    } catch (swapError) {
+      if (fs.existsSync(tempOutputPath)) {
+        fs.unlinkSync(tempOutputPath);
+      }
+      if (fs.existsSync(backupPath) && !fs.existsSync(targetFilePath)) {
+        fs.renameSync(backupPath, targetFilePath);
+      }
+      throw swapError;
+    }
+
+    return true;
+  } catch (error) {
+    log('비디오 메타데이터 커버 저장 실패:', { targetFilePath, imagePath, error: error.message });
+    return false;
+  }
+};
+
 ipcMain.handle('getThumbnailDataUrlHybrid', async (_, record, filePath) => {
   try {
     if (!filePath) return null;

@@ -53,6 +53,7 @@ export interface Config {
   hasAppPassword?: boolean;
   videoSeekSeconds?: number;
   videoAutoPlay?: boolean;
+  listThumbnailFit?: 'cover' | 'contain';
 }
 
 export {}; 
