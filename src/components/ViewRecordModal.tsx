@@ -63,6 +63,32 @@ const renderTextWithHashtags = (text: string) => {
   return parts;
 };
 
+const copyOnCtrlClick = async (
+  e: React.MouseEvent,
+  text: string,
+  successDescription: string
+) => {
+  e.stopPropagation();
+
+  if (!e.ctrlKey) {
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(text);
+    toast({
+      title: '복사 완료',
+      description: successDescription,
+    });
+  } catch (error) {
+    toast({
+      title: '복사 실패',
+      description: '클립보드 복사에 실패했습니다.',
+      variant: 'destructive',
+    });
+  }
+};
+
 // 전역 이벤트 타입 정의
 declare global {
   interface WindowEventMap {
@@ -267,15 +293,15 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                 e.stopPropagation();
                 try {
                   await navigator.clipboard.writeText(url);
-                  toast({ 
-                    title: '복사 완료', 
-                    description: 'URL이 클립보드에 복사되었습니다.' 
+                  toast({
+                    title: '복사 완료',
+                    description: 'URL이 클립보드에 복사되었습니다.',
                   });
                 } catch (error) {
-                  toast({ 
-                    title: '복사 실패', 
-                    description: '클립보드 복사에 실패했습니다.', 
-                    variant: 'destructive' 
+                  toast({
+                    title: '복사 실패',
+                    description: '클립보드 복사에 실패했습니다.',
+                    variant: 'destructive',
                   });
                 }
               }}
@@ -284,7 +310,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
             </button>
           </TooltipTrigger>
           <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-            복사하기
+            클릭하여 복사
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -567,27 +593,14 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                 <div 
                   className="whitespace-pre-wrap text-discord-text break-words overflow-wrap-anywhere px-1 py-0.5 rounded transition-colors inline-block" 
                   onClick={async (e) => {
-                    e.stopPropagation();
-                    try {
-                      await navigator.clipboard.writeText(strValue);
-                      toast({ 
-                        title: '복사 완료', 
-                        description: '텍스트가 클립보드에 복사되었습니다.' 
-                      });
-                    } catch (error) {
-                      toast({ 
-                        title: '복사 실패', 
-                        description: '클립보드 복사에 실패했습니다.', 
-                        variant: 'destructive' 
-                      });
-                    }
+                    await copyOnCtrlClick(e, strValue, '텍스트가 클립보드에 복사되었습니다.');
                   }}
                 >
                   {renderTextWithHashtags(strValue)}
                 </div>
               </TooltipTrigger>
               <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-                복사하기
+                Ctrl+클릭하여 복사
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -610,27 +623,14 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                 <div 
                   className="whitespace-pre-wrap text-discord-text break-words overflow-wrap-anywhere px-3 py-2 rounded transition-colors border border-gray-600 max-h-[240px] overflow-y-auto block w-full" 
                   onClick={async (e) => {
-                    e.stopPropagation();
-                    try {
-                      await navigator.clipboard.writeText(strValue);
-                      toast({ 
-                        title: '복사 완료', 
-                        description: '긴 텍스트가 클립보드에 복사되었습니다.' 
-                      });
-                    } catch (error) {
-                      toast({ 
-                        title: '복사 실패', 
-                        description: '클립보드 복사에 실패했습니다.', 
-                        variant: 'destructive' 
-                      });
-                    }
+                    await copyOnCtrlClick(e, strValue, '긴 텍스트가 클립보드에 복사되었습니다.');
                   }}
                 >
                   {renderTextWithHashtags(strValue)}
                 </div>
               </TooltipTrigger>
               <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-                복사하기
+                Ctrl+클릭하여 복사
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
