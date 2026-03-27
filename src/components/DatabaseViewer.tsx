@@ -1,20 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { Button } from './ui/button';
-import { Save, Settings2, Link2, X, RefreshCw, AlertTriangle, CheckCircle } from 'lucide-react';
-import { useToast } from './ui/use-toast';
+import { Save, Settings2, Link2, X } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+
 import { useERPStore } from '../hooks/useERPStore';
-import { Input } from './ui/input';
+import { AnimatedModal } from './ui/animated-modal';
+import { Button } from './ui/button';
 import {
   Form,
+  FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
-  FormDescription,
-  FormControl,
 } from './ui/form';
-import { useForm } from 'react-hook-form';
-import { ThumbnailSyncCheckResult, ThumbnailSyncCleanupOptions, ThumbnailSyncCleanupResult } from '../types';
-import { AnimatedModal } from './ui/animated-modal';
+import { Input } from './ui/input';
+import { useToast } from './ui/use-toast';
 
 interface TableInfo {
   name: string;
@@ -36,21 +36,13 @@ export const DatabaseViewer: React.FC = () => {
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [tableData, setTableData] = useState<any | null>(null);
-  const [dbPath, setDbPath] = useState<string>('');
+  const [dbPath, setDbPath] = useState('');
   const [config, setConfig] = useState<Config | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetInput, setResetInput] = useState('');
   const [isResetting, setIsResetting] = useState(false);
-  const [fileSize, setFileSize] = useState<string>('');
-  const [syncCheckResult, setSyncCheckResult] = useState<ThumbnailSyncCheckResult | null>(null);
-  const [isCheckingSync, setIsCheckingSync] = useState(false);
-  const [isCleaningUp, setIsCleaningUp] = useState(false);
-  const [cleanupOptions, setCleanupOptions] = useState<ThumbnailSyncCleanupOptions>({
-    removeDbOnly: true,
-    addFileOnly: true,
-    dryRun: false
-  });
+  const [fileSize, setFileSize] = useState('');
   const { toast } = useToast();
   const { selectCategory } = useERPStore();
 
@@ -59,7 +51,7 @@ export const DatabaseViewer: React.FC = () => {
       dbPath: '',
       backupDir: '',
       backupInterval: '60',
-    }
+    },
   });
 
   const showSuccessToast = (message: string) => {
@@ -82,25 +74,51 @@ export const DatabaseViewer: React.FC = () => {
     showErrorToast(message);
   };
 
-  const loadTables = async () => {
-    try {
-      const tables = await window.electronAPI.getTables();
-      setTables(tables);
-      if (tables.length > 0 && !selectedTable) {
-        loadTableData(tables[0].name);
-      }
-    } catch (error) {
-      handleApiError(error, '테이블 목록을 불러오는데 실패했습니다.');
-    }
-  };
-
   const loadTableData = async (tableName: string) => {
     try {
       const data = await window.electronAPI.getTableData(tableName);
       setTableData(data);
       setSelectedTable(tableName);
     } catch (error) {
-      handleApiError(error, '테이블 데이터를 불러오는데 실패했습니다.');
+      handleApiError(error, '테이블 데이터를 불러오지 못했습니다.');
+    }
+  };
+
+  const loadTables = async () => {
+    try {
+      const nextTables = await window.electronAPI.getTables();
+      setTables(nextTables);
+
+      if (nextTables.length > 0 && !selectedTable) {
+        await loadTableData(nextTables[0].name);
+      }
+    } catch (error) {
+      handleApiError(error, '테이블 목록을 불러오지 못했습니다.');
+    }
+  };
+
+  const loadFileSize = async (filePath: string) => {
+    try {
+      const result = await window.electronAPI.getFileSize(filePath);
+      setFileSize(result.success ? result.size : '');
+    } catch {
+      setFileSize('');
+    }
+  };
+
+  const loadConfig = async () => {
+    try {
+      const nextConfig = await window.electronAPI.getConfig();
+      setConfig(nextConfig);
+      setDbPath(nextConfig.dbPath);
+      form.reset({
+        dbPath: nextConfig.dbPath,
+        backupDir: nextConfig.backupDir,
+        backupInterval: String(Math.max(1, nextConfig.backupInterval)),
+      });
+      await loadFileSize(nextConfig.dbPath);
+    } catch (error) {
+      handleApiError(error, '설정을 불러오지 못했습니다.');
     }
   };
 
@@ -108,18 +126,17 @@ export const DatabaseViewer: React.FC = () => {
     try {
       await window.electronAPI.openDbFile();
     } catch (error) {
-      handleApiError(error, 'DB 파일을 여는데 실패했습니다.');
+      handleApiError(error, 'DB 파일을 열지 못했습니다.');
     }
   };
 
   const handleBackup = async () => {
     try {
       const result = await window.electronAPI.backupDatabase();
-      if (result.success) {
-        showSuccessToast('데이터베이스 백업이 완료되었습니다.');
-      } else {
+      if (!result.success) {
         throw new Error(result.error);
       }
+      showSuccessToast('데이터베이스 백업이 완료되었습니다.');
     } catch (error) {
       handleApiError(error, '데이터베이스 백업에 실패했습니다.');
     }
@@ -132,39 +149,7 @@ export const DatabaseViewer: React.FC = () => {
         throw new Error('백업 폴더를 열 수 없습니다.');
       }
     } catch (error) {
-      handleApiError(error, '백업 폴더를 여는데 실패했습니다.');
-    }
-  };
-
-  const loadConfig = async () => {
-    try {
-      const config = await window.electronAPI.getConfig();
-      setConfig(config);
-      setDbPath(config.dbPath);
-      form.reset({
-        dbPath: config.dbPath,
-        backupDir: config.backupDir,
-        backupInterval: String(Math.max(1, config.backupInterval)),
-      });
-      
-      // 파일 용량 가져오기
-      await loadFileSize(config.dbPath);
-    } catch (error) {
-      handleApiError(error, '설정을 불러오는데 실패했습니다.');
-    }
-  };
-
-  const loadFileSize = async (filePath: string) => {
-    try {
-      const result = await window.electronAPI.getFileSize(filePath);
-      if (result.success) {
-        setFileSize(result.size);
-      } else {
-        setFileSize('');
-      }
-    } catch (error) {
-      // 파일 용량 가져오기 실패는 무시
-      setFileSize('');
+      handleApiError(error, '백업 폴더를 열지 못했습니다.');
     }
   };
 
@@ -173,11 +158,11 @@ export const DatabaseViewer: React.FC = () => {
       const result = await window.electronAPI.setDbPath();
       if (result.success && result.path) {
         await loadConfig();
-        showSuccessToast('DB 저장 위치가 변경되었습니다.');
         await loadTables();
+        showSuccessToast('DB 경로가 변경되었습니다.');
       }
     } catch (error) {
-      handleApiError(error, 'DB 저장 위치 변경에 실패했습니다.');
+      handleApiError(error, 'DB 경로 변경에 실패했습니다.');
     }
   };
 
@@ -186,26 +171,28 @@ export const DatabaseViewer: React.FC = () => {
       const result = await window.electronAPI.setBackupDir();
       if (result.success && result.path) {
         await loadConfig();
-        showSuccessToast('백업 저장 위치가 변경되었습니다.');
+        showSuccessToast('백업 폴더가 변경되었습니다.');
       }
     } catch (error) {
-      handleApiError(error, '백업 저장 위치 변경에 실패했습니다.');
+      handleApiError(error, '백업 폴더 변경에 실패했습니다.');
     }
   };
 
   const handleSetBackupInterval = async () => {
     try {
-      const minutes = parseInt(form.getValues("backupInterval"));
-      if (isNaN(minutes) || minutes < 1) {
-        showErrorToast('유효한 시간 간격을 입력해주세요.');
+      const minutes = parseInt(form.getValues('backupInterval'), 10);
+      if (Number.isNaN(minutes) || minutes < 1) {
+        showErrorToast('유효한 백업 주기를 입력해 주세요.');
         return;
       }
 
       const result = await window.electronAPI.setBackupInterval(minutes);
-      if (result.success) {
-        showSuccessToast('백업 주기가 변경되었습니다.');
-        setIsSettingsOpen(false);
+      if (!result.success) {
+        throw new Error(result.error);
       }
+
+      showSuccessToast('백업 주기가 변경되었습니다.');
+      setIsSettingsOpen(false);
     } catch (error) {
       handleApiError(error, '백업 주기 변경에 실패했습니다.');
     }
@@ -224,48 +211,12 @@ export const DatabaseViewer: React.FC = () => {
       setResetInput('');
       setSelectedTable(null);
       setTableData(null);
-      setSyncCheckResult(null);
       await loadConfig();
       await loadTables();
     } catch (error) {
       handleApiError(error, '데이터베이스 초기화에 실패했습니다.');
     } finally {
       setIsResetting(false);
-    }
-  };
-
-  // 썸네일 동기화 점검
-  const handleCheckThumbnailSync = async () => {
-    try {
-      setIsCheckingSync(true);
-      const result = await window.electronAPI.checkThumbnailSync();
-      setSyncCheckResult(result);
-      showSuccessToast('썸네일 동기화 점검이 완료되었습니다.');
-    } catch (error) {
-      handleApiError(error, '썸네일 동기화 점검에 실패했습니다.');
-    } finally {
-      setIsCheckingSync(false);
-    }
-  };
-
-  // 썸네일 동기화 정리
-  const handleCleanupThumbnailSync = async () => {
-    try {
-      setIsCleaningUp(true);
-      const result = await window.electronAPI.cleanupThumbnailSync(cleanupOptions);
-      
-      if (result.errors.length > 0) {
-        showErrorToast(`${result.errors.length}개의 오류가 발생했습니다.`);
-      } else {
-        showSuccessToast(`정리가 완료되었습니다. (DB에서 제거: ${result.removedFromDb}, DB에 추가: ${result.addedToDb})`);
-      }
-      
-      // 점검 결과 새로고침
-      await handleCheckThumbnailSync();
-    } catch (error) {
-      handleApiError(error, '썸네일 동기화 정리에 실패했습니다.');
-    } finally {
-      setIsCleaningUp(false);
     }
   };
 
@@ -285,7 +236,6 @@ export const DatabaseViewer: React.FC = () => {
 
   return (
     <div className="h-full w-full flex flex-col bg-discord-bg">
-      {/* Header */}
       <div className="shrink-0 p-6 space-y-4 border-b border-gray-700">
         <div className="flex items-center justify-between">
           <div className="flex items-end">
@@ -297,17 +247,8 @@ export const DatabaseViewer: React.FC = () => {
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button 
-              variant="outline" 
-              onClick={handleCheckThumbnailSync}
-              disabled={isCheckingSync}
-              className="border-gray-600 hover:bg-discord-hover"
-            >
-              <RefreshCw size={16} className={`mr-2 ${isCheckingSync ? 'animate-spin' : ''}`} />
-              썸네일 동기화 점검
-            </Button>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={handleBackup}
               className="border-gray-600 hover:bg-discord-hover"
             >
@@ -325,87 +266,6 @@ export const DatabaseViewer: React.FC = () => {
           </div>
         </div>
 
-        {/* 썸네일 동기화 상태 표시 */}
-        {syncCheckResult && (
-          <div className="bg-discord-sidebar rounded-lg p-4 border border-gray-700">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium text-discord-text">썸네일 동기화 상태</h3>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleCleanupThumbnailSync}
-                  disabled={isCleaningUp}
-                  className="border-gray-600 hover:bg-discord-hover text-xs"
-                >
-                  <AlertTriangle size={14} className="mr-1" />
-                  {isCleaningUp ? '정리 중...' : '동기화 정리'}
-                </Button>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="text-discord-muted">총 레코드:</span>
-                <span className="text-discord-text font-medium">{syncCheckResult.totalRecords}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle size={14} className="text-green-400" />
-                <span className="text-discord-muted">정상:</span>
-                <span className="text-discord-text font-medium">{syncCheckResult.bothExist}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <AlertTriangle size={14} className="text-yellow-400" />
-                <span className="text-discord-muted">DB에만:</span>
-                <span className="text-discord-text font-medium">{syncCheckResult.dbOnly.length}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <AlertTriangle size={14} className="text-blue-400" />
-                <span className="text-discord-muted">파일에만:</span>
-                <span className="text-discord-text font-medium">{syncCheckResult.fileOnly.length}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <X size={14} className="text-red-400" />
-                <span className="text-discord-muted">둘 다 없음:</span>
-                <span className="text-discord-text font-medium">{syncCheckResult.neitherExist}</span>
-              </div>
-            </div>
-
-            {/* 정리 옵션 */}
-            <div className="mt-3 pt-3 border-t border-gray-700">
-              <div className="flex items-center gap-4 text-xs">
-                <label className="flex items-center gap-2 text-discord-muted">
-                  <input
-                    type="checkbox"
-                    checked={cleanupOptions.removeDbOnly}
-                    onChange={(e) => setCleanupOptions(prev => ({ ...prev, removeDbOnly: e.target.checked }))}
-                    className="rounded border-gray-600 bg-discord-bg"
-                  />
-                  DB에만 있는 썸네일 경로 제거
-                </label>
-                <label className="flex items-center gap-2 text-discord-muted">
-                  <input
-                    type="checkbox"
-                    checked={cleanupOptions.addFileOnly}
-                    onChange={(e) => setCleanupOptions(prev => ({ ...prev, addFileOnly: e.target.checked }))}
-                    className="rounded border-gray-600 bg-discord-bg"
-                  />
-                  파일에만 있는 썸네일 경로 추가
-                </label>
-                <label className="flex items-center gap-2 text-discord-muted">
-                  <input
-                    type="checkbox"
-                    checked={cleanupOptions.dryRun}
-                    onChange={(e) => setCleanupOptions(prev => ({ ...prev, dryRun: e.target.checked }))}
-                    className="rounded border-gray-600 bg-discord-bg"
-                  />
-                  시뮬레이션만 실행
-                </label>
-              </div>
-            </div>
-          </div>
-        )}
-
         <div className="text-sm text-muted-foreground space-y-1">
           <div className="flex items-center gap-2">
             <span>데이터베이스 위치:</span>
@@ -422,7 +282,7 @@ export const DatabaseViewer: React.FC = () => {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <span>백업 저장 위치:</span>
+            <span>백업 폴더:</span>
             <span className="text-discord-text font-medium flex items-center gap-2">
               {config?.backupDir}
               <Button
@@ -437,17 +297,16 @@ export const DatabaseViewer: React.FC = () => {
           </div>
         </div>
 
-        {/* Table List */}
         <div className="flex flex-wrap gap-2">
           {tables.map((table) => (
             <Button
               key={table.name}
-              variant={selectedTable === table.name ? "secondary" : "outline"}
+              variant={selectedTable === table.name ? 'secondary' : 'outline'}
               onClick={() => loadTableData(table.name)}
               className={`text-sm border-gray-600 ${
-                selectedTable === table.name 
-                  ? "bg-discord-accent hover:bg-blue-600 text-white border-transparent" 
-                  : "hover:bg-discord-hover text-discord-text"
+                selectedTable === table.name
+                  ? 'bg-discord-accent hover:bg-blue-600 text-white border-transparent'
+                  : 'hover:bg-discord-hover text-discord-text'
               }`}
             >
               {table.name}
@@ -456,7 +315,6 @@ export const DatabaseViewer: React.FC = () => {
         </div>
       </div>
 
-      {/* Table Content */}
       <div className="flex-1 overflow-hidden">
         {tableData && (
           <div className="relative w-full h-full">
@@ -464,9 +322,9 @@ export const DatabaseViewer: React.FC = () => {
               <table className="min-w-[1500px] border-separate border-spacing-0">
                 <thead>
                   <tr>
-                    {tableData.columns.filter(f => !f.hidden).map((column) => (
-                      <th 
-                        key={column.name} 
+                    {tableData.columns.filter((column: any) => !column.hidden).map((column: any) => (
+                      <th
+                        key={column.name}
                         className="bg-discord-sidebar text-xs font-medium text-discord-text p-2 text-left sticky top-0 border-b border-gray-700 first:pl-2"
                       >
                         {column.name}
@@ -475,16 +333,16 @@ export const DatabaseViewer: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {tableData.rows.map((row, i) => (
-                    <tr 
-                      key={`row-${i}-${JSON.stringify(row).slice(0, 50)}`}
+                  {tableData.rows.map((row: any, rowIndex: number) => (
+                    <tr
+                      key={`row-${rowIndex}-${JSON.stringify(row).slice(0, 50)}`}
                       className="hover:bg-discord-hover transition-colors"
                     >
-                      {tableData.columns.filter(f => !f.hidden).map((column, colIndex) => (
-                        <td 
-                          key={`${i}-${column.name}`}
+                      {tableData.columns.filter((column: any) => !column.hidden).map((column: any, columnIndex: number) => (
+                        <td
+                          key={`${rowIndex}-${column.name}`}
                           className={`p-2 text-xs text-discord-text border-b border-gray-700 ${
-                            colIndex === 0 ? 'pl-2' : ''
+                            columnIndex === 0 ? 'pl-2' : ''
                           }`}
                         >
                           {(() => {
@@ -508,152 +366,143 @@ export const DatabaseViewer: React.FC = () => {
         )}
       </div>
 
-      {/* Settings Dialog */}
       <AnimatedModal isOpen={isSettingsOpen} contentClassName="bg-discord-bg rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden">
-            <div className="flex items-center justify-between p-6 border-b border-gray-700">
-              <h2 className="text-xl font-bold text-discord-text">
-                데이터베이스 설정
-              </h2>
-              <button
-                onClick={() => setIsSettingsOpen(false)}
-                className="text-discord-muted hover:text-discord-text"
-              >
-                <X size={24} />
-              </button>
-            </div>
+        <div className="flex items-center justify-between p-6 border-b border-gray-700">
+          <h2 className="text-xl font-bold text-discord-text">데이터베이스 설정</h2>
+          <button
+            onClick={() => setIsSettingsOpen(false)}
+            className="text-discord-muted hover:text-discord-text"
+          >
+            <X size={24} />
+          </button>
+        </div>
 
-            <div className="p-6 overflow-y-auto max-h-[calc(90vh-160px)] discord-scrollbar">
-              <Form {...form}>
-                <div className="space-y-6">
-                  <FormField
-                    control={form.control}
-                    name="dbPath"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-discord-text font-medium">
-                          DB 저장 위치
-                        </FormLabel>
-                        <div className="flex gap-2 mt-2">
-                          <FormControl>
-                            <Input
-                              {...field}
-                              readOnly
-                              className="flex-1 bg-discord-sidebar border-gray-600 text-discord-text"
-                            />
-                          </FormControl>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={handleSetDbPath}
-                            className="border-gray-600 hover:bg-discord-hover text-discord-text"
-                          >
-                            변경
-                          </Button>
-                        </div>
-                        <FormDescription className="text-sm text-discord-muted mt-1">
-                          데이터베이스 파일이 저장될 경로를 지정합니다.
-                        </FormDescription>
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="backupDir"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-discord-text font-medium">
-                          백업 저장 위치
-                        </FormLabel>
-                        <div className="flex gap-2 mt-2">
-                          <FormControl>
-                            <Input
-                              {...field}
-                              readOnly
-                              className="flex-1 bg-discord-sidebar border-gray-600 text-discord-text"
-                            />
-                          </FormControl>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={handleSetBackupDir}
-                            className="border-gray-600 hover:bg-discord-hover text-discord-text"
-                          >
-                            변경
-                          </Button>
-                        </div>
-                        <FormDescription className="text-sm text-discord-muted mt-1">
-                          데이터베이스 백업 파일이 저장될 경로를 지정합니다.
-                        </FormDescription>
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="backupInterval"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-discord-text font-medium">
-                          백업 주기
-                        </FormLabel>
-                        <div className="flex gap-2 mt-2">
-                          <FormControl>
-                            <Input
-                              {...field}
-                              type="number"
-                              min="1"
-                              placeholder="예: 60 (1시간)"
-                              className="flex-1 bg-discord-sidebar border-gray-600 text-discord-text"
-                            />
-                          </FormControl>
-                        </div>
-                        <FormDescription className="text-sm text-discord-muted mt-1">
-                          자동 백업이 실행될 시간 간격을 분 단위로 설정합니다.
-                        </FormDescription>
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="border border-red-800/60 bg-[#2a1f1f] rounded-lg p-4">
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <div className="text-sm font-medium text-red-300">데이터베이스 초기화</div>
-                        <div className="text-xs text-red-200/80 mt-1">
-                          모든 카테고리와 레코드가 삭제됩니다. 이 작업은 되돌릴 수 없습니다.
-                        </div>
-                      </div>
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-160px)] discord-scrollbar">
+          <Form {...form}>
+            <div className="space-y-6">
+              <FormField
+                control={form.control}
+                name="dbPath"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-discord-text font-medium">DB 파일 위치</FormLabel>
+                    <div className="flex gap-2 mt-2">
+                      <FormControl>
+                        <Input
+                          {...field}
+                          readOnly
+                          className="flex-1 bg-discord-sidebar border-gray-600 text-discord-text"
+                        />
+                      </FormControl>
                       <Button
                         type="button"
-                        variant="destructive"
-                        className="bg-discord-danger hover:bg-red-900"
-                        onClick={() => setShowResetConfirm(true)}
+                        variant="outline"
+                        onClick={handleSetDbPath}
+                        className="border-gray-600 hover:bg-discord-hover text-discord-text"
                       >
-                        초기화
+                        변경
                       </Button>
                     </div>
-                  </div>
-                </div>
-              </Form>
-            </div>
+                    <FormDescription className="text-sm text-discord-muted mt-1">
+                      데이터베이스 파일이 저장될 경로입니다.
+                    </FormDescription>
+                  </FormItem>
+                )}
+              />
 
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-700">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setIsSettingsOpen(false)}
-                className="text-discord-text hover:bg-discord-hover"
-              >
-                취소
-              </Button>
-              <Button
-                type="button"
-                onClick={handleSetBackupInterval}
-                className="bg-discord-accent hover:bg-discord-accent/80 text-white"
-              >
-                저장
-              </Button>
+              <FormField
+                control={form.control}
+                name="backupDir"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-discord-text font-medium">백업 폴더 위치</FormLabel>
+                    <div className="flex gap-2 mt-2">
+                      <FormControl>
+                        <Input
+                          {...field}
+                          readOnly
+                          className="flex-1 bg-discord-sidebar border-gray-600 text-discord-text"
+                        />
+                      </FormControl>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleSetBackupDir}
+                        className="border-gray-600 hover:bg-discord-hover text-discord-text"
+                      >
+                        변경
+                      </Button>
+                    </div>
+                    <FormDescription className="text-sm text-discord-muted mt-1">
+                      데이터베이스 백업 파일이 저장될 폴더입니다.
+                    </FormDescription>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="backupInterval"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-discord-text font-medium">백업 주기</FormLabel>
+                    <div className="flex gap-2 mt-2">
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="number"
+                          min="1"
+                          placeholder="예: 60"
+                          className="flex-1 bg-discord-sidebar border-gray-600 text-discord-text"
+                        />
+                      </FormControl>
+                    </div>
+                    <FormDescription className="text-sm text-discord-muted mt-1">
+                      자동 백업 실행 간격을 분 단위로 설정합니다.
+                    </FormDescription>
+                  </FormItem>
+                )}
+              />
+
+              <div className="border border-red-800/60 bg-[#2a1f1f] rounded-lg p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <div className="text-sm font-medium text-red-300">데이터베이스 초기화</div>
+                    <div className="text-xs text-red-200/80 mt-1">
+                      모든 카테고리와 레코드가 삭제됩니다. 이 작업은 되돌릴 수 없습니다.
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    className="bg-discord-danger hover:bg-red-900"
+                    onClick={() => setShowResetConfirm(true)}
+                  >
+                    초기화
+                  </Button>
+                </div>
+              </div>
             </div>
+          </Form>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-700">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setIsSettingsOpen(false)}
+            className="text-discord-text hover:bg-discord-hover"
+          >
+            취소
+          </Button>
+          <Button
+            type="button"
+            onClick={handleSetBackupInterval}
+            className="bg-discord-accent hover:bg-discord-accent/80 text-white"
+          >
+            저장
+          </Button>
+        </div>
       </AnimatedModal>
 
       {showResetConfirm && (
@@ -667,17 +516,15 @@ export const DatabaseViewer: React.FC = () => {
                 이 작업은 되돌릴 수 없습니다.
               </div>
               <div className="text-discord-muted text-sm">
-                아래에 <span className="font-semibold">데이터베이스를 초기화하겠습니다</span>를 입력하세요.
+                아래에 <span className="font-semibold">데이터베이스를 초기화하겠습니다</span>를 입력해 주세요.
               </div>
             </div>
 
             {isResetting && (
               <div className="mb-4 p-4 bg-discord-sidebar rounded-lg border border-gray-600">
                 <div className="flex items-center justify-center gap-3">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-discord-accent"></div>
-                  <div className="text-discord-text text-sm">
-                    데이터베이스 초기화 중...
-                  </div>
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-discord-accent" />
+                  <div className="text-discord-text text-sm">데이터베이스 초기화 중...</div>
                 </div>
               </div>
             )}
@@ -694,7 +541,10 @@ export const DatabaseViewer: React.FC = () => {
               <Button
                 variant="ghost"
                 className="flex-1 text-discord-text hover:bg-discord-hover"
-                onClick={() => { setShowResetConfirm(false); setResetInput(''); }}
+                onClick={() => {
+                  setShowResetConfirm(false);
+                  setResetInput('');
+                }}
                 disabled={isResetting}
               >
                 취소
