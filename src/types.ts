@@ -100,4 +100,15 @@ export interface ThumbnailSyncCleanupResult {
     recordId: string;
     error: string;
   }>;
-} 
+}
+
+export interface Config {
+  dbPath: string;
+  backupDir: string;
+  backupInterval: number;
+  rememberWindowBounds?: boolean;
+  hasAppPassword?: boolean;
+  videoSeekSeconds?: number;
+  videoAutoPlay?: boolean;
+  listThumbnailFit?: 'cover' | 'contain';
+}
