@@ -98,7 +98,7 @@ async function generateThumbnail(filePath) {
         switch (fileType) {
             case 'image':
                 await (0, sharp_1.default)(filePath)
-                    .resize(400, 400, { fit: 'contain' })
+                    .resize(400, 400, { fit: 'inside' })
                     .toFile(thumbnailPath);
                 return thumbnailPath;
             case 'video':
@@ -108,7 +108,7 @@ async function generateThumbnail(filePath) {
                         timestamps: ['00:00:01'],
                         filename: path.basename(thumbnailPath),
                         folder: thumbnailDir,
-                        size: '400x400'
+                        size: '400x?'
                     })
                         .on('end', () => resolve(thumbnailPath))
                         .on('error', (err) => {
@@ -123,7 +123,7 @@ async function generateThumbnail(filePath) {
                     const buffer = zip.readFile(imageEntry);
                     if (buffer) {
                         await (0, sharp_1.default)(buffer)
-                            .resize(400, 400, { fit: 'contain' })
+                            .resize(400, 400, { fit: 'inside' })
                             .toFile(thumbnailPath);
                         return thumbnailPath;
                     }

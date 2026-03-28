@@ -694,7 +694,7 @@ async function generateThumbnail(filePath) {
     
     if (isImage) {
       await sharp(normalizedPath)
-        .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
+        .resize(400, 400, { fit: 'inside' })
         .toFile(thumbnailPath);
       log('이미지 썸네일 생성 완료:', thumbnailPath);
     } else if (isVideo) {
@@ -709,7 +709,7 @@ async function generateThumbnail(filePath) {
             timestamps: ['00:00:01'],
             filename: path.basename(thumbnailPath),
             folder: thumbnailDir,
-            size: '400x400'
+            size: '400x?'
           })
           .on('end', () => {
             log('비디오 썸네일 생성 완료:', thumbnailPath);
@@ -736,7 +736,7 @@ async function generateThumbnail(filePath) {
                 const buffer = Buffer.concat(chunks);
                 try {
                   await sharp(buffer)
-                    .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
+                    .resize(400, 400, { fit: 'inside' })
                     .toFile(thumbnailPath);
                   log('아카이브 썸네일 생성 완료:', thumbnailPath);
                   resolve();
@@ -2158,7 +2158,7 @@ const generateVideoThumbnailWithTime = async (filePath, timestampSec) => {
           timestamps: [ts],
           filename: path.basename(thumbnailPath),
           folder: thumbnailDir,
-          size: '400x400'
+          size: '400x?'
         })
         .on('end', () => resolve())
         .on('error', (err) => reject(err));
@@ -2213,7 +2213,7 @@ const regenerateImageOrArchiveThumbnail = async (filePath) => {
     if (isImage) {
       // 이미지 썸네일 재생성
       await sharp(normalizedPath)
-        .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
+        .resize(400, 400, { fit: 'inside' })
         .toFile(thumbnailPath);
       log('이미지 썸네일 재생성 완료:', thumbnailPath);
     } else if (isArchive) {
@@ -2232,7 +2232,7 @@ const regenerateImageOrArchiveThumbnail = async (filePath) => {
                 const buffer = Buffer.concat(chunks);
                 try {
                   await sharp(buffer)
-                    .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
+                    .resize(400, 400, { fit: 'inside' })
                     .toFile(thumbnailPath);
                   log('압축파일 썸네일 재생성 완료:', thumbnailPath);
                   resolve(null);
@@ -2312,7 +2312,7 @@ const setCustomThumbnailFromImage = async (targetFilePath, imagePath) => {
     log('커스텀 썸네일 생성 시작:', { targetFilePath: normalizedTargetPath, imagePath, thumbnailPath });
 
     await sharp(imagePath)
-      .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
+      .resize(400, 400, { fit: 'inside' })
       .toFile(thumbnailPath);
 
     log('커스텀 썸네일 생성 완료:', thumbnailPath);

@@ -83,7 +83,7 @@ export async function generateThumbnail(filePath: string, timestampSec: number =
     switch (fileType) {
       case 'image':
         await sharp(filePath)
-          .resize(400, 400, { fit: 'contain' })
+          .resize(400, 400, { fit: 'inside' })
           .toFile(thumbnailPath);
         return thumbnailPath;
 
@@ -118,7 +118,7 @@ export async function generateThumbnail(filePath: string, timestampSec: number =
               timestamps: [finalTimestampSec],
               filename: path.basename(thumbnailPath),
               folder: thumbnailDir,
-              size: '400x400'
+              size: '400x?'
             })
             .on('end', () => resolve(thumbnailPath))
             .on('error', (err) => {
@@ -137,7 +137,7 @@ export async function generateThumbnail(filePath: string, timestampSec: number =
           const buffer = zip.readFile(imageEntry);
           if (buffer) {
             await sharp(buffer)
-              .resize(400, 400, { fit: 'contain' })
+              .resize(400, 400, { fit: 'inside' })
               .toFile(thumbnailPath);
             return thumbnailPath;
           } else {

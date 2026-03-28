@@ -67,7 +67,7 @@ const generateThumbnailForFile = async (filePath: string) => {
     
     if (isImage) {
       await sharp(normalizedPath)
-        .resize(400, 400, { fit: 'contain' })
+        .resize(400, 400, { fit: 'inside' })
         .toFile(thumbnailPath);
     } else if (isVideo) {
       // 동영상 길이 확인
@@ -100,7 +100,7 @@ const generateThumbnailForFile = async (filePath: string) => {
             timestamps: [timestampSec],
             filename: path.basename(thumbnailPath),
             folder: thumbnailDir,
-            size: '400x400'
+            size: '400x?'
           })
           .on('end', () => {
             resolve(null);
@@ -126,7 +126,7 @@ const generateThumbnailForFile = async (filePath: string) => {
                 const buffer = Buffer.concat(chunks);
                 try {
                   await sharp(buffer)
-                    .resize(400, 400, { fit: 'contain' })
+                    .resize(400, 400, { fit: 'inside' })
                     .toFile(thumbnailPath);
                   resolve(null);
                 } catch (err) {

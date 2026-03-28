@@ -448,7 +448,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                       <img
                         src={thumbnailDataUrl}
                         alt="썸네일"
-                        className={`w-[96px] h-[96px] object-contain rounded border border-gray-700 cursor-pointer hover:opacity-80 ${missingFile ? 'opacity-40' : ''}`}
+                        className={`w-[96px] h-[96px] object-contain bg-black rounded border border-gray-700 cursor-pointer hover:opacity-80 ${missingFile ? 'opacity-40' : ''}`}
                         onClick={() => canOpen && handleThumbnailClick(resolvedPath)}
                       />
                       {missingFile && (
@@ -989,7 +989,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                   <img
                     src={dataUrl}
                     alt="썸네일"
-                    className={`w-[320px] h-[320px] object-contain rounded-xl border border-gray-700 cursor-pointer hover:opacity-80 transition ${missingFile ? 'opacity-40' : ''}`}
+                    className={`w-[320px] h-[320px] object-contain bg-black rounded-xl border border-gray-700 cursor-pointer hover:opacity-80 transition ${missingFile ? 'opacity-40' : ''}`}
                     onClick={() => canOpenFile && handleThumbnailClick(filePath)}
                   />
                   {missingFile && (
