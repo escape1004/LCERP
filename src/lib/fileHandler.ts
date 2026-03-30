@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import crypto from 'crypto';
 const ffmpegStatic = require('ffmpeg-static');
 
-// ffmpeg 경로 설정
+// Configure ffmpeg path
 if (ffmpegStatic && fs.existsSync(ffmpegStatic)) {
   ffmpeg.setFfmpegPath(ffmpegStatic);
 }
@@ -18,28 +18,28 @@ interface FileInfo {
   thumbnailPath?: string;
 }
 
-// 허용된 파일 확장자 목록
+// Allowed file extensions
 const ALLOWED_EXTENSIONS = {
   image: ['.jpg', '.jpeg', '.png', '.gif', '.webp'],
   video: ['.mp4', '.avi', '.mkv', '.mov'],
   archive: ['.zip', '.7z']
 };
 
-// 파일 경로 보안 검증
+// Validate file path safety
 function isValidFilePath(filePath: string): boolean {
   try {
-    // 경로가 실제로 존재하는지 확인
+    // Ensure the path exists
     if (!fs.existsSync(filePath)) {
       return false;
     }
 
-    // 심볼릭 링크 확인 (선택적)
+    // Reject symbolic links
     const stats = fs.lstatSync(filePath);
     if (stats.isSymbolicLink()) {
       return false;
     }
 
-    // 파일 확장자 확인
+    // Check extension
     const ext = path.extname(filePath).toLowerCase();
     const allowedExts = [
       ...ALLOWED_EXTENSIONS.image,
@@ -54,19 +54,31 @@ function isValidFilePath(filePath: string): boolean {
 }
 
 export function getThumbnailHash(filePath: string): string {
-  // 경로 표준화: 앞뒤 공백 제거, \를 /로 통일, 소문자 변환
+  // Normalize path for stable hashing
   const normalizedPath = filePath.trim().replace(/\\/g, '/').toLowerCase();
   return crypto.createHash('sha1').update(normalizedPath).digest('hex');
 }
 
-export async function generateThumbnail(filePath: string, timestampSec: number = 1): Promise<string | null> {
-  // 파일 경로 검증
+function getAutoThumbnailTimestamp(duration: number | null): number {
+  if (duration === null || !Number.isFinite(duration)) {
+    return 1;
+  }
+
+  if (duration <= 1) {
+    return 0;
+  }
+
+  return duration / 2;
+}
+
+export async function generateThumbnail(filePath: string, timestampSec?: number | null): Promise<string | null> {
+  // Validate file path
   if (!isValidFilePath(filePath)) {
     throw new Error('Invalid or unauthorized file path');
   }
 
   if (!ffmpegStatic || !fs.existsSync(ffmpegStatic)) {
-    throw new Error('ffmpeg-static 바이너리 경로를 찾을 수 없습니다. ffmpeg-static 패키지 설치 및 node_modules/ffmpeg-static 경로 확인 필요.');
+    throw new Error('ffmpeg-static binary path could not be found. Check the ffmpeg-static install and node_modules/ffmpeg-static path.');
   }
 
   const fileType = getFileType(filePath);
@@ -88,13 +100,13 @@ export async function generateThumbnail(filePath: string, timestampSec: number =
         return thumbnailPath;
 
       case 'video':
-        // 동영상 길이 확인
+        // Read video duration
         const ffprobeStatic = require('ffprobe-static');
         if (ffprobeStatic && fs.existsSync(ffprobeStatic)) {
           ffmpeg.setFfprobePath(ffprobeStatic);
         }
         
-        // 동영상 duration 확인
+        // Inspect duration with ffprobe
         const duration = await new Promise<number | null>((resolve) => {
           ffmpeg.ffprobe(filePath, (err: any, metadata: any) => {
             if (err || !metadata?.format?.duration) {
@@ -105,11 +117,9 @@ export async function generateThumbnail(filePath: string, timestampSec: number =
           });
         });
         
-        // timestamp 결정: duration이 timestampSec보다 짧으면 0초 또는 중간 지점 사용
-        let finalTimestampSec = timestampSec;
-        if (duration !== null && duration < timestampSec) {
-          // duration이 요청한 timestamp보다 짧으면 0초 또는 중간 지점 사용
-          finalTimestampSec = Math.max(0, duration / 2);
+        let finalTimestampSec = typeof timestampSec === 'number' ? timestampSec : getAutoThumbnailTimestamp(duration);
+        if (duration !== null && finalTimestampSec > duration) {
+          finalTimestampSec = getAutoThumbnailTimestamp(duration);
         }
         
         return new Promise((resolve, reject) => {
@@ -170,7 +180,7 @@ export function getFileType(filePath: string): FileInfo['type'] {
 }
 
 export async function openFile(filePath: string): Promise<void> {
-  // 파일 경로 검증
+  // Validate file path
   if (!isValidFilePath(filePath)) {
     throw new Error('Invalid or unauthorized file path');
   }
@@ -180,4 +190,4 @@ export async function openFile(filePath: string): Promise<void> {
   } catch (error) {
     throw error;
   }
-} 
+}

@@ -26,7 +26,19 @@ const deleteThumbnail = (filePath: string) => {
 };
 
 // 썸네일 생성 함수
-const generateThumbnailForFile = async (filePath: string, timestampSec: number = 1) => {
+const getAutoThumbnailTimestamp = (duration: number | null): number => {
+  if (duration === null || !Number.isFinite(duration)) {
+    return 1;
+  }
+
+  if (duration <= 1) {
+    return 0;
+  }
+
+  return duration / 2;
+};
+
+const generateThumbnailForFile = async (filePath: string, timestampSec?: number | null) => {
   try {
     // 직접 썸네일 생성 로직 구현
     let normalizedPath = filePath;
@@ -88,10 +100,10 @@ const generateThumbnailForFile = async (filePath: string, timestampSec: number =
       });
       
       // timestamp 결정: duration이 timestampSec보다 짧으면 0초 또는 중간 지점 사용
-      let finalTimestampSec = timestampSec;
-      if (duration !== null && duration < timestampSec) {
+      let finalTimestampSec = typeof timestampSec === 'number' ? timestampSec : getAutoThumbnailTimestamp(duration);
+      if (duration !== null && finalTimestampSec > duration) {
         // duration이 요청한 timestamp보다 짧으면 0초 또는 중간 지점 사용
-        finalTimestampSec = Math.max(0, duration / 2);
+        finalTimestampSec = getAutoThumbnailTimestamp(duration);
       }
       
       await new Promise((resolve, reject) => {

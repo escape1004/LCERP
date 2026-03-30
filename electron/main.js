@@ -628,6 +628,16 @@ const deleteThumbnail = (filePath) => {
 };
 
 // 썸네일 생성 함수
+function getAutoThumbnailTimestamp(duration) {
+  if (!Number.isFinite(duration)) {
+    return 1;
+  }
+  if (duration <= 1) {
+    return 0;
+  }
+  return duration / 2;
+}
+
 async function generateThumbnail(filePath) {
   try {
     let normalizedPath = filePath;
@@ -698,6 +708,12 @@ async function generateThumbnail(filePath) {
         .toFile(thumbnailPath);
       log('이미지 썸네일 생성 완료:', thumbnailPath);
     } else if (isVideo) {
+      const duration = await new Promise((resolve) => {
+        ffmpeg.ffprobe(normalizedPath, (err, metadata) => {
+          if (err || !metadata?.format?.duration) return resolve(null);
+          resolve(Number(metadata.format.duration));
+        });
+      });
       const embeddedCoverPath = await extractEmbeddedVideoCover(normalizedPath, thumbnailPath);
       if (embeddedCoverPath) {
         log('비디오 메타데이터 커버 썸네일 생성 완료:', embeddedCoverPath);
@@ -706,7 +722,7 @@ async function generateThumbnail(filePath) {
       await new Promise((resolve, reject) => {
         ffmpeg(normalizedPath)
           .screenshots({
-            timestamps: ['00:00:01'],
+            timestamps: [getAutoThumbnailTimestamp(duration)],
             filename: path.basename(thumbnailPath),
             folder: thumbnailDir,
             size: '400x?'
@@ -2148,9 +2164,11 @@ const generateVideoThumbnailWithTime = async (filePath, timestampSec) => {
       return embeddedCoverPath;
     }
     let ts = Number(timestampSec);
+    if (!Number.isFinite(ts)) {
+      ts = getAutoThumbnailTimestamp(duration);
+    }
     if (duration && ts > duration) {
-      ts = duration - 1;
-      if (ts < 0) ts = 0;
+      ts = getAutoThumbnailTimestamp(duration);
     }
     await new Promise((resolve, reject) => {
       ffmpeg(normalizedPath)
@@ -2585,7 +2603,7 @@ ipcMain.handle('getThumbnailDataUrlHybrid', async (_, record, filePath) => {
 
       if (isVideo) {
         const tsRaw = record?.data?.__thumbnailTimestamp;
-        const timestampSec = Number.isFinite(Number(tsRaw)) ? Number(tsRaw) : 1;
+        const timestampSec = Number.isFinite(Number(tsRaw)) ? Number(tsRaw) : null;
         thumbnailPath = await generateVideoThumbnailWithTime(normalizedPath, timestampSec);
       } else if (isImage || isArchive) {
         thumbnailPath = await regenerateImageOrArchiveThumbnail(normalizedPath);
