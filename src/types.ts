@@ -107,6 +107,7 @@ export interface Config {
   backupDir: string;
   backupInterval: number;
   rememberWindowBounds?: boolean;
+  zoomPercent?: number;
   hasAppPassword?: boolean;
   videoSeekSeconds?: number;
   videoAutoPlay?: boolean;

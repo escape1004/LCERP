@@ -46,7 +46,8 @@ const defaultConfig = {
   passwordHash: null,
   videoSeekSeconds: 5,
   videoAutoPlay: true,
-  listThumbnailFit: 'cover'
+  listThumbnailFit: 'cover',
+  zoomPercent: 100
 };
 
 let appConfig = { ...defaultConfig };
@@ -78,6 +79,27 @@ function saveAppConfig() {
   } catch (error) {
     console.error('Failed to save app config:', error);
   }
+}
+
+function normalizeZoomPercent(value) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return null;
+  }
+
+  return Math.min(200, Math.max(50, Math.round(numericValue)));
+}
+
+function getConfiguredZoomPercent() {
+  return normalizeZoomPercent(appConfig.zoomPercent) ?? 100;
+}
+
+function applyWindowZoom(targetWindow) {
+  if (!targetWindow || targetWindow.isDestroyed()) return;
+
+  const zoomFactor = getConfiguredZoomPercent() / 100;
+  targetWindow.webContents.setZoomLevel(0);
+  targetWindow.webContents.setZoomFactor(zoomFactor);
 }
 
 function hashPassword(password) {
@@ -181,13 +203,8 @@ function createWindow() {
     });
   }
 
-  const resetZoomToDefault = () => {
-    mainWindow.webContents.setZoomLevel(0);
-    mainWindow.webContents.setZoomFactor(1);
-  };
-
-  resetZoomToDefault();
-  mainWindow.webContents.on('did-finish-load', resetZoomToDefault);
+  applyWindowZoom(mainWindow);
+  mainWindow.webContents.on('did-finish-load', () => applyWindowZoom(mainWindow));
   mainWindow.webContents.setVisualZoomLevelLimits(1, 1);
   mainWindow.webContents.on('before-input-event', (event, input) => {
     const isZoomShortcut =
@@ -1367,6 +1384,7 @@ ipcMain.handle('getConfig', () => {
     backupDir: backupDir,
     backupInterval: 60,
     rememberWindowBounds: appConfig.rememberWindowBounds,
+    zoomPercent: getConfiguredZoomPercent(),
     hasAppPassword: Boolean(appConfig.passwordHash),
     videoSeekSeconds: appConfig.videoSeekSeconds || 5,
     videoAutoPlay: appConfig.videoAutoPlay !== false,
@@ -1434,6 +1452,22 @@ ipcMain.handle('setVideoSeekSeconds', (_event, seconds) => {
 
   appConfig.videoSeekSeconds = Math.floor(normalized);
   saveAppConfig();
+  return { success: true };
+});
+
+ipcMain.handle('setZoomPercent', (_event, percent) => {
+  const normalized = normalizeZoomPercent(percent);
+  if (normalized === null) {
+    return { success: false, error: 'Zoom percent must be a number.' };
+  }
+
+  appConfig.zoomPercent = normalized;
+  saveAppConfig();
+
+  for (const browserWindow of BrowserWindow.getAllWindows()) {
+    applyWindowZoom(browserWindow);
+  }
+
   return { success: true };
 });
 

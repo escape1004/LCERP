@@ -34,6 +34,8 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [securityMessage, setSecurityMessage] = useState('');
+  const [generalMessage, setGeneralMessage] = useState('');
+  const [zoomPercentInput, setZoomPercentInput] = useState('100');
   const [viewerSeekSeconds, setViewerSeekSeconds] = useState('5');
   const [viewerMessage, setViewerMessage] = useState('');
   const [viewerAutoPlayMessage, setViewerAutoPlayMessage] = useState('');
@@ -76,6 +78,8 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
       setPassword('');
       setPasswordConfirm('');
       setSecurityMessage('');
+      setGeneralMessage('');
+      setZoomPercentInput(String(nextConfig.zoomPercent ?? 100));
       setViewerSeekSeconds(String(nextConfig.videoSeekSeconds ?? 5));
       setViewerMessage('');
       setViewerAutoPlayMessage('');
@@ -88,6 +92,49 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
       cancelled = true;
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !config) return;
+
+    const rawValue = zoomPercentInput.trim();
+    if (!rawValue) {
+      setGeneralMessage('');
+      return;
+    }
+
+    const percent = Number(rawValue);
+    if (!Number.isFinite(percent) || percent < 50 || percent > 200) {
+      setGeneralMessage('확대 배율은 50%에서 200% 사이로 설정해야 합니다.');
+      return;
+    }
+
+    const normalized = Math.round(percent);
+    if ((config.zoomPercent ?? 100) === normalized) {
+      setGeneralMessage('');
+      return;
+    }
+
+    const timeoutId = window.setTimeout(async () => {
+      setIsSaving(true);
+      try {
+        const result = await window.electronAPI.setZoomPercent(normalized);
+        if (result.success) {
+          setConfig((prev) => prev ? { ...prev, zoomPercent: normalized } : prev);
+          setZoomPercentInput(String(normalized));
+          setGeneralMessage('');
+          return;
+        }
+
+        setGeneralMessage(result.error || '일반 설정 저장에 실패했습니다.');
+      } finally {
+        setIsSaving(false);
+      }
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [config, open, zoomPercentInput]);
 
   useEffect(() => {
     if (!open || !config) return;
@@ -235,6 +282,37 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
             className="data-[state=checked]:bg-discord-accent data-[state=unchecked]:bg-gray-600"
           />
         </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+        <div className="text-sm font-medium text-white">브라우저 확대 배율</div>
+        <p className="text-sm text-discord-muted mt-2 leading-6">
+          앱 전체 화면에 적용할 확대 배율을 고정합니다. 단축키나 브라우저 기본 확대/축소로는 변경되지 않습니다.
+        </p>
+
+        <div className="mt-5 flex items-end gap-3 max-w-md">
+          <div className="flex-1">
+            <div className="text-xs text-discord-muted mb-2">확대 배율</div>
+            <Input
+              type="number"
+              min="50"
+              max="200"
+              step="1"
+              value={zoomPercentInput}
+              onChange={(e) => {
+                setZoomPercentInput(e.target.value);
+                setGeneralMessage('');
+              }}
+              disabled={!config || isSaving}
+              className="bg-discord-bg border-gray-600 text-discord-text"
+            />
+          </div>
+          <div className="text-sm text-discord-muted pb-2">%</div>
+        </div>
+
+        {generalMessage && (
+          <p className="text-sm text-discord-muted mt-2">{generalMessage}</p>
+        )}
       </div>
     </div>
   );
