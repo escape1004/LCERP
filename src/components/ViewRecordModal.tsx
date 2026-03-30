@@ -193,6 +193,10 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
 
   useEffect(() => {
     let ignore = false;
+    if (isThumbnailOnlyFile) {
+      setFileExists(true);
+      return () => { ignore = true; };
+    }
     if (isOpen && filePath) {
       window.electronAPI.checkFileExists(filePath).then(exists => {
         if (!ignore) {
@@ -223,7 +227,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
       setFileExists(null);
     }
     return () => { ignore = true; };
-  }, [isOpen, filePath, record, category]);
+  }, [isOpen, filePath, record, category, isThumbnailOnlyFile]);
 
   const canOpenFile = !!filePath && filePath !== '' && filePath !== '-' && fileExists !== false && !isThumbnailOnlyFile;
 
@@ -387,6 +391,10 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
 
       React.useEffect(() => {
         let ignore = false;
+        if (field.thumbnailOnly) {
+          setResolvedExists(true);
+          return () => { ignore = true; };
+        }
         if (resolvedPath) {
           window.electronAPI.checkFileExists(resolvedPath).then(exists => {
             if (!ignore) setResolvedExists(exists);
@@ -395,7 +403,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
           setResolvedExists(null);
         }
         return () => { ignore = true; };
-      }, [resolvedPath]);
+      }, [resolvedPath, field.thumbnailOnly]);
 
       // 썸네일 재생성 이벤트 처리
       React.useEffect(() => {
@@ -434,7 +442,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         };
       }, [resolvedPath, record]);
 
-      const missingFile = resolvedExists === false;
+      const missingFile = !field.thumbnailOnly && resolvedExists === false;
       const canOpen = resolvedExists !== false && !field.thumbnailOnly;
 
       if (SUPPORTED_THUMBNAIL_EXTS.includes(ext)) {
@@ -1060,33 +1068,50 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
 
     if (!SUPPORTED_THUMBNAIL_EXTS.includes(ext)) return null;
 
+    const thumbnailBody = loading ? (
+      <div className="w-[320px] h-[320px] bg-gray-800 flex items-center justify-center text-lg text-gray-400 rounded-xl border border-gray-700">로딩중...</div>
+    ) : dataUrl ? (
+      <div className="relative">
+        <img
+          src={dataUrl}
+          alt="썸네일"
+          className={`w-[320px] h-[320px] object-contain bg-black rounded-xl border border-gray-700 transition ${canOpenFile ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
+          onClick={() => canOpenFile && handleThumbnailClick(filePath)}
+        />
+        {missingFile && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <HelpCircle size={32} className="text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]" />
+          </div>
+        )}
+        {/* 파일 확장자명 표시 */}
+        {filePath && (
+          <div className="absolute bottom-2 right-2 bg-black bg-opacity-70 text-white text-sm px-2 py-1 rounded">
+            {ext}
+          </div>
+        )}
+      </div>
+    ) : filePath ? (
+      <div 
+        className={`w-[320px] h-[320px] bg-gray-900 flex items-center justify-center text-lg text-gray-500 border border-gray-700 rounded-xl transition-colors ${canOpenFile ? 'cursor-pointer hover:bg-gray-800' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
+        onClick={() => canOpenFile && handleThumbnailClick(filePath)}
+      >
+        {missingFile ? '파일 없음' : '썸네일 없음'}
+      </div>
+    ) : (
+      <div className="w-[320px] h-[320px] bg-gray-950 flex items-center justify-center text-lg text-gray-600 border border-gray-800 rounded-xl">
+        파일 없음
+      </div>
+    );
+
     return (
       <div className="flex flex-col items-center">
-        {loading ? (
-          <div className="w-[320px] h-[320px] bg-gray-800 flex items-center justify-center text-lg text-gray-400 rounded-xl border border-gray-700">로딩중...</div>
+        {isThumbnailOnlyFile ? (
+          thumbnailBody
         ) : dataUrl ? (
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="relative">
-                  <img
-                    src={dataUrl}
-                    alt="썸네일"
-                    className={`w-[320px] h-[320px] object-contain bg-black rounded-xl border border-gray-700 transition ${canOpenFile ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
-                    onClick={() => canOpenFile && handleThumbnailClick(filePath)}
-                  />
-                  {missingFile && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <HelpCircle size={32} className="text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]" />
-                    </div>
-                  )}
-                  {/* 파일 확장자명 표시 */}
-                  {filePath && (
-                    <div className="absolute bottom-2 right-2 bg-black bg-opacity-70 text-white text-sm px-2 py-1 rounded">
-                      {ext}
-                    </div>
-                  )}
-                </div>
+                {thumbnailBody}
               </TooltipTrigger>
               <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
                 {filePath ? (missingFile ? '원본 파일이 존재하지 않습니다' : dataUrl ? '썸네일 클릭 시 뷰어 모달 열기' : '클릭 시 뷰어 모달 열기 (썸네일 없음)') : '첨부파일이 없습니다'}

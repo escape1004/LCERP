@@ -509,6 +509,10 @@ const ThumbnailCell: React.FC<{
 
   React.useEffect(() => {
     let ignore = false;
+    if (thumbnailOnly) {
+      setFileExists(true);
+      return () => { ignore = true; };
+    }
     if (filePath) {
       window.electronAPI.checkFileExists(filePath).then(exists => {
         if (!ignore) setFileExists(exists);
@@ -517,7 +521,7 @@ const ThumbnailCell: React.FC<{
       setFileExists(null);
     }
     return () => { ignore = true; };
-  }, [filePath]);
+  }, [filePath, thumbnailOnly]);
 
   const handleThumbnailImageError = React.useCallback(() => {
     if (!filePath || !record || hasRetriedAfterErrorRef.current) {
@@ -560,55 +564,60 @@ const ThumbnailCell: React.FC<{
 
   // 썸네일이 해시 기반인지 여부
   const isHashBased = record && !record.thumbnailPath;
-  const missingFile = !!filePath && fileExists === false;
+  const missingFile = !thumbnailOnly && !!filePath && fileExists === false;
   const canOpen = !!filePath && fileExists !== false && !thumbnailOnly;
+
+  const thumbnailBody = (
+    <div className="relative w-24 h-24">
+      {dataUrl ? (
+        <>
+          <img 
+            src={dataUrl} 
+            alt="썸네일" 
+            className={`w-24 h-24 ${thumbnailFit === 'contain' ? 'object-contain bg-black' : 'object-cover'} rounded border border-gray-700 ${canOpen ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
+            onClick={() => filePath && canOpen && onThumbnailClick(filePath)}
+            onError={handleThumbnailImageError}
+          />
+          {isHashBased && (
+            <div className="absolute top-1 left-1 z-10">
+              <RefreshCw size={16} className="text-[#5865F2] drop-shadow-[0_1px_4px_rgba(0,0,0,0.7)]" />
+            </div>
+          )}
+          {missingFile && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <HelpCircle size={20} className="text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]" />
+            </div>
+          )}
+        </>
+      ) : filePath ? (
+        <div 
+          className={`w-24 h-24 bg-gray-800 flex items-center justify-center text-gray-500 border border-gray-700 rounded transition-colors ${canOpen ? 'cursor-pointer hover:bg-gray-700' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
+          onClick={() => canOpen && onThumbnailClick(filePath)}
+        >
+          <span className="text-2xl">{missingFile ? '?' : '🖼️'}</span>
+        </div>
+      ) : (
+        <div className="w-24 h-24 bg-gray-900 flex items-center justify-center text-gray-600 border border-gray-800 rounded">
+          <span className="text-2xl">-</span>
+        </div>
+      )}
+      {filePath && (
+        <div className="absolute bottom-1 right-1 bg-black bg-opacity-70 text-white text-xs px-1 py-0.5 rounded">
+          {getFileExtension(filePath)}
+        </div>
+      )}
+    </div>
+  );
+
+  if (thumbnailOnly) {
+    return thumbnailBody;
+  }
 
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="relative w-24 h-24">
-            {dataUrl ? (
-              <>
-                <img 
-                  src={dataUrl} 
-                  alt="썸네일" 
-                  className={`w-24 h-24 ${thumbnailFit === 'contain' ? 'object-contain bg-black' : 'object-cover'} rounded border border-gray-700 ${canOpen ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
-                  onClick={() => filePath && canOpen && onThumbnailClick(filePath)}
-                  onError={handleThumbnailImageError}
-                />
-                {isHashBased && (
-                  <div className="absolute top-1 left-1 z-10">
-                    <RefreshCw size={16} className="text-[#5865F2] drop-shadow-[0_1px_4px_rgba(0,0,0,0.7)]" />
-                  </div>
-                )}
-                {missingFile && (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <HelpCircle size={20} className="text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]" />
-                  </div>
-                )}
-              </>
-            ) : filePath ? (
-              // 파일은 있지만 썸네일이 없는 경우
-              <div 
-                className={`w-24 h-24 bg-gray-800 flex items-center justify-center text-gray-500 border border-gray-700 rounded transition-colors ${canOpen ? 'cursor-pointer hover:bg-gray-700' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
-                onClick={() => canOpen && onThumbnailClick(filePath)}
-              >
-                <span className="text-2xl">{missingFile ? '?' : '🖼️'}</span>
-              </div>
-            ) : (
-              // 파일이 없는 경우
-              <div className="w-24 h-24 bg-gray-900 flex items-center justify-center text-gray-600 border border-gray-800 rounded">
-                <span className="text-2xl">-</span>
-              </div>
-            )}
-            {/* 파일 확장자 표시 */}
-            {filePath && (
-              <div className="absolute bottom-1 right-1 bg-black bg-opacity-70 text-white text-xs px-1 py-0.5 rounded">
-                {getFileExtension(filePath)}
-              </div>
-            )}
-          </div>
+          {thumbnailBody}
         </TooltipTrigger>
         <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
           {filePath ? (missingFile ? '원본 파일이 존재하지 않습니다' : dataUrl ? '썸네일 클릭 시 뷰어 모달 열기' : '클릭 시 뷰어 모달 열기 (썸네일 없음)') : '첨부파일이 없습니다'}
