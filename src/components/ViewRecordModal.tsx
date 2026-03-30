@@ -1410,6 +1410,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         <div className="flex-1 min-h-0 p-6 overflow-y-auto max-h-[calc(90vh-160px)] discord-scrollbar">
           <div className="space-y-6">
             {category.fields
+              .filter(field => !(field.type === 'file' && field.thumbnailOnly))
               .sort((a, b) => a.order - b.order)
               .map(field => (
                 <div key={field.id} className="border-b border-gray-800 pb-4 last:border-b-0">
