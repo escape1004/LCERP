@@ -481,6 +481,7 @@ const ThumbnailCell: React.FC<{
 }> = ({ filePath, record, onThumbnailClick, thumbnailFit }) => {
   const [dataUrl, setDataUrl] = React.useState<string | null>(null);
   const [fileExists, setFileExists] = React.useState<boolean | null>(null);
+  const hasRetriedAfterErrorRef = React.useRef(false);
   const reloadThumbnail = React.useCallback(() => {
     if (!filePath || !record) {
       setDataUrl(null);
@@ -495,6 +496,7 @@ const ThumbnailCell: React.FC<{
   React.useEffect(() => {
     let ignore = false;
     if (filePath && record) {
+      hasRetriedAfterErrorRef.current = false;
       window.electronAPI.getThumbnailDataUrlHybrid(record, filePath).then(res => {
         if (!ignore) setDataUrl(res);
       });
@@ -516,29 +518,21 @@ const ThumbnailCell: React.FC<{
     return () => { ignore = true; };
   }, [filePath]);
 
-  React.useEffect(() => {
-    if (!filePath || !record) return;
-
-    const isRegeneratableThumbnail = /\.(png|jpe?g|gif|webp|bmp|avif|zip|rar|7z|cbz|cbr)$/i.test(filePath);
-    if (!isRegeneratableThumbnail) {
+  const handleThumbnailImageError = React.useCallback(() => {
+    if (!filePath || !record || hasRetriedAfterErrorRef.current) {
+      setDataUrl(null);
       return;
     }
 
-    let ignore = false;
+    hasRetriedAfterErrorRef.current = true;
     setDataUrl(null);
 
     window.electronAPI.regenerateThumbnail(filePath)
       .catch(() => null)
       .finally(() => {
-        if (!ignore) {
-          reloadThumbnail();
-        }
+        reloadThumbnail();
       });
-
-    return () => {
-      ignore = true;
-    };
-  }, [filePath, record, reloadThumbnail, thumbnailFit]);
+  }, [filePath, record, reloadThumbnail]);
 
   // 썸네일 삭제 이벤트 감지하여 캐시 초기화
   React.useEffect(() => {
@@ -580,6 +574,7 @@ const ThumbnailCell: React.FC<{
                   alt="썸네일" 
                   className={`w-24 h-24 ${thumbnailFit === 'contain' ? 'object-contain bg-black' : 'object-cover'} rounded border border-gray-700 cursor-pointer hover:opacity-80 ${missingFile ? 'opacity-40' : ''}`}
                   onClick={() => filePath && canOpen && onThumbnailClick(filePath)}
+                  onError={handleThumbnailImageError}
                 />
                 {isHashBased && (
                   <div className="absolute top-1 left-1 z-10">
