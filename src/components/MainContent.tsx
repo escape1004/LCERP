@@ -601,7 +601,7 @@ const ThumbnailCell: React.FC<{
           <span className="text-2xl">-</span>
         </div>
       )}
-      {filePath && (
+      {filePath && !thumbnailOnly && (
         <div className="absolute bottom-1 right-1 bg-black bg-opacity-70 text-white text-xs px-1 py-0.5 rounded">
           {getFileExtension(filePath)}
         </div>

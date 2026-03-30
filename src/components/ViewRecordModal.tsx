@@ -1087,7 +1087,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
           </div>
         )}
         {/* 파일 확장자명 표시 */}
-        {filePath && (
+        {filePath && !isThumbnailOnlyFile && (
           <div className="absolute bottom-2 right-2 bg-black bg-opacity-70 text-white text-sm px-2 py-1 rounded">
             {ext}
           </div>
