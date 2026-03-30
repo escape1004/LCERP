@@ -1573,7 +1573,9 @@ export const MainContent: React.FC = () => {
                                     ? 'px-2 py-3 text-xs text-discord-text text-left overflow-hidden'
                                     : 'px-2 py-3 text-xs text-discord-text overflow-hidden'
                                 }`} style={{ width: `${getColumnWidth(field.id)}px` }}>
-                                  {formatFieldValue(field, record.data[field.id], categoriesSafe, getCategoryRecords, handleViewRelatedRecord, () => setSelectedRecordId(record.id))}
+                                  {field.type === 'file' && field.thumbnailOnly
+                                    ? ''
+                                    : formatFieldValue(field, record.data[field.id], categoriesSafe, getCategoryRecords, handleViewRelatedRecord, () => setSelectedRecordId(record.id))}
                                 </td>
                               ))}
                               {/* 참조되는 카테고리인 경우에만 참조 횟수 표시 */}

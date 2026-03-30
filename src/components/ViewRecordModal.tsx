@@ -487,32 +487,35 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                 파일 없음
               </div>
             )}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all text-left"
-                    onClick={async () => {
-                      try {
-                        await navigator.clipboard.writeText(resolvedPath);
-                        toast({ title: '경로가 복사되었습니다.' });
-                      } catch (e) {
-                        toast({ title: '복사 실패', description: String(e), variant: 'destructive' });
-                      }
-                    }}
-                  >
-                    {resolvedPath}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-                  복사하기
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            {!field.thumbnailOnly && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all text-left"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(resolvedPath);
+                          toast({ title: '경로가 복사되었습니다.' });
+                        } catch (e) {
+                          toast({ title: '복사 실패', description: String(e), variant: 'destructive' });
+                        }
+                      }}
+                    >
+                      {resolvedPath}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+                    복사하기
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
         );
       }
+      if (field.thumbnailOnly) return '-';
       // 미지원 확장자: 기존 경로 복사 버튼만
       return (
         <TooltipProvider>
@@ -1415,7 +1418,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                   </h3>
                   <div className="text-discord-text text-sm">
                     {/* 파일 필드는 상세 정보에서 썸네일 대신 경로 복사 버튼만 */}
-                    {field.type === 'file' && record?.data[field.id] ? (
+                    {field.type === 'file' && !field.thumbnailOnly && record?.data[field.id] ? (
                       (() => {
                         const displayPath = resolveFilePath(record.data[field.id], field);
                         if (!displayPath) return '-';
