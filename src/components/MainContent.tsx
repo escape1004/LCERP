@@ -478,7 +478,8 @@ const ThumbnailCell: React.FC<{
   record: DataRecord | undefined;
   onThumbnailClick: (filePath: string) => void;
   thumbnailFit: 'cover' | 'contain';
-}> = ({ filePath, record, onThumbnailClick, thumbnailFit }) => {
+  thumbnailOnly?: boolean;
+}> = ({ filePath, record, onThumbnailClick, thumbnailFit, thumbnailOnly = false }) => {
   const [dataUrl, setDataUrl] = React.useState<string | null>(null);
   const [fileExists, setFileExists] = React.useState<boolean | null>(null);
   const hasRetriedAfterErrorRef = React.useRef(false);
@@ -560,7 +561,7 @@ const ThumbnailCell: React.FC<{
   // 썸네일이 해시 기반인지 여부
   const isHashBased = record && !record.thumbnailPath;
   const missingFile = !!filePath && fileExists === false;
-  const canOpen = !!filePath && fileExists !== false;
+  const canOpen = !!filePath && fileExists !== false && !thumbnailOnly;
 
   return (
     <TooltipProvider>
@@ -572,7 +573,7 @@ const ThumbnailCell: React.FC<{
                 <img 
                   src={dataUrl} 
                   alt="썸네일" 
-                  className={`w-24 h-24 ${thumbnailFit === 'contain' ? 'object-contain bg-black' : 'object-cover'} rounded border border-gray-700 cursor-pointer hover:opacity-80 ${missingFile ? 'opacity-40' : ''}`}
+                  className={`w-24 h-24 ${thumbnailFit === 'contain' ? 'object-contain bg-black' : 'object-cover'} rounded border border-gray-700 ${canOpen ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
                   onClick={() => filePath && canOpen && onThumbnailClick(filePath)}
                   onError={handleThumbnailImageError}
                 />
@@ -590,7 +591,7 @@ const ThumbnailCell: React.FC<{
             ) : filePath ? (
               // 파일은 있지만 썸네일이 없는 경우
               <div 
-                className={`w-24 h-24 bg-gray-800 flex items-center justify-center text-gray-500 border border-gray-700 rounded cursor-pointer hover:bg-gray-700 transition-colors ${missingFile ? 'opacity-40' : ''}`}
+                className={`w-24 h-24 bg-gray-800 flex items-center justify-center text-gray-500 border border-gray-700 rounded transition-colors ${canOpen ? 'cursor-pointer hover:bg-gray-700' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
                 onClick={() => canOpen && onThumbnailClick(filePath)}
               >
                 <span className="text-2xl">{missingFile ? '?' : '🖼️'}</span>
@@ -1545,6 +1546,7 @@ export const MainContent: React.FC = () => {
                                     filePath={resolveFilePath(record.data[fileField.id], fileField) || undefined}
                                     record={record}
                                     thumbnailFit={listThumbnailFit}
+                                    thumbnailOnly={fileField.thumbnailOnly}
                                     onThumbnailClick={(filePath) => {
                                       // 즉시 모달 열기 (파일 타입 확인은 모달 내에서 처리)
                                       setViewerFilePath(filePath);

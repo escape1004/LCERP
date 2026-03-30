@@ -231,6 +231,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
       textSuffix: '',
       pathMode: 'direct',
       basePath: '',
+      thumbnailOnly: false,
     };
     setFormData(prev => {
       const updated = { ...prev, fields: [...prev.fields, newField] };
@@ -256,7 +257,10 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     const newFields = [...formData.fields];
     newFields[index] = { ...newFields[index], ...updates };
     if (updates.type === 'file' && !newFields[index].pathMode) {
-      newFields[index] = { ...newFields[index], pathMode: 'direct', basePath: '' };
+      newFields[index] = { ...newFields[index], pathMode: 'direct', basePath: '', thumbnailOnly: false };
+    }
+    if (updates.thumbnailOnly === true) {
+      newFields[index] = { ...newFields[index], thumbnailOnly: true, pathMode: 'direct', basePath: '' };
     }
     setFormData(prev => ({ ...prev, fields: newFields }));
     
@@ -495,6 +499,18 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                               미노출(리스트 숨김)
                                             </label>
                                           </div>
+                                          {field.type === 'file' && (
+                                            <div className="flex items-center gap-2">
+                                              <Checkbox
+                                                id={`thumbnail-only-${field.id}`}
+                                                checked={field.thumbnailOnly}
+                                                onCheckedChange={(checked) => updateField(index, { thumbnailOnly: checked as boolean })}
+                                              />
+                                              <label htmlFor={`thumbnail-only-${field.id}`} className="text-sm text-gray-300">
+                                                썸네일 전용
+                                              </label>
+                                            </div>
+                                          )}
                                           {(field.type === 'select' || field.type === 'relation') && (
                                             <div className="flex items-center gap-2">
                                               <Checkbox
@@ -511,7 +527,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                       </div>
                                     </div>
 
-                                    {field.type === 'file' && (
+                                    {field.type === 'file' && !field.thumbnailOnly && (
                                       <div>
                                         <Label className="text-sm text-gray-400 mb-2 block">첨부파일 경로 설정</Label>
                                         <div className="flex items-center gap-3">

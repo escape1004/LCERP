@@ -174,6 +174,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   // Footer 관련 변수들
   const fileField = category.fields.find(f => f.type === 'file');
   const filePath = resolveFilePath(fileField ? record?.data[fileField.id] : null, fileField);
+  const isThumbnailOnlyFile = !!fileField?.thumbnailOnly;
 
   React.useEffect(() => {
     if (!isOpen || !record || !fileField || !filePath) return;
@@ -224,7 +225,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
     return () => { ignore = true; };
   }, [isOpen, filePath, record, category]);
 
-  const canOpenFile = !!filePath && filePath !== '' && filePath !== '-' && fileExists !== false;
+  const canOpenFile = !!filePath && filePath !== '' && filePath !== '-' && fileExists !== false && !isThumbnailOnlyFile;
 
   const handleThumbnailClick = (filePath: string) => {
     // 즉시 모달 열기 (파일 타입 확인은 모달 내에서 처리)
@@ -434,7 +435,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
       }, [resolvedPath, record]);
 
       const missingFile = resolvedExists === false;
-      const canOpen = resolvedExists !== false;
+      const canOpen = resolvedExists !== false && !field.thumbnailOnly;
 
       if (SUPPORTED_THUMBNAIL_EXTS.includes(ext)) {
         return (
@@ -449,7 +450,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                       <img
                         src={thumbnailDataUrl}
                         alt="썸네일"
-                        className={`w-[96px] h-[96px] object-contain bg-black rounded border border-gray-700 cursor-pointer hover:opacity-80 ${missingFile ? 'opacity-40' : ''}`}
+                        className={`w-[96px] h-[96px] object-contain bg-black rounded border border-gray-700 ${canOpen ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
                         onClick={() => canOpen && handleThumbnailClick(resolvedPath)}
                       />
                       {missingFile && (
@@ -467,7 +468,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
             ) : resolvedPath ? (
               // 파일은 있지만 썸네일이 없는 경우
               <div 
-                className={`w-[96px] h-[96px] bg-gray-900 flex items-center justify-center text-xs text-gray-500 border border-gray-700 rounded cursor-pointer hover:bg-gray-800 transition-colors ${missingFile ? 'opacity-40' : ''}`}
+                className={`w-[96px] h-[96px] bg-gray-900 flex items-center justify-center text-xs text-gray-500 border border-gray-700 rounded transition-colors ${canOpen ? 'cursor-pointer hover:bg-gray-800' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
                 onClick={() => canOpen && handleThumbnailClick(resolvedPath)}
               >
                 {missingFile ? '파일 없음' : '썸네일 없음'}
@@ -1071,7 +1072,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                   <img
                     src={dataUrl}
                     alt="썸네일"
-                    className={`w-[320px] h-[320px] object-contain bg-black rounded-xl border border-gray-700 cursor-pointer hover:opacity-80 transition ${missingFile ? 'opacity-40' : ''}`}
+                    className={`w-[320px] h-[320px] object-contain bg-black rounded-xl border border-gray-700 transition ${canOpenFile ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
                     onClick={() => canOpenFile && handleThumbnailClick(filePath)}
                   />
                   {missingFile && (
@@ -1095,7 +1096,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         ) : filePath ? (
           // 파일은 있지만 썸네일이 없는 경우
           <div 
-            className={`w-[320px] h-[320px] bg-gray-900 flex items-center justify-center text-lg text-gray-500 border border-gray-700 rounded-xl cursor-pointer hover:bg-gray-800 transition-colors ${missingFile ? 'opacity-40' : ''}`}
+            className={`w-[320px] h-[320px] bg-gray-900 flex items-center justify-center text-lg text-gray-500 border border-gray-700 rounded-xl transition-colors ${canOpenFile ? 'cursor-pointer hover:bg-gray-800' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
             onClick={() => canOpenFile && handleThumbnailClick(filePath)}
           >
             {missingFile ? '파일 없음' : '썸네일 없음'}
@@ -1107,7 +1108,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
           </div>
         )}
         {/* 시간 입력/슬라이더 부분만 분기 */}
-        {isVideo && fileExists === true && (
+        {isVideo && fileExists === true && !isThumbnailOnlyFile && (
           <div className="flex items-center justify-center mt-2">
             {(!effectiveDuration || effectiveDuration === 0) ? (
               <div className="text-xs text-gray-500">동영상 길이 불러오는 중...</div>
@@ -1227,7 +1228,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         )}
         
         {/* 이미지/압축파일용 썸네일 재생성 / 커스텀 업로드 버튼 영역 */}
-        {!isVideo && fileExists === true && (
+        {!isVideo && fileExists === true && !isThumbnailOnlyFile && (
           <div className="flex items-center gap-2 mt-2">
             {/* 이미지/압축파일 자동 재생성 버튼 */}
             <TooltipProvider>

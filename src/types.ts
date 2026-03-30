@@ -36,6 +36,7 @@ export interface FieldDefinition {
   textSuffix?: string;
   pathMode?: 'direct' | 'base';
   basePath?: string;
+  thumbnailOnly?: boolean;
   options?: string[];
   relationCategoryId?: string;
   multiple?: boolean;

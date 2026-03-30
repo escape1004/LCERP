@@ -1013,8 +1013,9 @@ export const RecordModal: React.FC<RecordModalProps> = ({
               type="button"
               onClick={async () => {
                 try {
-                  // Electron 환경에서는 네이티브 파일 다이얼로그 사용
-                  const result = await window.electronAPI.openFileDialog();
+                  const result = field.thumbnailOnly
+                    ? await window.electronAPI.openImageFileDialog()
+                    : await window.electronAPI.openFileDialog();
                   if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
                     return;
                   }

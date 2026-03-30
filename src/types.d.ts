@@ -96,6 +96,7 @@ export interface Field {
   textSuffix?: string;
   pathMode?: 'direct' | 'base';
   basePath?: string;
+  thumbnailOnly?: boolean;
   multiple?: boolean;
   options?: string[];
   relationCategoryId?: string;
