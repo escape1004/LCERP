@@ -72,7 +72,7 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
 
     let cancelled = false;
 
-    window.electronAPI.getConfig().then((nextConfig) => {
+    window.electronAPI.getConfig().then((nextConfig: Config) => {
       if (cancelled) return;
       setConfig(nextConfig);
       setPassword('');

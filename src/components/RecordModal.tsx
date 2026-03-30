@@ -328,6 +328,26 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     }
   };
 
+  const normalizeTextFieldInput = (field: FieldDefinition, inputValue: string) => {
+    if (field.type !== 'text') {
+      return inputValue;
+    }
+
+    let normalizedValue = inputValue;
+    const prefix = field.textPrefix ?? '';
+    const suffix = field.textSuffix ?? '';
+
+    if (prefix && normalizedValue.startsWith(prefix)) {
+      normalizedValue = normalizedValue.slice(prefix.length);
+    }
+
+    if (suffix && normalizedValue.endsWith(suffix)) {
+      normalizedValue = normalizedValue.slice(0, normalizedValue.length - suffix.length);
+    }
+
+    return normalizedValue;
+  };
+
   const toggleCombobox = (fieldId: string) => {
     setOpenComboboxes(prev => ({
       ...prev,
@@ -415,7 +435,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                 type="text"
                 placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
                 value={value}
-                onChange={(e) => updateFieldValue(field.id, e.target.value)}
+                onChange={(e) => updateFieldValue(field.id, normalizeTextFieldInput(field, e.target.value))}
                 className={inputClassName}
                 ref={isFirstField ? firstFieldRef as React.Ref<HTMLInputElement> : undefined}
               />
@@ -436,7 +456,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                 type="text"
                 placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
                 value={value}
-                onChange={(e) => updateFieldValue(field.id, e.target.value)}
+                onChange={(e) => updateFieldValue(field.id, normalizeTextFieldInput(field, e.target.value))}
                 className={cn(
                   inputClassName,
                   'h-10 border-0 shadow-none rounded-none bg-transparent px-0',
