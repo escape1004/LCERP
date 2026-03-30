@@ -273,10 +273,7 @@ const db = new Database(dbPath, { verbose: log });
 
 // 북마크 핸들러 등록 (직접 추가)
 try {
-  console.log('=== Registering bookmark handlers ===');
-  
   ipcMain.handle('getBookmarks', async (_event, categoryId, recordId) => {
-    console.log('=== getBookmarks called with:', categoryId, recordId);
     const record = db.prepare("SELECT data FROM records WHERE categoryId = ? AND id = ?").get(categoryId, recordId);
     if (!record) return { success: false, error: "Record not found" };
     const data = JSON.parse(record.data);
@@ -284,7 +281,6 @@ try {
   });
 
   ipcMain.handle('addBookmark', async (_event, categoryId, recordId, time) => {
-    console.log('=== addBookmark called with:', categoryId, recordId, time);
     const record = db.prepare("SELECT data FROM records WHERE categoryId = ? AND id = ?").get(categoryId, recordId);
     if (!record) return { success: false, error: "Record not found" };
     const data = JSON.parse(record.data);
@@ -301,7 +297,6 @@ try {
   });
 
   ipcMain.handle('removeBookmark', async (_event, categoryId, recordId, time) => {
-    console.log('=== removeBookmark called with:', categoryId, recordId, time);
     const record = db.prepare("SELECT data FROM records WHERE categoryId = ? AND id = ?").get(categoryId, recordId);
     if (!record) return { success: false, error: "Record not found" };
     const data = JSON.parse(record.data);
@@ -315,7 +310,6 @@ try {
   });
 
   ipcMain.handle('removeAllBookmarks', async (_event, categoryId, recordId) => {
-    console.log('=== removeAllBookmarks called with:', categoryId, recordId);
     try {
       const record = db.prepare("SELECT data FROM records WHERE categoryId = ? AND id = ?").get(categoryId, recordId);
       if (!record) return { success: false, error: "Record not found" };
@@ -325,13 +319,10 @@ try {
         data.bookmarks = [];
         db.prepare("UPDATE records SET data = ?, updatedAt = ? WHERE categoryId = ? AND id = ?")
           .run(JSON.stringify(data), new Date().toISOString(), categoryId, recordId);
-        console.log('=== 북마크 삭제 완료 ===', { recordId, deletedCount: data.bookmarks.length });
-      } else {
-        console.log('=== 북마크가 없음 ===', { recordId });
       }
       return { success: true };
     } catch (error) {
-      console.error('=== removeAllBookmarks 에러 ===', error);
+      console.error('Failed to remove all bookmarks:', error);
       return { success: false, error: error.message };
     }
   });
@@ -688,8 +679,6 @@ async function generateThumbnail(filePath) {
     ];
     const ffmpegPath = ffmpegCandidates.find(fs.existsSync);
     const ffprobePath = ffprobeCandidates.find(fs.existsSync);
-    console.log('ffmpegPath:', ffmpegPath);
-    console.log('ffprobePath:', ffprobePath);
     if (!ffmpegPath || !ffprobePath) {
       log('ffmpeg/ffprobe 경로를 찾을 수 없음', { ffmpegPath, ffprobePath });
       return null;
@@ -2168,8 +2157,6 @@ const generateVideoThumbnailWithTime = async (filePath, timestampSec) => {
     ];
     const ffmpegPath = ffmpegCandidates.find(fs.existsSync);
     const ffprobePath = ffprobeCandidates.find(fs.existsSync);
-    console.log('ffmpegPath:', ffmpegPath);
-    console.log('ffprobePath:', ffprobePath);
     if (!ffmpegPath || !ffprobePath || !fs.existsSync(ffmpegPath) || !fs.existsSync(ffprobePath)) {
       log('ffmpeg/ffprobe 경로를 찾을 수 없음', { ffmpegPath, ffprobePath });
       return null;
@@ -2403,7 +2390,6 @@ ipcMain.handle('removeCustomThumbnail', async (_, filePath) => {
 
 ipcMain.handle('getVideoDuration', async (_, filePath) => {
   try {
-    console.log('getVideoDuration 호출됨:', filePath);
     const ffmpeg = require('fluent-ffmpeg');
     const ffmpegStatic = require('ffmpeg-static');
     const ffprobeStatic = require('ffprobe-static');
@@ -2413,18 +2399,13 @@ ipcMain.handle('getVideoDuration', async (_, filePath) => {
     if (!path.isAbsolute(filePath)) {
       normalizedPath = path.join(appDataDir, filePath);
     }
-    console.log('정규화된 경로:', normalizedPath);
     if (!fs.existsSync(normalizedPath)) {
-      console.log('파일이 존재하지 않음:', normalizedPath);
       return null;
     }
-    console.log('파일 존재 확인됨');
-    
+
     // ffmpeg/ffprobe 경로를 resources 폴더의 경로로만 강제 지정
     const ffmpegPath = path.join(process.resourcesPath, 'ffmpeg-static', 'ffmpeg.exe');
     const ffprobePath = getUnpackedFfprobePath();
-    console.log('ffmpegPath:', ffmpegPath);
-    console.log('ffprobePath:', ffprobePath);
     if (!fs.existsSync(ffmpegPath) || !fs.existsSync(ffprobePath)) {
       log('ffmpeg/ffprobe 경로를 찾을 수 없음', { ffmpegPath, ffprobePath });
       return null;
@@ -2433,25 +2414,21 @@ ipcMain.handle('getVideoDuration', async (_, filePath) => {
     ffmpeg.setFfprobePath(ffprobePath);
     
     return await new Promise((resolve, reject) => {
-      console.log('ffprobe 실행 시작');
       ffmpeg.ffprobe(normalizedPath, (err, metadata) => {
         if (err) {
-          console.error('ffprobe 에러:', err);
+          console.error('ffprobe error:', err);
           return resolve(null);
         }
-        console.log('ffprobe 메타데이터:', metadata);
         if (metadata && metadata.format && metadata.format.duration) {
           const duration = Math.floor(metadata.format.duration);
-          console.log('동영상 duration:', duration);
           resolve(duration);
         } else {
-          console.log('duration 정보 없음');
           resolve(null);
         }
       });
     });
   } catch (e) {
-    console.error('getVideoDuration 전체 에러:', e);
+    console.error('Failed to get video duration:', e);
     return null;
   }
 });

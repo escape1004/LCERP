@@ -1,18 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { ElectronAPI } from '../src/types/electron.d';
 
-interface TableData {
-  columns: string[];
-  rows: any[];
-  total: number;
-}
-
-interface Config {
-  dbPath: string;
-  backupDir: string;
-  backupInterval: number;
-}
-
 export {};
 
 const api: ElectronAPI = {
