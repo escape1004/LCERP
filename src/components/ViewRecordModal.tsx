@@ -9,6 +9,7 @@ import { ViewerModal } from './ViewerModal';
 import { TimeInput } from './TimeInput';
 import { format } from "date-fns";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./ui/tooltip";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "./ui/context-menu";
 import { resolveFilePath } from '../lib/pathResolver';
 import { AnimatedModal } from './ui/animated-modal';
 import { formatFieldDisplayValue } from '../lib/fieldFormat';
@@ -874,6 +875,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
     const [loading, setLoading] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
     const [regenLoading, setRegenLoading] = React.useState(false);
+    const [hasEmbeddedCover, setHasEmbeddedCover] = React.useState(false);
     const ext = filePath ? filePath.slice(filePath.lastIndexOf('.')).toLowerCase() : '';
     const isVideo = /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(ext);
     const loadRecords = useERPStore(state => state.loadRecords);
@@ -903,6 +905,39 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
       return () => { ignore = true; };
     }, [isVideo, filePath, record]);
 
+    React.useEffect(() => {
+      let ignore = false;
+      if (isVideo && filePath) {
+        window.electronAPI.getVideoCodecInfo(filePath)
+          .then((info) => {
+            if (!ignore) {
+              setHasEmbeddedCover(info?.hasEmbeddedCover === true);
+            }
+          })
+          .catch(() => {
+            if (!ignore) {
+              setHasEmbeddedCover(false);
+            }
+          });
+      } else {
+        setHasEmbeddedCover(false);
+      }
+/*        const codecInfo = await window.electronAPI.getVideoCodecInfo(filePath);
+        const hasCoverAfterRemoval = codecInfo?.hasEmbeddedCover === true;
+        setHasEmbeddedCover(hasCoverAfterRemoval);
+        if (hasCoverAfterRemoval) {
+          toast({
+            title: '而ㅼ뒪? ?몃꽕???쒓굅 ?ㅽ뙣',
+            description: '而ㅼ뒪? ?몃꽕?쇱씠 ?븘吏??섏씠??硫붾젰?곸뿉 ?꾨땲?뚯뒿?덈떎.',
+            variant: 'destructive',
+          });
+          return;
+        }
+*/
+
+      return () => { ignore = true; };
+    }, [isVideo, filePath]);
+
     const reloadThumbnail = React.useCallback(() => {
       setLoading(true);
       if (!record) {
@@ -930,6 +965,53 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
           throw e;
         });
     }, [filePath]);
+
+    const handleRemoveCustomThumbnail = React.useCallback(async () => {
+      if (!filePath) return;
+
+      try {
+        setRegenLoading(true);
+        setGlobalLoading(true, '커스텀 썸네일 제거 중...');
+        showGlobalLoading('커스텀 썸네일 제거 중...', 30000, true);
+
+        const removed = await window.electronAPI.removeCustomThumbnail(filePath);
+        if (!removed) {
+          toast({
+            title: '커스텀 썸네일 제거 실패',
+            description: '커스텀 썸네일이 없거나 제거할 수 없습니다.',
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        const codecInfo = await window.electronAPI.getVideoCodecInfo(filePath);
+        const hasCoverAfterRemoval = codecInfo?.hasEmbeddedCover === true;
+        setHasEmbeddedCover(hasCoverAfterRemoval);
+        if (hasCoverAfterRemoval) {
+          toast({
+            title: '커스텀 썸네일 제거 실패',
+            description: '커스텀 썸네일이 아직 남아 있습니다.',
+            variant: 'destructive',
+          });
+          return;
+        }
+        window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));
+        await reloadThumbnail();
+        if (categoryId) {
+          await loadRecords(categoryId);
+        }
+        toast({ title: '커스텀 썸네일을 제거했습니다.' });
+      } catch (e) {
+        toast({
+          title: '커스텀 썸네일 제거 실패',
+          description: String(e),
+          variant: 'destructive',
+        });
+      } finally {
+        setRegenLoading(false);
+        hideGlobalLoading();
+      }
+    }, [filePath, categoryId, loadRecords, reloadThumbnail, hideGlobalLoading, setGlobalLoading, showGlobalLoading]);
 
     React.useEffect(() => {
       if (SUPPORTED_THUMBNAIL_EXTS.includes(ext) && filePath) {
@@ -1067,12 +1149,15 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                     hideLoading();
                   }
                 }}
-                disabled={regenLoading}
+                disabled={regenLoading || hasEmbeddedCover}
                 loading={regenLoading}
+                regenerateTooltip={hasEmbeddedCover ? '커스텀 썸네일이 있어서 재생성이 불가능합니다.' : undefined}
                 rightAddon={(
-                  <TooltipProvider>
+                  <ContextMenu>
+                    <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
+                        <ContextMenuTrigger asChild>
                         <button
                           type="button"
                           onClick={async () => {
@@ -1089,6 +1174,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
 
                               const res = await window.electronAPI.setCustomThumbnail(filePath, imagePath);
                               if (res) {
+                                setHasEmbeddedCover(true);
                                 toast({ title: '커스텀 썸네일이 적용되었습니다.' });
                                 window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));
                                 await reloadThumbnail();
@@ -1118,12 +1204,22 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                         >
                           <Upload size={12} />
                         </button>
+                        </ContextMenuTrigger>
                       </TooltipTrigger>
                       <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
                         이미지 파일을 선택해 썸네일로 등록
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
+                    <ContextMenuContent>
+                      <ContextMenuItem
+                        disabled={!hasEmbeddedCover || regenLoading}
+                        onClick={handleRemoveCustomThumbnail}
+                      >
+                        커스텀 썸네일 제거
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
                 )}
               />
             )}

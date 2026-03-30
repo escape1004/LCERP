@@ -51,7 +51,8 @@ export interface ElectronAPI {
   getVideoDuration: (filePath: string) => Promise<number | null>;
 
   // New method
-  getVideoCodecInfo: (filePath: string) => Promise<{ video?: { codec?: string; profile?: string; pix_fmt?: string }; audio?: { codec?: string; sample_rate?: string; channels?: number }; error?: string }>;
+  getVideoCodecInfo: (filePath: string) => Promise<{ video?: { codec?: string; profile?: string; pix_fmt?: string }; audio?: { codec?: string; sample_rate?: string; channels?: number }; hasEmbeddedCover?: boolean; error?: string }>;
+  removeCustomThumbnail: (filePath: string) => Promise<boolean>;
 
   // Bookmark methods
   getBookmarks: (categoryId: string, recordId: string) => Promise<{ success: boolean; bookmarks?: { time: number; createdAt: string }[]; error?: string }>;

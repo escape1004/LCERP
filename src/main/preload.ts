@@ -111,6 +111,7 @@ const api: ElectronAPI = {
   generateThumbnailWithTime: (filePath: string, timestampSec: number) => ipcRenderer.invoke('generateThumbnailWithTime', filePath, timestampSec),
   regenerateThumbnail: (filePath: string) => ipcRenderer.invoke('regenerateThumbnail', filePath),
   setCustomThumbnail: (filePath: string, imagePath: string) => ipcRenderer.invoke('setCustomThumbnail', filePath, imagePath),
+  removeCustomThumbnail: (filePath: string) => ipcRenderer.invoke('removeCustomThumbnail', filePath),
   getVideoDuration: (filePath: string) => ipcRenderer.invoke('getVideoDuration', filePath),
   getVideoCodecInfo: (filePath: string) => ipcRenderer.invoke('getVideoCodecInfo', filePath),
   getBookmarks: (categoryId, recordId) => ipcRenderer.invoke('getBookmarks', categoryId, recordId),

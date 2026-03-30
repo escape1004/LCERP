@@ -2357,6 +2357,16 @@ ipcMain.handle('setCustomThumbnail', async (_, filePath, imagePath) => {
   return await setCustomThumbnailFromImage(filePath, imagePath);
 });
 
+ipcMain.handle('removeCustomThumbnail', async (_, filePath) => {
+  const removed = await removeEmbeddedVideoCover(filePath);
+  const stillHasEmbeddedCover = removed ? await hasEmbeddedVideoCover(filePath) : true;
+  if (removed && !stillHasEmbeddedCover) {
+    deleteThumbnail(filePath);
+    return true;
+  }
+  return false;
+});
+
 ipcMain.handle('getVideoDuration', async (_, filePath) => {
   try {
     console.log('getVideoDuration 호출됨:', filePath);
@@ -2427,9 +2437,11 @@ ipcMain.handle('getVideoCodecInfo', async (_, filePath) => {
         if (!metadata || !metadata.streams) return resolve({ error: 'No metadata' });
         const video = metadata.streams.find(s => s.codec_type === 'video');
         const audio = metadata.streams.find(s => s.codec_type === 'audio');
+        const hasEmbeddedCover = metadata.streams.some((s) => s?.disposition?.attached_pic === 1);
         resolve({
           video: video ? { codec: video.codec_name, profile: video.profile, pix_fmt: video.pix_fmt } : null,
           audio: audio ? { codec: audio.codec_name, sample_rate: audio.sample_rate, channels: audio.channels } : null,
+          hasEmbeddedCover,
         });
       });
     });
@@ -2464,6 +2476,31 @@ const getFfmpegToolPaths = () => {
     ffmpegPath: ffmpegCandidates.find(fs.existsSync),
     ffprobePath: ffprobeCandidates.find(fs.existsSync)
   };
+};
+
+const hasEmbeddedVideoCover = async (filePath) => {
+  try {
+    const ffmpeg = require('fluent-ffmpeg');
+    const { ffmpegPath, ffprobePath } = getFfmpegToolPaths();
+    if (!ffmpegPath || !ffprobePath) {
+      return false;
+    }
+
+    ffmpeg.setFfmpegPath(ffmpegPath);
+    ffmpeg.setFfprobePath(ffprobePath);
+
+    return await new Promise((resolve) => {
+      ffmpeg.ffprobe(filePath, (err, metadata) => {
+        if (err || !metadata?.streams) {
+          return resolve(false);
+        }
+
+        resolve(metadata.streams.some((stream) => stream?.disposition?.attached_pic === 1));
+      });
+    });
+  } catch (error) {
+    return false;
+  }
 };
 
 const extractEmbeddedVideoCover = async (filePath, outputPath) => {
@@ -2568,6 +2605,82 @@ const persistCustomThumbnailToVideoMetadata = async (targetFilePath, imagePath) 
     return true;
   } catch (error) {
     log('비디오 메타데이터 커버 저장 실패:', { targetFilePath, imagePath, error: error.message });
+    return false;
+  }
+};
+
+const removeEmbeddedVideoCover = async (targetFilePath) => {
+  try {
+    const ext = path.extname(targetFilePath).toLowerCase();
+    const supportedFormats = ['.mp4', '.m4v', '.mov', '.mkv'];
+    if (!supportedFormats.includes(ext)) {
+      return false;
+    }
+
+    const ffmpeg = require('fluent-ffmpeg');
+    const { ffmpegPath, ffprobePath } = getFfmpegToolPaths();
+    if (!ffmpegPath || !ffprobePath) {
+      return false;
+    }
+
+    ffmpeg.setFfmpegPath(ffmpegPath);
+    ffmpeg.setFfprobePath(ffprobePath);
+
+    const attachedPicStreamIndexes = await new Promise((resolve) => {
+      ffmpeg.ffprobe(targetFilePath, (err, metadata) => {
+        if (err || !metadata?.streams) {
+          return resolve([]);
+        }
+
+        const indexes = metadata.streams
+          .filter((stream) => stream?.disposition?.attached_pic === 1)
+          .map((stream) => stream.index)
+          .filter((index) => index !== null && index !== undefined);
+
+        resolve(indexes);
+      });
+    });
+
+    if (!attachedPicStreamIndexes.length) {
+      return false;
+    }
+
+    const tempOutputPath = `${targetFilePath}.cover-remove-tmp${ext}`;
+    const outputOptions = ['-map 0', ...attachedPicStreamIndexes.map((index) => `-map -0:${index}`), '-c copy'];
+
+    await new Promise((resolve, reject) => {
+      ffmpeg(targetFilePath)
+        .outputOptions(outputOptions)
+        .save(tempOutputPath)
+        .on('end', resolve)
+        .on('error', reject);
+    });
+
+    if (!fs.existsSync(tempOutputPath)) {
+      return false;
+    }
+
+    const backupPath = `${targetFilePath}.cover-remove-backup`;
+    try {
+      if (fs.existsSync(backupPath)) {
+        fs.unlinkSync(backupPath);
+      }
+      fs.renameSync(targetFilePath, backupPath);
+      fs.renameSync(tempOutputPath, targetFilePath);
+      fs.unlinkSync(backupPath);
+    } catch (swapError) {
+      if (fs.existsSync(tempOutputPath)) {
+        fs.unlinkSync(tempOutputPath);
+      }
+      if (fs.existsSync(backupPath) && !fs.existsSync(targetFilePath)) {
+        fs.renameSync(backupPath, targetFilePath);
+      }
+      throw swapError;
+    }
+
+    return true;
+  } catch (error) {
+    log('임베디드 커버 제거 실패:', { targetFilePath, error: error.message });
     return false;
   }
 };
