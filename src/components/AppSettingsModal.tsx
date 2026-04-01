@@ -11,6 +11,8 @@ import type { Config } from '../types';
 interface AppSettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  currentProfileName?: string;
+  onRequestProfileSwitch?: () => void | Promise<void>;
 }
 
 type SettingsSection = {
@@ -27,7 +29,7 @@ const sections: SettingsSection[] = [
   { id: 'security', label: '보안', description: '프로그램 비밀번호 관리', icon: Shield },
 ];
 
-export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) {
+export function AppSettingsModal({ open, onOpenChange, currentProfileName, onRequestProfileSwitch }: AppSettingsModalProps) {
   const [activeSection, setActiveSection] = useState('general');
   const [config, setConfig] = useState<Config | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -267,6 +269,28 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
 
   const renderGeneralSection = () => (
     <div className="space-y-4">
+      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-sm font-medium text-white">현재 프로필</div>
+            <p className="text-sm text-discord-muted mt-2 leading-6">
+              {currentProfileName ? `"${currentProfileName}" 프로필을 사용 중입니다.` : '선택된 프로필이 없습니다.'}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              void onRequestProfileSwitch?.();
+            }}
+            className="border-gray-600 hover:bg-discord-hover text-discord-text"
+            disabled={isSaving || !onRequestProfileSwitch}
+          >
+            프로필 변경
+          </Button>
+        </div>
+      </div>
+
       <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
         <div className="flex items-start justify-between gap-4">
           <div>

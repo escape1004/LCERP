@@ -1,5 +1,6 @@
 export interface Category {
   id: string;
+  profileId?: string;
   name: string;
   parentId?: string;
   fields: FieldDefinition[];
@@ -49,6 +50,7 @@ export interface FieldDefinition {
 
 export interface DataRecord {
   id: string;
+  profileId?: string;
   categoryId: string;
   data: Record<string, any>;
   createdAt: string;
@@ -113,4 +115,12 @@ export interface Config {
   videoSeekSeconds?: number;
   videoAutoPlay?: boolean;
   listThumbnailFit?: 'cover' | 'contain';
+}
+
+export interface Profile {
+  id: string;
+  name: string;
+  avatarColor?: string;
+  createdAt: string;
+  updatedAt: string;
 }

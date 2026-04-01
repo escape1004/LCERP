@@ -51,6 +51,8 @@ const defaultConfig = {
 };
 
 let appConfig = { ...defaultConfig };
+let currentProfileId = null;
+const DEFAULT_PROFILE_COLOR = '#5865F2';
 
 // save 폴더가 없으면 생성
 if (!fs.existsSync(appDataDir)) {
@@ -104,6 +106,88 @@ function applyWindowZoom(targetWindow) {
 
 function hashPassword(password) {
   return crypto.createHash('sha256').update(String(password)).digest('hex');
+}
+
+function getCurrentProfileIdOrThrow() {
+  if (!currentProfileId) {
+    throw new Error('Profile is not selected.');
+  }
+
+  return currentProfileId;
+}
+
+function getProfileById(profileId) {
+  return db.prepare('SELECT * FROM profiles WHERE id = ?').get(profileId) || null;
+}
+
+function ensureCurrentProfileExists() {
+  if (!currentProfileId) return null;
+
+  const profile = getProfileById(currentProfileId);
+  if (!profile) {
+    currentProfileId = null;
+    return null;
+  }
+
+  return profile;
+}
+
+function getScopedCategory(categoryId, profileId = getCurrentProfileIdOrThrow()) {
+  return db.prepare('SELECT * FROM categories WHERE id = ? AND profileId = ?').get(categoryId, profileId) || null;
+}
+
+function getScopedRecord(recordId, profileId = getCurrentProfileIdOrThrow()) {
+  return db.prepare('SELECT * FROM records WHERE id = ? AND profileId = ?').get(recordId, profileId) || null;
+}
+
+function ensureCategoryBelongsToCurrentProfile(categoryId) {
+  const category = getScopedCategory(categoryId);
+  if (!category) {
+    throw new Error('Category not found in current profile.');
+  }
+
+  return category;
+}
+
+function ensureRecordBelongsToCurrentProfile(recordId) {
+  const record = getScopedRecord(recordId);
+  if (!record) {
+    throw new Error('Record not found in current profile.');
+  }
+
+  return record;
+}
+
+function createProfile(name, avatarColor = DEFAULT_PROFILE_COLOR) {
+  const normalizedName = String(name || '').trim();
+  if (!normalizedName) {
+    throw new Error('Profile name is required.');
+  }
+
+  const now = new Date().toISOString();
+  const profile = {
+    id: crypto.randomUUID(),
+    name: normalizedName,
+    avatarColor: avatarColor || DEFAULT_PROFILE_COLOR,
+    createdAt: now,
+    updatedAt: now
+  };
+
+  db.prepare(`
+    INSERT INTO profiles (id, name, avatarColor, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(profile.id, profile.name, profile.avatarColor, profile.createdAt, profile.updatedAt);
+
+  return profile;
+}
+
+function ensureDefaultProfile() {
+  const existingProfile = db.prepare('SELECT * FROM profiles ORDER BY createdAt ASC LIMIT 1').get();
+  if (existingProfile) {
+    return existingProfile;
+  }
+
+  return createProfile('기본 프로필', DEFAULT_PROFILE_COLOR);
 }
 
 loadAppConfig();
@@ -274,14 +358,18 @@ const db = new Database(dbPath, { verbose: log });
 // 북마크 핸들러 등록 (직접 추가)
 try {
   ipcMain.handle('getBookmarks', async (_event, categoryId, recordId) => {
-    const record = db.prepare("SELECT data FROM records WHERE categoryId = ? AND id = ?").get(categoryId, recordId);
+    const profileId = getCurrentProfileIdOrThrow();
+    ensureCategoryBelongsToCurrentProfile(categoryId);
+    const record = db.prepare("SELECT data FROM records WHERE categoryId = ? AND id = ? AND profileId = ?").get(categoryId, recordId, profileId);
     if (!record) return { success: false, error: "Record not found" };
     const data = JSON.parse(record.data);
     return { success: true, bookmarks: data.bookmarks || [] };
   });
 
   ipcMain.handle('addBookmark', async (_event, categoryId, recordId, time) => {
-    const record = db.prepare("SELECT data FROM records WHERE categoryId = ? AND id = ?").get(categoryId, recordId);
+    const profileId = getCurrentProfileIdOrThrow();
+    ensureCategoryBelongsToCurrentProfile(categoryId);
+    const record = db.prepare("SELECT data FROM records WHERE categoryId = ? AND id = ? AND profileId = ?").get(categoryId, recordId, profileId);
     if (!record) return { success: false, error: "Record not found" };
     const data = JSON.parse(record.data);
     if (!data.bookmarks) data.bookmarks = [];
@@ -291,34 +379,38 @@ try {
     const newBookmark = { time, createdAt: new Date().toISOString() };
     data.bookmarks.push(newBookmark);
     data.bookmarks.sort((a, b) => a.time - b.time);
-    db.prepare("UPDATE records SET data = ?, updatedAt = ? WHERE categoryId = ? AND id = ?")
-      .run(JSON.stringify(data), new Date().toISOString(), categoryId, recordId);
+    db.prepare("UPDATE records SET data = ?, updatedAt = ? WHERE categoryId = ? AND id = ? AND profileId = ?")
+      .run(JSON.stringify(data), new Date().toISOString(), categoryId, recordId, profileId);
     return { success: true, bookmark: newBookmark };
   });
 
   ipcMain.handle('removeBookmark', async (_event, categoryId, recordId, time) => {
-    const record = db.prepare("SELECT data FROM records WHERE categoryId = ? AND id = ?").get(categoryId, recordId);
+    const profileId = getCurrentProfileIdOrThrow();
+    ensureCategoryBelongsToCurrentProfile(categoryId);
+    const record = db.prepare("SELECT data FROM records WHERE categoryId = ? AND id = ? AND profileId = ?").get(categoryId, recordId, profileId);
     if (!record) return { success: false, error: "Record not found" };
     const data = JSON.parse(record.data);
     if (!data.bookmarks) return { success: false, error: "북마크가 없습니다." };
     const idx = data.bookmarks.findIndex((b) => Math.abs(b.time - time) < 1);
     if (idx === -1) return { success: false, error: "해당 시간의 북마크를 찾을 수 없습니다." };
     data.bookmarks.splice(idx, 1);
-    db.prepare("UPDATE records SET data = ?, updatedAt = ? WHERE categoryId = ? AND id = ?")
-      .run(JSON.stringify(data), new Date().toISOString(), categoryId, recordId);
+    db.prepare("UPDATE records SET data = ?, updatedAt = ? WHERE categoryId = ? AND id = ? AND profileId = ?")
+      .run(JSON.stringify(data), new Date().toISOString(), categoryId, recordId, profileId);
     return { success: true };
   });
 
   ipcMain.handle('removeAllBookmarks', async (_event, categoryId, recordId) => {
     try {
-      const record = db.prepare("SELECT data FROM records WHERE categoryId = ? AND id = ?").get(categoryId, recordId);
+      const profileId = getCurrentProfileIdOrThrow();
+      ensureCategoryBelongsToCurrentProfile(categoryId);
+      const record = db.prepare("SELECT data FROM records WHERE categoryId = ? AND id = ? AND profileId = ?").get(categoryId, recordId, profileId);
       if (!record) return { success: false, error: "Record not found" };
       
       const data = JSON.parse(record.data);
       if (data.bookmarks && data.bookmarks.length > 0) {
         data.bookmarks = [];
-        db.prepare("UPDATE records SET data = ?, updatedAt = ? WHERE categoryId = ? AND id = ?")
-          .run(JSON.stringify(data), new Date().toISOString(), categoryId, recordId);
+        db.prepare("UPDATE records SET data = ?, updatedAt = ? WHERE categoryId = ? AND id = ? AND profileId = ?")
+          .run(JSON.stringify(data), new Date().toISOString(), categoryId, recordId, profileId);
       }
       return { success: true };
     } catch (error) {
@@ -340,10 +432,21 @@ db.exec('PRAGMA journal_mode = WAL');
 // 데이터베이스 테이블 생성
 function initializeDatabase() {
   try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS profiles (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL COLLATE NOCASE,
+        avatarColor TEXT,
+        createdAt TEXT,
+        updatedAt TEXT
+      )
+    `);
+
     // 카테고리 테이블
     db.exec(`
       CREATE TABLE IF NOT EXISTS categories (
         id TEXT PRIMARY KEY,
+        profileId TEXT,
         name TEXT NOT NULL COLLATE NOCASE,
         parentId TEXT,
         fields TEXT NOT NULL,
@@ -358,6 +461,7 @@ function initializeDatabase() {
     db.exec(`
       CREATE TABLE IF NOT EXISTS records (
         id TEXT PRIMARY KEY,
+        profileId TEXT,
         categoryId TEXT NOT NULL,
         data TEXT NOT NULL,
         createdAt TEXT,
@@ -367,6 +471,11 @@ function initializeDatabase() {
     `);
 
     // duration 필드가 없으면 추가 (마이그레이션)
+    const categoryColumns = db.prepare("PRAGMA table_info(categories)").all();
+    if (!categoryColumns.some(col => col.name === 'profileId')) {
+      db.exec('ALTER TABLE categories ADD COLUMN profileId TEXT');
+    }
+
     const columns = db.prepare("PRAGMA table_info(records)").all();
     if (!columns.some(col => col.name === 'duration')) {
       db.exec('ALTER TABLE records ADD COLUMN duration INTEGER');
@@ -376,6 +485,14 @@ function initializeDatabase() {
     if (!columns.some(col => col.name === 'thumbnailPath')) {
       db.exec('ALTER TABLE records ADD COLUMN thumbnailPath TEXT');
     }
+
+    if (!columns.some(col => col.name === 'profileId')) {
+      db.exec('ALTER TABLE records ADD COLUMN profileId TEXT');
+    }
+
+    const defaultProfile = ensureDefaultProfile();
+    db.prepare('UPDATE categories SET profileId = ? WHERE profileId IS NULL OR profileId = ?').run(defaultProfile.id, '');
+    db.prepare('UPDATE records SET profileId = ? WHERE profileId IS NULL OR profileId = ?').run(defaultProfile.id, '');
   } catch (error) {
     log('Error initializing database:', error);
     throw error;
@@ -795,14 +912,14 @@ async function generateThumbnail(filePath) {
 // 카테고리의 모든 레코드에서 썸네일 정리
 const cleanupThumbnailsForCategory = (categoryId) => {
   try {
-    const records = db.prepare('SELECT data FROM records WHERE categoryId = ?').all(categoryId);
+    const category = db.prepare('SELECT fields, profileId FROM categories WHERE id = ?').get(categoryId);
+    if (!category) return 0;
+
+    const records = db.prepare('SELECT data FROM records WHERE categoryId = ? AND profileId = ?').all(categoryId, category.profileId);
     let deletedCount = 0;
     
     records.forEach(record => {
       const data = JSON.parse(record.data);
-      const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(categoryId);
-      if (!category) return;
-      
       const fields = JSON.parse(category.fields);
       const fileField = fields.find(f => f.type === 'file');
       
@@ -824,7 +941,10 @@ const cleanupThumbnailsForCategory = (categoryId) => {
 // 관계형 데이터에서 참조 정리
 const cleanupRelationReferences = (categoryId) => {
   try {
-    const allCategories = db.prepare('SELECT id, fields FROM categories').all();
+    const targetCategory = db.prepare('SELECT profileId FROM categories WHERE id = ?').get(categoryId);
+    if (!targetCategory) return 0;
+
+    const allCategories = db.prepare('SELECT id, fields FROM categories WHERE profileId = ?').all(targetCategory.profileId);
     let updatedCount = 0;
     
     allCategories.forEach(cat => {
@@ -832,7 +952,7 @@ const cleanupRelationReferences = (categoryId) => {
       const relationFields = fields.filter(f => f.type === 'relation' && f.relationCategoryId === categoryId);
       
       if (relationFields.length > 0) {
-        const records = db.prepare('SELECT id, data FROM records WHERE categoryId = ?').all(cat.id);
+        const records = db.prepare('SELECT id, data FROM records WHERE categoryId = ? AND profileId = ?').all(cat.id, targetCategory.profileId);
         
         records.forEach(record => {
           const data = JSON.parse(record.data);
@@ -869,8 +989,8 @@ const cleanupRelationReferences = (categoryId) => {
 };
 
 // 중복 체크 함수
-function checkDuplicateFields(categoryId, data, existingRecordId = null) {
-  const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(categoryId);
+function checkDuplicateFields(categoryId, data, existingRecordId = null, profileId = getCurrentProfileIdOrThrow()) {
+  const category = db.prepare('SELECT fields FROM categories WHERE id = ? AND profileId = ?').get(categoryId, profileId);
   if (!category) {
     throw new Error(`Category not found: ${categoryId}`);
   }
@@ -891,9 +1011,10 @@ function checkDuplicateFields(categoryId, data, existingRecordId = null) {
     let query = `
       SELECT id FROM records 
       WHERE categoryId = ? 
+      AND profileId = ?
       AND json_extract(data, '$.${field.id}') = ?
     `;
-    let params = [categoryId, String(fieldValue)];
+    let params = [categoryId, profileId, String(fieldValue)];
 
     if (existingRecordId) {
       query += ' AND id != ?';
@@ -922,7 +1043,8 @@ ipcMain.handle('openExternal', async (_, url) => {
 
 ipcMain.handle('db:getCategories', async () => {
   try {
-    const categories = db.prepare('SELECT * FROM categories ORDER BY order_num').all();
+    const profileId = getCurrentProfileIdOrThrow();
+    const categories = db.prepare('SELECT * FROM categories WHERE profileId = ? ORDER BY order_num').all(profileId);
     // fields를 배열로 변환
     return categories.map(cat => ({
       ...cat,
@@ -967,15 +1089,17 @@ ipcMain.handle('shell:openExternal', async (_, url) => {
 });
 
 ipcMain.handle('db:addCategory', async (_, category) => {
+  const profileId = getCurrentProfileIdOrThrow();
   const id = generateUUID();
   const now = new Date().toISOString();
   
   try {
     db.prepare(`
-      INSERT INTO categories (id, name, parentId, fields, order_num, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO categories (id, profileId, name, parentId, fields, order_num, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
+      profileId,
       category.name,
       category.parentId || null,
       JSON.stringify(category.fields),
@@ -994,12 +1118,13 @@ async function handleUpdateRecord(_, id, data) {
   try {
     log('=== handleUpdateRecord 시작 ===', { id, dataKeys: Object.keys(data) });
     
-    const record = db.prepare('SELECT categoryId, duration FROM records WHERE id = ?').get(id);
+    const profileId = getCurrentProfileIdOrThrow();
+    const record = db.prepare('SELECT categoryId, duration FROM records WHERE id = ? AND profileId = ?').get(id, profileId);
     if (!record) {
       throw new Error('Record not found');
     }
 
-    await checkDuplicateFields(record.categoryId, data, id);
+    await checkDuplicateFields(record.categoryId, data, id, profileId);
 
     // 기존 duration 값 유지
     let duration = record.duration;
@@ -1057,7 +1182,7 @@ async function handleUpdateRecord(_, id, data) {
     let prevFilePath = null;
     try {
       log('=== 파일 경로 변경 감지 시작 ===');
-      const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(record.categoryId);
+      const category = db.prepare('SELECT fields FROM categories WHERE id = ? AND profileId = ?').get(record.categoryId, profileId);
       if (category) {
         const fields = JSON.parse(category.fields);
         log('=== 카테고리 필드 ===', { fields: fields.map(f => ({ id: f.id, type: f.type, name: f.name })) });
@@ -1067,7 +1192,7 @@ async function handleUpdateRecord(_, id, data) {
           log('=== 파일 필드 발견 ===', { fileFieldId: fileField.id, fileFieldName: fileField.name });
           
           // 업데이트 전에 이전 파일 경로 조회
-          const prevRecord = db.prepare('SELECT data FROM records WHERE id = ?').get(id);
+          const prevRecord = db.prepare('SELECT data FROM records WHERE id = ? AND profileId = ?').get(id, profileId);
           if (prevRecord) {
             const prevData = JSON.parse(prevRecord.data);
             prevFilePath = prevData[fileField.id] || null;
@@ -1089,21 +1214,22 @@ async function handleUpdateRecord(_, id, data) {
     const stmt = db.prepare(`
       UPDATE records
       SET data = ?, updatedAt = ?, duration = ?
-      WHERE id = ?
+      WHERE id = ? AND profileId = ?
     `);
     
     stmt.run(
       JSON.stringify(data),
       new Date().toISOString(),
       duration,
-      id
+      id,
+      profileId
     );
     log('=== DB 업데이트 완료 ===');
     
     // 파일 필드가 있으면 썸네일 자동 생성
     try {
       log('=== 썸네일 생성 로직 시작 ===');
-      const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(record.categoryId);
+      const category = db.prepare('SELECT fields FROM categories WHERE id = ? AND profileId = ?').get(record.categoryId, profileId);
       if (category) {
         const fields = JSON.parse(category.fields);
         const fileField = fields.find(f => f.type === 'file');
@@ -1123,13 +1249,13 @@ async function handleUpdateRecord(_, id, data) {
             
             // 파일 경로가 변경되었으므로 기존 북마크 삭제
             try {
-              const recordData = db.prepare('SELECT data FROM records WHERE id = ?').get(id);
+              const recordData = db.prepare('SELECT data FROM records WHERE id = ? AND profileId = ?').get(id, profileId);
               if (recordData) {
                 const data = JSON.parse(recordData.data);
                 if (data.bookmarks && data.bookmarks.length > 0) {
                   data.bookmarks = [];
-                  db.prepare("UPDATE records SET data = ?, updatedAt = ? WHERE id = ?")
-                    .run(JSON.stringify(data), new Date().toISOString(), id);
+                  db.prepare("UPDATE records SET data = ?, updatedAt = ? WHERE id = ? AND profileId = ?")
+                    .run(JSON.stringify(data), new Date().toISOString(), id, profileId);
                   log('=== 파일 변경으로 인해 북마크 삭제 완료 ===', { recordId: id, deletedCount: data.bookmarks.length });
                 } else {
                   log('=== 파일 변경됨, 북마크 없음 ===', { recordId: id });
@@ -1146,7 +1272,7 @@ async function handleUpdateRecord(_, id, data) {
               log('=== 썸네일 생성 완료 ===', { thumbnailResult });
               
               // 새 레코드의 경우 썸네일 경로를 DB에 저장
-              db.prepare('UPDATE records SET thumbnailPath = ? WHERE id = ?').run(thumbnailResult, id);
+              db.prepare('UPDATE records SET thumbnailPath = ? WHERE id = ? AND profileId = ?').run(thumbnailResult, id, profileId);
               log('[addRecord] 썸네일 경로 DB 저장 완료', { recordId: id, thumbnailPath: thumbnailResult });
             } else {
               log('=== 썸네일 생성 실패 ===');
@@ -1181,8 +1307,10 @@ ipcMain.handle('updateRecord', handleUpdateRecord);
 ipcMain.handle('db:updateRecord', handleUpdateRecord);
 
 ipcMain.handle('db:deleteCategory', async (_, id) => {
+  const profileId = getCurrentProfileIdOrThrow();
+  ensureCategoryBelongsToCurrentProfile(id);
   const relationCleanupCount = cleanupRelationReferences(id);
-  const childCategories = db.prepare('SELECT id FROM categories WHERE parentId = ?').all(id);
+  const childCategories = db.prepare('SELECT id FROM categories WHERE parentId = ? AND profileId = ?').all(id, profileId);
   let totalThumbnailCount = 0;
   
   childCategories.forEach(child => {
@@ -1191,9 +1319,9 @@ ipcMain.handle('db:deleteCategory', async (_, id) => {
   
   totalThumbnailCount += cleanupThumbnailsForCategory(id);
   
-  db.prepare('DELETE FROM categories WHERE parentId = ?').run(id);
-  db.prepare('DELETE FROM records WHERE categoryId = ?').run(id);
-  db.prepare('DELETE FROM categories WHERE id = ?').run(id);
+  db.prepare('DELETE FROM categories WHERE parentId = ? AND profileId = ?').run(id, profileId);
+  db.prepare('DELETE FROM records WHERE categoryId = ? AND profileId = ?').run(id, profileId);
+  db.prepare('DELETE FROM categories WHERE id = ? AND profileId = ?').run(id, profileId);
   
   return {
     success: true,
@@ -1204,8 +1332,10 @@ ipcMain.handle('db:deleteCategory', async (_, id) => {
 
 ipcMain.handle('db:getRecords', async (_, categoryId) => {
   try {
+    const profileId = getCurrentProfileIdOrThrow();
     if (!categoryId) throw new Error('Category ID is required');
-    const records = db.prepare('SELECT id, categoryId, data, createdAt, updatedAt, duration, thumbnailPath FROM records WHERE categoryId = ? ORDER BY createdAt DESC').all(categoryId);
+    ensureCategoryBelongsToCurrentProfile(categoryId);
+    const records = db.prepare('SELECT id, categoryId, data, createdAt, updatedAt, duration, thumbnailPath FROM records WHERE categoryId = ? AND profileId = ? ORDER BY createdAt DESC').all(categoryId, profileId);
     return records.map(record => ({
       ...record,
       data: JSON.parse(record.data)
@@ -1218,17 +1348,19 @@ ipcMain.handle('db:getRecords', async (_, categoryId) => {
 
 ipcMain.handle('db:addRecord', async (_, record) => {
   try {
+    const profileId = getCurrentProfileIdOrThrow();
     if (!record || typeof record !== 'object') {
       throw new Error('Record must be an object');
     }
     if (!record.categoryId || !record.data) {
       throw new Error('Missing required fields');
     }
-    await checkDuplicateFields(record.categoryId, record.data);
+    ensureCategoryBelongsToCurrentProfile(record.categoryId);
+    await checkDuplicateFields(record.categoryId, record.data, null, profileId);
     const recordId = record.id || crypto.randomUUID();
     const stmt = db.prepare(`
-      INSERT INTO records (id, categoryId, data, createdAt, updatedAt, duration)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO records (id, profileId, categoryId, data, createdAt, updatedAt, duration)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
     const now = new Date().toISOString();
     // duration 계산
@@ -1283,6 +1415,7 @@ ipcMain.handle('db:addRecord', async (_, record) => {
     try {
       stmt.run(
         recordId,
+        profileId,
         record.categoryId,
         JSON.stringify(record.data),
         record.createdAt || now,
@@ -1295,7 +1428,7 @@ ipcMain.handle('db:addRecord', async (_, record) => {
     }
     // 파일 필드가 있으면 썸네일 자동 생성
     try {
-      const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(record.categoryId);
+      const category = db.prepare('SELECT fields FROM categories WHERE id = ? AND profileId = ?').get(record.categoryId, profileId);
       if (category) {
         const fields = JSON.parse(category.fields);
         const fileFieldObj = fields.find(f => f.type === 'file');
@@ -1308,7 +1441,7 @@ ipcMain.handle('db:addRecord', async (_, record) => {
               log('[addRecord] 썸네일 생성 완료', { thumbnailResult });
               
               // 새 레코드의 경우 썸네일 경로를 DB에 저장
-              db.prepare('UPDATE records SET thumbnailPath = ? WHERE id = ?').run(thumbnailResult, recordId);
+              db.prepare('UPDATE records SET thumbnailPath = ? WHERE id = ? AND profileId = ?').run(thumbnailResult, recordId, profileId);
               log('[addRecord] 썸네일 경로 DB 저장 완료', { recordId, thumbnailPath: thumbnailResult });
             } else {
               log('[addRecord] 썸네일 생성 실패(결과 null)', { filePath });
@@ -1330,14 +1463,15 @@ ipcMain.handle('db:addRecord', async (_, record) => {
 
 ipcMain.handle('db:deleteRecord', async (_, id) => {
   try {
-    const record = db.prepare('SELECT categoryId, data FROM records WHERE id = ?').get(id);
+    const profileId = getCurrentProfileIdOrThrow();
+    const record = db.prepare('SELECT categoryId, data FROM records WHERE id = ? AND profileId = ?').get(id, profileId);
     if (!record) {
       throw new Error('Record not found');
     }
     
     // 썸네일 삭제
     try {
-      const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(record.categoryId);
+      const category = db.prepare('SELECT fields FROM categories WHERE id = ? AND profileId = ?').get(record.categoryId, profileId);
       if (category) {
         const fields = JSON.parse(category.fields);
         const fileField = fields.find(f => f.type === 'file');
@@ -1359,7 +1493,7 @@ ipcMain.handle('db:deleteRecord', async (_, id) => {
       // 썸네일 삭제 실패는 레코드 삭제를 막지 않음
     }
     
-    db.prepare('DELETE FROM records WHERE id = ?').run(id);
+    db.prepare('DELETE FROM records WHERE id = ? AND profileId = ?').run(id, profileId);
     return { success: true };
   } catch (error) {
     log('Error in deleteRecord:', error);
@@ -1379,6 +1513,93 @@ ipcMain.handle('getConfig', () => {
     videoAutoPlay: appConfig.videoAutoPlay !== false,
     listThumbnailFit: appConfig.listThumbnailFit === 'contain' ? 'contain' : 'cover'
   };
+});
+
+ipcMain.handle('profiles:getAll', () => {
+  log('profiles:getAll');
+  return db.prepare('SELECT * FROM profiles ORDER BY createdAt ASC').all();
+});
+
+ipcMain.handle('profiles:getCurrent', () => {
+  return ensureCurrentProfileExists();
+});
+
+ipcMain.handle('profiles:select', (_event, profileId) => {
+  log('profiles:select', { profileId });
+  const profile = getProfileById(profileId);
+  if (!profile) {
+    log('profiles:select:not-found', { profileId });
+    return { success: false, error: 'Profile not found.' };
+  }
+
+  currentProfileId = profile.id;
+  log('profiles:select:success', { profileId: profile.id });
+  return { success: true, profile };
+});
+
+ipcMain.handle('profiles:clearCurrent', () => {
+  currentProfileId = null;
+  return { success: true };
+});
+
+ipcMain.handle('profiles:create', (_event, payload = {}) => {
+  try {
+    log('profiles:create', payload);
+    const profile = createProfile(payload.name, payload.avatarColor);
+    log('profiles:create:success', { profileId: profile.id, name: profile.name });
+    return { success: true, profile };
+  } catch (error) {
+    log('profiles:create:error', { message: error.message, stack: error.stack });
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('profiles:update', (_event, profileId, updates = {}) => {
+  const profile = getProfileById(profileId);
+  if (!profile) {
+    return { success: false, error: 'Profile not found.' };
+  }
+
+  const name = String(updates.name ?? profile.name).trim();
+  if (!name) {
+    return { success: false, error: 'Profile name is required.' };
+  }
+
+  const avatarColor = updates.avatarColor || profile.avatarColor || DEFAULT_PROFILE_COLOR;
+  db.prepare(`
+    UPDATE profiles
+    SET name = ?, avatarColor = ?, updatedAt = ?
+    WHERE id = ?
+  `).run(name, avatarColor, new Date().toISOString(), profileId);
+
+  return { success: true, profile: getProfileById(profileId) };
+});
+
+ipcMain.handle('profiles:delete', (_event, profileId) => {
+  const profile = getProfileById(profileId);
+  if (!profile) {
+    return { success: false, error: 'Profile not found.' };
+  }
+
+  const profileCount = db.prepare('SELECT COUNT(*) as count FROM profiles').get();
+  if ((profileCount?.count || 0) <= 1) {
+    return { success: false, error: 'At least one profile must remain.' };
+  }
+
+  const categoryIds = db.prepare('SELECT id FROM categories WHERE profileId = ?').all(profileId).map(row => row.id);
+  categoryIds.forEach(categoryId => {
+    cleanupThumbnailsForCategory(categoryId);
+  });
+
+  db.prepare('DELETE FROM records WHERE profileId = ?').run(profileId);
+  db.prepare('DELETE FROM categories WHERE profileId = ?').run(profileId);
+  db.prepare('DELETE FROM profiles WHERE id = ?').run(profileId);
+
+  if (currentProfileId === profileId) {
+    currentProfileId = null;
+  }
+
+  return { success: true };
 });
 
 ipcMain.handle('setDbPath', async () => {
@@ -1679,7 +1900,8 @@ ipcMain.handle('openBackupLocation', () => {
 
 ipcMain.handle('db:checkDuplicate', async (_, categoryId, fieldId, value, recordId = null) => {
   try {
-    const category = db.prepare('SELECT fields FROM categories WHERE id = ?').get(categoryId);
+    const profileId = getCurrentProfileIdOrThrow();
+    const category = db.prepare('SELECT fields FROM categories WHERE id = ? AND profileId = ?').get(categoryId, profileId);
     if (!category) {
       throw new Error(`Category not found: ${categoryId}`);
     }
@@ -1698,9 +1920,10 @@ ipcMain.handle('db:checkDuplicate', async (_, categoryId, fieldId, value, record
     let query = `
       SELECT id FROM records 
       WHERE categoryId = ? 
+      AND profileId = ?
       AND json_extract(data, '$.${fieldId}') = ?
     `;
-    let params = [categoryId, String(value)];
+    let params = [categoryId, profileId, String(value)];
 
     if (recordId) {
       query += ' AND id != ?';
@@ -2077,10 +2300,11 @@ ipcMain.handle('getArchiveFileText', async (_, filePath, fileName) => {
 });
 
 ipcMain.handle('db:updateCategory', (event, id, updates) => {
+  const profileId = getCurrentProfileIdOrThrow();
   const stmt = db.prepare(`
     UPDATE categories
     SET name = ?, parentId = ?, fields = ?, order_num = ?, updatedAt = ?
-    WHERE id = ?
+    WHERE id = ? AND profileId = ?
   `);
   stmt.run(
     updates.name,
@@ -2088,7 +2312,8 @@ ipcMain.handle('db:updateCategory', (event, id, updates) => {
     JSON.stringify(updates.fields),
     updates.order_num,
     new Date().toISOString(),
-    id
+    id,
+    profileId
   );
   return { success: true };
 });

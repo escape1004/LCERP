@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Category, DataRecord, NewCategory, NewRecord } from '@/types';
+import { Category, DataRecord, NewCategory, NewRecord, Profile } from '@/types';
 
 interface ERPStore {
   categories: Category[];
@@ -9,6 +9,7 @@ interface ERPStore {
   currentPage: number;
   itemsPerPage: number;
   showDbViewer: boolean;
+  currentProfile: Profile | null;
 
   loadCategories: () => Promise<void>;
   loadRecords: (categoryId: string) => Promise<void>;
@@ -28,6 +29,8 @@ interface ERPStore {
   toggleDbViewer: () => void;
   checkDuplicate: (categoryId: string, fieldId: string, value: any, recordId?: string) => Promise<boolean>;
   invalidateCache: (categoryId?: string) => void;
+  setCurrentProfile: (profile: Profile | null) => void;
+  resetForProfile: () => void;
 }
 
 export const useERPStore = create<ERPStore>((set, get) => ({
@@ -38,16 +41,33 @@ export const useERPStore = create<ERPStore>((set, get) => ({
   currentPage: 1,
   itemsPerPage: 20,
   showDbViewer: false,
+  currentProfile: null,
 
   loadCategories: async () => {
+    if (!get().currentProfile) {
+      set({ categories: [] });
+      return;
+    }
+
     const categories = await window.electronAPI.getCategories();
     set({ categories });
   },
 
   loadRecords: async (categoryId: string) => {
     try {
+      const profileId = get().currentProfile?.id;
+      if (!profileId) {
+        set(state => ({
+          records: {
+            ...state.records,
+            [categoryId]: []
+          }
+        }));
+        return;
+      }
+
       // 로컬 스토리지에서 캐시된 데이터 확인
-      const cacheKey = `records_${categoryId}`;
+      const cacheKey = `records_${profileId}_${categoryId}`;
       const cachedData = localStorage.getItem(cacheKey);
       const cacheTimestamp = localStorage.getItem(`${cacheKey}_timestamp`);
       
@@ -98,15 +118,24 @@ export const useERPStore = create<ERPStore>((set, get) => ({
 
   // 캐시 무효화 함수
   invalidateCache: (categoryId?: string) => {
+    const profileId = get().currentProfile?.id;
     if (categoryId) {
       // 특정 카테고리 캐시만 무효화
-      localStorage.removeItem(`records_${categoryId}`);
-      localStorage.removeItem(`records_${categoryId}_timestamp`);
+      if (!profileId) return;
+      localStorage.removeItem(`records_${profileId}_${categoryId}`);
+      localStorage.removeItem(`records_${profileId}_${categoryId}_timestamp`);
     } else {
       // 모든 캐시 무효화
       const keys = Object.keys(localStorage);
       keys.forEach(key => {
-        if (key.startsWith('records_')) {
+        if (!profileId) {
+          if (key.startsWith('records_')) {
+            localStorage.removeItem(key);
+          }
+          return;
+        }
+
+        if (key.startsWith(`records_${profileId}_`)) {
           localStorage.removeItem(key);
         }
       });
@@ -269,5 +298,18 @@ export const useERPStore = create<ERPStore>((set, get) => ({
     } catch (error) {
       return false;
     }
+  },
+
+  setCurrentProfile: (profile) => set({ currentProfile: profile }),
+
+  resetForProfile: () => {
+    set({
+      categories: [],
+      records: {},
+      selectedCategoryId: null,
+      searchTerm: '',
+      currentPage: 1,
+      showDbViewer: false
+    });
   },
 }));

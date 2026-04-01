@@ -25,6 +25,13 @@ export interface ElectronAPI {
   setAppPassword: (password: string) => Promise<{ success: boolean; error?: string }>;
   clearAppPassword: () => Promise<{ success: boolean; error?: string }>;
   verifyAppPassword: (password: string) => Promise<{ success: boolean; error?: string }>;
+  getProfiles: () => Promise<Profile[]>;
+  getCurrentProfile: () => Promise<Profile | null>;
+  selectProfile: (profileId: string) => Promise<{ success: boolean; profile?: Profile; error?: string }>;
+  clearCurrentProfile: () => Promise<{ success: boolean }>;
+  createProfile: (payload: { name: string; avatarColor?: string }) => Promise<{ success: boolean; profile?: Profile; error?: string }>;
+  updateProfile: (profileId: string, updates: { name?: string; avatarColor?: string }) => Promise<{ success: boolean; profile?: Profile; error?: string }>;
+  deleteProfile: (profileId: string) => Promise<{ success: boolean; error?: string }>;
   setVideoSeekSeconds: (seconds: number) => Promise<{ success: boolean; error?: string }>;
   setVideoAutoPlay: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
   setListThumbnailFit: (fit: 'cover' | 'contain') => Promise<{ success: boolean; error?: string }>;
@@ -134,6 +141,14 @@ export interface NewRecord {
   data: any;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface Profile {
+  id: string;
+  name: string;
+  avatarColor?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export {}; 

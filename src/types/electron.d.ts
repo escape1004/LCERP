@@ -1,4 +1,4 @@
-import type { Category, NewCategory, CategoryUpdate, DataRecord, NewRecord, TableData, Config } from './index';
+import type { Category, NewCategory, CategoryUpdate, DataRecord, NewRecord, TableData, Config, Profile } from './index';
 
 export interface ElectronAPI {
   // Database viewer methods
@@ -36,6 +36,15 @@ export interface ElectronAPI {
   setVideoSeekSeconds: (seconds: number) => Promise<{ success: boolean; error?: string }>;
   setVideoAutoPlay: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
   setListThumbnailFit: (fit: 'cover' | 'contain') => Promise<{ success: boolean; error?: string }>;
+
+  // Profile methods
+  getProfiles: () => Promise<Profile[]>;
+  getCurrentProfile: () => Promise<Profile | null>;
+  selectProfile: (profileId: string) => Promise<{ success: boolean; profile?: Profile; error?: string }>;
+  clearCurrentProfile: () => Promise<{ success: boolean }>;
+  createProfile: (payload: { name: string; avatarColor?: string }) => Promise<{ success: boolean; profile?: Profile; error?: string }>;
+  updateProfile: (profileId: string, updates: { name?: string; avatarColor?: string }) => Promise<{ success: boolean; profile?: Profile; error?: string }>;
+  deleteProfile: (profileId: string) => Promise<{ success: boolean; error?: string }>;
   
   // File dialog methods
   openFileDialog: () => Promise<{ canceled: boolean; filePaths: string[] }>;
