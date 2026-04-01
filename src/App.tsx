@@ -446,8 +446,8 @@ const App = () => {
                   description="프로필마다 카테고리와 대시보드 통계가 분리됩니다."
                 >
                   <div className="flex justify-center">
-                    <div className="w-full max-w-4xl">
-                      <div className="grid grid-cols-2 gap-x-8 gap-y-10 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                    <div className="w-fit max-w-full">
+                      <div className="flex flex-wrap justify-center gap-x-8 gap-y-10">
                         {profiles.map((profile) => (
                           <ContextMenu key={profile.id}>
                             <ContextMenuTrigger asChild>
@@ -455,10 +455,10 @@ const App = () => {
                                 type="button"
                                 disabled={isProfileBusy}
                                 onClick={() => void handleSelectProfile(profile)}
-                                className="group flex flex-col items-center text-center disabled:opacity-60"
+                                className="group flex w-[132px] flex-col items-center text-center disabled:opacity-60"
                               >
                                 <div
-                                  className="flex aspect-square w-full max-w-[132px] items-center justify-center rounded-xl text-4xl font-semibold text-white transition duration-200 group-hover:scale-[1.03] group-hover:ring-2 group-hover:ring-white/70"
+                                  className="flex aspect-square w-full items-center justify-center rounded-xl text-4xl font-semibold text-white transition duration-200 group-hover:scale-[1.03] group-hover:ring-2 group-hover:ring-white/70"
                                   style={getProfileSwatchStyle(profile.avatarColor)}
                                 >
                                   {profile.name.charAt(0).toUpperCase()}
@@ -490,9 +490,9 @@ const App = () => {
                         <button
                           type="button"
                           onClick={openCreateProfileModal}
-                          className="group flex flex-col items-center text-center"
+                          className="group flex w-[132px] flex-col items-center text-center"
                         >
-                          <div className="flex aspect-square w-full max-w-[132px] items-center justify-center rounded-full bg-gray-500/80 text-black transition duration-200 group-hover:scale-[1.03] group-hover:bg-gray-400">
+                          <div className="flex aspect-square w-full items-center justify-center rounded-full bg-gray-500/80 text-black transition duration-200 group-hover:scale-[1.03] group-hover:bg-gray-400">
                             <Plus className="h-16 w-16" strokeWidth={2.5} />
                           </div>
                           <div className="mt-4 text-xl font-medium text-gray-400 transition group-hover:text-white">
