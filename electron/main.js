@@ -149,6 +149,32 @@ function ensureCategoryBelongsToCurrentProfile(categoryId) {
   return category;
 }
 
+function getCategorySubtreeIds(rootCategoryId, profileId) {
+  const categories = db.prepare('SELECT id, parentId FROM categories WHERE profileId = ?').all(profileId);
+  const childrenByParentId = new Map();
+
+  categories.forEach(category => {
+    const key = category.parentId || '__root__';
+    if (!childrenByParentId.has(key)) {
+      childrenByParentId.set(key, []);
+    }
+    childrenByParentId.get(key).push(category.id);
+  });
+
+  const subtreeIds = [];
+  const stack = [rootCategoryId];
+
+  while (stack.length > 0) {
+    const categoryId = stack.pop();
+    subtreeIds.push(categoryId);
+
+    const childIds = childrenByParentId.get(categoryId) || [];
+    childIds.forEach(childId => stack.push(childId));
+  }
+
+  return subtreeIds;
+}
+
 function ensureRecordBelongsToCurrentProfile(recordId) {
   const record = getScopedRecord(recordId);
   if (!record) {
@@ -2316,6 +2342,66 @@ ipcMain.handle('db:updateCategory', (event, id, updates) => {
     profileId
   );
   return { success: true };
+});
+
+ipcMain.handle('db:moveCategoryToProfile', (_event, categoryId, targetProfileId) => {
+  try {
+    const sourceProfileId = getCurrentProfileIdOrThrow();
+    const category = ensureCategoryBelongsToCurrentProfile(categoryId);
+
+    if (category.parentId) {
+      return { success: false, error: 'Only root categories can be moved.' };
+    }
+
+    const targetProfile = getProfileById(targetProfileId);
+    if (!targetProfile) {
+      return { success: false, error: 'Target profile not found.' };
+    }
+
+    if (targetProfileId === sourceProfileId) {
+      return { success: false, error: 'Category is already in that profile.' };
+    }
+
+    const subtreeIds = getCategorySubtreeIds(categoryId, sourceProfileId);
+    const targetRootOrder = db.prepare(`
+      SELECT COALESCE(MAX(order_num), -1) + 1 AS nextOrder
+      FROM categories
+      WHERE profileId = ? AND parentId IS NULL
+    `).get(targetProfileId)?.nextOrder ?? 0;
+
+    const updateCategoryProfileStmt = db.prepare(`
+      UPDATE categories
+      SET profileId = ?, updatedAt = ?
+      WHERE id = ?
+    `);
+    const updateRecordProfileStmt = db.prepare(`
+      UPDATE records
+      SET profileId = ?, updatedAt = ?
+      WHERE categoryId = ? AND profileId = ?
+    `);
+    const updateRootOrderStmt = db.prepare(`
+      UPDATE categories
+      SET order_num = ?, updatedAt = ?
+      WHERE id = ?
+    `);
+
+    const moveCategoryTree = db.transaction(() => {
+      const now = new Date().toISOString();
+
+      subtreeIds.forEach(subtreeCategoryId => {
+        updateCategoryProfileStmt.run(targetProfileId, now, subtreeCategoryId);
+        updateRecordProfileStmt.run(targetProfileId, now, subtreeCategoryId, sourceProfileId);
+      });
+
+      updateRootOrderStmt.run(targetRootOrder, now, categoryId);
+    });
+
+    moveCategoryTree();
+    return { success: true };
+  } catch (error) {
+    log('Error moving category to profile:', error);
+    return { success: false, error: error.message };
+  }
 });
 
 ipcMain.handle('getVideoServerPort', () => {

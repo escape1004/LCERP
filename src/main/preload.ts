@@ -67,6 +67,7 @@ const api: ElectronAPI = {
   addCategory: (category: NewCategory) => ipcRenderer.invoke('db:addCategory', category),
   updateCategory: (id: string, updates: CategoryUpdate) => ipcRenderer.invoke('db:updateCategory', id, updates),
   deleteCategory: (id: string) => ipcRenderer.invoke('db:deleteCategory', id),
+  moveCategoryToProfile: (categoryId: string, targetProfileId: string) => ipcRenderer.invoke('db:moveCategoryToProfile', categoryId, targetProfileId),
   addRecord: (record: NewRecord) => ipcRenderer.invoke('db:addRecord', record),
   updateRecord: (id: string, data: Record<string, any>) => ipcRenderer.invoke('db:updateRecord', id, data),
   deleteRecord: (id: string) => ipcRenderer.invoke('db:deleteRecord', id),

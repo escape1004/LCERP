@@ -14,6 +14,9 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from './ui/context-menu';
 import {
@@ -186,6 +189,47 @@ export const Sidebar: React.FC = () => {
     setDeleteInput('');
     setShowDeleteConfirm(true);
   };
+  const getCategorySubtreeIds = (rootCategoryId: string): string[] => {
+    const subtreeIds: string[] = [];
+    const stack = [rootCategoryId];
+
+    while (stack.length > 0) {
+      const categoryId = stack.pop();
+      if (!categoryId) continue;
+
+      subtreeIds.push(categoryId);
+      categories
+        .filter((item) => item.parentId === categoryId)
+        .forEach((item) => stack.push(item.id));
+    }
+
+    return subtreeIds;
+  };
+
+  const handleMoveCategoryToProfile = async (category: Category, targetProfile: Profile) => {
+    const result = await window.electronAPI.moveCategoryToProfile(category.id, targetProfile.id);
+
+    if (!result.success) {
+      toast({
+        title: result.error || '카테고리를 다른 프로필로 이동할 수 없습니다.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const movedCategoryIds = getCategorySubtreeIds(category.id);
+    if (selectedCategoryId && movedCategoryIds.includes(selectedCategoryId)) {
+      selectCategory(null);
+      setShowDbViewer(false);
+      navigate('/dashboard');
+    }
+
+    await loadCategories();
+    toast({
+      title: '카테고리 이동 완료',
+      description: `"${category.name}" 카테고리를 "${targetProfile.name}" 프로필로 이동했습니다.`,
+    });
+  };
 
   const handleDeleteCategory = async () => {
     if (!deleteTarget) return;
@@ -221,6 +265,7 @@ export const Sidebar: React.FC = () => {
     const subCategories = getSubCategories(category.id);
     const isSelected = selectedCategoryId === category.id;
     const showSubCategories = shouldShowSubCategories(category.id);
+    const movableProfiles = profiles.filter((profile) => profile.id !== currentProfile?.id);
 
     return (
       <div key={category.id}>
@@ -275,6 +320,21 @@ export const Sidebar: React.FC = () => {
             <ContextMenuItem onClick={() => handleEditCategory(category)}>
               카테고리 수정
             </ContextMenuItem>
+            {level === 0 && movableProfiles.length > 0 && (
+              <ContextMenuSub>
+                <ContextMenuSubTrigger>프로필 변경</ContextMenuSubTrigger>
+                <ContextMenuSubContent className="min-w-[200px]">
+                  {movableProfiles.map((profile) => (
+                    <ContextMenuItem
+                      key={profile.id}
+                      onClick={() => void handleMoveCategoryToProfile(category, profile)}
+                    >
+                      {profile.name}
+                    </ContextMenuItem>
+                  ))}
+                </ContextMenuSubContent>
+              </ContextMenuSub>
+            )}
             <ContextMenuItem onClick={() => handleExportCategory(category)}>
               카테고리 추출
             </ContextMenuItem>
@@ -308,6 +368,7 @@ export const Sidebar: React.FC = () => {
     const subCategories = getSubCategories(category.id);
     const isSelected = selectedCategoryId === category.id;
     const showSubCategories = shouldShowSubCategories(category.id);
+    const movableProfiles = profiles.filter((profile) => profile.id !== currentProfile?.id);
 
     return (
       <div key={category.id}>
@@ -363,6 +424,21 @@ export const Sidebar: React.FC = () => {
             <ContextMenuItem onClick={() => handleEditCategory(category)}>
               카테고리 수정
             </ContextMenuItem>
+            {level === 0 && movableProfiles.length > 0 && (
+              <ContextMenuSub>
+                <ContextMenuSubTrigger>프로필 변경</ContextMenuSubTrigger>
+                <ContextMenuSubContent className="min-w-[200px]">
+                  {movableProfiles.map((profile) => (
+                    <ContextMenuItem
+                      key={profile.id}
+                      onClick={() => void handleMoveCategoryToProfile(category, profile)}
+                    >
+                      {profile.name}
+                    </ContextMenuItem>
+                  ))}
+                </ContextMenuSubContent>
+              </ContextMenuSub>
+            )}
             <ContextMenuItem onClick={() => handleExportCategory(category)}>
               카테고리 추출
             </ContextMenuItem>

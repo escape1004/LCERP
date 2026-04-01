@@ -6,6 +6,7 @@ export interface ElectronAPI {
   addCategory: (category: NewCategory) => Promise<string>;
   updateCategory: (id: string, updates: CategoryUpdate) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;
+  moveCategoryToProfile: (categoryId: string, targetProfileId: string) => Promise<{ success: boolean; error?: string }>;
   getRecords: (categoryId: string) => Promise<DataRecord[]>;
   addRecord: (record: NewRecord) => Promise<string>;
   updateRecord: (id: string, data: Record<string, any>) => Promise<void>;
