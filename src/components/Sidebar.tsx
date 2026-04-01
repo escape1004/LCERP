@@ -95,7 +95,7 @@ export const Sidebar: React.FC = () => {
     setCurrentProfile(null);
     setShowDbViewer(false);
     selectCategory(null);
-    navigate('/dashboard');
+    navigate('/dashboard', { replace: true });
   };
 
   const handleQuickProfileSwitch = async (profile: Profile) => {
@@ -110,7 +110,8 @@ export const Sidebar: React.FC = () => {
     setCurrentProfile(result.profile);
     setShowDbViewer(false);
     selectCategory(null);
-    navigate('/dashboard');
+    navigate('/dashboard', { replace: true });
+    await loadCategories();
   };
 
   const rootCategories = categories.filter(cat => !cat.parentId).sort((a, b) => a.order - b.order);

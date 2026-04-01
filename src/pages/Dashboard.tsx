@@ -70,7 +70,7 @@ const StatCard: React.FC<{ title: string; value: string | number; icon: React.Re
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { categories, loadCategories, loadRecords, getCategoryRecords, selectCategory, showDbViewer } = useERPStore();
+  const { categories, loadCategories, loadRecords, getCategoryRecords, selectCategory, showDbViewer, currentProfile } = useERPStore();
   const [loading, setLoading] = useState(true);
   const [categoryStats, setCategoryStats] = useState<CategoryStats[]>([]);
   const [dateUnit, setDateUnit] = useState<'day' | 'month' | 'year'>('day');
@@ -152,7 +152,7 @@ export default function Dashboard() {
     };
     
     loadAllData();
-  }, [loadCategories, loadRecords, getCategoryRecords]);
+  }, [loadCategories, loadRecords, getCategoryRecords, currentProfile?.id]);
 
   // 전체 통계 (상위 카테고리만)
   const totalStats = useMemo(() => {
