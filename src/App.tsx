@@ -108,7 +108,7 @@ function GateCard({ title, description, children, className = 'max-w-5xl' }: Gat
 }
 
 const App = () => {
-  const { currentProfile, setCurrentProfile, resetForProfile } = useERPStore();
+  const { currentProfile, setCurrentProfile, resetForProfile, setShowDbViewer, selectCategory } = useERPStore();
   const [isAppSettingsOpen, setIsAppSettingsOpen] = useState(false);
   const [isCheckingPassword, setIsCheckingPassword] = useState(true);
   const [requiresPassword, setRequiresPassword] = useState(false);
@@ -163,6 +163,13 @@ const App = () => {
     const nextProfiles = await window.electronAPI.getProfiles();
     setProfiles(nextProfiles);
     return nextProfiles;
+  };
+
+  const handleOpenDatabaseViewer = () => {
+    selectCategory(null);
+    setShowDbViewer(true);
+    setIsAppSettingsOpen(false);
+    window.location.hash = '#/category';
   };
 
   useEffect(() => {
@@ -539,6 +546,7 @@ const App = () => {
           <AppSettingsModal
             open={isAppSettingsOpen}
             onOpenChange={setIsAppSettingsOpen}
+            onOpenDatabaseViewer={handleOpenDatabaseViewer}
           />
           <Dialog
             open={isCreateProfileOpen}

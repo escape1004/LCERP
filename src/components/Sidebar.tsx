@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { Plus, Menu, ChevronLeft, Database, LayoutDashboard, Settings, Check } from 'lucide-react';
+import { Plus, Menu, ChevronLeft, LayoutDashboard, Settings, Check } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useERPStore } from '../hooks/useERPStore';
 import { useLoadingStore } from '../hooks/useLoadingStore';
@@ -620,21 +620,6 @@ export const Sidebar: React.FC = () => {
             </Droppable>
           </DragDropContext>
         </div>
-      </div>
-
-      {/* DB 뷰어 버튼 */}
-      <div className="p-3 border-gray-800">
-        <Button
-          variant="ghost"
-          className="w-full justify-start text-discord-muted hover:text-discord-text"
-          onClick={() => {
-            selectCategory(null);
-            setShowDbViewer(true);
-          }}
-        >
-          <Database className="mr-2 h-4 w-4" />
-          데이터베이스 보기
-        </Button>
       </div>
 
       {showDeleteConfirm && (

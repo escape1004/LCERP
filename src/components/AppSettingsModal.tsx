@@ -11,6 +11,7 @@ import type { Config } from '../types';
 interface AppSettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onOpenDatabaseViewer: () => void;
 }
 
 type SettingsSection = {
@@ -27,7 +28,7 @@ const sections: SettingsSection[] = [
   { id: 'security', label: '보안', description: '프로그램 비밀번호 관리', icon: Shield },
 ];
 
-export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) {
+export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: AppSettingsModalProps) {
   const [activeSection, setActiveSection] = useState('general');
   const [config, setConfig] = useState<Config | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -314,6 +315,25 @@ export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) 
         </div>
 
         {generalMessage && <p className="text-sm text-discord-muted mt-2">{generalMessage}</p>}
+      </div>
+
+      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-sm font-medium text-white">데이터베이스 보기</div>
+            <p className="text-sm text-discord-muted mt-2 leading-6">
+              프로필과 무관한 전체 데이터베이스 정보를 확인합니다.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onOpenDatabaseViewer}
+            className="border-gray-600 hover:bg-discord-hover text-discord-text"
+          >
+            열기
+          </Button>
+        </div>
       </div>
     </div>
   );
