@@ -18,6 +18,12 @@ import {
   DialogContent,
   DialogTitle,
 } from './components/ui/dialog';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from './components/ui/context-menu';
 import { useERPStore } from './hooks/useERPStore';
 import type { Profile } from './types';
 
@@ -110,6 +116,10 @@ const App = () => {
   const [customProfileColor, setCustomProfileColor] = useState(PROFILE_COLORS[0]);
   const [isProfileBusy, setIsProfileBusy] = useState(false);
   const [isCreateProfileOpen, setIsCreateProfileOpen] = useState(false);
+  const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
+  const [deleteTargetProfile, setDeleteTargetProfile] = useState<Profile | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteInput, setDeleteInput] = useState('');
   const customColorInputRef = useRef<HTMLInputElement | null>(null);
 
   const selectedProfileInitial = useMemo(
@@ -263,6 +273,119 @@ const App = () => {
     }
   };
 
+  const handleSaveProfile = async () => {
+    const name = newProfileName.trim();
+    if (!name) {
+      setProfileError('프로필 이름을 입력하세요.');
+      return;
+    }
+
+    setIsProfileBusy(true);
+    setProfileError('');
+
+    try {
+      const avatarColor = normalizeProfileColor(selectedProfileColor);
+
+      if (editingProfile) {
+        if (!window.electronAPI?.updateProfile) {
+          setProfileError('프로필 수정 API를 찾을 수 없습니다. 앱을 완전히 종료 후 다시 실행하세요.');
+          return;
+        }
+
+        const result = await window.electronAPI.updateProfile(editingProfile.id, {
+          name,
+          avatarColor,
+        });
+
+        if (!result.success || !result.profile) {
+          setProfileError(result.error || '프로필을 수정할 수 없습니다.');
+          return;
+        }
+
+        await refreshProfiles();
+        setIsCreateProfileOpen(false);
+        setEditingProfile(null);
+        setNewProfileName('');
+        setSelectedProfileColor(PROFILE_COLORS[0]);
+        setCustomProfileColor(PROFILE_COLORS[0]);
+        return;
+      }
+
+      if (!window.electronAPI?.createProfile) {
+        setProfileError('프로필 생성 API를 찾을 수 없습니다. 앱을 완전히 종료 후 다시 실행하세요.');
+        return;
+      }
+
+      const result = await window.electronAPI.createProfile({
+        name,
+        avatarColor,
+      });
+
+      if (!result.success || !result.profile) {
+        setProfileError(result.error || '프로필을 만들 수 없습니다.');
+        return;
+      }
+
+      const nextProfiles = await refreshProfiles();
+      setNewProfileName('');
+      setSelectedProfileColor(PROFILE_COLORS[nextProfiles.length % PROFILE_COLORS.length] || PROFILE_COLORS[0]);
+      setCustomProfileColor(PROFILE_COLORS[nextProfiles.length % PROFILE_COLORS.length] || PROFILE_COLORS[0]);
+      setIsCreateProfileOpen(false);
+      await handleSelectProfile(result.profile);
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : '프로필 저장 중 오류가 발생했습니다.');
+    } finally {
+      setIsProfileBusy(false);
+    }
+  };
+
+  const openCreateProfileModal = () => {
+    setEditingProfile(null);
+    setProfileError('');
+    setNewProfileName('');
+    setSelectedProfileColor(PROFILE_COLORS[0]);
+    setCustomProfileColor(PROFILE_COLORS[0]);
+    setIsCreateProfileOpen(true);
+  };
+
+  const openEditProfileModal = (profile: Profile) => {
+    const profileColor = normalizeProfileColor(profile.avatarColor || PROFILE_COLORS[0]);
+    setEditingProfile(profile);
+    setProfileError('');
+    setNewProfileName(profile.name);
+    setSelectedProfileColor(profileColor);
+    setCustomProfileColor(profileColor);
+    setIsCreateProfileOpen(true);
+  };
+
+  const handleDeleteProfile = async () => {
+    if (!deleteTargetProfile) return;
+
+    setIsProfileBusy(true);
+    setProfileError('');
+
+    try {
+      const result = await window.electronAPI.deleteProfile(deleteTargetProfile.id);
+      if (!result.success) {
+        setProfileError(result.error || '프로필을 삭제할 수 없습니다.');
+        return;
+      }
+
+      await refreshProfiles();
+      if (editingProfile?.id === deleteTargetProfile.id) {
+        setEditingProfile(null);
+        setIsCreateProfileOpen(false);
+      }
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : '프로필 삭제 중 오류가 발생했습니다.');
+    } finally {
+      setIsProfileBusy(false);
+      setShowDeleteConfirm(false);
+      setDeleteInput('');
+      setDeleteTargetProfile(null);
+    }
+  };
+
   const handleSwitchProfile = async () => {
     await window.electronAPI.clearCurrentProfile();
     resetForProfile();
@@ -323,34 +446,47 @@ const App = () => {
                     <div className="w-full max-w-4xl">
                       <div className="grid grid-cols-2 gap-x-8 gap-y-10 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                         {profiles.map((profile) => (
-                          <button
-                            key={profile.id}
-                            type="button"
-                            disabled={isProfileBusy}
-                            onClick={() => void handleSelectProfile(profile)}
-                            className="group flex flex-col items-center text-center disabled:opacity-60"
-                          >
-                            <div
-                              className="flex aspect-square w-full max-w-[132px] items-center justify-center rounded-xl text-4xl font-semibold text-white transition duration-200 group-hover:scale-[1.03] group-hover:ring-2 group-hover:ring-white/70"
-                              style={getProfileSwatchStyle(profile.avatarColor)}
-                            >
-                              {profile.name.charAt(0).toUpperCase()}
-                            </div>
-                            <div className="mt-4 text-xl font-medium text-gray-300 transition group-hover:text-white">
-                              {profile.name}
-                            </div>
-                          </button>
+                          <ContextMenu key={profile.id}>
+                            <ContextMenuTrigger asChild>
+                              <button
+                                type="button"
+                                disabled={isProfileBusy}
+                                onClick={() => void handleSelectProfile(profile)}
+                                className="group flex flex-col items-center text-center disabled:opacity-60"
+                              >
+                                <div
+                                  className="flex aspect-square w-full max-w-[132px] items-center justify-center rounded-xl text-4xl font-semibold text-white transition duration-200 group-hover:scale-[1.03] group-hover:ring-2 group-hover:ring-white/70"
+                                  style={getProfileSwatchStyle(profile.avatarColor)}
+                                >
+                                  {profile.name.charAt(0).toUpperCase()}
+                                </div>
+                                <div className="mt-4 text-xl font-medium text-gray-300 transition group-hover:text-white">
+                                  {profile.name}
+                                </div>
+                              </button>
+                            </ContextMenuTrigger>
+                            <ContextMenuContent>
+                              <ContextMenuItem onClick={() => openEditProfileModal(profile)}>
+                                프로필 수정
+                              </ContextMenuItem>
+                              <ContextMenuItem
+                                className="text-red-400 focus:text-red-300"
+                                onClick={() => {
+                                  setDeleteTargetProfile(profile);
+                                  setDeleteInput('');
+                                  setProfileError('');
+                                  setShowDeleteConfirm(true);
+                                }}
+                              >
+                                프로필 삭제
+                              </ContextMenuItem>
+                            </ContextMenuContent>
+                          </ContextMenu>
                         ))}
 
                         <button
                           type="button"
-                          onClick={() => {
-                            setProfileError('');
-                            setNewProfileName('');
-                            setSelectedProfileColor(PROFILE_COLORS[0]);
-                            setCustomProfileColor(PROFILE_COLORS[0]);
-                            setIsCreateProfileOpen(true);
-                          }}
+                          onClick={openCreateProfileModal}
                           className="group flex flex-col items-center text-center"
                         >
                           <div className="flex aspect-square w-full max-w-[132px] items-center justify-center rounded-full bg-gray-500/80 text-black transition duration-200 group-hover:scale-[1.03] group-hover:bg-gray-400">
@@ -389,14 +525,15 @@ const App = () => {
               setIsCreateProfileOpen(open);
               if (!open) {
                 setProfileError('');
+                setEditingProfile(null);
               }
             }}
           >
             <DialogContent className="max-w-md p-0 gap-0 overflow-hidden bg-discord-bg border-gray-700 text-discord-text [&>button]:hidden">
-              <DialogTitle className="sr-only">새 프로필 만들기</DialogTitle>
+              <DialogTitle className="sr-only">{editingProfile ? '프로필 수정' : '새 프로필 만들기'}</DialogTitle>
               <div className="flex items-center justify-between p-6 border-b border-gray-700">
                 <div>
-                  <h3 className="text-lg font-semibold text-white">새 프로필 만들기</h3>
+                  <h3 className="text-lg font-semibold text-white">{editingProfile ? '프로필 수정' : '새 프로필 만들기'}</h3>
                 </div>
                 <button
                   type="button"
@@ -422,7 +559,7 @@ const App = () => {
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
-                      void handleCreateProfile();
+                      void handleSaveProfile();
                     }
                   }}
                   className="bg-discord-sidebar border-gray-600 text-discord-text"
@@ -487,15 +624,81 @@ const App = () => {
                   취소
                 </Button>
                 <Button
-                  onClick={() => void handleCreateProfile()}
+                  onClick={() => void handleSaveProfile()}
                   className="bg-discord-accent hover:bg-blue-600 text-white"
                   disabled={isProfileBusy || !newProfileName.trim()}
                 >
-                  프로필 생성
+                  {editingProfile ? '프로필 수정' : '프로필 생성'}
                 </Button>
               </div>
             </DialogContent>
           </Dialog>
+          {showDeleteConfirm && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+              <div className="bg-discord-bg rounded-lg p-6 w-full max-w-md border border-gray-700 flex flex-col items-center">
+                <div className="mb-6 text-center text-discord-text">
+                  <div className="text-base font-medium mb-2">
+                    {deleteTargetProfile
+                      ? `정말로 ${deleteTargetProfile.name} 프로필을 삭제하시겠습니까?`
+                      : '정말로 이 프로필을 삭제하시겠습니까?'}
+                  </div>
+                  <div className="text-red-400 font-semibold mb-2">
+                    이 작업은 되돌릴 수 없습니다.
+                  </div>
+                  <div className="text-discord-muted text-sm">
+                    아래에 <span className="font-semibold">프로필을 삭제하겠습니다</span>를 입력하세요
+                  </div>
+                </div>
+
+                {isProfileBusy && (
+                  <div className="mb-4 p-4 bg-discord-sidebar rounded-lg border border-gray-600">
+                    <div className="flex items-center justify-center gap-3">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-discord-accent"></div>
+                      <div className="text-discord-text text-sm">
+                        프로필 삭제 중...
+                        <div className="text-discord-muted text-xs mt-1">
+                          프로필 데이터와 카테고리를 정리 중
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <Input
+                  type="text"
+                  value={deleteInput}
+                  onChange={(e) => setDeleteInput(e.target.value)}
+                  className="w-full mb-3 bg-discord-sidebar border-gray-600 text-discord-text"
+                  placeholder="프로필을 삭제하겠습니다"
+                  disabled={isProfileBusy}
+                />
+                <div className="flex w-full gap-2">
+                  <Button
+                    variant="ghost"
+                    className="flex-1 text-discord-text hover:bg-discord-hover"
+                    onClick={() => {
+                      setShowDeleteConfirm(false);
+                      setDeleteInput('');
+                      setDeleteTargetProfile(null);
+                    }}
+                    disabled={isProfileBusy}
+                  >
+                    취소
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    className="flex-1 bg-discord-danger hover:bg-red-900 text-white disabled:bg-red-800 disabled:text-red-300 disabled:cursor-not-allowed"
+                    disabled={deleteInput !== '프로필을 삭제하겠습니다' || isProfileBusy}
+                    onClick={() => {
+                      void handleDeleteProfile();
+                    }}
+                  >
+                    {isProfileBusy ? '삭제 중...' : '삭제'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
           <LoadingOverlay />
         </div>
       </TooltipProvider>
