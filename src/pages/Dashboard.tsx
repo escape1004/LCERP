@@ -8,6 +8,8 @@ import { FileText, Image, Video, Archive, Folder, Calendar } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { ViewRecordModal } from '../components/ViewRecordModal';
 import { DatabaseViewer } from '../components/DatabaseViewer';
+import { Button } from '../components/ui/button';
+import { CategoryModal } from '../components/CategoryModal';
 
 const COLORS = ['#5865F2', '#57F287', '#FEE75C', '#ED4245', '#EB459E', '#95A5A6'];
 
@@ -77,6 +79,7 @@ export default function Dashboard() {
   const [viewRecordModalOpen, setViewRecordModalOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<DataRecord | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
 
   useEffect(() => {
     const loadAllData = async () => {
@@ -294,12 +297,24 @@ export default function Dashboard() {
         <div className="flex-1 overflow-y-auto bg-discord-bg discord-scrollbar">
           <div className="p-6">
             <h1 className="text-2xl font-bold text-discord-text mb-6">대시보드</h1>
-            <div className="bg-discord-sidebar rounded-lg p-8 border border-gray-700 text-center">
+            <div className="bg-discord-sidebar rounded-lg p-8 border border-gray-700 text-center flex flex-col items-center">
+              <div className="order-last mt-6 flex justify-center">
+                <Button
+                  onClick={() => setIsCategoryModalOpen(true)}
+                  className="bg-discord-accent hover:bg-blue-600 text-white"
+                >
+                  카테고리 생성
+                </Button>
+              </div>
               <p className="text-discord-muted text-lg mb-2">카테고리가 없습니다</p>
               <p className="text-discord-muted text-sm">새 카테고리를 생성하여 시작하세요.</p>
             </div>
           </div>
         </div>
+        <CategoryModal
+          isOpen={isCategoryModalOpen}
+          onClose={() => setIsCategoryModalOpen(false)}
+        />
       </div>
     );
   }
@@ -609,6 +624,10 @@ export default function Dashboard() {
         }}
         category={selectedCategory}
         record={selectedRecord}
+      />
+      <CategoryModal
+        isOpen={isCategoryModalOpen}
+        onClose={() => setIsCategoryModalOpen(false)}
       />
     </div>
   );
