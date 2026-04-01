@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { Plus, Menu, ChevronLeft, Database, LayoutDashboard } from 'lucide-react';
+import { Plus, Menu, ChevronLeft, Database, LayoutDashboard, Settings } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useERPStore } from '../hooks/useERPStore';
 import { useLoadingStore } from '../hooks/useLoadingStore';
-import { Category } from '../types';
+import { Category, Profile } from '../types';
 import { Button } from './ui/button';
 import { CategoryModal } from './CategoryModal';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -16,6 +16,12 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from './ui/context-menu';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
 
 export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
@@ -30,7 +36,10 @@ export const Sidebar: React.FC = () => {
     loadRecords,
     showDbViewer,
     deleteCategory,
-    loadCategories
+    loadCategories,
+    currentProfile,
+    setCurrentProfile,
+    resetForProfile,
   } = useERPStore();
   
   const { showLoading, hideLoading, setLoading: setGlobalLoading } = useLoadingStore();
@@ -43,6 +52,66 @@ export const Sidebar: React.FC = () => {
   const [deleteInput, setDeleteInput] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+
+  const getProfileSwatchStyle = (color?: string): React.CSSProperties => {
+    if (color === 'rainbow') {
+      return {
+        backgroundImage: 'linear-gradient(135deg, #ff5f6d 0%, #ffc371 22%, #47cf73 44%, #3b82f6 68%, #a855f7 100%)',
+      };
+    }
+
+    return {
+      backgroundColor: color || '#5865F2',
+    };
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadProfiles = async () => {
+      try {
+        const nextProfiles = await window.electronAPI.getProfiles();
+        if (!cancelled) {
+          setProfiles(nextProfiles);
+        }
+      } catch {
+        if (!cancelled) {
+          setProfiles([]);
+        }
+      }
+    };
+
+    void loadProfiles();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentProfile?.id]);
+
+  const handleProfileManage = async () => {
+    await window.electronAPI.clearCurrentProfile();
+    resetForProfile();
+    setCurrentProfile(null);
+    setShowDbViewer(false);
+    selectCategory(null);
+    navigate('/dashboard');
+  };
+
+  const handleQuickProfileSwitch = async (profile: Profile) => {
+    const result = await window.electronAPI.selectProfile(profile.id);
+
+    if (!result.success || !result.profile) {
+      toast({ title: result.error || '프로필을 전환할 수 없습니다.', variant: 'destructive' });
+      return;
+    }
+
+    resetForProfile();
+    setCurrentProfile(result.profile);
+    setShowDbViewer(false);
+    selectCategory(null);
+    navigate('/dashboard');
+  };
 
   const rootCategories = categories.filter(cat => !cat.parentId).sort((a, b) => a.order - b.order);
   
@@ -343,7 +412,45 @@ export const Sidebar: React.FC = () => {
     <div className="w-64 h-full flex flex-col bg-discord-sidebar">
       {/* Header */}
       <div className="shrink-0 p-3 border-b border-gray-800 flex items-center justify-between">
-        <h1 className="text-lg font-bold text-discord-text">Local ERP</h1>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="min-w-0 rounded px-2 py-1 -ml-2 text-left"
+            >
+              <div className="truncate text-lg font-bold text-discord-text">
+                {currentProfile?.name || '프로필'}
+              </div>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            className="min-w-[220px] border-gray-700 bg-discord-sidebar text-discord-text"
+          >
+            <DropdownMenuItem
+              onClick={() => void handleProfileManage()}
+              className="cursor-pointer text-discord-text hover:bg-discord-hover focus:bg-discord-hover focus:text-discord-text"
+            >
+              <Settings className="mr-2 h-4 w-4" />
+              프로필 관리
+            </DropdownMenuItem>
+            {profiles.map((profile) => (
+              <DropdownMenuItem
+                key={profile.id}
+                onClick={() => void handleQuickProfileSwitch(profile)}
+                className="flex cursor-pointer items-center gap-3 text-discord-text hover:bg-discord-hover focus:bg-discord-hover focus:text-discord-text"
+              >
+                <div
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-semibold text-white"
+                  style={getProfileSwatchStyle(profile.avatarColor)}
+                >
+                  {profile.name.charAt(0).toUpperCase()}
+                </div>
+                <span className="truncate">{profile.name}</span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Button
           size="sm"
           variant="ghost"

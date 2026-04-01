@@ -303,6 +303,9 @@ const App = () => {
         }
 
         await refreshProfiles();
+        if (currentProfile?.id === editingProfile.id) {
+          setCurrentProfile(result.profile);
+        }
         setIsCreateProfileOpen(false);
         setEditingProfile(null);
         setNewProfileName('');
