@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Toaster } from '@/components/ui/toaster';
 import { Toaster as Sonner } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -23,6 +23,26 @@ import type { Profile } from './types';
 
 const queryClient = new QueryClient();
 const PROFILE_COLORS = ['#5865F2', '#3BA55D', '#F97316', '#EC4899', '#0EA5E9', '#EAB308'];
+const RAINBOW_PROFILE_COLOR = 'rainbow';
+
+function normalizeProfileColor(value: string) {
+  if (value === RAINBOW_PROFILE_COLOR) return value;
+
+  const normalized = value.trim();
+  return /^#[0-9a-fA-F]{6}$/.test(normalized) ? normalized.toUpperCase() : PROFILE_COLORS[0];
+}
+
+function getProfileSwatchStyle(color?: string): React.CSSProperties {
+  if (color === RAINBOW_PROFILE_COLOR) {
+    return {
+      backgroundImage: 'linear-gradient(135deg, #ff5f6d 0%, #ffc371 22%, #47cf73 44%, #3b82f6 68%, #a855f7 100%)',
+    };
+  }
+
+  return {
+    backgroundColor: normalizeProfileColor(color || PROFILE_COLORS[0]),
+  };
+}
 
 const RouterContent = () => {
   const navigate = useNavigate();
@@ -87,13 +107,16 @@ const App = () => {
   const [profileError, setProfileError] = useState('');
   const [newProfileName, setNewProfileName] = useState('');
   const [selectedProfileColor, setSelectedProfileColor] = useState(PROFILE_COLORS[0]);
+  const [customProfileColor, setCustomProfileColor] = useState(PROFILE_COLORS[0]);
   const [isProfileBusy, setIsProfileBusy] = useState(false);
   const [isCreateProfileOpen, setIsCreateProfileOpen] = useState(false);
+  const customColorInputRef = useRef<HTMLInputElement | null>(null);
 
   const selectedProfileInitial = useMemo(
     () => (newProfileName.trim().charAt(0) || 'P').toUpperCase(),
     [newProfileName]
   );
+  const isCustomColorSelected = !PROFILE_COLORS.includes(selectedProfileColor);
 
   useEffect(() => {
     const handleAuxClick = (e: MouseEvent) => {
@@ -219,7 +242,7 @@ const App = () => {
 
       const result = await window.electronAPI.createProfile({
         name,
-        avatarColor: selectedProfileColor,
+        avatarColor: normalizeProfileColor(selectedProfileColor),
       });
 
       if (!result.success || !result.profile) {
@@ -230,6 +253,7 @@ const App = () => {
       const nextProfiles = await refreshProfiles();
       setNewProfileName('');
       setSelectedProfileColor(PROFILE_COLORS[nextProfiles.length % PROFILE_COLORS.length] || PROFILE_COLORS[0]);
+      setCustomProfileColor(PROFILE_COLORS[nextProfiles.length % PROFILE_COLORS.length] || PROFILE_COLORS[0]);
       setIsCreateProfileOpen(false);
       await handleSelectProfile(result.profile);
     } catch (error) {
@@ -308,7 +332,7 @@ const App = () => {
                           >
                             <div
                               className="flex aspect-square w-full max-w-[132px] items-center justify-center rounded-md text-4xl font-semibold text-white transition duration-200 group-hover:scale-[1.03] group-hover:ring-2 group-hover:ring-white/70"
-                              style={{ backgroundColor: profile.avatarColor || PROFILE_COLORS[0] }}
+                              style={getProfileSwatchStyle(profile.avatarColor)}
                             >
                               {profile.name.charAt(0).toUpperCase()}
                             </div>
@@ -322,6 +346,9 @@ const App = () => {
                           type="button"
                           onClick={() => {
                             setProfileError('');
+                            setNewProfileName('');
+                            setSelectedProfileColor(PROFILE_COLORS[0]);
+                            setCustomProfileColor(PROFILE_COLORS[0]);
                             setIsCreateProfileOpen(true);
                           }}
                           className="group flex flex-col items-center text-center"
@@ -383,7 +410,7 @@ const App = () => {
               <div className="p-6 space-y-4 bg-discord-bg">
                 <div
                   className="flex h-20 w-20 items-center justify-center rounded-xl text-3xl font-semibold text-white"
-                  style={{ backgroundColor: selectedProfileColor }}
+                  style={getProfileSwatchStyle(selectedProfileColor)}
                 >
                   {selectedProfileInitial}
                 </div>
@@ -406,15 +433,48 @@ const App = () => {
                     <button
                       key={color}
                       type="button"
-                      onClick={() => setSelectedProfileColor(color)}
-                      className={`h-10 w-10 rounded-full border-2 transition ${
+                      onClick={() => {
+                        setSelectedProfileColor(color);
+                        setCustomProfileColor(color);
+                      }}
+                      className={`flex h-10 w-10 items-center justify-center rounded-full border-2 p-0 transition ${
                         selectedProfileColor === color ? 'border-white scale-105' : 'border-transparent'
                       }`}
-                      style={{ backgroundColor: color }}
+                      style={{ backgroundColor: 'transparent' }}
                       aria-label={`프로필 색상 ${color}`}
-                    />
+                    >
+                      <span
+                        className="block h-full w-full rounded-full"
+                        style={{ backgroundColor: color }}
+                      />
+                    </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => customColorInputRef.current?.click()}
+                    className={`flex h-10 w-10 items-center justify-center rounded-full border-2 p-0 transition ${
+                      isCustomColorSelected ? 'border-white scale-105' : 'border-transparent'
+                    }`}
+                    aria-label="프로필 색상 무지개"
+                  >
+                    <span
+                      className="block h-full w-full rounded-full"
+                      style={getProfileSwatchStyle(RAINBOW_PROFILE_COLOR)}
+                    />
+                  </button>
                 </div>
+                <input
+                  ref={customColorInputRef}
+                  type="color"
+                  value={normalizeProfileColor(customProfileColor)}
+                  onChange={(e) => {
+                    const nextColor = normalizeProfileColor(e.target.value);
+                    setCustomProfileColor(nextColor);
+                    setSelectedProfileColor(nextColor);
+                  }}
+                  className="sr-only"
+                  aria-label="직접 색상 선택"
+                />
                 {profileError && <p className="text-sm text-red-400">{profileError}</p>}
               </div>
               <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-700 bg-discord-bg">
