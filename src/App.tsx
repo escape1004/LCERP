@@ -331,7 +331,7 @@ const App = () => {
                             className="group flex flex-col items-center text-center disabled:opacity-60"
                           >
                             <div
-                              className="flex aspect-square w-full max-w-[132px] items-center justify-center rounded-md text-4xl font-semibold text-white transition duration-200 group-hover:scale-[1.03] group-hover:ring-2 group-hover:ring-white/70"
+                              className="flex aspect-square w-full max-w-[132px] items-center justify-center rounded-xl text-4xl font-semibold text-white transition duration-200 group-hover:scale-[1.03] group-hover:ring-2 group-hover:ring-white/70"
                               style={getProfileSwatchStyle(profile.avatarColor)}
                             >
                               {profile.name.charAt(0).toUpperCase()}
