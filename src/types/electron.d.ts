@@ -22,13 +22,14 @@ export interface ElectronAPI {
   
   // Backup methods
   backupDatabase: () => Promise<{ success: boolean; path?: string; error?: string }>;
-  openBackupLocation: () => Promise<{ success: boolean }>;
+  openBackupLocation: () => Promise<{ success: boolean; error?: string }>;
+  resetDatabase: () => Promise<{ success: boolean; backupPath?: string; error?: string }>;
   
   // Config methods
   getConfig: () => Promise<Config>;
-  setDbPath: () => Promise<{ success: boolean; path?: string }>;
-  setBackupDir: () => Promise<{ success: boolean; path?: string }>;
-  setBackupInterval: (minutes: number) => Promise<{ success: boolean }>;
+  setDbPath: () => Promise<{ success: boolean; path?: string; error?: string }>;
+  setBackupDir: () => Promise<{ success: boolean; path?: string; error?: string }>;
+  setBackupInterval: (minutes: number) => Promise<{ success: boolean; error?: string }>;
   setRememberWindowBounds: (enabled: boolean) => Promise<{ success: boolean }>;
   setZoomPercent: (percent: number) => Promise<{ success: boolean; error?: string }>;
   setAppPassword: (password: string) => Promise<{ success: boolean; error?: string }>;
@@ -55,6 +56,7 @@ export interface ElectronAPI {
 
   // Utility methods
   openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
+  getFileSize: (filePath: string) => Promise<{ success: boolean; size?: string; error?: string }>;
   
   // New method
   send: (channel: string, ...args: any[]) => void;

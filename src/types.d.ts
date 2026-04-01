@@ -16,11 +16,11 @@ export interface ElectronAPI {
   getCategories: () => Promise<Category[]>;
   backupDatabase: () => Promise<{ success: boolean; path?: string; error?: string }>;
   resetDatabase: () => Promise<{ success: boolean; backupPath?: string; error?: string }>;
-  openBackupLocation: () => Promise<{ success: boolean }>;
+  openBackupLocation: () => Promise<{ success: boolean; error?: string }>;
   getConfig: () => Promise<any>;
-  setDbPath: () => Promise<{ success: boolean; path?: string }>;
-  setBackupDir: () => Promise<{ success: boolean; path?: string }>;
-  setBackupInterval: (minutes: number) => Promise<{ success: boolean }>;
+  setDbPath: () => Promise<{ success: boolean; path?: string; error?: string }>;
+  setBackupDir: () => Promise<{ success: boolean; path?: string; error?: string }>;
+  setBackupInterval: (minutes: number) => Promise<{ success: boolean; error?: string }>;
   setRememberWindowBounds: (enabled: boolean) => Promise<{ success: boolean }>;
   setZoomPercent: (percent: number) => Promise<{ success: boolean; error?: string }>;
   setAppPassword: (password: string) => Promise<{ success: boolean; error?: string }>;

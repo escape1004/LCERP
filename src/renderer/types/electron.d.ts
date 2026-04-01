@@ -25,13 +25,14 @@ declare global {
       importCategories: () => Promise<{ success: boolean; importedCount?: number; error?: string }>;
       getCategories: () => Promise<Category[]>;
       backupDatabase: () => Promise<{ success: boolean; path?: string; error?: string }>;
-      openBackupLocation: () => Promise<{ success: boolean }>;
-      getConfig: () => Promise<{ success: boolean; data: Config; error?: string }>;
-      setDbPath: () => Promise<{ success: boolean; path?: string }>;
-      setBackupDir: () => Promise<{ success: boolean; path?: string }>;
-      setBackupInterval: (minutes: number) => Promise<{ success: boolean }>;
+      openBackupLocation: () => Promise<{ success: boolean; error?: string }>;
+      getConfig: () => Promise<Config>;
+      setDbPath: () => Promise<{ success: boolean; path?: string; error?: string }>;
+      setBackupDir: () => Promise<{ success: boolean; path?: string; error?: string }>;
+      setBackupInterval: (minutes: number) => Promise<{ success: boolean; error?: string }>;
       openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
       resetDatabase: () => Promise<{ success: boolean; backupPath?: string; error?: string }>;
+      getFileSize: (filePath: string) => Promise<{ success: boolean; size?: string; error?: string }>;
     }
   }
 }
