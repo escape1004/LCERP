@@ -11,8 +11,6 @@ import type { Config } from '../types';
 interface AppSettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  currentProfileName?: string;
-  onRequestProfileSwitch?: () => void | Promise<void>;
 }
 
 type SettingsSection = {
@@ -29,7 +27,7 @@ const sections: SettingsSection[] = [
   { id: 'security', label: '보안', description: '프로그램 비밀번호 관리', icon: Shield },
 ];
 
-export function AppSettingsModal({ open, onOpenChange, currentProfileName, onRequestProfileSwitch }: AppSettingsModalProps) {
+export function AppSettingsModal({ open, onOpenChange }: AppSettingsModalProps) {
   const [activeSection, setActiveSection] = useState('general');
   const [config, setConfig] = useState<Config | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -74,21 +72,24 @@ export function AppSettingsModal({ open, onOpenChange, currentProfileName, onReq
 
     let cancelled = false;
 
-    window.electronAPI.getConfig().then((nextConfig: Config) => {
-      if (cancelled) return;
-      setConfig(nextConfig);
-      setPassword('');
-      setPasswordConfirm('');
-      setSecurityMessage('');
-      setGeneralMessage('');
-      setZoomPercentInput(String(nextConfig.zoomPercent ?? 100));
-      setViewerSeekSeconds(String(nextConfig.videoSeekSeconds ?? 5));
-      setViewerMessage('');
-      setViewerAutoPlayMessage('');
-      setListMessage('');
-    }).catch((error) => {
-      console.error('Failed to load app settings:', error);
-    });
+    window.electronAPI
+      .getConfig()
+      .then((nextConfig: Config) => {
+        if (cancelled) return;
+        setConfig(nextConfig);
+        setPassword('');
+        setPasswordConfirm('');
+        setSecurityMessage('');
+        setGeneralMessage('');
+        setZoomPercentInput(String(nextConfig.zoomPercent ?? 100));
+        setViewerSeekSeconds(String(nextConfig.videoSeekSeconds ?? 5));
+        setViewerMessage('');
+        setViewerAutoPlayMessage('');
+        setListMessage('');
+      })
+      .catch((error) => {
+        console.error('Failed to load app settings:', error);
+      });
 
     return () => {
       cancelled = true;
@@ -121,7 +122,7 @@ export function AppSettingsModal({ open, onOpenChange, currentProfileName, onReq
       try {
         const result = await window.electronAPI.setZoomPercent(normalized);
         if (result.success) {
-          setConfig((prev) => prev ? { ...prev, zoomPercent: normalized } : prev);
+          setConfig((prev) => (prev ? { ...prev, zoomPercent: normalized } : prev));
           setZoomPercentInput(String(normalized));
           setGeneralMessage('');
           return;
@@ -164,7 +165,7 @@ export function AppSettingsModal({ open, onOpenChange, currentProfileName, onReq
       try {
         const result = await window.electronAPI.setVideoSeekSeconds(normalized);
         if (result.success) {
-          setConfig((prev) => prev ? { ...prev, videoSeekSeconds: normalized } : prev);
+          setConfig((prev) => (prev ? { ...prev, videoSeekSeconds: normalized } : prev));
           setViewerSeekSeconds(String(normalized));
           setViewerMessage('');
           return;
@@ -182,7 +183,7 @@ export function AppSettingsModal({ open, onOpenChange, currentProfileName, onReq
   }, [config, open, viewerSeekSeconds]);
 
   const handleRememberWindowBoundsChange = async (checked: boolean) => {
-    setConfig((prev) => prev ? { ...prev, rememberWindowBounds: checked } : prev);
+    setConfig((prev) => (prev ? { ...prev, rememberWindowBounds: checked } : prev));
     setIsSaving(true);
     try {
       await window.electronAPI.setRememberWindowBounds(checked);
@@ -193,7 +194,7 @@ export function AppSettingsModal({ open, onOpenChange, currentProfileName, onReq
 
   const handleListThumbnailFitChange = async (fit: 'cover' | 'contain') => {
     const previousFit = config?.listThumbnailFit === 'contain' ? 'contain' : 'cover';
-    setConfig((prev) => prev ? { ...prev, listThumbnailFit: fit } : prev);
+    setConfig((prev) => (prev ? { ...prev, listThumbnailFit: fit } : prev));
     setListMessage('');
     setIsSaving(true);
 
@@ -204,7 +205,7 @@ export function AppSettingsModal({ open, onOpenChange, currentProfileName, onReq
         return;
       }
 
-      setConfig((prev) => prev ? { ...prev, listThumbnailFit: previousFit } : prev);
+      setConfig((prev) => (prev ? { ...prev, listThumbnailFit: previousFit } : prev));
       setListMessage(result.error || '리스트 설정 저장에 실패했습니다.');
     } finally {
       setIsSaving(false);
@@ -212,13 +213,13 @@ export function AppSettingsModal({ open, onOpenChange, currentProfileName, onReq
   };
 
   const handleVideoAutoPlayChange = async (checked: boolean) => {
-    setConfig((prev) => prev ? { ...prev, videoAutoPlay: checked } : prev);
+    setConfig((prev) => (prev ? { ...prev, videoAutoPlay: checked } : prev));
     setViewerAutoPlayMessage('');
     setIsSaving(true);
     try {
       const result = await window.electronAPI.setVideoAutoPlay(checked);
       if (!result.success) {
-        setConfig((prev) => prev ? { ...prev, videoAutoPlay: !checked } : prev);
+        setConfig((prev) => (prev ? { ...prev, videoAutoPlay: !checked } : prev));
         setViewerAutoPlayMessage(result.error || '뷰어 설정 저장에 실패했습니다.');
       }
     } finally {
@@ -241,7 +242,7 @@ export function AppSettingsModal({ open, onOpenChange, currentProfileName, onReq
     setIsSaving(false);
 
     if (result.success) {
-      setConfig((prev) => prev ? { ...prev, hasAppPassword: true } : prev);
+      setConfig((prev) => (prev ? { ...prev, hasAppPassword: true } : prev));
       setPassword('');
       setPasswordConfirm('');
       setSecurityMessage('비밀번호가 설정되었습니다.');
@@ -257,7 +258,7 @@ export function AppSettingsModal({ open, onOpenChange, currentProfileName, onReq
     setIsSaving(false);
 
     if (result.success) {
-      setConfig((prev) => prev ? { ...prev, hasAppPassword: false } : prev);
+      setConfig((prev) => (prev ? { ...prev, hasAppPassword: false } : prev));
       setPassword('');
       setPasswordConfirm('');
       setSecurityMessage('비밀번호가 해제되었습니다.');
@@ -269,28 +270,6 @@ export function AppSettingsModal({ open, onOpenChange, currentProfileName, onReq
 
   const renderGeneralSection = () => (
     <div className="space-y-4">
-      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-sm font-medium text-white">현재 프로필</div>
-            <p className="text-sm text-discord-muted mt-2 leading-6">
-              {currentProfileName ? `"${currentProfileName}" 프로필을 사용 중입니다.` : '선택된 프로필이 없습니다.'}
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              void onRequestProfileSwitch?.();
-            }}
-            className="border-gray-600 hover:bg-discord-hover text-discord-text"
-            disabled={isSaving || !onRequestProfileSwitch}
-          >
-            프로필 변경
-          </Button>
-        </div>
-      </div>
-
       <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -334,9 +313,7 @@ export function AppSettingsModal({ open, onOpenChange, currentProfileName, onReq
           <div className="text-sm text-discord-muted pb-2">%</div>
         </div>
 
-        {generalMessage && (
-          <p className="text-sm text-discord-muted mt-2">{generalMessage}</p>
-        )}
+        {generalMessage && <p className="text-sm text-discord-muted mt-2">{generalMessage}</p>}
       </div>
     </div>
   );
@@ -357,7 +334,11 @@ export function AppSettingsModal({ open, onOpenChange, currentProfileName, onReq
                   <HelpCircle size={15} />
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+              <TooltipContent
+                side="top"
+                align="center"
+                className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words"
+              >
                 <div>Cover: 썸네일 영역을 꽉 채웁니다. 일부 가장자리가 잘릴 수 있습니다.</div>
                 <div className="mt-1">Contain: 원본 전체가 보이도록 맞춥니다. 여백이 생길 수 있습니다.</div>
               </TooltipContent>
@@ -379,19 +360,23 @@ export function AppSettingsModal({ open, onOpenChange, currentProfileName, onReq
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-discord-sidebar border-gray-600 text-discord-text">
-              <SelectItem value="cover" className="text-discord-text focus:bg-discord-hover focus:text-discord-text hover:bg-discord-hover">
+              <SelectItem
+                value="cover"
+                className="text-discord-text focus:bg-discord-hover focus:text-discord-text hover:bg-discord-hover"
+              >
                 Cover
               </SelectItem>
-              <SelectItem value="contain" className="text-discord-text focus:bg-discord-hover focus:text-discord-text hover:bg-discord-hover">
+              <SelectItem
+                value="contain"
+                className="text-discord-text focus:bg-discord-hover focus:text-discord-text hover:bg-discord-hover"
+              >
                 Contain
               </SelectItem>
             </SelectContent>
           </Select>
         </div>
 
-        {listMessage && (
-          <p className="text-sm text-discord-muted mt-2">{listMessage}</p>
-        )}
+        {listMessage && <p className="text-sm text-discord-muted mt-2">{listMessage}</p>}
       </div>
     </div>
   );
@@ -442,9 +427,7 @@ export function AppSettingsModal({ open, onOpenChange, currentProfileName, onReq
           <div className="text-sm text-discord-muted pb-2">초</div>
         </div>
 
-        {viewerMessage && (
-          <p className="text-sm text-discord-muted mt-2">{viewerMessage}</p>
-        )}
+        {viewerMessage && <p className="text-sm text-discord-muted mt-2">{viewerMessage}</p>}
       </div>
     </div>
   );
@@ -479,9 +462,7 @@ export function AppSettingsModal({ open, onOpenChange, currentProfileName, onReq
             className="bg-discord-bg border-gray-600 text-discord-text"
           />
 
-          {securityMessage && (
-            <p className="text-sm text-discord-muted">{securityMessage}</p>
-          )}
+          {securityMessage && <p className="text-sm text-discord-muted">{securityMessage}</p>}
 
           <div className="flex gap-3 pt-2">
             <Button

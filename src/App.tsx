@@ -401,15 +401,6 @@ const App = () => {
     }
   };
 
-  const handleSwitchProfile = async () => {
-    await window.electronAPI.clearCurrentProfile();
-    resetForProfile();
-    setCurrentProfile(null);
-    setIsAppSettingsOpen(false);
-    setProfileError('');
-    await refreshProfiles();
-  };
-
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -548,8 +539,6 @@ const App = () => {
           <AppSettingsModal
             open={isAppSettingsOpen}
             onOpenChange={setIsAppSettingsOpen}
-            currentProfileName={currentProfile?.name ?? ''}
-            onRequestProfileSwitch={handleSwitchProfile}
           />
           <Dialog
             open={isCreateProfileOpen}
