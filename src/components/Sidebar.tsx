@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { Plus, Menu, ChevronLeft, Database, LayoutDashboard, Settings } from 'lucide-react';
+import { Plus, Menu, ChevronLeft, Database, LayoutDashboard, Settings, Check } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useERPStore } from '../hooks/useERPStore';
 import { useLoadingStore } from '../hooks/useLoadingStore';
@@ -514,8 +514,13 @@ export const Sidebar: React.FC = () => {
             {profiles.map((profile) => (
               <DropdownMenuItem
                 key={profile.id}
-                onClick={() => void handleQuickProfileSwitch(profile)}
-                className="flex cursor-pointer items-center gap-3 text-discord-text hover:bg-discord-hover focus:bg-discord-hover focus:text-discord-text"
+                onClick={() => {
+                  if (currentProfile?.id === profile.id) return;
+                  void handleQuickProfileSwitch(profile);
+                }}
+                className={`flex items-center gap-3 text-discord-text hover:bg-discord-hover focus:bg-discord-hover focus:text-discord-text ${
+                  currentProfile?.id === profile.id ? 'cursor-default' : 'cursor-pointer'
+                }`}
               >
                 <div
                   className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-semibold text-white"
@@ -523,7 +528,10 @@ export const Sidebar: React.FC = () => {
                 >
                   {profile.name.charAt(0).toUpperCase()}
                 </div>
-                <span className="truncate">{profile.name}</span>
+                <span className="flex-1 truncate">{profile.name}</span>
+                {currentProfile?.id === profile.id && (
+                  <Check className="h-4 w-4 shrink-0 text-discord-text" />
+                )}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
