@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Toaster } from '@/components/ui/toaster';
 import { Toaster as Sonner } from '@/components/ui/sonner';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HashRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { Plus, X } from 'lucide-react';
+import { Lock, Plus, X } from 'lucide-react';
 import Index from './pages/Index';
 import Dashboard from './pages/Dashboard';
 import NotFound from './pages/NotFound';
@@ -30,6 +30,7 @@ import type { Profile } from './types';
 const queryClient = new QueryClient();
 const PROFILE_COLORS = ['#5865F2', '#3BA55D', '#F97316', '#EC4899', '#0EA5E9', '#EAB308'];
 const RAINBOW_PROFILE_COLOR = 'rainbow';
+const DEFAULT_PROFILE_NAME = '기본 프로필';
 
 function normalizeProfileColor(value: string) {
   if (value === RAINBOW_PROFILE_COLOR) return value;
@@ -48,6 +49,10 @@ function getProfileSwatchStyle(color?: string): React.CSSProperties {
   return {
     backgroundColor: normalizeProfileColor(color || PROFILE_COLORS[0]),
   };
+}
+
+function isDefaultProfile(profile: Pick<Profile, 'name'>) {
+  return profile.name === DEFAULT_PROFILE_NAME;
 }
 
 const RouterContent = () => {
@@ -363,6 +368,13 @@ const App = () => {
 
   const handleDeleteProfile = async () => {
     if (!deleteTargetProfile) return;
+    if (isDefaultProfile(deleteTargetProfile)) {
+      setProfileError('기본 프로필은 삭제할 수 없습니다.');
+      setShowDeleteConfirm(false);
+      setDeleteInput('');
+      setDeleteTargetProfile(null);
+      return;
+    }
 
     setIsProfileBusy(true);
     setProfileError('');
@@ -461,9 +473,21 @@ const App = () => {
                                 className="group flex w-[132px] flex-col items-center text-center disabled:opacity-60"
                               >
                                 <div
-                                  className="flex aspect-square w-full items-center justify-center rounded-xl text-4xl font-semibold text-white transition duration-200 group-hover:scale-[1.03] group-hover:ring-2 group-hover:ring-white/70"
+                                  className="relative flex aspect-square w-full items-center justify-center rounded-xl text-4xl font-semibold text-white transition duration-200 group-hover:scale-[1.03] group-hover:ring-2 group-hover:ring-white/70"
                                   style={getProfileSwatchStyle(profile.avatarColor)}
                                 >
+                                  {isDefaultProfile(profile) && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 ring-1 ring-white/15">
+                                          <Lock className="h-4 w-4 text-white" />
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-[220px] bg-discord-sidebar text-discord-text border-gray-700">
+                                        기본 프로필입니다, 삭제가 불가능합니다.
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
                                   {profile.name.charAt(0).toUpperCase()}
                                 </div>
                                 <div className="mt-4 text-xl font-medium text-gray-300 transition group-hover:text-white">
@@ -476,8 +500,10 @@ const App = () => {
                                 프로필 수정
                               </ContextMenuItem>
                               <ContextMenuItem
-                                className="text-red-400 focus:text-red-300"
+                                disabled={isDefaultProfile(profile)}
+                                className="text-red-400 focus:text-red-300 data-[disabled]:pointer-events-none data-[disabled]:opacity-40"
                                 onClick={() => {
+                                  if (isDefaultProfile(profile)) return;
                                   setDeleteTargetProfile(profile);
                                   setDeleteInput('');
                                   setProfileError('');
