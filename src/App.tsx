@@ -402,7 +402,10 @@ const App = () => {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <div className="h-screen w-screen flex flex-col bg-discord-bg font-noto">
-          <TitleBar onOpenSettings={() => currentProfile && !requiresPassword && setIsAppSettingsOpen(true)} />
+          <TitleBar
+            onOpenSettings={() => currentProfile && !requiresPassword && setIsAppSettingsOpen(true)}
+            settingsDisabled={isCheckingPassword || requiresPassword || !currentProfile}
+          />
           <div className="flex-1 min-h-0">
             {isCheckingPassword ? null : requiresPassword ? (
               <div className="h-full flex items-center justify-center bg-discord-bg p-6">

@@ -8,9 +8,10 @@ interface CSSPropertiesWithWebkit extends React.CSSProperties {
 
 interface TitleBarProps {
   onOpenSettings: () => void;
+  settingsDisabled?: boolean;
 }
 
-export function TitleBar({ onOpenSettings }: TitleBarProps) {
+export function TitleBar({ onOpenSettings, settingsDisabled = false }: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false);
   const electronAPI = window.electronAPI as ElectronAPI;
 
@@ -64,7 +65,8 @@ export function TitleBar({ onOpenSettings }: TitleBarProps) {
       >
         <button
           onClick={onOpenSettings}
-          className="w-12 h-full hover:bg-[#404249] hover:text-white transition-colors flex items-center justify-center"
+          disabled={settingsDisabled}
+          className="w-12 h-full transition-colors flex items-center justify-center hover:bg-[#404249] hover:text-white disabled:cursor-default disabled:text-[#5F6670] disabled:hover:bg-transparent disabled:hover:text-[#5F6670]"
           aria-label="환경설정"
         >
           <Settings className="w-4 h-4" />
