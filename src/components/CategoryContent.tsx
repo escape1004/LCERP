@@ -113,6 +113,14 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
   // 키보드 단축키 핸들러
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isEditableTarget = !!target && (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      );
+
       // 모달이 열려있으면 단축키 비활성화
       if (isRecordModalOpen || isViewModalOpen || isConfirmDialogOpen || isAlertDialogOpen) {
         return;
@@ -130,6 +138,21 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
           || sortedRecords.find(record => record.id === selectedRecordId);
         if (selectedRecord) {
           handleEdit(selectedRecord);
+        }
+      } else if (!e.ctrlKey && !e.metaKey && !e.altKey && !isEditableTarget && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        if (paginatedRecords.length === 0) {
+          return;
+        }
+
+        e.preventDefault();
+        const currentIndex = paginatedRecords.findIndex(record => record.id === selectedRecordId);
+
+        if (e.key === 'ArrowUp') {
+          const nextIndex = currentIndex <= 0 ? 0 : currentIndex - 1;
+          setSelectedRecordId(paginatedRecords[nextIndex].id);
+        } else {
+          const nextIndex = currentIndex < 0 ? 0 : Math.min(currentIndex + 1, paginatedRecords.length - 1);
+          setSelectedRecordId(paginatedRecords[nextIndex].id);
         }
       }
     };
