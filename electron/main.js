@@ -8,6 +8,7 @@ const unzipper = require('unzipper');
 const url = require('url');
 const http = require('http');
 const { execSync } = require('child_process');
+const XLSX = require('xlsx');
 
 // 콘솔 출력 인코딩을 UTF-8로 고정 (Windows 환경 한글 깨짐 방지)
 if (process.stdout && typeof process.stdout.setDefaultEncoding === 'function') {
@@ -1056,6 +1057,525 @@ function checkDuplicateFields(categoryId, data, existingRecordId = null, profile
   return true;
 }
 
+const IMPORT_EXPORT_BATCH_SIZE = 1000;
+
+function sanitizeFileName(name) {
+  return String(name || 'category').replace(/[<>:"/\\|?*\u0000-\u001F]/g, '_').trim() || 'category';
+}
+
+function getCategoryOrThrow(categoryId, profileId = getCurrentProfileIdOrThrow()) {
+  const category = db.prepare('SELECT * FROM categories WHERE id = ? AND profileId = ?').get(categoryId, profileId);
+  if (!category) {
+    throw new Error(`Category not found: ${categoryId}`);
+  }
+  return {
+    ...category,
+    fields: JSON.parse(category.fields)
+  };
+}
+
+function getCategoryRecordsForProfile(categoryId, profileId = getCurrentProfileIdOrThrow()) {
+  return db.prepare(`
+    SELECT id, categoryId, data, createdAt, updatedAt, duration, thumbnailPath
+    FROM records
+    WHERE categoryId = ? AND profileId = ?
+    ORDER BY createdAt DESC
+  `).all(categoryId, profileId).map((record) => ({
+    ...record,
+    data: JSON.parse(record.data)
+  }));
+}
+
+function getRelationKeyField(relatedCategory, relationField) {
+  if (!relatedCategory || !Array.isArray(relatedCategory.fields)) return null;
+
+  const displayField = relationField?.displayFieldId
+    ? relatedCategory.fields.find((field) => field.id === relationField.displayFieldId)
+    : null;
+
+  if (displayField?.unique) {
+    return displayField;
+  }
+
+  const uniqueField = relatedCategory.fields.find((field) => field.unique);
+  if (uniqueField) {
+    return uniqueField;
+  }
+
+  if (displayField) {
+    return displayField;
+  }
+
+  return relatedCategory.fields.find((field) => field.type !== 'file' && field.type !== 'relation')
+    || relatedCategory.fields[0]
+    || null;
+}
+
+function buildRelationResolvers(fields, profileId = getCurrentProfileIdOrThrow()) {
+  const resolvers = new Map();
+
+  fields
+    .filter((field) => field.type === 'relation' && field.relationCategoryId)
+    .forEach((field) => {
+      const relatedCategory = getCategoryOrThrow(field.relationCategoryId, profileId);
+      const relatedRecords = getCategoryRecordsForProfile(field.relationCategoryId, profileId);
+      const keyField = getRelationKeyField(relatedCategory, field);
+      const displayField = field.displayFieldId
+        ? relatedCategory.fields.find((candidate) => candidate.id === field.displayFieldId)
+        : relatedCategory.fields[0] || null;
+
+      const lookup = new Map();
+
+      relatedRecords.forEach((record) => {
+        const candidates = [];
+        if (keyField) {
+          candidates.push(record.data[keyField.id]);
+        }
+        if (displayField && (!keyField || displayField.id !== keyField.id)) {
+          candidates.push(record.data[displayField.id]);
+        }
+        candidates.push(record.id);
+
+        candidates.forEach((candidate) => {
+          if (candidate === undefined || candidate === null || candidate === '') return;
+          const normalized = String(candidate).trim().toLowerCase();
+          if (!normalized) return;
+          if (!lookup.has(normalized)) {
+            lookup.set(normalized, []);
+          }
+          lookup.get(normalized).push(record.id);
+        });
+      });
+
+      resolvers.set(field.id, {
+        field,
+        relatedCategory,
+        relatedRecords,
+        keyField,
+        displayField,
+        lookup
+      });
+    });
+
+  return resolvers;
+}
+
+function getRelationExportValue(field, value, relationResolvers) {
+  const resolver = relationResolvers.get(field.id);
+  if (!resolver) {
+    return field.multiple ? JSON.stringify(Array.isArray(value) ? value : []) : String(value ?? '');
+  }
+
+  const toKeyValue = (recordId) => {
+    const relatedRecord = resolver.relatedRecords.find((record) => record.id === recordId);
+    if (!relatedRecord) {
+      return String(recordId ?? '');
+    }
+
+    const keyField = resolver.keyField || resolver.displayField;
+    if (!keyField) {
+      return relatedRecord.id;
+    }
+
+    const keyValue = relatedRecord.data[keyField.id];
+    return keyValue === undefined || keyValue === null ? '' : String(keyValue);
+  };
+
+  if (field.multiple) {
+    const relationValues = Array.isArray(value) ? value.map(toKeyValue).filter(Boolean) : [];
+    return JSON.stringify(relationValues);
+  }
+
+  return toKeyValue(value);
+}
+
+function serializeExportValue(field, value) {
+  if (value === null || value === undefined) return '';
+  if (field?.multiple || Array.isArray(value)) {
+    return JSON.stringify(Array.isArray(value) ? value : [value]);
+  }
+  if (field?.type === 'checkbox') {
+    return value ? 'true' : 'false';
+  }
+  if (typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+  return String(value);
+}
+
+function escapeCsvCell(value) {
+  const text = value === null || value === undefined ? '' : String(value);
+  if (/[",\r\n]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+}
+
+function parseBooleanImportValue(value) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return ['true', '1', 'y', 'yes', 'o', 'on'].includes(normalized);
+}
+
+function parseArrayImportValue(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+
+  const text = String(value ?? '').trim();
+  if (!text) return [];
+
+  if ((text.startsWith('[') && text.endsWith(']')) || (text.startsWith('{') && text.endsWith('}'))) {
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => String(item).trim()).filter(Boolean);
+      }
+    } catch (error) {
+      // Fall through to delimiter parsing.
+    }
+  }
+
+  return text
+    .split(/[\r\n,;]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseImportedFieldValue(field, rawValue) {
+  if (rawValue === null || rawValue === undefined) {
+    return field?.multiple ? [] : field?.type === 'checkbox' ? false : '';
+  }
+
+  const text = typeof rawValue === 'string' ? rawValue.trim() : rawValue;
+  if (text === '') {
+    return field?.multiple ? [] : field?.type === 'checkbox' ? false : '';
+  }
+
+  switch (field?.type) {
+    case 'number': {
+      const numericValue = Number(text);
+      return Number.isFinite(numericValue) ? numericValue : String(text);
+    }
+    case 'checkbox':
+      return parseBooleanImportValue(text);
+    case 'select':
+    case 'relation':
+      return field?.multiple ? parseArrayImportValue(text) : String(text);
+    case 'file':
+    case 'date':
+    case 'text':
+    default:
+      return String(text);
+  }
+}
+
+function resolveImportedRelationValue(field, rawValue, relationResolvers) {
+  const resolver = relationResolvers.get(field.id);
+  if (!resolver) {
+    return {
+      value: field.multiple ? parseArrayImportValue(rawValue) : String(rawValue ?? ''),
+      unresolvedCount: 0
+    };
+  }
+
+  const sourceValues = field.multiple ? parseArrayImportValue(rawValue) : [String(rawValue ?? '').trim()].filter(Boolean);
+  const resolvedIds = [];
+  let unresolvedCount = 0;
+
+  sourceValues.forEach((sourceValue) => {
+    const normalized = String(sourceValue).trim().toLowerCase();
+    if (!normalized) return;
+
+    const matches = resolver.lookup.get(normalized) || [];
+    if (matches.length === 1) {
+      resolvedIds.push(matches[0]);
+      return;
+    }
+
+    unresolvedCount += 1;
+  });
+
+  return {
+    value: field.multiple ? Array.from(new Set(resolvedIds)) : (resolvedIds[0] || ''),
+    unresolvedCount
+  };
+}
+
+function createDefaultRecordData(fields) {
+  return fields.reduce((acc, field) => {
+    if (field.multiple) {
+      acc[field.id] = [];
+    } else if (field.type === 'checkbox') {
+      acc[field.id] = false;
+    } else {
+      acc[field.id] = '';
+    }
+    return acc;
+  }, {});
+}
+
+function getHeaderFieldMap(fields) {
+  const map = new Map();
+  fields.forEach((field) => {
+    const keys = [field.id, field.name]
+      .filter(Boolean)
+      .map((key) => String(key).trim().toLowerCase());
+
+    for (const key of keys) {
+      if (key) {
+        map.set(key, field);
+      }
+    }
+  });
+  return map;
+}
+
+function getUniqueFieldValueSets(categoryId, uniqueFields, profileId = getCurrentProfileIdOrThrow()) {
+  const uniqueValueSets = new Map();
+
+  for (const field of uniqueFields) {
+    const rows = db.prepare(`
+      SELECT json_extract(data, '$.${field.id}') AS value
+      FROM records
+      WHERE categoryId = ?
+        AND profileId = ?
+        AND json_extract(data, '$.${field.id}') IS NOT NULL
+    `).all(categoryId, profileId);
+
+    const values = new Set();
+    rows.forEach((row) => {
+      if (row.value !== '') {
+        values.add(String(row.value));
+      }
+    });
+    uniqueValueSets.set(field.id, values);
+  }
+
+  return uniqueValueSets;
+}
+
+const insertImportedRecordsBatch = db.transaction((recordsToInsert) => {
+  const stmt = db.prepare(`
+    INSERT INTO records (id, profileId, categoryId, data, createdAt, updatedAt, duration)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  for (const record of recordsToInsert) {
+    stmt.run(
+      record.id,
+      record.profileId,
+      record.categoryId,
+      JSON.stringify(record.data),
+      record.createdAt,
+      record.updatedAt,
+      record.duration ?? null
+    );
+  }
+});
+
+async function exportCategoryRecordsToCsv(filePath, category, records) {
+  const relationResolvers = buildRelationResolvers(category.fields);
+  const writeChunk = (stream, chunk) => new Promise((resolve, reject) => {
+    const handleError = (error) => reject(error);
+    stream.once('error', handleError);
+    const canContinue = stream.write(chunk);
+    if (canContinue) {
+      stream.off('error', handleError);
+      resolve();
+      return;
+    }
+    stream.once('drain', () => {
+      stream.off('error', handleError);
+      resolve();
+    });
+  });
+
+  await new Promise(async (resolve, reject) => {
+    const stream = fs.createWriteStream(filePath, { encoding: 'utf8' });
+    stream.on('error', reject);
+    stream.on('finish', resolve);
+    try {
+      await writeChunk(stream, '\uFEFF');
+      await writeChunk(stream, `${category.fields.map((field) => escapeCsvCell(field.name)).join(',')}\r\n`);
+
+      for (const record of records) {
+        const row = category.fields
+          .map((field) => {
+            const exportValue = field.type === 'relation'
+              ? getRelationExportValue(field, record.data[field.id], relationResolvers)
+              : serializeExportValue(field, record.data[field.id]);
+            return escapeCsvCell(exportValue);
+          })
+          .join(',');
+
+        await writeChunk(stream, `${row}\r\n`);
+      }
+
+      stream.end();
+    } catch (error) {
+      stream.destroy();
+      reject(error);
+    }
+  });
+}
+
+function exportCategoryRecordsToExcel(filePath, category, records) {
+  const relationResolvers = buildRelationResolvers(category.fields);
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.aoa_to_sheet([category.fields.map((field) => field.name)]);
+
+  for (let index = 0; index < records.length; index += IMPORT_EXPORT_BATCH_SIZE) {
+    const batch = records.slice(index, index + IMPORT_EXPORT_BATCH_SIZE).map((record) =>
+      category.fields.map((field) => (
+        field.type === 'relation'
+          ? getRelationExportValue(field, record.data[field.id], relationResolvers)
+          : serializeExportValue(field, record.data[field.id])
+      ))
+    );
+
+    XLSX.utils.sheet_add_aoa(worksheet, batch, { origin: -1 });
+  }
+
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Records');
+  XLSX.writeFile(workbook, filePath, { compression: true });
+}
+
+function readImportRowsFromFile(filePath) {
+  const workbook = XLSX.readFile(filePath, {
+    raw: false,
+    dense: true,
+    cellDates: false
+  });
+  const firstSheetName = workbook.SheetNames[0];
+  if (!firstSheetName) {
+    return [];
+  }
+  const worksheet = workbook.Sheets[firstSheetName];
+  return XLSX.utils.sheet_to_json(worksheet, {
+    defval: '',
+    raw: false
+  });
+}
+
+function importCategoryRecordsFromRows(categoryId, fields, rows, profileId = getCurrentProfileIdOrThrow()) {
+  const normalizedRows = Array.isArray(rows) ? rows : [];
+  const headerFieldMap = getHeaderFieldMap(fields);
+  const uniqueFields = fields.filter((field) => field.unique);
+  const uniqueValueSets = getUniqueFieldValueSets(categoryId, uniqueFields, profileId);
+  const relationResolvers = buildRelationResolvers(fields, profileId);
+  const now = new Date().toISOString();
+
+  let importedCount = 0;
+  let duplicateCount = 0;
+  let skippedCount = 0;
+  let unresolvedRelationCount = 0;
+  const duplicateFields = new Set();
+  let pendingBatch = [];
+
+  const flushPendingBatch = () => {
+    if (pendingBatch.length === 0) return;
+    insertImportedRecordsBatch(pendingBatch);
+    pendingBatch = [];
+  };
+
+  for (const row of normalizedRows) {
+    const recordData = createDefaultRecordData(fields);
+    let hasAnyValue = false;
+
+    for (const [header, rawValue] of Object.entries(row)) {
+      const field = headerFieldMap.get(String(header).trim().toLowerCase());
+      if (!field) continue;
+
+      const relationResult = field.type === 'relation'
+        ? resolveImportedRelationValue(field, rawValue, relationResolvers)
+        : null;
+      const parsedValue = relationResult
+        ? relationResult.value
+        : parseImportedFieldValue(field, rawValue);
+
+      if (relationResult) {
+        unresolvedRelationCount += relationResult.unresolvedCount;
+      }
+
+      recordData[field.id] = parsedValue;
+
+      if (
+        parsedValue !== '' &&
+        parsedValue !== null &&
+        parsedValue !== undefined &&
+        !(Array.isArray(parsedValue) && parsedValue.length === 0) &&
+        !(field.type === 'checkbox' && parsedValue === false)
+      ) {
+        hasAnyValue = true;
+      }
+    }
+
+    if (!hasAnyValue) {
+      skippedCount += 1;
+      continue;
+    }
+
+    let isDuplicate = false;
+    for (const field of uniqueFields) {
+      const value = recordData[field.id];
+      if (value === undefined || value === null || value === '') {
+        continue;
+      }
+
+      const normalizedValue = String(value);
+      const valueSet = uniqueValueSets.get(field.id);
+      if (valueSet && valueSet.has(normalizedValue)) {
+        isDuplicate = true;
+        duplicateFields.add(field.name);
+        break;
+      }
+    }
+
+    if (isDuplicate) {
+      duplicateCount += 1;
+      continue;
+    }
+
+    const recordId = crypto.randomUUID();
+    const record = {
+      id: recordId,
+      profileId,
+      categoryId,
+      data: recordData,
+      createdAt: now,
+      updatedAt: now,
+      duration: null
+    };
+
+    pendingBatch.push(record);
+    importedCount += 1;
+
+    for (const field of uniqueFields) {
+      const value = recordData[field.id];
+      if (value === undefined || value === null || value === '') {
+        continue;
+      }
+      uniqueValueSets.get(field.id)?.add(String(value));
+    }
+
+    if (pendingBatch.length >= IMPORT_EXPORT_BATCH_SIZE) {
+      flushPendingBatch();
+    }
+  }
+
+  flushPendingBatch();
+
+  return {
+    importedCount,
+    duplicateCount,
+    skippedCount,
+    unresolvedRelationCount,
+    duplicateFields: Array.from(duplicateFields)
+  };
+}
+
 // IPC 핸들러들
 ipcMain.handle('openExternal', async (_, url) => {
   try {
@@ -1886,6 +2406,95 @@ ipcMain.handle('category:import', async () => {
     return { success: true, importedCount: oldToNew.size };
   } catch (error) {
     log('Error importing category:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('category:exportRecords', async (_, categoryId, format = 'csv') => {
+  try {
+    const profileId = getCurrentProfileIdOrThrow();
+    if (!categoryId) {
+      throw new Error('Category ID is required');
+    }
+
+    ensureCategoryBelongsToCurrentProfile(categoryId);
+    const category = getCategoryOrThrow(categoryId, profileId);
+    const records = getCategoryRecordsForProfile(categoryId, profileId);
+    const normalizedFormat = format === 'xlsx' ? 'xlsx' : 'csv';
+    const extension = normalizedFormat === 'xlsx' ? 'xlsx' : 'csv';
+    const safeCategoryName = sanitizeFileName(category.name);
+
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: normalizedFormat === 'xlsx' ? 'Excel 내보내기' : 'CSV 내보내기',
+      defaultPath: `${safeCategoryName}.${extension}`,
+      filters: [
+        {
+          name: normalizedFormat === 'xlsx' ? 'Excel Workbook' : 'CSV File',
+          extensions: [extension]
+        }
+      ]
+    });
+
+    if (canceled || !filePath) {
+      return { success: false, canceled: true };
+    }
+
+    if (normalizedFormat === 'xlsx') {
+      exportCategoryRecordsToExcel(filePath, category, records);
+    } else {
+      await exportCategoryRecordsToCsv(filePath, category, records);
+    }
+
+    return {
+      success: true,
+      path: filePath,
+      recordCount: records.length,
+      format: normalizedFormat
+    };
+  } catch (error) {
+    log('Error exporting category records:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('category:importRecords', async (_, categoryId, format = 'csv') => {
+  try {
+    const profileId = getCurrentProfileIdOrThrow();
+    if (!categoryId) {
+      throw new Error('Category ID is required');
+    }
+
+    ensureCategoryBelongsToCurrentProfile(categoryId);
+    const category = getCategoryOrThrow(categoryId, profileId);
+    const normalizedFormat = format === 'xlsx' ? 'xlsx' : 'csv';
+    const extensions = normalizedFormat === 'xlsx' ? ['xlsx', 'xls'] : ['csv'];
+
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      title: normalizedFormat === 'xlsx' ? 'Excel 가져오기' : 'CSV 가져오기',
+      properties: ['openFile'],
+      filters: [
+        {
+          name: normalizedFormat === 'xlsx' ? 'Excel Workbook' : 'CSV File',
+          extensions
+        }
+      ]
+    });
+
+    if (canceled || !filePaths || filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+
+    const rows = readImportRowsFromFile(filePaths[0]);
+    const result = importCategoryRecordsFromRows(categoryId, category.fields, rows, profileId);
+
+    return {
+      success: true,
+      path: filePaths[0],
+      format: normalizedFormat,
+      ...result
+    };
+  } catch (error) {
+    log('Error importing category records:', error);
     return { success: false, error: error.message };
   }
 });

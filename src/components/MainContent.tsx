@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+﻿import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, Upload, FileText, ChevronDown, ChevronUp, ArrowUpWideNarrow, ArrowDownWideNarrow, ArrowUp01, ArrowDown01, SortAsc, SortDesc, Check, RefreshCw, HelpCircle } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { useLoadingStore } from '../hooks/useLoadingStore';
@@ -18,8 +18,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "./ui/tooltip";
-import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
 import { ConfirmDialog } from './ui/confirm-dialog';
 import { AlertDialog } from './ui/alert-dialog';
 import { CategoryModal } from './CategoryModal';
@@ -637,6 +635,7 @@ export const MainContent: React.FC = () => {
     deleteRecord,
     getCategoryRecords,
     loadRecords,
+    invalidateCache,
     selectCategory,
     showDbViewer,
   } = useERPStore();
@@ -1273,6 +1272,78 @@ export const MainContent: React.FC = () => {
     setIsAlertDialogOpen(true);
   };
 
+  const handleExportRecords = async (format: 'csv' | 'xlsx') => {
+    if (!selectedCategorySafe) {
+      showAlert('내보내기 실패', '먼저 카테고리를 선택해주세요.', 'warning');
+      return;
+    }
+
+    try {
+      const result = await window.electronAPI.exportCategoryRecords(selectedCategorySafe.id, format);
+
+      if (!result.success) {
+        if (!result.canceled) {
+          showAlert('내보내기 실패', result.error || '파일 내보내기 중 오류가 발생했습니다.', 'error');
+        }
+        return;
+      }
+
+      const formatLabel = format === 'xlsx' ? 'Excel' : 'CSV';
+      showAlert(
+        '내보내기 완료',
+        `${selectedCategorySafe.name} 카테고리의 ${result.recordCount ?? 0}개 레코드를 ${formatLabel} 파일로 저장했습니다.`,
+        'success'
+      );
+    } catch (error) {
+      console.error(`Failed to export ${format}:`, error);
+      showAlert('내보내기 실패', '파일 내보내기 중 오류가 발생했습니다.', 'error');
+    }
+  };
+
+  const handleImportRecords = async (format: 'csv' | 'xlsx') => {
+    if (!selectedCategorySafe) {
+      showAlert('가져오기 실패', '먼저 카테고리를 선택해주세요.', 'warning');
+      return;
+    }
+
+    try {
+      const result = await window.electronAPI.importCategoryRecords(selectedCategorySafe.id, format);
+
+      if (!result.success) {
+        if (!result.canceled) {
+          showAlert('가져오기 실패', result.error || '파일 가져오기 중 오류가 발생했습니다.', 'error');
+        }
+        return;
+      }
+
+      invalidateCache(selectedCategorySafe.id);
+      await loadRecords(selectedCategorySafe.id);
+
+      const details = [
+        `저장됨: ${result.importedCount ?? 0}건`,
+        `중복으로 건너뜀: ${result.duplicateCount ?? 0}건`,
+        `빈 행/해석 불가 행 건너뜀: ${result.skippedCount ?? 0}건`,
+      ];
+
+      if (result.unresolvedRelationCount) {
+        details.push(`관계형 자동 연결 실패: ${result.unresolvedRelationCount}건`);
+      }
+
+      if (result.duplicateFields && result.duplicateFields.length > 0) {
+        details.push(`중복 검사 필드: ${result.duplicateFields.join(', ')}`);
+      }
+
+      showAlert(
+        '가져오기 완료',
+        details.join('\n'),
+        (result.duplicateCount || result.skippedCount || result.unresolvedRelationCount) ? 'warning' : 'success'
+      );
+    } catch (error) {
+      console.error(`Failed to import ${format}:`, error);
+      showAlert('가져오기 실패', '파일 가져오기 중 오류가 발생했습니다.', 'error');
+    }
+  };
+
   const handlePageInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -1343,17 +1414,37 @@ export const MainContent: React.FC = () => {
                     >
                       항목 다중 추가
                     </ContextMenuItem>
-                    <ContextMenuItem disabled>
-                      CSV 내보내기 (개발중)
+                    <ContextMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleExportRecords('csv');
+                      }}
+                    >
+                      CSV 내보내기
                     </ContextMenuItem>
-                    <ContextMenuItem disabled>
-                      Excel 내보내기 (개발중)
+                    <ContextMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleExportRecords('xlsx');
+                      }}
+                    >
+                      Excel 내보내기
                     </ContextMenuItem>
-                    <ContextMenuItem disabled>
-                      CSV 가져오기 (개발중)
+                    <ContextMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleImportRecords('csv');
+                      }}
+                    >
+                      CSV 가져오기
                     </ContextMenuItem>
-                    <ContextMenuItem disabled>
-                      Excel 가져오기 (개발중)
+                    <ContextMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleImportRecords('xlsx');
+                      }}
+                    >
+                      Excel 가져오기
                     </ContextMenuItem>
                   </ContextMenuContent>
                 </ContextMenu>

@@ -33,6 +33,8 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
     itemsPerPage,
     setCurrentPage,
     selectCategory,
+    loadRecords,
+    invalidateCache,
   } = useERPStore();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -494,6 +496,68 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
     setIsAlertDialogOpen(true);
   };
 
+  const handleExportRecords = async (format: 'csv' | 'xlsx') => {
+    try {
+      const result = await window.electronAPI.exportCategoryRecords(selectedCategory.id, format);
+
+      if (!result.success) {
+        if (!result.canceled) {
+          showAlert('내보내기 실패', result.error || '파일 내보내기 중 오류가 발생했습니다.', 'error');
+        }
+        return;
+      }
+
+      const formatLabel = format === 'xlsx' ? 'Excel' : 'CSV';
+      showAlert(
+        '내보내기 완료',
+        `${selectedCategory.name} 카테고리의 ${result.recordCount ?? 0}개 레코드를 ${formatLabel} 파일로 저장했습니다.`,
+        'success'
+      );
+    } catch (error) {
+      console.error(`Failed to export ${format}:`, error);
+      showAlert('내보내기 실패', '파일 내보내기 중 오류가 발생했습니다.', 'error');
+    }
+  };
+
+  const handleImportRecords = async (format: 'csv' | 'xlsx') => {
+    try {
+      const result = await window.electronAPI.importCategoryRecords(selectedCategory.id, format);
+
+      if (!result.success) {
+        if (!result.canceled) {
+          showAlert('가져오기 실패', result.error || '파일 가져오기 중 오류가 발생했습니다.', 'error');
+        }
+        return;
+      }
+
+      invalidateCache(selectedCategory.id);
+      await loadRecords(selectedCategory.id);
+
+      const details = [
+        `저장됨: ${result.importedCount ?? 0}건`,
+        `중복으로 건너뜀: ${result.duplicateCount ?? 0}건`,
+        `빈 행/해석 불가 행 건너뜀: ${result.skippedCount ?? 0}건`,
+      ];
+
+      if (result.unresolvedRelationCount) {
+        details.push(`관계형 자동 연결 실패: ${result.unresolvedRelationCount}건`);
+      }
+
+      if (result.duplicateFields && result.duplicateFields.length > 0) {
+        details.push(`중복 검사 필드: ${result.duplicateFields.join(', ')}`);
+      }
+
+      showAlert(
+        '가져오기 완료',
+        details.join('\n'),
+        (result.duplicateCount || result.skippedCount) ? 'warning' : 'success'
+      );
+    } catch (error) {
+      console.error(`Failed to import ${format}:`, error);
+      showAlert('가져오기 실패', '파일 가져오기 중 오류가 발생했습니다.', 'error');
+    }
+  };
+
   const exportToCSV = async () => {
     const headers = selectedCategory.fields.filter(f => !f.hidden).map(f => f.name).join(',');
     const rows = sortedRecords.map(record => 
@@ -747,17 +811,37 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
                 >
                   항목 다중 추가
                 </ContextMenuItem>
-                <ContextMenuItem disabled>
-                  CSV 내보내기 (개발중)
+                <ContextMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleExportRecords('csv');
+                  }}
+                >
+                  CSV 내보내기
                 </ContextMenuItem>
-                <ContextMenuItem disabled>
-                  Excel 내보내기 (개발중)
+                <ContextMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleExportRecords('xlsx');
+                  }}
+                >
+                  Excel 내보내기
                 </ContextMenuItem>
-                <ContextMenuItem disabled>
-                  CSV 가져오기 (개발중)
+                <ContextMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleImportRecords('csv');
+                  }}
+                >
+                  CSV 가져오기
                 </ContextMenuItem>
-                <ContextMenuItem disabled>
-                  Excel 가져오기 (개발중)
+                <ContextMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleImportRecords('xlsx');
+                  }}
+                >
+                  Excel 가져오기
                 </ContextMenuItem>
               </ContextMenuContent>
             </ContextMenu>

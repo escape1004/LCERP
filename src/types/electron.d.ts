@@ -13,6 +13,8 @@ export interface ElectronAPI {
   updateCategory: (id: string, updates: CategoryUpdate) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;
   moveCategoryToProfile: (categoryId: string, targetProfileId: string) => Promise<{ success: boolean; error?: string }>;
+  exportCategoryRecords: (categoryId: string, format: 'csv' | 'xlsx') => Promise<{ success: boolean; canceled?: boolean; path?: string; recordCount?: number; format?: 'csv' | 'xlsx'; error?: string }>;
+  importCategoryRecords: (categoryId: string, format: 'csv' | 'xlsx') => Promise<{ success: boolean; canceled?: boolean; path?: string; importedCount?: number; duplicateCount?: number; skippedCount?: number; unresolvedRelationCount?: number; duplicateFields?: string[]; format?: 'csv' | 'xlsx'; error?: string }>;
   
   // Record methods
   getRecords: (categoryId: string) => Promise<DataRecord[]>;
