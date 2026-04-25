@@ -115,6 +115,7 @@ export interface Config {
   videoSeekSeconds?: number;
   videoAutoPlay?: boolean;
   listThumbnailFit?: 'cover' | 'contain';
+  thumbnailPreviewScale?: number;
 }
 
 export interface Profile {

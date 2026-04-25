@@ -28,6 +28,8 @@ const sections: SettingsSection[] = [
   { id: 'security', label: '보안', description: '프로그램 비밀번호 관리', icon: Shield },
 ];
 
+const thumbnailPreviewScaleOptions = [100, 125, 150, 175, 200] as const;
+
 export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: AppSettingsModalProps) {
   const [activeSection, setActiveSection] = useState('general');
   const [config, setConfig] = useState<Config | null>(null);
@@ -213,6 +215,26 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
     }
   };
 
+  const handleThumbnailPreviewScaleChange = async (scale: number) => {
+    const previousScale = Math.min(200, Math.max(75, Number(config?.thumbnailPreviewScale ?? 100)));
+    setConfig((prev) => (prev ? { ...prev, thumbnailPreviewScale: scale } : prev));
+    setListMessage('');
+    setIsSaving(true);
+
+    try {
+      const result = await window.electronAPI.setThumbnailPreviewScale(scale);
+      if (result.success) {
+        window.dispatchEvent(new CustomEvent('config:updated', { detail: { thumbnailPreviewScale: scale } }));
+        return;
+      }
+
+      setConfig((prev) => (prev ? { ...prev, thumbnailPreviewScale: previousScale } : prev));
+      setListMessage(result.error || '썸네일 미리보기 배율 저장에 실패했습니다.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleVideoAutoPlayChange = async (checked: boolean) => {
     setConfig((prev) => (prev ? { ...prev, videoAutoPlay: checked } : prev));
     setViewerAutoPlayMessage('');
@@ -392,6 +414,30 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
               >
                 Contain
               </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="mt-5 max-w-md">
+          <div className="text-xs text-discord-muted mb-2">미리보기 배율</div>
+          <Select
+            value={String(config?.thumbnailPreviewScale ?? 100)}
+            onValueChange={(value) => void handleThumbnailPreviewScaleChange(Number(value))}
+            disabled={!config || isSaving}
+          >
+            <SelectTrigger className="bg-discord-sidebar border-gray-600 text-discord-text">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-discord-sidebar border-gray-600 text-discord-text">
+              {thumbnailPreviewScaleOptions.map((scale) => (
+                <SelectItem
+                  key={scale}
+                  value={String(scale)}
+                  className="text-discord-text focus:bg-discord-hover focus:text-discord-text hover:bg-discord-hover"
+                >
+                  {scale}%
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

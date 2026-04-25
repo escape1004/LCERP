@@ -466,7 +466,10 @@ declare global {
   interface WindowEventMap {
     'erp:categoryChange': CustomEvent<{ categoryId: string }>;
     'thumbnail:regenerated': CustomEvent<{ filePath: string }>;
-    'config:updated': CustomEvent<{ listThumbnailFit?: 'cover' | 'contain' }>;
+    'config:updated': CustomEvent<{
+      listThumbnailFit?: 'cover' | 'contain';
+      thumbnailPreviewScale?: number;
+    }>;
   }
 }
 
@@ -477,9 +480,16 @@ const ThumbnailCell: React.FC<{
   onThumbnailClick: (filePath: string) => void;
   thumbnailFit: 'cover' | 'contain';
   thumbnailOnly?: boolean;
-}> = ({ filePath, record, onThumbnailClick, thumbnailFit, thumbnailOnly = false }) => {
+  onPreviewChange?: (preview: {
+    dataUrl: string | null;
+    filePath: string;
+    missingFile: boolean;
+    thumbnailFit: 'cover' | 'contain';
+  } | null) => void;
+}> = ({ filePath, record, onThumbnailClick, thumbnailFit, thumbnailOnly = false, onPreviewChange }) => {
   const [dataUrl, setDataUrl] = React.useState<string | null>(null);
   const [fileExists, setFileExists] = React.useState<boolean | null>(null);
+  const [isHovered, setIsHovered] = React.useState(false);
   const hasRetriedAfterErrorRef = React.useRef(false);
   const reloadThumbnail = React.useCallback(() => {
     if (!filePath || !record) {
@@ -565,8 +575,27 @@ const ThumbnailCell: React.FC<{
   const missingFile = !thumbnailOnly && !!filePath && fileExists === false;
   const canOpen = !!filePath && fileExists !== false && !thumbnailOnly;
 
+  React.useEffect(() => {
+    if (!onPreviewChange) return;
+    if (!isHovered || !filePath) {
+      onPreviewChange(null);
+      return;
+    }
+
+    onPreviewChange({
+      dataUrl,
+      filePath,
+      missingFile,
+      thumbnailFit
+    });
+  }, [onPreviewChange, isHovered, filePath, dataUrl, missingFile, thumbnailFit]);
+
   const thumbnailBody = (
-    <div className="relative w-24 h-24">
+    <div
+      className="relative w-24 h-24"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       {dataUrl ? (
         <>
           <img 
@@ -1095,6 +1124,13 @@ export const MainContent: React.FC = () => {
   const [isPageInputMode, setIsPageInputMode] = useState(false);
   const [pageInputValue, setPageInputValue] = useState('');
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState<{
+    dataUrl: string | null;
+    filePath: string;
+    missingFile: boolean;
+    thumbnailFit: 'cover' | 'contain';
+  } | null>(null);
+  const [thumbnailPreviewScale, setThumbnailPreviewScale] = useState(100);
 
   // 뷰어 모달 상태
   const [viewerModalOpen, setViewerModalOpen] = useState(false);
@@ -1111,16 +1147,24 @@ export const MainContent: React.FC = () => {
     window.electronAPI.getConfig().then((config) => {
       if (!cancelled) {
         setListThumbnailFit(config?.listThumbnailFit === 'contain' ? 'contain' : 'cover');
+        setThumbnailPreviewScale(Math.min(200, Math.max(75, Number(config?.thumbnailPreviewScale ?? 100))));
       }
     }).catch(() => {
       if (!cancelled) {
         setListThumbnailFit('cover');
+        setThumbnailPreviewScale(100);
       }
     });
 
-    const handleConfigUpdated = (event: CustomEvent<{ listThumbnailFit?: 'cover' | 'contain' }>) => {
+    const handleConfigUpdated = (event: CustomEvent<{
+      listThumbnailFit?: 'cover' | 'contain';
+      thumbnailPreviewScale?: number;
+    }>) => {
       if (event.detail.listThumbnailFit) {
         setListThumbnailFit(event.detail.listThumbnailFit);
+      }
+      if (event.detail.thumbnailPreviewScale) {
+        setThumbnailPreviewScale(Math.min(200, Math.max(75, Number(event.detail.thumbnailPreviewScale))));
       }
     };
 
@@ -1131,6 +1175,9 @@ export const MainContent: React.FC = () => {
       window.removeEventListener('config:updated', handleConfigUpdated as EventListener);
     };
   }, []);
+
+  const previewWidth = Math.round(320 * (thumbnailPreviewScale / 100));
+  const previewHeight = Math.round(220 * (thumbnailPreviewScale / 100));
 
   // Ctrl+좌우 방향키 페이지 이동 핸들러
   useEffect(() => {
@@ -1670,6 +1717,7 @@ export const MainContent: React.FC = () => {
                                     record={record}
                                     thumbnailFit={listThumbnailFit}
                                     thumbnailOnly={fileField.thumbnailOnly}
+                                    onPreviewChange={setThumbnailPreview}
                                     onThumbnailClick={(filePath) => {
                                       // 즉시 모달 열기 (파일 타입 확인은 모달 내에서 처리)
                                       setViewerFilePath(filePath);
@@ -1740,6 +1788,46 @@ export const MainContent: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
+
+                {thumbnailPreview && (
+                  <div className="fixed bottom-6 right-6 z-50 pointer-events-none">
+                    <div
+                      className="rounded-xl border border-[#3b3f46] bg-[#111214]/95 shadow-[0_18px_60px_rgba(0,0,0,0.45)] backdrop-blur-sm overflow-hidden"
+                      style={{ width: `${previewWidth}px` }}
+                    >
+                      <div className="flex items-center justify-between border-b border-[#2b2d31] bg-[#1e1f22]/95 px-4 py-2">
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#b5bac1]">
+                          썸네일 미리보기
+                        </span>
+                      </div>
+                      <div
+                        className="flex items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(88,101,242,0.22),_transparent_58%),linear-gradient(180deg,_#232428_0%,_#15171a_100%)] p-4"
+                        style={{ height: `${previewHeight}px` }}
+                      >
+                        {thumbnailPreview.dataUrl ? (
+                          <img
+                            src={thumbnailPreview.dataUrl}
+                            alt="썸네일 미리보기"
+                            className={`h-full w-full rounded-lg border border-[#2b2d31] shadow-[0_12px_24px_rgba(0,0,0,0.35)] ${
+                              thumbnailPreview.thumbnailFit === 'contain' ? 'object-contain bg-black' : 'object-cover'
+                            }`}
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center rounded-lg border border-dashed border-[#3b3f46] bg-[#18191c] text-center">
+                            <div>
+                              <div className="text-4xl leading-none">
+                                {thumbnailPreview.missingFile ? '?' : '🖼️'}
+                              </div>
+                              <p className="mt-3 text-sm text-[#dcddde]">
+                                {thumbnailPreview.missingFile ? '원본 파일을 찾을 수 없습니다' : '썸네일을 불러오는 중입니다'}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Pagination */}
                 <div className="shrink-0 px-6 py-4 border-t border-gray-700">

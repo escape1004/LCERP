@@ -49,7 +49,8 @@ const defaultConfig = {
   videoSeekSeconds: 5,
   videoAutoPlay: true,
   listThumbnailFit: 'cover',
-  zoomPercent: 100
+  zoomPercent: 100,
+  thumbnailPreviewScale: 100
 };
 
 let appConfig = { ...defaultConfig };
@@ -96,6 +97,19 @@ function normalizeZoomPercent(value) {
 
 function getConfiguredZoomPercent() {
   return normalizeZoomPercent(appConfig.zoomPercent) ?? 100;
+}
+
+function normalizeThumbnailPreviewScale(value) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return null;
+  }
+
+  return Math.min(200, Math.max(75, Math.round(numericValue)));
+}
+
+function getConfiguredThumbnailPreviewScale() {
+  return normalizeThumbnailPreviewScale(appConfig.thumbnailPreviewScale) ?? 100;
 }
 
 function applyWindowZoom(targetWindow) {
@@ -2197,7 +2211,8 @@ ipcMain.handle('getConfig', () => {
     hasAppPassword: Boolean(appConfig.passwordHash),
     videoSeekSeconds: appConfig.videoSeekSeconds || 5,
     videoAutoPlay: appConfig.videoAutoPlay !== false,
-    listThumbnailFit: appConfig.listThumbnailFit === 'contain' ? 'contain' : 'cover'
+    listThumbnailFit: appConfig.listThumbnailFit === 'contain' ? 'contain' : 'cover',
+    thumbnailPreviewScale: getConfiguredThumbnailPreviewScale()
   };
 });
 
@@ -2379,6 +2394,17 @@ ipcMain.handle('setListThumbnailFit', (_event, fit) => {
   }
 
   appConfig.listThumbnailFit = fit;
+  saveAppConfig();
+  return { success: true };
+});
+
+ipcMain.handle('setThumbnailPreviewScale', (_event, scale) => {
+  const normalized = normalizeThumbnailPreviewScale(scale);
+  if (normalized === null) {
+    return { success: false, error: 'Thumbnail preview scale must be a number.' };
+  }
+
+  appConfig.thumbnailPreviewScale = normalized;
   saveAppConfig();
   return { success: true };
 });

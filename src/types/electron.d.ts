@@ -40,6 +40,7 @@ export interface ElectronAPI {
   setVideoSeekSeconds: (seconds: number) => Promise<{ success: boolean; error?: string }>;
   setVideoAutoPlay: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
   setListThumbnailFit: (fit: 'cover' | 'contain') => Promise<{ success: boolean; error?: string }>;
+  setThumbnailPreviewScale: (scale: number) => Promise<{ success: boolean; error?: string }>;
 
   // Profile methods
   getProfiles: () => Promise<Profile[]>;

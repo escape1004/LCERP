@@ -100,6 +100,7 @@ const api: ElectronAPI = {
   setBackupInterval: (minutes: number) => ipcRenderer.invoke('setBackupInterval', minutes),
   setRememberWindowBounds: (enabled: boolean) => ipcRenderer.invoke('setRememberWindowBounds', enabled),
   setZoomPercent: (percent: number) => ipcRenderer.invoke('setZoomPercent', percent),
+  setThumbnailPreviewScale: (scale: number) => ipcRenderer.invoke('setThumbnailPreviewScale', scale),
   setAppPassword: (password: string) => ipcRenderer.invoke('setAppPassword', password),
   clearAppPassword: () => ipcRenderer.invoke('clearAppPassword'),
   verifyAppPassword: (password: string) => ipcRenderer.invoke('verifyAppPassword', password),

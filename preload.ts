@@ -38,6 +38,7 @@ const api: ElectronAPI = {
   setDbPath: () => ipcRenderer.invoke('setDbPath'),
   setBackupDir: () => ipcRenderer.invoke('setBackupDir'),
   setBackupInterval: (minutes: number) => ipcRenderer.invoke('setBackupInterval', minutes),
+  setThumbnailPreviewScale: (scale: number) => ipcRenderer.invoke('setThumbnailPreviewScale', scale),
   getProfiles: () => ipcRenderer.invoke('profiles:getAll'),
   getCurrentProfile: () => ipcRenderer.invoke('profiles:getCurrent'),
   selectProfile: (profileId: string) => ipcRenderer.invoke('profiles:select', profileId),
