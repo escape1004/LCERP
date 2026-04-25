@@ -9,6 +9,7 @@ const url = require('url');
 const http = require('http');
 const { execSync } = require('child_process');
 const XLSX = require('xlsx');
+const AdmZip = require('adm-zip');
 
 // 콘솔 출력 인코딩을 UTF-8로 고정 (Windows 환경 한글 깨짐 방지)
 if (process.stdout && typeof process.stdout.setDefaultEncoding === 'function') {
@@ -1189,6 +1190,123 @@ function getRelationExportValue(field, value, relationResolvers) {
   return toKeyValue(value);
 }
 
+function getExcelHeaderLabel(field) {
+  return `${field.name}${field.type === 'relation' ? '*' : ''}`;
+}
+
+function getExcelColumnWidth(field, header, values) {
+  const maxLength = values.reduce((max, value) => {
+    const text = value === null || value === undefined ? '' : String(value);
+    return Math.max(max, text.length);
+  }, String(header || '').length);
+
+  const minWidthByType = {
+    checkbox: 12,
+    date: 14,
+    number: 12,
+    relation: 18,
+    file: 24
+  };
+  const minWidth = minWidthByType[field?.type] || 12;
+  return Math.min(Math.max(maxLength + 4, minWidth), 48);
+}
+
+function buildDiscordStyleSheetXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="3">
+    <font><sz val="11"/><color rgb="FFDCDDDE"/><name val="Calibri"/><family val="2"/></font>
+    <font><b/><sz val="12"/><color rgb="FFF2F3F5"/><name val="Calibri"/><family val="2"/></font>
+    <font><b/><sz val="11"/><color rgb="FFB5BAC1"/><name val="Calibri"/><family val="2"/></font>
+  </fonts>
+  <fills count="5">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF5865F2"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF313338"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF2B2D31"/><bgColor indexed="64"/></patternFill></fill>
+  </fills>
+  <borders count="2">
+    <border><left/><right/><top/><bottom/><diagonal/></border>
+    <border>
+      <left style="thin"><color rgb="FF1E1F22"/></left>
+      <right style="thin"><color rgb="FF1E1F22"/></right>
+      <top style="thin"><color rgb="FF1E1F22"/></top>
+      <bottom style="thin"><color rgb="FF1E1F22"/></bottom>
+      <diagonal/>
+    </border>
+  </borders>
+  <cellStyleXfs count="1">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>
+  </cellStyleXfs>
+  <cellXfs count="6">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+    <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+    <xf numFmtId="0" fontId="2" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+  </cellXfs>
+  <cellStyles count="1">
+    <cellStyle name="Normal" xfId="0" builtinId="0"/>
+  </cellStyles>
+  <dxfs count="0"/>
+  <tableStyles count="0" defaultTableStyle="TableStyleMedium9" defaultPivotStyle="PivotStyleMedium4"/>
+</styleSheet>`;
+}
+
+function applyDiscordExcelStyling(buffer, options) {
+  const { recordColumnCount, recordRowCount } = options;
+  const zip = new AdmZip(buffer);
+  const stylesPath = 'xl/styles.xml';
+  const recordsSheetPath = 'xl/worksheets/sheet1.xml';
+  const recordsSheetXml = zip.readAsText(recordsSheetPath);
+
+  const lastCellRef = XLSX.utils.encode_cell({
+    c: Math.max(recordColumnCount - 1, 0),
+    r: Math.max(recordRowCount - 1, 0)
+  });
+  const autoFilterRef = `A1:${XLSX.utils.encode_cell({ c: Math.max(recordColumnCount - 1, 0), r: 0 })}`;
+
+  let styledRecordsSheetXml = recordsSheetXml.replace(
+    '<sheetView workbookViewId="0"/>',
+    '<sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A2" sqref="A2"/></sheetView>'
+  );
+
+  styledRecordsSheetXml = styledRecordsSheetXml.replace(
+    /<row r="1">([\s\S]*?)<\/row>/,
+    (_match, rowContent) => {
+      const styledRow = rowContent.replace(/<c r="([A-Z]+1)"/g, '<c r="$1" s="1"');
+      return `<row r="1" ht="24" customHeight="1">${styledRow}</row>`;
+    }
+  );
+
+  styledRecordsSheetXml = styledRecordsSheetXml.replace(
+    /<row r="([2-9]\d*)">([\s\S]*?)<\/row>/g,
+    (_match, rowNumber, rowContent) => {
+      const styleId = Number(rowNumber) % 2 === 0 ? '2' : '3';
+      const styledRow = rowContent.replace(/<c r="([A-Z]+\d+)"/g, `<c r="$1" s="${styleId}"`);
+      return `<row r="${rowNumber}" ht="22" customHeight="1">${styledRow}</row>`;
+    }
+  );
+
+  if (!styledRecordsSheetXml.includes('<autoFilter ')) {
+    styledRecordsSheetXml = styledRecordsSheetXml.replace(
+      '</sheetData>',
+      `</sheetData><autoFilter ref="${autoFilterRef}"/>`
+    );
+  }
+
+  styledRecordsSheetXml = styledRecordsSheetXml.replace(
+    /<ignoredError numberStoredAsText="1" sqref="[^"]*"\/>/,
+    `<ignoredError numberStoredAsText="1" sqref="A1:${lastCellRef}"/>`
+  );
+
+  zip.updateFile(stylesPath, Buffer.from(buildDiscordStyleSheetXml(), 'utf8'));
+  zip.updateFile(recordsSheetPath, Buffer.from(styledRecordsSheetXml, 'utf8'));
+  return zip.toBuffer();
+}
+
 function serializeExportValue(field, value) {
   if (value === null || value === undefined) return '';
   if (field?.multiple || Array.isArray(value)) {
@@ -1424,7 +1542,8 @@ async function exportCategoryRecordsToCsv(filePath, category, records) {
 function exportCategoryRecordsToExcel(filePath, category, records) {
   const relationResolvers = buildRelationResolvers(category.fields);
   const workbook = XLSX.utils.book_new();
-  const worksheet = XLSX.utils.aoa_to_sheet([category.fields.map((field) => field.name)]);
+  const headers = category.fields.map((field) => getExcelHeaderLabel(field));
+  const worksheet = XLSX.utils.aoa_to_sheet([headers]);
 
   for (let index = 0; index < records.length; index += IMPORT_EXPORT_BATCH_SIZE) {
     const batch = records.slice(index, index + IMPORT_EXPORT_BATCH_SIZE).map((record) =>
@@ -1438,8 +1557,29 @@ function exportCategoryRecordsToExcel(filePath, category, records) {
     XLSX.utils.sheet_add_aoa(worksheet, batch, { origin: -1 });
   }
 
+  worksheet['!cols'] = category.fields.map((field, index) => ({
+    wch: getExcelColumnWidth(
+      field,
+      headers[index],
+      records.map((record) => (
+        field.type === 'relation'
+          ? getRelationExportValue(field, record.data[field.id], relationResolvers)
+          : serializeExportValue(field, record.data[field.id])
+      ))
+    )
+  }));
+
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Records');
-  XLSX.writeFile(workbook, filePath, { compression: true });
+  const workbookBuffer = XLSX.write(workbook, {
+    type: 'buffer',
+    bookType: 'xlsx',
+    compression: true
+  });
+  const styledBuffer = applyDiscordExcelStyling(workbookBuffer, {
+    recordColumnCount: headers.length,
+    recordRowCount: records.length + 1
+  });
+  fs.writeFileSync(filePath, styledBuffer);
 }
 
 function readImportRowsFromFile(filePath) {
