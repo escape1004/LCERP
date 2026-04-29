@@ -24,6 +24,19 @@ const normalizeCategoryField = (field: FieldDefinition): FieldDefinition => {
   return { ...field, required: false, unique: false };
 };
 
+const stripTextAffixes = (value: unknown, prefix?: string, suffix?: string) => {
+  if (typeof value !== 'string') return value;
+
+  let nextValue = value;
+  if (prefix && nextValue.startsWith(prefix)) {
+    nextValue = nextValue.slice(prefix.length);
+  }
+  if (suffix && nextValue.endsWith(suffix)) {
+    nextValue = nextValue.slice(0, -suffix.length);
+  }
+  return nextValue;
+};
+
 export const CategoryModal: React.FC<CategoryModalProps> = ({
   isOpen,
   onClose,
@@ -39,6 +52,8 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [duplicateErrors, setDuplicateErrors] = useState<Record<string, string>>({});
   const [isValidating, setIsValidating] = useState(false);
+  const [isMigratingAffixes, setIsMigratingAffixes] = useState(false);
+  const [migratedAffixCount, setMigratedAffixCount] = useState(0);
   const [isDirty, setIsDirty] = useState(false);
   const [expandedTextDecorations, setExpandedTextDecorations] = useState<Record<string, boolean>>({});
   
@@ -100,6 +115,8 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     setErrors({});
     setDuplicateErrors({});
     setIsDirty(false);
+    setIsMigratingAffixes(false);
+    setMigratedAffixCount(0);
     setExpandedTextDecorations({});
   }, [category, isOpen]);
 
@@ -184,21 +201,70 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     return finalValidationResult;
   };
 
+  const migrateTextAffixValues = async (nextFields: FieldDefinition[]) => {
+    if (!category) return 0;
+
+    const previousFieldsById = new Map(initialFormData.fields.map((field) => [field.id, field]));
+    const fieldsToMigrate = nextFields.filter((field) => {
+      if (field.type !== 'text') return false;
+      const previousField = previousFieldsById.get(field.id);
+      if (!previousField) return false;
+
+      const prefixChanged = (field.textPrefix || '') !== (previousField.textPrefix || '');
+      const suffixChanged = (field.textSuffix || '') !== (previousField.textSuffix || '');
+      return (prefixChanged || suffixChanged) && Boolean(field.textPrefix || field.textSuffix);
+    });
+
+    if (fieldsToMigrate.length === 0) return 0;
+
+    const records = getCategoryRecords(category.id);
+    let migratedCount = 0;
+
+    for (const record of records) {
+      const nextData = { ...record.data };
+      let didChange = false;
+
+      fieldsToMigrate.forEach((field) => {
+        const currentValue = nextData[field.id];
+        const nextValue = stripTextAffixes(currentValue, field.textPrefix, field.textSuffix);
+        if (nextValue !== currentValue) {
+          nextData[field.id] = nextValue;
+          didChange = true;
+        }
+      });
+
+      if (didChange) {
+        migratedCount += 1;
+        setMigratedAffixCount(migratedCount);
+        await window.electronAPI.updateRecord(record.id, nextData);
+      }
+    }
+
+    if (migratedCount > 0) {
+      await loadRecords(category.id);
+    }
+
+    return migratedCount;
+  };
+
   const handleSubmit = async () => {
     if (!isDirty) {
       onClose();
       return;
     }
     
-    if (isValidating) return;
+    if (isValidating || isMigratingAffixes) return;
     
     const isValid = await validateForm();
     if (!isValid) return;
 
     try {
+      setIsMigratingAffixes(true);
+      setMigratedAffixCount(0);
       const normalizedFields = formData.fields.map(normalizeCategoryField);
       if (category) {
-        updateCategory(category.id, {
+        await migrateTextAffixValues(normalizedFields);
+        await updateCategory(category.id, {
           name: formData.name,
           parentId: formData.parentId,
           fields: normalizedFields,
@@ -222,6 +288,8 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
         title: '카테고리 저장 중 오류가 발생했습니다.',
         variant: 'destructive',
       });
+    } finally {
+      setIsMigratingAffixes(false);
     }
   };
 
@@ -649,7 +717,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                               </div>
                                             </div>
                                             <p className="text-xs text-gray-500 mt-2">
-                                              입력값은 원본 그대로 저장하고, 화면에는 접두사/접미사를 붙여 표시합니다.
+                                              저장 시 기존 값에 접두사/접미사가 이미 붙어 있으면 원본 값에서 제거합니다.
                                             </p>
                                           </div>
                                         </div>
@@ -831,10 +899,19 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
 
         {/* Footer */}
         <div className="flex items-end justify-end gap-3 p-6 border-t border-gray-700">
+          {isMigratingAffixes && (
+            <div className="mr-auto flex items-center gap-2 text-sm text-discord-muted">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-discord-accent border-t-transparent" />
+              <span>
+                기존 데이터 마이그레이션 중... {migratedAffixCount > 0 ? `${migratedAffixCount}개 처리` : ''}
+              </span>
+            </div>
+          )}
           <Button 
             variant="ghost" 
             onClick={onClose}
             className="text-discord-text hover:bg-discord-hover"
+            disabled={isMigratingAffixes}
           >
             취소
           </Button>
@@ -843,6 +920,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
             className="bg-discord-accent hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={
               isValidating || 
+              isMigratingAffixes ||
               !isDirty ||
               !formData.name.trim() || 
               formData.fields.length === 0 ||
@@ -851,7 +929,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
               formData.fields.some(f => f.type === 'relation' && f.relationCategoryId && !f.displayFieldId)
             }
           >
-            {isValidating ? '검증 중...' : category ? '수정' : '생성'}
+            {isMigratingAffixes ? '마이그레이션 중...' : isValidating ? '검증 중...' : category ? '수정' : '생성'}
           </Button>
         </div>
     </AnimatedModal>
