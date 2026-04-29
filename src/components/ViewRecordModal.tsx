@@ -690,6 +690,22 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         );
       }
       
+      case 'percentage': {
+        const numericValue = Number(value && typeof value === 'object' ? value.value : 0);
+        const numericMax = Number(value && typeof value === 'object' ? value.max : 0);
+        const safeMax = Number.isFinite(numericMax) ? Math.max(0, numericMax) : 0;
+        const safeValue = Number.isFinite(numericValue) ? Math.min(Math.max(0, numericValue), safeMax) : 0;
+        const percentValue = safeMax > 0 ? Math.round((safeValue / safeMax) * 100) : 0;
+        return (
+          <span>
+            {safeValue} / {safeMax}{' '}
+            <span className={percentValue >= 100 ? 'text-discord-accent font-semibold' : 'text-discord-text font-semibold'}>
+              ({percentValue}%)
+            </span>
+          </span>
+        );
+      }
+
       case 'checkbox':
         return value ? <Check className="w-5 h-5 text-discord-accent" /> : <X className="w-5 h-5 text-discord-danger" />;
       

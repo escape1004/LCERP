@@ -16,6 +16,35 @@ interface BulkAddModalProps {
   category: Category | null;
 }
 
+const parseNonNegativeNumberInput = (value: string): number => {
+  const trimmedValue = value.trim();
+  if (trimmedValue === '') return 0;
+  const numericValue = Number(trimmedValue);
+  return Number.isFinite(numericValue) ? Math.max(0, numericValue) : 0;
+};
+
+const parsePercentageBulkValue = (value: string) => {
+  const [currentPart = '', maxPart = ''] = value.split('/', 2);
+  const max = parseNonNegativeNumberInput(maxPart);
+  return {
+    value: Math.min(parseNonNegativeNumberInput(currentPart), max),
+    max
+  };
+};
+
+const normalizeBulkFieldValue = (field: FieldDefinition, value: any) => {
+  if (field.type === 'number') {
+    return String(Number(value) || 0);
+  }
+
+  if (field.type === 'percentage') {
+    const percentageValue = typeof value === 'string' ? parsePercentageBulkValue(value) : value;
+    return `${percentageValue?.value ?? ''}/${percentageValue?.max ?? ''}`;
+  }
+
+  return String(value || '');
+};
+
 export const BulkAddModal: React.FC<BulkAddModalProps> = ({
   isOpen,
   onClose,
@@ -114,15 +143,13 @@ export const BulkAddModal: React.FC<BulkAddModalProps> = ({
       const existingValues = new Set(
         existingRecords.map(record => {
           const value = record.data[selectedFieldId];
-          return selectedField.type === 'number' ? String(Number(value) || 0) : String(value || '');
+          return normalizeBulkFieldValue(selectedField, value);
         })
       );
 
       // 중복되지 않은 값만 필터링
       const newValues = uniqueInputValues.filter(value => {
-        const normalizedValue = selectedField.type === 'number' 
-          ? String(Number(value) || 0) 
-          : String(value);
+        const normalizedValue = normalizeBulkFieldValue(selectedField, value);
         return !existingValues.has(normalizedValue);
       });
 
@@ -157,6 +184,8 @@ export const BulkAddModal: React.FC<BulkAddModalProps> = ({
         category.fields.forEach(field => {
           if (field.type === 'checkbox') {
             recordData[field.id] = false;
+          } else if (field.type === 'percentage') {
+            recordData[field.id] = { value: 0, max: 0 };
           } else {
             recordData[field.id] = '';
           }
@@ -165,6 +194,8 @@ export const BulkAddModal: React.FC<BulkAddModalProps> = ({
         // 선택한 필드에 값 설정
         if (selectedField.type === 'number') {
           recordData[selectedFieldId] = Number(value) || 0;
+        } else if (selectedField.type === 'percentage') {
+          recordData[selectedFieldId] = parsePercentageBulkValue(value);
         } else {
           recordData[selectedFieldId] = value;
         }

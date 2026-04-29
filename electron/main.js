@@ -1375,6 +1375,22 @@ function parseArrayImportValue(value) {
     .filter(Boolean);
 }
 
+function parsePercentageImportPart(value) {
+  if (value === null || value === undefined) return 0;
+  const text = String(value).trim();
+  if (text === '') return 0;
+  const numericValue = Number(text);
+  return Number.isFinite(numericValue) ? Math.max(0, numericValue) : 0;
+}
+
+function normalizePercentageImportValue(value, max) {
+  const safeMax = parsePercentageImportPart(max);
+  return {
+    value: Math.min(parsePercentageImportPart(value), safeMax),
+    max: safeMax
+  };
+}
+
 function parseImportedFieldValue(field, rawValue) {
   if (rawValue === null || rawValue === undefined) {
     return field?.multiple ? [] : field?.type === 'checkbox' ? false : '';
@@ -1386,7 +1402,28 @@ function parseImportedFieldValue(field, rawValue) {
   }
 
   switch (field?.type) {
-    case 'number': {
+    case 'number':
+    case 'percentage': {
+      if (field?.type === 'percentage') {
+        if (typeof text === 'string') {
+          const trimmedText = text.trim();
+          if (trimmedText.startsWith('{') && trimmedText.endsWith('}')) {
+            try {
+              const parsed = JSON.parse(trimmedText);
+              return normalizePercentageImportValue(parsed?.value, parsed?.max);
+            } catch (error) {
+              // Fall through to delimiter parsing.
+            }
+          }
+
+          if (trimmedText.includes('/')) {
+            const [currentPart, maxPart] = trimmedText.split('/', 2);
+            return normalizePercentageImportValue(currentPart, maxPart);
+          }
+        }
+
+        return normalizePercentageImportValue(text, 0);
+      }
       const numericValue = Number(text);
       return Number.isFinite(numericValue) ? numericValue : String(text);
     }

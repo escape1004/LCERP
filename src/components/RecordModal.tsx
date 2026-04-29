@@ -51,6 +51,27 @@ const isStoredDateValue = (value: string) => {
   return isValid(parsedYearMonth) && format(parsedYearMonth, YEAR_MONTH_STORAGE_FORMAT) === value;
 };
 
+const parseNonNegativeNumberInput = (value: string): number => {
+  if (value === '') return 0;
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? Math.max(0, numericValue) : 0;
+};
+
+const clampPercentageValue = (value: number, max: number): number => {
+  return Math.min(value, Math.max(0, max));
+};
+
+const normalizePercentageValue = (value: any) => {
+  const numericMax = Number(value && typeof value === 'object' ? value.max : 0);
+  const max = Number.isFinite(numericMax) ? Math.max(0, numericMax) : 0;
+  const numericValue = Number(value && typeof value === 'object' ? value.value : 0);
+  const current = Number.isFinite(numericValue) ? Math.max(0, numericValue) : 0;
+  return {
+    value: clampPercentageValue(current, max),
+    max
+  };
+};
+
 export const RecordModal: React.FC<RecordModalProps> = ({
   isOpen,
   onClose,
@@ -87,11 +108,21 @@ export const RecordModal: React.FC<RecordModalProps> = ({
   // formData의 초기값을 useMemo로 계산
   const initialFormData = React.useMemo(() => {
     if (record && category) {
-      return { ...record.data };
+      const nextData = { ...record.data };
+      category.fields.forEach((field) => {
+        if (field.type === 'percentage') {
+          nextData[field.id] = normalizePercentageValue(nextData[field.id]);
+        }
+      });
+      return nextData;
     } else if (category) {
       const initialData: Record<string, any> = {};
       category.fields.forEach(field => {
-        initialData[field.id] = field.type === 'checkbox' ? false : '';
+        initialData[field.id] = field.type === 'checkbox'
+          ? false
+          : field.type === 'percentage'
+            ? { value: 0, max: 0 }
+            : '';
       });
       return initialData;
     }
@@ -113,7 +144,11 @@ export const RecordModal: React.FC<RecordModalProps> = ({
       // 새 레코드 추가 시, 모든 필드의 기본값 세팅
       const initialData: Record<string, any> = {};
       category.fields.forEach(field => {
-        initialData[field.id] = field.type === 'checkbox' ? false : '';
+        initialData[field.id] = field.type === 'checkbox'
+          ? false
+          : field.type === 'percentage'
+            ? { value: 0, max: 0 }
+            : '';
       });
       setFormData(initialData);
     }
@@ -175,7 +210,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     (category?.fields ?? []).forEach(field => {
       const value = formData[field.id];
 
-      if (field.required) {
+      if (field.required && field.type !== 'percentage') {
         if (!value && value !== 0 && value !== false) {
           newErrors[field.id] = `${field.name}은(는) 필수 입력 항목입니다.`;
           return;
@@ -244,14 +279,20 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     }
     try {
       setIsValidating(true);
+      const normalizedFormData = { ...formData };
+      category.fields.forEach((field) => {
+        if (field.type === 'percentage') {
+          normalizedFormData[field.id] = normalizePercentageValue(normalizedFormData[field.id]);
+        }
+      });
       if (record) {
-        await updateRecord(record.id, formData);
+        await updateRecord(record.id, normalizedFormData);
         
         // 파일 필드가 변경되었는지 확인하고 썸네일 재생성 이벤트 발생
         const fileField = category.fields.find(f => f.type === 'file');
         if (fileField) {
           const prevFilePath = record.data[fileField.id];
-          const newFilePath = formData[fileField.id];
+          const newFilePath = normalizedFormData[fileField.id];
           if (newFilePath !== prevFilePath && newFilePath) {
             // 파일이 변경되었으므로 기존 북마크 삭제 (에러 처리 추가)
             try {
@@ -277,7 +318,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
         const now = new Date().toISOString();
         const newRecord: NewRecord = {
           categoryId: category.id,
-          data: formData,
+          data: normalizedFormData,
           createdAt: now,
           updatedAt: now
         };
@@ -301,7 +342,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     
     // 필드가 unique인 경우 중복 체크 실행
     const field = (category?.fields ?? []).find(f => f.id === fieldId);
-    if (field?.unique) {
+    if (field?.unique && field.type !== 'percentage') {
       if (value !== undefined && value !== null && value !== '') {
         checkFieldDuplicate(fieldId, value);
       } else {
@@ -406,8 +447,10 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     const value =
       field.type === 'select' && field.multiple
         ? formData[field.id] ?? []
-        : field.type === 'checkbox'
+      : field.type === 'checkbox'
           ? formData[field.id] ?? false
+      : field.type === 'percentage'
+          ? normalizePercentageValue(formData[field.id])
           : formData[field.id] ?? '';
     const hasError = !!errors[field.id];
     const hasDuplicateError = !!duplicateErrors[field.id];
@@ -506,6 +549,66 @@ export const RecordModal: React.FC<RecordModalProps> = ({
               className={inputClassName}
               ref={isFirstField ? firstFieldRef as React.Ref<HTMLInputElement> : undefined}
             />
+            {renderError()}
+          </div>
+        );
+
+      case 'percentage':
+        return (
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              {(() => {
+                const currentValue = value && typeof value === 'object' ? value.value ?? 0 : 0;
+                const maxValue = value && typeof value === 'object' ? value.max ?? 0 : 0;
+                const safeCurrent = Math.max(0, Number(currentValue || 0));
+                const safeMax = Math.max(0, Number(maxValue || 0));
+                const clampedCurrent = clampPercentageValue(safeCurrent, safeMax);
+
+                return (
+                  <>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      placeholder="현재값"
+                      value={currentValue}
+                      onChange={(e) => {
+                        const nextValue = e.target.value;
+                        const nextCurrent = parseNonNegativeNumberInput(nextValue);
+                        const numericMax = Math.max(0, Number(maxValue || 0));
+                        updateFieldValue(field.id, {
+                          value: clampPercentageValue(nextCurrent, numericMax),
+                          max: numericMax
+                        });
+                      }}
+                      className={inputClassName}
+                      ref={isFirstField ? firstFieldRef as React.Ref<HTMLInputElement> : undefined}
+                    />
+                    <span className="text-discord-muted">/</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      placeholder="최대값"
+                      value={maxValue}
+                      onChange={(e) => {
+                        const nextMax = e.target.value;
+                        const numericMax = parseNonNegativeNumberInput(nextMax);
+                        const numericCurrent = Math.max(0, Number(currentValue || 0));
+                        updateFieldValue(field.id, {
+                          value: clampPercentageValue(numericCurrent, numericMax),
+                          max: numericMax
+                        });
+                      }}
+                      className={inputClassName}
+                    />
+                    <div className="min-w-[64px] text-right text-sm text-discord-muted">
+                      {`${safeMax > 0 ? Math.round((clampedCurrent / safeMax) * 100) : 0}%`}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
             {renderError()}
           </div>
         );
@@ -1147,8 +1250,8 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                       {formatFieldDisplayValue(field, '예시값')}
                     </span>
                   )}
-                  {field.required && <span className="text-red-500 ml-1">*</span>}
-                  {field.unique && <span className="text-gray-400 ml-1 text-xs">(중복 불가)</span>}
+                  {field.type !== 'percentage' && field.required && <span className="text-red-500 ml-1">*</span>}
+                  {field.type !== 'percentage' && field.unique && <span className="text-gray-400 ml-1 text-xs">(중복 불가)</span>}
                 </Label>
                 {renderField(field, index === 0)}
               </div>

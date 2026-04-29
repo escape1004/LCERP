@@ -83,6 +83,32 @@ const renderTextWithHashtags = (text: string) => {
   return parts;
 };
 
+const getPercentageMeta = (field: FieldDefinition, value: any) => {
+  const currentValue = value && typeof value === 'object' ? value.value : value;
+  const maxValue = value && typeof value === 'object' ? value.max : 0;
+  const numericValue = Number(currentValue || 0);
+  const numericMax = Number(maxValue || 0);
+  const safeMax = Number.isFinite(numericMax) ? Math.max(0, numericMax) : 0;
+  const safeValue = Number.isFinite(numericValue) ? Math.min(Math.max(0, numericValue), safeMax) : 0;
+  const percentValue = safeMax > 0 ? Math.round((safeValue / safeMax) * 100) : 0;
+
+  return {
+    value: safeValue,
+    max: safeMax,
+    percent: percentValue
+  };
+};
+
+const parseNonNegativeNumberInput = (value: string): number => {
+  if (value === '') return 0;
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? Math.max(0, numericValue) : 0;
+};
+
+const getPercentageTextClassName = (percent: number) => (
+  percent >= 100 ? 'text-discord-accent font-semibold' : 'text-discord-text font-semibold'
+);
+
 const copyOnCtrlClick = async (
   e: React.MouseEvent,
   text: string,
@@ -261,6 +287,18 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
           </Tooltip>
         </TooltipProvider>
       );
+
+    case 'percentage': {
+      const percentage = getPercentageMeta(field, value);
+      return (
+        <span className="text-discord-text px-1 py-0.5 rounded truncate block">
+          {percentage.value} / {percentage.max}{' '}
+          <span className={getPercentageTextClassName(percentage.percent)}>
+            ({percentage.percent}%)
+          </span>
+        </span>
+      );
+    }
     
     case 'checkbox':
       return value ? <Check className="w-5 h-5 text-discord-accent" /> : <X className="w-5 h-5 text-discord-danger" />;
@@ -684,11 +722,70 @@ export const MainContent: React.FC = () => {
   const [resizeStartX, setResizeStartX] = useState(0);
   const [resizeStartWidth, setResizeStartWidth] = useState(0);
   const tableRef = useRef<HTMLTableElement>(null);
+  const [inlinePercentageOverrides, setInlinePercentageOverrides] = useState<Record<string, { value: number; max: number }>>({});
+  const inlinePercentageRequestRef = useRef<Record<string, number>>({});
 
   // categories, selectedCategory, currentRecords에 기본값 보장
   const categoriesSafe = categories || [];
   const selectedCategorySafe = categoriesSafe.find(cat => cat.id === selectedCategoryId) || null;
   const currentRecordsSafe = selectedCategoryId ? getCategoryRecords(selectedCategoryId) || [] : [];
+  const getInlinePercentageKey = useCallback((recordId: string, fieldId: string) => `${recordId}:${fieldId}`, []);
+  const getRecordFieldValue = useCallback((record: DataRecord, fieldId: string) => {
+    const overrideKey = getInlinePercentageKey(record.id, fieldId);
+    if (Object.prototype.hasOwnProperty.call(inlinePercentageOverrides, overrideKey)) {
+      return inlinePercentageOverrides[overrideKey];
+    }
+    return record.data[fieldId];
+  }, [getInlinePercentageKey, inlinePercentageOverrides]);
+
+  const updateInlinePercentageValue = useCallback(async (
+    record: DataRecord,
+    field: FieldDefinition,
+    nextRawValue: string
+  ) => {
+    const overrideKey = getInlinePercentageKey(record.id, field.id);
+    const currentValue = getRecordFieldValue(record, field.id);
+    const normalizedCurrent = currentValue && typeof currentValue === 'object'
+      ? currentValue
+      : { value: 0, max: 0 };
+    const maxValue = Math.max(0, Number(normalizedCurrent.max || 0));
+    const nextValue = {
+      ...normalizedCurrent,
+      value: Math.min(parseNonNegativeNumberInput(nextRawValue), maxValue),
+      max: maxValue
+    };
+
+    setInlinePercentageOverrides((prev) => ({
+      ...prev,
+      [overrideKey]: nextValue
+    }));
+
+    const requestId = (inlinePercentageRequestRef.current[overrideKey] || 0) + 1;
+    inlinePercentageRequestRef.current[overrideKey] = requestId;
+
+    try {
+      await window.electronAPI.updateRecord(record.id, {
+        ...record.data,
+        [field.id]: nextValue
+      });
+      if (inlinePercentageRequestRef.current[overrideKey] === requestId) {
+        record.data[field.id] = nextValue;
+      }
+    } catch (error) {
+      if (inlinePercentageRequestRef.current[overrideKey] === requestId) {
+        const fallback = getPercentageMeta(field, record.data[field.id]);
+        setInlinePercentageOverrides((prev) => ({
+          ...prev,
+          [overrideKey]: { value: fallback.value, max: fallback.max }
+        }));
+        toast({
+          title: '저장 실패',
+          description: `${field.name} 값을 저장하지 못했습니다.`,
+          variant: 'destructive'
+        });
+      }
+    }
+  }, [getInlinePercentageKey, getRecordFieldValue]);
 
   const getRecordReferenceCount = useCallback((recordId: string, categoryId: string): number => {
     let count = 0;
@@ -751,6 +848,7 @@ export const MainContent: React.FC = () => {
     setSortField(''); // Reset sort field when category changes
     setSortDirection('asc'); // Reset sort direction when category changes
     setFileTypeFilter('all'); // Reset file type filter when category changes
+    setInlinePercentageOverrides({});
     scrollTableToTop(); // Reset scroll position when category changes
   }, [selectedCategoryId, setCurrentPage]);
 
@@ -887,7 +985,7 @@ export const MainContent: React.FC = () => {
       if (searchField === 'all') {
         const visibleFields = selectedCategorySafe?.fields.filter(f => !f.hidden) || [];
         return visibleFields.some((field) => {
-          const value = record.data[field.id];
+          const value = getRecordFieldValue(record, field.id);
 
           // 관계형 필드 처리
           if (field.type === 'relation' && field.relationCategoryId) {
@@ -913,6 +1011,13 @@ export const MainContent: React.FC = () => {
             }
           }
 
+          if (field.type === 'percentage') {
+            const percentage = getPercentageMeta(field, value);
+            return `${percentage.value} ${percentage.max} ${percentage.percent}`
+              .toLowerCase()
+              .includes(searchTerm.toLowerCase());
+          }
+
           // 일반 필드
           return String(value || '').toLowerCase().includes(searchTerm.toLowerCase());
         });
@@ -920,7 +1025,7 @@ export const MainContent: React.FC = () => {
         // 특정 필드만 검색
         const field = selectedCategorySafe?.fields.find(f => f.id === searchField);
         if (!field) return false;
-        const value = record.data[field.id];
+        const value = getRecordFieldValue(record, field.id);
 
         if (field.type === 'relation' && field.relationCategoryId) {
           const relatedCategory = categoriesSafe.find(cat => cat.id === field.relationCategoryId);
@@ -945,11 +1050,18 @@ export const MainContent: React.FC = () => {
           }
         }
 
+        if (field.type === 'percentage') {
+          const percentage = getPercentageMeta(field, value);
+          return `${percentage.value} ${percentage.max} ${percentage.percent}`
+            .toLowerCase()
+            .includes(searchTerm.toLowerCase());
+        }
+
         // 일반 필드
         return String(value || '').toLowerCase().includes(searchTerm.toLowerCase());
       }
     });
-  }, [selectedCategoryId, searchTerm, searchField, fileTypeFilter, currentRecordsSafe, selectedCategorySafe, categoriesSafe, getCategoryRecords, fileField]);
+  }, [selectedCategoryId, searchTerm, searchField, fileTypeFilter, currentRecordsSafe, selectedCategorySafe, categoriesSafe, getCategoryRecords, fileField, getRecordFieldValue]);
 
   // Sorting
   const sortedRecords = useMemo(() => {
@@ -994,8 +1106,8 @@ export const MainContent: React.FC = () => {
         return 0;
       }
 
-      let aValue = a.data[sortField];
-      let bValue = b.data[sortField];
+      let aValue = getRecordFieldValue(a, sortField);
+      let bValue = getRecordFieldValue(b, sortField);
 
       // 관계형 필드인 경우 실제 데이터 값으로 정렬
       const sortFieldDef = selectedCategorySafe?.fields.find(f => f.id === sortField);
@@ -1060,6 +1172,16 @@ export const MainContent: React.FC = () => {
       // b만 빈 값인 경우
       if (bIsEmpty) return sortDirection === 'asc' ? -1 : 1;
 
+      if (sortFieldDef?.type === 'number') {
+        aValue = Number(aValue);
+        bValue = Number(bValue);
+      }
+
+      if (sortFieldDef?.type === 'percentage') {
+        aValue = getPercentageMeta(sortFieldDef, aValue).percent;
+        bValue = getPercentageMeta(sortFieldDef, bValue).percent;
+      }
+
       // Handle different data types
       if (typeof aValue === 'string' && typeof bValue === 'string') {
         aValue = aValue.toLowerCase();
@@ -1070,7 +1192,7 @@ export const MainContent: React.FC = () => {
       if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [customFilteredRecords, sortField, sortDirection, selectedCategorySafe?.id, getRecordReferenceCount, fileField]);
+  }, [customFilteredRecords, sortField, sortDirection, selectedCategorySafe?.id, getRecordReferenceCount, fileField, getRecordFieldValue, categoriesSafe, getCategoryRecords, selectedCategorySafe?.fields]);
 
   // Pagination
   const totalPages = Math.ceil(sortedRecords.length / itemsPerPage);
@@ -1733,11 +1855,56 @@ export const MainContent: React.FC = () => {
                                 <td key={field.id} className={`${
                                   field.type === 'checkbox'
                                     ? 'px-2 py-3 text-xs text-discord-text text-left overflow-hidden'
+                                    : field.type === 'percentage'
+                                      ? 'px-2 py-2 text-xs text-discord-text'
                                     : 'px-2 py-3 text-xs text-discord-text overflow-hidden'
                                 }`} style={{ width: `${getColumnWidth(field.id)}px` }}>
                                   {field.type === 'file' && field.thumbnailOnly
                                     ? ''
-                                    : formatFieldValue(field, record.data[field.id], categoriesSafe, getCategoryRecords, handleViewRelatedRecord, () => setSelectedRecordId(record.id))}
+                                    : field.type === 'percentage'
+                                      ? (() => {
+                                          const currentValue = getRecordFieldValue(record, field.id);
+                                          const percentage = getPercentageMeta(field, currentValue);
+                                          const rawValue = currentValue && typeof currentValue === 'object' ? percentage.value : 0;
+                                          const rawMax = currentValue && typeof currentValue === 'object' ? percentage.max : 0;
+                                          return (
+                                            <div className="flex items-center gap-2">
+                                              <Input
+                                                type="number"
+                                                min={0}
+                                                step="0.01"
+                                                value={rawValue}
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setSelectedRecordId(record.id);
+                                                }}
+                                                onFocus={() => setSelectedRecordId(record.id)}
+                                                onChange={(e) => {
+                                                  void updateInlinePercentageValue(record, field, e.target.value);
+                                                }}
+                                                className="h-8 min-w-0 bg-discord-sidebar border-gray-600 text-discord-text"
+                                              />
+                                              <span className="text-discord-muted">/</span>
+                                              <Input
+                                                type="number"
+                                                min={0}
+                                                step="0.01"
+                                                value={rawMax}
+                                                readOnly
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setSelectedRecordId(record.id);
+                                                }}
+                                                onFocus={() => setSelectedRecordId(record.id)}
+                                                className="h-8 min-w-0 bg-discord-sidebar/70 border-gray-600 text-discord-muted cursor-default"
+                                              />
+                                              <span className={`min-w-[42px] text-right ${getPercentageTextClassName(percentage.percent)}`}>
+                                                {percentage.percent}%
+                                              </span>
+                                            </div>
+                                          );
+                                        })()
+                                      : formatFieldValue(field, getRecordFieldValue(record, field.id), categoriesSafe, getCategoryRecords, handleViewRelatedRecord, () => setSelectedRecordId(record.id))}
                                 </td>
                               ))}
                               {/* 참조되는 카테고리인 경우에만 참조 횟수 표시 */}

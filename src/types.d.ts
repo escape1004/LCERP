@@ -99,7 +99,7 @@ export interface Category {
 export interface Field {
   id: string;
   name: string;
-  type: 'text' | 'number' | 'select' | 'relation' | 'date' | 'file' | 'checkbox' | 'longtext';
+  type: 'text' | 'number' | 'percentage' | 'select' | 'relation' | 'date' | 'file' | 'checkbox' | 'longtext';
   required: boolean;
   unique: boolean;
   order: number;

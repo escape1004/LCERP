@@ -30,6 +30,11 @@ interface EditCategoryModalProps {
   category?: Category;
 }
 
+const normalizeCategoryField = (field: FieldDefinition): FieldDefinition => {
+  if (field.type !== 'percentage') return field;
+  return { ...field, required: false, unique: false };
+};
+
 const FieldEditor: React.FC<FieldEditorProps> = ({ field, onChange, onDelete, categories, onShowAlert }) => {
   const handleRequiredChange = (checked: boolean) => {
     onChange({ ...field, required: checked });
@@ -56,8 +61,11 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, onChange, onDelete, ca
               return;
             }
             const newField = { ...field, type: value as FieldDefinition['type'] };
-            if (value === 'checkbox') {
+            if (value === 'checkbox' || value === 'percentage') {
               newField.unique = false;
+            }
+            if (value === 'percentage') {
+              newField.required = false;
             }
             onChange(newField);
           }}
@@ -68,6 +76,7 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, onChange, onDelete, ca
           <SelectContent>
             <SelectItem value="text">텍스트</SelectItem>
             <SelectItem value="number">숫자</SelectItem>
+            <SelectItem value="percentage">백분율</SelectItem>
             <SelectItem value="date">날짜</SelectItem>
             <SelectItem value="select">선택</SelectItem>
             <SelectItem value="checkbox">체크박스</SelectItem>
@@ -89,36 +98,40 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, onChange, onDelete, ca
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           {/* 기존 체크박스들 */}
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id={`required-${field.id}`}
-              checked={field.required}
-              onCheckedChange={(checked) => onChange({ ...field, required: checked === true })}
-            />
-            <label
-              htmlFor={`required-${field.id}`}
-              className="text-sm font-medium leading-none text-discord-text cursor-pointer"
-            >
-              필수값
-            </label>
-          </div>
+          {field.type !== 'percentage' && (
+            <>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id={`required-${field.id}`}
+                  checked={field.required}
+                  onCheckedChange={(checked) => onChange({ ...field, required: checked === true })}
+                />
+                <label
+                  htmlFor={`required-${field.id}`}
+                  className="text-sm font-medium leading-none text-discord-text cursor-pointer"
+                >
+                  필수값
+                </label>
+              </div>
 
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id={`unique-${field.id}`}
-              checked={field.unique}
-              onCheckedChange={(checked) => onChange({ ...field, unique: checked === true })}
-              disabled={field.type === 'checkbox'}
-            />
-            <label
-              htmlFor={`unique-${field.id}`}
-              className={`text-sm font-medium leading-none cursor-pointer ${
-                field.type === 'checkbox' ? 'text-gray-500' : 'text-discord-text'
-              }`}
-            >
-              중복 불가
-            </label>
-          </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id={`unique-${field.id}`}
+                  checked={field.unique}
+                  onCheckedChange={(checked) => onChange({ ...field, unique: checked === true })}
+                  disabled={field.type === 'checkbox'}
+                />
+                <label
+                  htmlFor={`unique-${field.id}`}
+                  className={`text-sm font-medium leading-none cursor-pointer ${
+                    field.type === 'checkbox' ? 'text-gray-500' : 'text-discord-text'
+                  }`}
+                >
+                  중복 불가
+                </label>
+              </div>
+            </>
+          )}
 
           <div className="flex items-center space-x-2">
             <Checkbox
@@ -249,11 +262,11 @@ export const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
   const { categories, addCategory, updateCategory } = useERPStore();
   const [name, setName] = useState(category?.name || '');
   const [fields, setFields] = useState<FieldDefinition[]>(
-    category ? JSON.parse(JSON.stringify(category.fields)) : []
+    category ? JSON.parse(JSON.stringify(category.fields.map(normalizeCategoryField))) : []
   );
   const [initialName, setInitialName] = useState(category?.name || '');
   const [initialFields, setInitialFields] = useState<FieldDefinition[]>(
-    category ? JSON.parse(JSON.stringify(category.fields)) : []
+    category ? JSON.parse(JSON.stringify(category.fields.map(normalizeCategoryField))) : []
   );
   const [error, setError] = useState('');
   const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
@@ -278,10 +291,10 @@ export const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
     if (isOpen) {
       document.addEventListener('keydown', handleKeyDown);
       setName(category?.name || '');
-      setFields(category ? JSON.parse(JSON.stringify(category.fields)) : []);
+      setFields(category ? JSON.parse(JSON.stringify(category.fields.map(normalizeCategoryField))) : []);
       setInitialName(category?.name || '');
       setInitialFields(
-        category ? JSON.parse(JSON.stringify(category.fields)) : []
+        category ? JSON.parse(JSON.stringify(category.fields.map(normalizeCategoryField))) : []
       );
       setError('');
     }
@@ -330,16 +343,18 @@ export const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
 
       if (category) {
         // 수정
+        const normalizedFields = fields.map(normalizeCategoryField);
         await updateCategory(category.id, {
           name,
-          fields: fields.map((field, index) => ({ ...field, order: index })),
+          fields: normalizedFields.map((field, index) => ({ ...field, order: index })),
         });
       } else {
         // 생성
         const now = new Date().toISOString();
+        const normalizedFields = fields.map(normalizeCategoryField);
         const newCategory: NewCategory = {
           name,
-          fields: fields.map((field, index) => ({ ...field, order: index })),
+          fields: normalizedFields.map((field, index) => ({ ...field, order: index })),
           order: categories.length,
           createdAt: now,
           updatedAt: now,

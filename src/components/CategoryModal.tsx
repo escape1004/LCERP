@@ -19,6 +19,11 @@ interface CategoryModalProps {
   category?: Category | null;
 }
 
+const normalizeCategoryField = (field: FieldDefinition): FieldDefinition => {
+  if (field.type !== 'percentage') return field;
+  return { ...field, required: false, unique: false };
+};
+
 export const CategoryModal: React.FC<CategoryModalProps> = ({
   isOpen,
   onClose,
@@ -79,7 +84,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
       const categoryData = {
         name: category.name,
         parentId: category.parentId,
-        fields: category.fields,
+        fields: category.fields.map(normalizeCategoryField),
       };
       setFormData(JSON.parse(JSON.stringify(categoryData)));
       setInitialFormData(JSON.parse(JSON.stringify(categoryData)));
@@ -114,7 +119,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
       const newDuplicateErrors: Record<string, string> = {};
 
       formData.fields.forEach(field => {
-        if (field.unique) {
+        if (field.unique && field.type !== 'percentage') {
           const values = records.map(record => record.data[field.id]);
           const duplicates = values.filter((value, index) => 
             values.indexOf(value) !== index && value !== undefined && value !== null && value !== ''
@@ -191,18 +196,19 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     if (!isValid) return;
 
     try {
+      const normalizedFields = formData.fields.map(normalizeCategoryField);
       if (category) {
         updateCategory(category.id, {
           name: formData.name,
           parentId: formData.parentId,
-          fields: formData.fields,
+          fields: normalizedFields,
         });
       } else {
         const now = new Date().toISOString();
         const newCategory: NewCategory = {
           name: formData.name,
           parentId: formData.parentId,
-          fields: formData.fields,
+          fields: normalizedFields,
           order: categories.length,
           createdAt: now,
           updatedAt: now,
@@ -256,6 +262,9 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     }
     const newFields = [...formData.fields];
     newFields[index] = { ...newFields[index], ...updates };
+    if (updates.type === 'percentage') {
+      newFields[index] = { ...newFields[index], required: false, unique: false };
+    }
     if (updates.type === 'file' && !newFields[index].pathMode) {
       newFields[index] = { ...newFields[index], pathMode: 'direct', basePath: '', thumbnailOnly: false };
     }
@@ -461,6 +470,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                             <SelectItem value="text">텍스트</SelectItem>
                                             <SelectItem value="longtext">긴 텍스트</SelectItem>
                                             <SelectItem value="number">숫자</SelectItem>
+                                            <SelectItem value="percentage">백분율</SelectItem>
                                             <SelectItem value="date">날짜</SelectItem>
                                             <SelectItem value="select">선택 목록</SelectItem>
                                             <SelectItem value="checkbox">체크박스</SelectItem>
@@ -469,26 +479,30 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                           </SelectContent>
                                         </Select>
                                         <div className="flex items-center gap-4 ml-auto">
-                                          <div className="flex items-center gap-2">
-                                            <Checkbox
-                                              id={`required-${field.id}`}
-                                              checked={field.required}
-                                              onCheckedChange={(checked) => updateField(index, { required: checked as boolean })}
-                                            />
-                                            <label htmlFor={`required-${field.id}`} className="text-sm text-gray-300">
-                                              필수값
-                                            </label>
-                                          </div>
-                                          <div className="flex items-center gap-2">
-                                            <Checkbox
-                                              id={`unique-${field.id}`}
-                                              checked={field.unique}
-                                              onCheckedChange={(checked) => updateField(index, { unique: checked as boolean })}
-                                            />
-                                            <label htmlFor={`unique-${field.id}`} className="text-sm text-gray-300">
-                                              중복 불가
-                                            </label>
-                                          </div>
+                                          {field.type !== 'percentage' && (
+                                            <>
+                                              <div className="flex items-center gap-2">
+                                                <Checkbox
+                                                  id={`required-${field.id}`}
+                                                  checked={field.required}
+                                                  onCheckedChange={(checked) => updateField(index, { required: checked as boolean })}
+                                                />
+                                                <label htmlFor={`required-${field.id}`} className="text-sm text-gray-300">
+                                                  필수값
+                                                </label>
+                                              </div>
+                                              <div className="flex items-center gap-2">
+                                                <Checkbox
+                                                  id={`unique-${field.id}`}
+                                                  checked={field.unique}
+                                                  onCheckedChange={(checked) => updateField(index, { unique: checked as boolean })}
+                                                />
+                                                <label htmlFor={`unique-${field.id}`} className="text-sm text-gray-300">
+                                                  중복 불가
+                                                </label>
+                                              </div>
+                                            </>
+                                          )}
                                           <div className="flex items-center gap-2">
                                             <Checkbox
                                               id={`hidden-${field.id}`}
