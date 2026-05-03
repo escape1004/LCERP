@@ -730,6 +730,13 @@ export const MainContent: React.FC = () => {
   const selectedCategorySafe = categoriesSafe.find(cat => cat.id === selectedCategoryId) || null;
   const currentRecordsSafe = selectedCategoryId ? getCategoryRecords(selectedCategoryId) || [] : [];
   const getInlinePercentageKey = useCallback((recordId: string, fieldId: string) => `${recordId}:${fieldId}`, []);
+
+  useEffect(() => {
+    if (selectedCategoryId && !selectedCategorySafe) {
+      selectCategory(null);
+    }
+  }, [selectedCategoryId, selectedCategorySafe, selectCategory]);
+
   const getRecordFieldValue = useCallback((record: DataRecord, fieldId: string) => {
     const overrideKey = getInlinePercentageKey(record.id, fieldId);
     if (Object.prototype.hasOwnProperty.call(inlinePercentageOverrides, overrideKey)) {
@@ -2058,29 +2065,33 @@ export const MainContent: React.FC = () => {
           </div>
 
           {/* Modals */}
-          <RecordModal
-            isOpen={isRecordModalOpen}
-            onClose={() => {
-              setIsRecordModalOpen(false);
-              setEditingRecord(null);
-            }}
-            category={selectedCategorySafe}
-            record={editingRecord}
-          />
+          {selectedCategorySafe && (
+            <RecordModal
+              isOpen={isRecordModalOpen}
+              onClose={() => {
+                setIsRecordModalOpen(false);
+                setEditingRecord(null);
+              }}
+              category={selectedCategorySafe}
+              record={editingRecord}
+            />
+          )}
 
-          <ViewRecordModal
-            isOpen={isViewModalOpen}
-            onClose={() => {
-              setIsViewModalOpen(false);
-              window.setTimeout(() => {
-                setViewingRecord(null);
-                setViewingCategory('');
-              }, 200);
-            }}
-            category={categoriesSafe.find(cat => cat.id === viewingCategory) || selectedCategorySafe}
-            record={viewingRecord}
-            onViewRecord={handleViewRelatedRecord}
-          />
+          {(categoriesSafe.find(cat => cat.id === viewingCategory) || selectedCategorySafe) && (
+            <ViewRecordModal
+              isOpen={isViewModalOpen}
+              onClose={() => {
+                setIsViewModalOpen(false);
+                window.setTimeout(() => {
+                  setViewingRecord(null);
+                  setViewingCategory('');
+                }, 200);
+              }}
+              category={categoriesSafe.find(cat => cat.id === viewingCategory) || selectedCategorySafe}
+              record={viewingRecord}
+              onViewRecord={handleViewRelatedRecord}
+            />
+          )}
 
           <ViewerModal
             isOpen={viewerModalOpen}
@@ -2120,11 +2131,13 @@ export const MainContent: React.FC = () => {
             variant={alertDialogProps.variant}
           />
 
-          <BulkAddModal
-            isOpen={isBulkAddModalOpen}
-            onClose={() => setIsBulkAddModalOpen(false)}
-            category={selectedCategorySafe}
-          />
+          {selectedCategorySafe && (
+            <BulkAddModal
+              isOpen={isBulkAddModalOpen}
+              onClose={() => setIsBulkAddModalOpen(false)}
+              category={selectedCategorySafe}
+            />
+          )}
         </div>
       )}
     </div>

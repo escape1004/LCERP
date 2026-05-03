@@ -158,14 +158,35 @@ export const useERPStore = create<ERPStore>((set, get) => ({
   },
 
   deleteCategory: async (id) => {
+    const categoryIdsToDelete = new Set<string>();
+    const stack = [id];
+    const categories = get().categories;
+
+    while (stack.length > 0) {
+      const categoryId = stack.pop();
+      if (!categoryId || categoryIdsToDelete.has(categoryId)) continue;
+
+      categoryIdsToDelete.add(categoryId);
+      categories
+        .filter(category => category.parentId === categoryId)
+        .forEach(category => stack.push(category.id));
+    }
+
     const result = await window.electronAPI.deleteCategory(id);
     set(state => {
-      const { [id]: _, ...remainingRecords } = state.records;
+      const remainingRecords = { ...state.records };
+      categoryIdsToDelete.forEach(categoryId => {
+        delete remainingRecords[categoryId];
+      });
+
       return {
-        selectedCategoryId: state.selectedCategoryId === id ? null : state.selectedCategoryId,
+        selectedCategoryId: state.selectedCategoryId && categoryIdsToDelete.has(state.selectedCategoryId)
+          ? null
+          : state.selectedCategoryId,
         records: remainingRecords
       };
     });
+    categoryIdsToDelete.forEach(categoryId => get().invalidateCache(categoryId));
     await get().loadCategories();
     return result;
   },

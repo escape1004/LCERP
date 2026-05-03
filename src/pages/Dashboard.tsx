@@ -389,15 +389,15 @@ export default function Dashboard() {
                       if (data && data.activePayload && data.activePayload.length > 0) {
                         const clickedData = data.activePayload[0].payload;
                         if (clickedData && clickedData.categoryId) {
-                          navigate('/category');
                           selectCategory(clickedData.categoryId);
+                          navigate('/category');
                         }
                       } else if (data && data.activeLabel) {
                         // activeLabel을 사용하여 데이터 찾기
                         const clickedData = categoryRecordData.find(item => item.name === data.activeLabel);
                         if (clickedData && clickedData.categoryId) {
-                          navigate('/category');
                           selectCategory(clickedData.categoryId);
+                          navigate('/category');
                         }
                       }
                     }}
@@ -548,8 +548,8 @@ export default function Dashboard() {
                       <h3 
                         className="text-md font-semibold text-discord-text cursor-pointer hover:text-discord-accent transition-colors"
                         onClick={() => {
-                          navigate('/category');
                           selectCategory(stat.category.id);
+                          navigate('/category');
                         }}
                       >
                         {stat.category.name}

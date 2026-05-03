@@ -235,7 +235,24 @@ export const Sidebar: React.FC = () => {
     if (!deleteTarget) return;
     try {
       setIsDeleting(true);
+      const deletedCategoryIds = getCategorySubtreeIds(deleteTarget.id);
+      const shouldLeaveCategoryView = !!selectedCategoryId && deletedCategoryIds.includes(selectedCategoryId);
+
+      if (shouldLeaveCategoryView) {
+        selectCategory(null);
+        setShowDbViewer(false);
+        navigate('/dashboard', { replace: true });
+        window.location.hash = '#/dashboard';
+      }
+
       const result = await deleteCategory(deleteTarget.id);
+
+      if (shouldLeaveCategoryView) {
+        selectCategory(null);
+        setShowDbViewer(false);
+        navigate('/dashboard', { replace: true });
+        window.location.hash = '#/dashboard';
+      }
 
       let message = '카테고리가 삭제되었습니다.';
       if (result.thumbnailCleanupCount > 0) {
@@ -279,7 +296,6 @@ export const Sidebar: React.FC = () => {
           }`}
           style={{ paddingLeft: `${12 + level * 12}px` }}
           onClick={async () => {
-            navigate('/category');
             // 이미 로드된 카테고리인지 확인
             const existingRecords = getCategoryRecords(category.id);
             const needsLoading = !existingRecords || existingRecords.length === 0;
@@ -292,6 +308,7 @@ export const Sidebar: React.FC = () => {
             
             selectCategory(category.id);
             setShowDbViewer(false);
+            navigate('/category');
             
             // 로드되지 않은 경우 selectCategory가 완료될 때까지 대기 후 로딩 화면 닫기
             if (needsLoading) {
@@ -382,7 +399,6 @@ export const Sidebar: React.FC = () => {
           }`}
           style={{ paddingLeft: `${12 + level * 12}px` }}
           onClick={async () => {
-            navigate('/category');
             // 이미 로드된 카테고리인지 확인
             const existingRecords = getCategoryRecords(category.id);
             const needsLoading = !existingRecords || existingRecords.length === 0;
@@ -395,6 +411,7 @@ export const Sidebar: React.FC = () => {
             
             selectCategory(category.id);
             setShowDbViewer(false);
+            navigate('/category');
             
             // 로드되지 않은 경우 selectCategory가 완료될 때까지 대기 후 로딩 화면 닫기
             if (needsLoading) {
