@@ -578,7 +578,10 @@ const ThumbnailCell: React.FC<{
     hasRetriedAfterErrorRef.current = true;
     setDataUrl(null);
 
-    window.electronAPI.regenerateThumbnail(filePath)
+    window.electronAPI.regenerateThumbnail(filePath, {
+      recordId: record.id,
+      categoryId: record.categoryId,
+    })
       .catch(() => null)
       .finally(() => {
         reloadThumbnail();

@@ -797,19 +797,147 @@ function generateUUID() {
   return crypto.randomUUID();
 }
 
-// 썸네일 파일 삭제 함수
-const deleteThumbnail = (filePath) => {
-  try {
-    // appDataDir 사용
-    const thumbnailDir = path.join(appDataDir, 'thumbnails');
-    const hash = getThumbnailHash(filePath);
-    const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
-    
-    if (fs.existsSync(thumbnailPath)) {
-      fs.unlinkSync(thumbnailPath);
-      return true;
+function sanitizeThumbnailPathSegment(value, fallback = 'unknown') {
+  const sanitized = String(value || '')
+    .trim()
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+    .replace(/\s+/g, ' ')
+    .replace(/\.+$/g, '')
+    .slice(0, 80);
+
+  return sanitized || fallback;
+}
+
+function getThumbnailRootDir() {
+  return path.join(appDataDir, 'thumbnails');
+}
+
+function getLegacyThumbnailPath(filePath) {
+  const hash = getThumbnailHash(filePath);
+  return path.join(getThumbnailRootDir(), `thumb_${hash}.jpg`);
+}
+
+function getThumbnailCategorySegments(categoryId, profileId) {
+  if (!categoryId || !profileId) {
+    return ['uncategorized'];
+  }
+
+  const categories = db.prepare('SELECT id, name, parentId FROM categories WHERE profileId = ?').all(profileId);
+  const categoriesById = new Map(categories.map(category => [category.id, category]));
+  const segments = [];
+  const seen = new Set();
+  let current = categoriesById.get(categoryId);
+
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    segments.unshift(sanitizeThumbnailPathSegment(current.name, current.id));
+    current = current.parentId ? categoriesById.get(current.parentId) : null;
+  }
+
+  return segments.length > 0 ? segments : ['uncategorized'];
+}
+
+function resolveThumbnailContext(context = {}) {
+  let recordId = context?.recordId || null;
+  let categoryId = context?.categoryId || null;
+  let profileId = context?.profileId || currentProfileId || null;
+
+  if (recordId) {
+    const record = profileId
+      ? db.prepare('SELECT id, categoryId, profileId FROM records WHERE id = ? AND profileId = ?').get(recordId, profileId)
+      : db.prepare('SELECT id, categoryId, profileId FROM records WHERE id = ?').get(recordId);
+
+    if (record) {
+      categoryId = record.categoryId || categoryId;
+      profileId = record.profileId || profileId;
     }
-    return false;
+  }
+
+  return { recordId, categoryId, profileId };
+}
+
+function getStructuredThumbnailDir(context = {}) {
+  const { categoryId, profileId } = resolveThumbnailContext(context);
+  const profile = profileId ? getProfileById(profileId) : null;
+  const profileSegment = sanitizeThumbnailPathSegment(profile?.name || profileId, 'profile');
+  const categorySegments = getThumbnailCategorySegments(categoryId, profileId);
+
+  return path.join(getThumbnailRootDir(), profileSegment, ...categorySegments);
+}
+
+function getThumbnailPathForContext(filePath, context = {}) {
+  const thumbnailDir = getStructuredThumbnailDir(context);
+  const hash = getThumbnailHash(filePath);
+  return {
+    thumbnailDir,
+    thumbnailPath: path.join(thumbnailDir, `thumb_${hash}.jpg`)
+  };
+}
+
+function ensureThumbnailDirForContext(filePath, context = {}) {
+  const target = getThumbnailPathForContext(filePath, context);
+  if (!fs.existsSync(target.thumbnailDir)) {
+    fs.mkdirSync(target.thumbnailDir, { recursive: true });
+    log('thumbnail directory created:', target.thumbnailDir);
+  }
+
+  return target;
+}
+
+function getThumbnailContextForRecordLike(record) {
+  if (!record) {
+    return resolveThumbnailContext({});
+  }
+
+  return resolveThumbnailContext({
+    recordId: record.id,
+    categoryId: record.categoryId,
+    profileId: record.profileId || currentProfileId || null
+  });
+}
+
+function copyLegacyThumbnailToStructuredPath(filePath, context = {}) {
+  try {
+    const legacyPath = getLegacyThumbnailPath(filePath);
+    const { thumbnailPath } = ensureThumbnailDirForContext(filePath, context);
+
+    if (legacyPath === thumbnailPath || !fs.existsSync(legacyPath)) {
+      return null;
+    }
+
+    if (!fs.existsSync(thumbnailPath)) {
+      fs.copyFileSync(legacyPath, thumbnailPath);
+    }
+
+    if (fs.existsSync(thumbnailPath) && fs.existsSync(legacyPath)) {
+      fs.unlinkSync(legacyPath);
+    }
+
+    return thumbnailPath;
+  } catch (error) {
+    log('legacy thumbnail migration failed:', error);
+    return null;
+  }
+}
+
+// 썸네일 파일 삭제 함수
+const deleteThumbnail = (filePath, context = {}) => {
+  try {
+    const normalizedPath = path.isAbsolute(filePath) ? filePath : path.join(appDataDir, filePath);
+    const candidatePaths = [
+      context?.thumbnailPath,
+      getThumbnailPathForContext(normalizedPath, context).thumbnailPath,
+      getLegacyThumbnailPath(normalizedPath)
+    ].filter(Boolean);
+
+    let deleted = false;
+    for (const thumbnailPath of [...new Set(candidatePaths)]) {
+      if (fs.existsSync(thumbnailPath)) {
+        fs.unlinkSync(thumbnailPath);
+        deleted = true;
+      }
+    }
+    return deleted;
   } catch (error) {
     log('썸네일 삭제 실패:', error);
     return false;
@@ -834,7 +962,7 @@ function getThumbnailTimestampForFile(filePath, duration) {
   return getAutoThumbnailTimestamp(duration);
 }
 
-async function generateThumbnail(filePath) {
+async function generateThumbnail(filePath, context = {}) {
   try {
     let normalizedPath = filePath;
     
@@ -884,15 +1012,7 @@ async function generateThumbnail(filePath) {
       return null;
     }
     
-    // appDataDir 사용
-    const thumbnailDir = path.join(appDataDir, 'thumbnails');
-    if (!fs.existsSync(thumbnailDir)) {
-      fs.mkdirSync(thumbnailDir, { recursive: true });
-      log('썸네일 디렉토리 생성됨:', thumbnailDir);
-    }
-    
-    const hash = getThumbnailHash(normalizedPath);
-    const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
+    const { thumbnailDir, thumbnailPath } = ensureThumbnailDirForContext(normalizedPath, context);
     
     log('썸네일 생성 시작:', { filePath: normalizedPath, thumbnailPath, fileType: isImage ? 'image' : isVideo ? 'video' : 'archive' });
     
@@ -986,7 +1106,7 @@ const cleanupThumbnailsForCategory = (categoryId) => {
     const category = db.prepare('SELECT fields, profileId FROM categories WHERE id = ?').get(categoryId);
     if (!category) return 0;
 
-    const records = db.prepare('SELECT data FROM records WHERE categoryId = ? AND profileId = ?').all(categoryId, category.profileId);
+    const records = db.prepare('SELECT id, data, thumbnailPath FROM records WHERE categoryId = ? AND profileId = ?').all(categoryId, category.profileId);
     let deletedCount = 0;
     
     records.forEach(record => {
@@ -996,7 +1116,7 @@ const cleanupThumbnailsForCategory = (categoryId) => {
       
       if (fileField && data[fileField.id]) {
         const filePath = data[fileField.id];
-        if (deleteThumbnail(filePath)) {
+        if (deleteThumbnail(filePath, { recordId: record.id, categoryId, profileId: category.profileId, thumbnailPath: record.thumbnailPath })) {
           deletedCount++;
         }
       }
@@ -2042,7 +2162,7 @@ async function handleUpdateRecord(_, id, data) {
             }
             
             // 썸네일 생성
-            const thumbnailResult = await generateThumbnail(newFilePath);
+            const thumbnailResult = await generateThumbnail(newFilePath, { recordId: id, categoryId: record.categoryId, profileId });
             if (thumbnailResult) {
               log('=== 썸네일 생성 완료 ===', { thumbnailResult });
               
@@ -2213,7 +2333,7 @@ ipcMain.handle('db:addRecord', async (_, record) => {
           const filePath = record.data[fileFieldObj.id];
           log('[addRecord] 썸네일 생성 시작', { filePath });
           try {
-            const thumbnailResult = await generateThumbnail(filePath);
+            const thumbnailResult = await generateThumbnail(filePath, { recordId, categoryId: record.categoryId, profileId });
             if (thumbnailResult) {
               log('[addRecord] 썸네일 생성 완료', { thumbnailResult });
               
@@ -2242,7 +2362,7 @@ ipcMain.handle('db:addRecord', async (_, record) => {
 ipcMain.handle('db:deleteRecord', async (_, id) => {
   try {
     const profileId = getCurrentProfileIdOrThrow();
-    const record = db.prepare('SELECT categoryId, data FROM records WHERE id = ? AND profileId = ?').get(id, profileId);
+    const record = db.prepare('SELECT categoryId, data, thumbnailPath FROM records WHERE id = ? AND profileId = ?').get(id, profileId);
     if (!record) {
       throw new Error('Record not found');
     }
@@ -2259,7 +2379,7 @@ ipcMain.handle('db:deleteRecord', async (_, id) => {
             const filePath = data[fileField.id];
             log('레코드 삭제 시 썸네일 삭제 시작:', filePath);
             
-            const thumbnailDeleted = deleteThumbnail(filePath);
+            const thumbnailDeleted = deleteThumbnail(filePath, { recordId: id, categoryId: record.categoryId, profileId, thumbnailPath: record.thumbnailPath });
             if (thumbnailDeleted) {
               log('썸네일 삭제 완료:', filePath);
             }
@@ -2869,7 +2989,7 @@ ipcMain.handle('checkFileExists', async (_, filePath) => {
   }
 });
 
-ipcMain.handle('getThumbnailDataUrl', async (_, filePath) => {
+ipcMain.handle('getThumbnailDataUrl', async (_, filePath, context = {}) => {
   try {
     let normalizedPath = filePath;
     
@@ -2878,10 +2998,11 @@ ipcMain.handle('getThumbnailDataUrl', async (_, filePath) => {
       normalizedPath = path.join(appDataDir, filePath);
     }
     
-    // appDataDir 사용
-    const thumbnailDir = path.join(appDataDir, 'thumbnails');
-    const hash = getThumbnailHash(normalizedPath);
-    const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
+    let thumbnailPath = getThumbnailPathForContext(normalizedPath, context).thumbnailPath;
+    if (!fs.existsSync(thumbnailPath)) {
+      const migratedPath = copyLegacyThumbnailToStructuredPath(normalizedPath, context);
+      thumbnailPath = migratedPath || thumbnailPath;
+    }
     
     if (!fs.existsSync(thumbnailPath)) {
       log('썸네일 파일이 존재하지 않음:', thumbnailPath);
@@ -3285,22 +3406,11 @@ ipcMain.handle('getFileSize', async (_, filePath) => {
 });
 
 // 썸네일 삭제 IPC 핸들러 등록
-ipcMain.handle('deleteThumbnail', async (_, filePath) => {
-  try {
-    const thumbnailDir = path.join(process.cwd(), 'save', 'thumbnails');
-    const hash = getThumbnailHash(filePath);
-    const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
-    if (fs.existsSync(thumbnailPath)) {
-      fs.unlinkSync(thumbnailPath);
-      return true;
-    }
-    return false;
-  } catch (error) {
-    return false;
-  }
+ipcMain.handle('deleteThumbnail', async (_, filePath, context = {}) => {
+  return deleteThumbnail(filePath, context);
 });
 
-const generateVideoThumbnailWithTime = async (filePath, timestampSec) => {
+const generateVideoThumbnailWithTime = async (filePath, timestampSec, context = {}) => {
   try {
     const sharp = require('sharp');
     const ffmpeg = require('fluent-ffmpeg');
@@ -3338,12 +3448,7 @@ const generateVideoThumbnailWithTime = async (filePath, timestampSec) => {
     const ext = path.extname(normalizedPath).toLowerCase();
     const isVideo = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'].includes(ext);
     if (!isVideo) return null;
-    const thumbnailDir = path.join(appDataDir, 'thumbnails');
-    if (!fs.existsSync(thumbnailDir)) {
-      fs.mkdirSync(thumbnailDir, { recursive: true });
-    }
-    const hash = getThumbnailHash(normalizedPath);
-    const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
+    const { thumbnailDir, thumbnailPath } = ensureThumbnailDirForContext(normalizedPath, context);
     // duration 구하기
     const duration = await new Promise((resolve) => {
       ffmpeg.ffprobe(normalizedPath, (err, metadata) => {
@@ -3379,12 +3484,12 @@ const generateVideoThumbnailWithTime = async (filePath, timestampSec) => {
   }
 };
 
-ipcMain.handle('generateThumbnailWithTime', async (_, filePath, timestampSec) => {
-  return await generateVideoThumbnailWithTime(filePath, timestampSec);
+ipcMain.handle('generateThumbnailWithTime', async (_, filePath, timestampSec, context = {}) => {
+  return await generateVideoThumbnailWithTime(filePath, timestampSec, context);
 });
 
 // 이미지/압축파일용 썸네일 재생성 함수
-const regenerateImageOrArchiveThumbnail = async (filePath) => {
+const regenerateImageOrArchiveThumbnail = async (filePath, context = {}) => {
   try {
     const sharp = require('sharp');
     const path = require('path');
@@ -3410,13 +3515,7 @@ const regenerateImageOrArchiveThumbnail = async (filePath) => {
       return null;
     }
     
-    const thumbnailDir = path.join(appDataDir, 'thumbnails');
-    if (!fs.existsSync(thumbnailDir)) {
-      fs.mkdirSync(thumbnailDir, { recursive: true });
-    }
-    
-    const hash = getThumbnailHash(normalizedPath);
-    const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
+    const { thumbnailDir, thumbnailPath } = ensureThumbnailDirForContext(normalizedPath, context);
     
     log('썸네일 재생성 시작:', { filePath: normalizedPath, thumbnailPath, fileType: isImage ? 'image' : 'archive' });
     
@@ -3483,7 +3582,7 @@ const regenerateImageOrArchiveThumbnail = async (filePath) => {
 };
 
 // 사용자가 직접 선택한 이미지 파일로 썸네일을 교체하는 함수
-const setCustomThumbnailFromImage = async (targetFilePath, imagePath) => {
+const setCustomThumbnailFromImage = async (targetFilePath, imagePath, context = {}) => {
   try {
     const sharp = require('sharp');
     const path = require('path');
@@ -3511,13 +3610,7 @@ const setCustomThumbnailFromImage = async (targetFilePath, imagePath) => {
       return null;
     }
 
-    const thumbnailDir = path.join(appDataDir, 'thumbnails');
-    if (!fs.existsSync(thumbnailDir)) {
-      fs.mkdirSync(thumbnailDir, { recursive: true });
-    }
-
-    const hash = getThumbnailHash(normalizedTargetPath);
-    const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
+    const { thumbnailPath } = ensureThumbnailDirForContext(normalizedTargetPath, context);
 
     log('커스텀 썸네일 생성 시작:', { targetFilePath: normalizedTargetPath, imagePath, thumbnailPath });
 
@@ -3540,20 +3633,20 @@ const setCustomThumbnailFromImage = async (targetFilePath, imagePath) => {
   }
 };
 
-ipcMain.handle('regenerateThumbnail', async (_, filePath) => {
-  return await regenerateImageOrArchiveThumbnail(filePath);
+ipcMain.handle('regenerateThumbnail', async (_, filePath, context = {}) => {
+  return await regenerateImageOrArchiveThumbnail(filePath, context);
 });
 
 // 사용자가 선택한 이미지로 썸네일을 직접 등록
-ipcMain.handle('setCustomThumbnail', async (_, filePath, imagePath) => {
-  return await setCustomThumbnailFromImage(filePath, imagePath);
+ipcMain.handle('setCustomThumbnail', async (_, filePath, imagePath, context = {}) => {
+  return await setCustomThumbnailFromImage(filePath, imagePath, context);
 });
 
-ipcMain.handle('removeCustomThumbnail', async (_, filePath) => {
+ipcMain.handle('removeCustomThumbnail', async (_, filePath, context = {}) => {
   const removed = await removeEmbeddedVideoCover(filePath);
   const stillHasEmbeddedCover = removed ? await hasEmbeddedVideoCover(filePath) : true;
   if (removed && !stillHasEmbeddedCover) {
-    deleteThumbnail(filePath);
+    deleteThumbnail(filePath, context);
     return true;
   }
   return false;
@@ -3604,8 +3697,8 @@ ipcMain.handle('getVideoDuration', async (_, filePath) => {
   }
 });
 
-ipcMain.handle('generateThumbnail', async (_, filePath) => {
-  return await generateThumbnail(filePath);
+ipcMain.handle('generateThumbnail', async (_, filePath, context = {}) => {
+  return await generateThumbnail(filePath, context);
 });
 
 ipcMain.handle('getVideoCodecInfo', async (_, filePath) => {
@@ -3875,14 +3968,34 @@ ipcMain.handle('getThumbnailDataUrlHybrid', async (_, record, filePath) => {
       normalizedPath = path.join(appDataDir, filePath);
     }
 
-    const thumbnailDir = path.join(appDataDir, 'thumbnails');
+    const thumbnailContext = getThumbnailContextForRecordLike(record);
     let thumbnailPath = null;
 
     if (record && record.thumbnailPath && fs.existsSync(record.thumbnailPath)) {
-      thumbnailPath = record.thumbnailPath;
+      const expectedPath = getThumbnailPathForContext(normalizedPath, thumbnailContext).thumbnailPath;
+      if (record.thumbnailPath !== expectedPath) {
+        ensureThumbnailDirForContext(normalizedPath, thumbnailContext);
+        if (!fs.existsSync(expectedPath)) {
+          fs.copyFileSync(record.thumbnailPath, expectedPath);
+        }
+        thumbnailPath = expectedPath;
+        if (record?.id) {
+          db.prepare('UPDATE records SET thumbnailPath = ? WHERE id = ?').run(thumbnailPath, record.id);
+        }
+      } else {
+        thumbnailPath = record.thumbnailPath;
+      }
     } else {
-      const hash = getThumbnailHash(normalizedPath);
-      thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
+      thumbnailPath = getThumbnailPathForContext(normalizedPath, thumbnailContext).thumbnailPath;
+      if (!fs.existsSync(thumbnailPath)) {
+        const migratedPath = copyLegacyThumbnailToStructuredPath(normalizedPath, thumbnailContext);
+        if (migratedPath) {
+          thumbnailPath = migratedPath;
+          if (record?.id) {
+            db.prepare('UPDATE records SET thumbnailPath = ? WHERE id = ?').run(thumbnailPath, record.id);
+          }
+        }
+      }
     }
 
     if (!thumbnailPath || !fs.existsSync(thumbnailPath)) {
@@ -3899,9 +4012,9 @@ ipcMain.handle('getThumbnailDataUrlHybrid', async (_, record, filePath) => {
       if (isVideo) {
         const tsRaw = record?.thumbnailTimestamp ?? record?.data?.__thumbnailTimestamp;
         const timestampSec = Number.isFinite(Number(tsRaw)) ? Number(tsRaw) : null;
-        thumbnailPath = await generateVideoThumbnailWithTime(normalizedPath, timestampSec);
+        thumbnailPath = await generateVideoThumbnailWithTime(normalizedPath, timestampSec, thumbnailContext);
       } else if (isImage || isArchive) {
-        thumbnailPath = await regenerateImageOrArchiveThumbnail(normalizedPath);
+        thumbnailPath = await regenerateImageOrArchiveThumbnail(normalizedPath, thumbnailContext);
       }
 
       if (thumbnailPath && record?.id) {
@@ -3938,7 +4051,7 @@ ipcMain.handle('migrateThumbnailPaths', async () => {
     log('=== 썸네일 경로 마이그레이션 시작 ===');
     
     // 모든 카테고리 조회
-    const categories = db.prepare('SELECT id, fields FROM categories').all();
+    const categories = db.prepare('SELECT id, fields, profileId FROM categories').all();
     let totalProcessed = 0;
     let totalUpdated = 0;
     
@@ -3949,7 +4062,7 @@ ipcMain.handle('migrateThumbnailPaths', async () => {
       if (!fileField) continue;
       
       // 해당 카테고리의 모든 레코드 조회
-      const records = db.prepare('SELECT id, data, thumbnailPath FROM records WHERE categoryId = ?').all(category.id);
+      const records = db.prepare('SELECT id, data, thumbnailPath, categoryId, profileId FROM records WHERE categoryId = ?').all(category.id);
       
       for (const record of records) {
         totalProcessed++;
@@ -3958,14 +4071,26 @@ ipcMain.handle('migrateThumbnailPaths', async () => {
         
         if (!filePath || filePath === '' || filePath === '-') continue;
         
-        // 이미 thumbnailPath가 있으면 건너뛰기
-        if (record.thumbnailPath) continue;
-        
         try {
           // 해시 기반 썸네일 경로 생성
-          const hash = getThumbnailHash(filePath);
-          const thumbnailDir = path.join(appDataDir, 'thumbnails');
-          const thumbnailPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
+          const normalizedPath = path.isAbsolute(filePath) ? filePath : path.join(appDataDir, filePath);
+          const context = { recordId: record.id, categoryId: record.categoryId, profileId: record.profileId || category.profileId };
+          const thumbnailPath = getThumbnailPathForContext(normalizedPath, context).thumbnailPath;
+
+          if (record.thumbnailPath && record.thumbnailPath === thumbnailPath && fs.existsSync(thumbnailPath)) {
+            continue;
+          }
+
+          if (record.thumbnailPath && fs.existsSync(record.thumbnailPath) && record.thumbnailPath !== thumbnailPath) {
+            ensureThumbnailDirForContext(normalizedPath, context);
+            if (!fs.existsSync(thumbnailPath)) {
+              fs.copyFileSync(record.thumbnailPath, thumbnailPath);
+            }
+          }
+
+          if (!fs.existsSync(thumbnailPath)) {
+            copyLegacyThumbnailToStructuredPath(normalizedPath, context);
+          }
           
           // 썸네일 파일이 실제로 존재하는지 확인
           if (fs.existsSync(thumbnailPath)) {
@@ -3993,7 +4118,6 @@ ipcMain.handle('checkThumbnailSync', async () => {
   try {
     log('=== 썸네일 동기화 점검 시작 ===');
     
-    const thumbnailDir = path.join(appDataDir, 'thumbnails');
     const results = {
       totalRecords: 0,
       dbOnly: [], // DB에만 있고 파일이 없는 경우
@@ -4003,7 +4127,7 @@ ipcMain.handle('checkThumbnailSync', async () => {
     };
     
     // 모든 카테고리 조회
-    const categories = db.prepare('SELECT id, fields FROM categories').all();
+    const categories = db.prepare('SELECT id, fields, profileId FROM categories').all();
     
     for (const category of categories) {
       const fields = JSON.parse(category.fields);
@@ -4012,7 +4136,7 @@ ipcMain.handle('checkThumbnailSync', async () => {
       if (!fileField) continue;
       
       // 해당 카테고리의 모든 레코드 조회
-      const records = db.prepare('SELECT id, data, thumbnailPath FROM records WHERE categoryId = ?').all(category.id);
+      const records = db.prepare('SELECT id, data, thumbnailPath, categoryId, profileId FROM records WHERE categoryId = ?').all(category.id);
       
       for (const record of records) {
         results.totalRecords++;
@@ -4025,11 +4149,13 @@ ipcMain.handle('checkThumbnailSync', async () => {
         }
         
         // 해시 기반 썸네일 경로
-        const hash = getThumbnailHash(filePath);
-        const hashPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
+        const normalizedPath = path.isAbsolute(filePath) ? filePath : path.join(appDataDir, filePath);
+        const context = { recordId: record.id, categoryId: record.categoryId, profileId: record.profileId || category.profileId };
+        const hashPath = getThumbnailPathForContext(normalizedPath, context).thumbnailPath;
+        const legacyPath = getLegacyThumbnailPath(normalizedPath);
         
         const dbExists = record.thumbnailPath && fs.existsSync(record.thumbnailPath);
-        const hashExists = fs.existsSync(hashPath);
+        const hashExists = fs.existsSync(hashPath) || fs.existsSync(legacyPath);
         
         if (dbExists && hashExists) {
           results.bothExist++;
@@ -4076,7 +4202,6 @@ ipcMain.handle('cleanupThumbnailSync', async (event, options = {}) => {
       dryRun = false       // 실제 변경하지 않고 시뮬레이션만
     } = options;
     
-    const thumbnailDir = path.join(appDataDir, 'thumbnails');
     const results = {
       removedFromDb: 0,
       addedToDb: 0,
@@ -4084,7 +4209,7 @@ ipcMain.handle('cleanupThumbnailSync', async (event, options = {}) => {
     };
     
     // 모든 카테고리 조회
-    const categories = db.prepare('SELECT id, fields FROM categories').all();
+    const categories = db.prepare('SELECT id, fields, profileId FROM categories').all();
     
     for (const category of categories) {
       const fields = JSON.parse(category.fields);
@@ -4093,7 +4218,7 @@ ipcMain.handle('cleanupThumbnailSync', async (event, options = {}) => {
       if (!fileField) continue;
       
       // 해당 카테고리의 모든 레코드 조회
-      const records = db.prepare('SELECT id, data, thumbnailPath FROM records WHERE categoryId = ?').all(category.id);
+      const records = db.prepare('SELECT id, data, thumbnailPath, categoryId, profileId FROM records WHERE categoryId = ?').all(category.id);
       
       for (const record of records) {
         const data = JSON.parse(record.data);
@@ -4102,11 +4227,16 @@ ipcMain.handle('cleanupThumbnailSync', async (event, options = {}) => {
         if (!filePath || filePath === '' || filePath === '-') continue;
         
         // 해시 기반 썸네일 경로
-        const hash = getThumbnailHash(filePath);
-        const hashPath = path.join(thumbnailDir, `thumb_${hash}.jpg`);
+        const normalizedPath = path.isAbsolute(filePath) ? filePath : path.join(appDataDir, filePath);
+        const context = { recordId: record.id, categoryId: record.categoryId, profileId: record.profileId || category.profileId };
+        const hashPath = getThumbnailPathForContext(normalizedPath, context).thumbnailPath;
+        const legacyPath = getLegacyThumbnailPath(normalizedPath);
         
         const dbExists = record.thumbnailPath && fs.existsSync(record.thumbnailPath);
-        const hashExists = fs.existsSync(hashPath);
+        let hashExists = fs.existsSync(hashPath);
+        if (!hashExists && fs.existsSync(legacyPath)) {
+          hashExists = !!copyLegacyThumbnailToStructuredPath(normalizedPath, context);
+        }
         
         try {
           if (removeDbOnly && dbExists && !hashExists) {

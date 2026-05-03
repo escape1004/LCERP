@@ -913,6 +913,10 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
     const loadRecords = useERPStore(state => state.loadRecords);
     const { showLoading: showGlobalLoading, hideLoading: hideGlobalLoading, setLoading: setGlobalLoading } = useLoadingStore();
     const missingFile = fileExists === false;
+    const thumbnailContext = React.useMemo(() => ({
+      recordId: record.id,
+      categoryId: categoryId || record.categoryId,
+    }), [categoryId, record.id, record.categoryId]);
 
     // duration: record에서 우선 사용, 없으면 lazy fetch
     React.useEffect(() => {
@@ -1006,7 +1010,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         setGlobalLoading(true, '커스텀 썸네일 제거 중...');
         showGlobalLoading('커스텀 썸네일 제거 중...', 30000, true);
 
-        const removed = await window.electronAPI.removeCustomThumbnail(filePath);
+        const removed = await window.electronAPI.removeCustomThumbnail(filePath, thumbnailContext);
         if (!removed) {
           toast({
             title: '커스텀 썸네일 제거 실패',
@@ -1043,7 +1047,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         setRegenLoading(false);
         hideGlobalLoading();
       }
-    }, [filePath, categoryId, loadRecords, reloadThumbnail, hideGlobalLoading, setGlobalLoading, showGlobalLoading]);
+    }, [filePath, categoryId, loadRecords, reloadThumbnail, hideGlobalLoading, setGlobalLoading, showGlobalLoading, thumbnailContext]);
 
     React.useEffect(() => {
       if (SUPPORTED_THUMBNAIL_EXTS.includes(ext) && filePath) {
@@ -1178,7 +1182,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                   showLoading('썸네일 재생성 중...', 60000, true); // 60초 타임아웃, 취소 버튼 표시
                   try {
                     const totalSeconds = newHh * 3600 + newMm * 60 + newSs;
-                    const res = await window.electronAPI.generateThumbnailWithTime(filePath, totalSeconds);
+                    const res = await window.electronAPI.generateThumbnailWithTime(filePath, totalSeconds, thumbnailContext);
                     if (res) {
                       toast({ title: `썸네일이 ${newHh.toString().padStart(2, '0')}:${newMm.toString().padStart(2, '0')}:${newSs.toString().padStart(2, '0')} 지점에서 재생성되었습니다.` });
                       await window.electronAPI.updateRecord(record.id, { ...record.data, __thumbnailTimestamp: totalSeconds });
@@ -1221,7 +1225,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                               setGlobalLoading(true, '커스텀 썸네일 적용 중...');
                               showGlobalLoading('커스텀 썸네일 적용 중...', 30000, true);
 
-                              const res = await window.electronAPI.setCustomThumbnail(filePath, imagePath);
+                              const res = await window.electronAPI.setCustomThumbnail(filePath, imagePath, thumbnailContext);
                               if (res) {
                                 setHasEmbeddedCover(true);
                                 toast({ title: '커스텀 썸네일이 적용되었습니다.' });
@@ -1290,7 +1294,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                       setGlobalLoading(true, '썸네일 재생성 중...');
                       showGlobalLoading('썸네일 재생성 중...', 30000, true); // 30초 타임아웃, 취소 버튼 표시
                       try {
-                        const res = await window.electronAPI.regenerateThumbnail(filePath);
+                        const res = await window.electronAPI.regenerateThumbnail(filePath, thumbnailContext);
                         if (res) {
                           toast({ title: '썸네일이 재생성되었습니다.' });
                           window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));
@@ -1338,7 +1342,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                         setGlobalLoading(true, '커스텀 썸네일 적용 중...');
                         showGlobalLoading('커스텀 썸네일 적용 중...', 30000, true);
 
-                        const res = await window.electronAPI.setCustomThumbnail(filePath, imagePath);
+                        const res = await window.electronAPI.setCustomThumbnail(filePath, imagePath, thumbnailContext);
                         if (res) {
                           toast({ title: '커스텀 썸네일이 적용되었습니다.' });
                           window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));

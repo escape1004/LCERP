@@ -1,3 +1,10 @@
+export interface ThumbnailContext {
+  recordId?: string;
+  categoryId?: string;
+  profileId?: string;
+  thumbnailPath?: string;
+}
+
 export interface ElectronAPI {
   getTables: () => Promise<{ name: string }[]>;
   getTableData: (tableName: string) => Promise<TableData>;
@@ -62,11 +69,11 @@ export interface ElectronAPI {
   getVideoBlobUrl: (filePath: string) => Promise<{ base64: string; mimeType: string } | null>;
   getVideoServerPort: () => Promise<number>;
   getFileSize: (filePath: string) => Promise<{ success: boolean; size?: string; error?: string }>;
-  deleteThumbnail: (filePath: string) => Promise<boolean>;
-  generateThumbnailWithTime: (filePath: string, timestampSec: number) => Promise<string | null>;
-  regenerateThumbnail: (filePath: string) => Promise<string | null>;
-  setCustomThumbnail: (filePath: string, imagePath: string) => Promise<string | null>;
-  removeCustomThumbnail: (filePath: string) => Promise<boolean>;
+  deleteThumbnail: (filePath: string, context?: ThumbnailContext) => Promise<boolean>;
+  generateThumbnailWithTime: (filePath: string, timestampSec: number, context?: ThumbnailContext) => Promise<string | null>;
+  regenerateThumbnail: (filePath: string, context?: ThumbnailContext) => Promise<string | null>;
+  setCustomThumbnail: (filePath: string, imagePath: string, context?: ThumbnailContext) => Promise<string | null>;
+  removeCustomThumbnail: (filePath: string, context?: ThumbnailContext) => Promise<boolean>;
   getVideoDuration: (filePath: string) => Promise<number | null>;
   getVideoCodecInfo: (filePath: string) => Promise<{ video?: { codec?: string; profile?: string; pix_fmt?: string }; audio?: { codec?: string; sample_rate?: string; channels?: number }; hasEmbeddedCover?: boolean; error?: string }>;
   getBookmarks: (categoryId: string, recordId: string) => Promise<{ success: boolean; bookmarks: { time: number; createdAt: string }[]; error?: string }>;
