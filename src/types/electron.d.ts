@@ -35,6 +35,7 @@ export interface ElectronAPI {
   setRememberWindowBounds: (enabled: boolean) => Promise<{ success: boolean }>;
   setZoomPercent: (percent: number) => Promise<{ success: boolean; error?: string }>;
   setAppPassword: (password: string) => Promise<{ success: boolean; error?: string }>;
+  setDateParseFormats: (formats: string[]) => Promise<{ success: boolean; dateParseFormats?: string[]; error?: string }>;
   clearAppPassword: () => Promise<{ success: boolean; error?: string }>;
   verifyAppPassword: (password: string) => Promise<{ success: boolean; error?: string }>;
   setVideoSeekSeconds: (seconds: number) => Promise<{ success: boolean; error?: string }>;

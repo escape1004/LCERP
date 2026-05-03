@@ -50,7 +50,8 @@ const defaultConfig = {
   videoAutoPlay: true,
   listThumbnailFit: 'cover',
   zoomPercent: 100,
-  thumbnailPreviewScale: 100
+  thumbnailPreviewScale: 100,
+  dateParseFormats: null
 };
 
 let appConfig = { ...defaultConfig };
@@ -110,6 +111,22 @@ function normalizeThumbnailPreviewScale(value) {
 
 function getConfiguredThumbnailPreviewScale() {
   return normalizeThumbnailPreviewScale(appConfig.thumbnailPreviewScale) ?? 100;
+}
+
+function normalizeDateParseFormats(value) {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const seen = new Set();
+  return value
+    .map((item) => String(item || '').trim())
+    .filter((item) => {
+      if (!item || item.length > 80 || seen.has(item)) return false;
+      seen.add(item);
+      return true;
+    })
+    .slice(0, 50);
 }
 
 function applyWindowZoom(targetWindow) {
@@ -2273,7 +2290,8 @@ ipcMain.handle('getConfig', () => {
     videoSeekSeconds: appConfig.videoSeekSeconds || 5,
     videoAutoPlay: appConfig.videoAutoPlay !== false,
     listThumbnailFit: appConfig.listThumbnailFit === 'contain' ? 'contain' : 'cover',
-    thumbnailPreviewScale: getConfiguredThumbnailPreviewScale()
+    thumbnailPreviewScale: getConfiguredThumbnailPreviewScale(),
+    dateParseFormats: normalizeDateParseFormats(appConfig.dateParseFormats)
   };
 });
 
@@ -2468,6 +2486,12 @@ ipcMain.handle('setThumbnailPreviewScale', (_event, scale) => {
   appConfig.thumbnailPreviewScale = normalized;
   saveAppConfig();
   return { success: true };
+});
+
+ipcMain.handle('setDateParseFormats', (_event, formats) => {
+  appConfig.dateParseFormats = normalizeDateParseFormats(formats);
+  saveAppConfig();
+  return { success: true, dateParseFormats: appConfig.dateParseFormats ?? [] };
 });
 
 ipcMain.handle('backupDatabase', () => {

@@ -16,13 +16,45 @@ interface DatePickerProps {
   placeholder?: string;
 }
 
-const SUPPORTED_DATE_FORMATS = [
+export const DEFAULT_DATE_PARSE_FORMATS = [
   "yyyy-MM-dd",
   "yyyy.MM.dd",
+  "yyyy. MM. dd",
   "yyyy/MM/dd",
   "MM/dd/yyyy",
   "MM-dd-yyyy",
+  "yy-MM-dd",
+  "yy.MM.dd",
+  "yy/MM/dd",
+  "yyyy-MM",
+  "yyyy.MM",
+  "yyyy/MM",
+  "yyyy년 M월 d일",
+  "yy년 M월 d일",
+  "yyyyMMdd",
+  "yyMMdd",
 ] as const;
+
+const normalizeDateParseFormat = (dateFormat: string) => dateFormat
+  .trim()
+  .replace(/Y/g, "y")
+  .replace(/D/g, "d");
+
+const getStoredDateOutputFormat = (dateFormat: string) => (
+  /d/.test(normalizeDateParseFormat(dateFormat)) ? "yyyy-MM-dd" : "yyyy-MM"
+);
+
+const getDateParseFormats = (customFormats: string[] = []) => {
+  const seen = new Set<string>();
+  const configuredFormats = customFormats.length > 0 ? customFormats : [...DEFAULT_DATE_PARSE_FORMATS];
+  return configuredFormats
+    .map(normalizeDateParseFormat)
+    .filter((dateFormat) => {
+      if (!dateFormat || seen.has(dateFormat)) return false;
+      seen.add(dateFormat);
+      return true;
+    });
+};
 
 const SUPPORTED_YEAR_MONTH_FORMATS = [
   /^(\d{4})-(\d{1,2})$/,
@@ -36,7 +68,7 @@ const SUPPORTED_KOREAN_DATE_PATTERNS = [
   /^(\d{2})년\s*(\d{1,2})월\s*(\d{1,2})일$/,
 ] as const;
 
-const toNormalizedDateString = (inputValue: string): string | null => {
+const toNormalizedDateString = (inputValue: string, customFormats: string[] = []): string | null => {
   const trimmedValue = inputValue.trim();
 
   if (!trimmedValue) {
@@ -98,10 +130,14 @@ const toNormalizedDateString = (inputValue: string): string | null => {
     return null;
   }
 
-  for (const dateFormat of SUPPORTED_DATE_FORMATS) {
-    const parsedDate = parse(trimmedValue, dateFormat, new Date());
-    if (isValid(parsedDate)) {
-      return format(parsedDate, "yyyy-MM-dd");
+  for (const dateFormat of getDateParseFormats(customFormats)) {
+    try {
+      const parsedDate = parse(trimmedValue, dateFormat, new Date());
+      if (isValid(parsedDate)) {
+        return format(parsedDate, getStoredDateOutputFormat(dateFormat));
+      }
+    } catch {
+      // Invalid custom date-fns format tokens are ignored.
     }
   }
 
@@ -123,6 +159,7 @@ const toNormalizedDateString = (inputValue: string): string | null => {
 
 export function DatePicker({ value, onChange, className, placeholder }: DatePickerProps) {
   const [open, setOpen] = React.useState(false)
+  const [customDateFormats, setCustomDateFormats] = React.useState<string[]>([]);
 
   const date = React.useMemo(() => {
     if (!value) return undefined;
@@ -130,8 +167,32 @@ export function DatePicker({ value, onChange, className, placeholder }: DatePick
     return isValid(parsedDate) ? parsedDate : undefined;
   }, [value]);
 
+  React.useEffect(() => {
+    let cancelled = false;
+    window.electronAPI?.getConfig?.()
+      .then((config) => {
+        if (!cancelled) {
+          setCustomDateFormats(Array.isArray(config?.dateParseFormats) ? config.dateParseFormats : []);
+        }
+      })
+      .catch(() => null);
+
+    const handleConfigUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<{ dateParseFormats?: string[] }>).detail;
+      if (Array.isArray(detail?.dateParseFormats)) {
+        setCustomDateFormats(detail.dateParseFormats);
+      }
+    };
+
+    window.addEventListener("config:updated", handleConfigUpdate);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("config:updated", handleConfigUpdate);
+    };
+  }, []);
+
   const handleInputChange = React.useCallback((inputValue: string) => {
-    const normalizedValue = toNormalizedDateString(inputValue);
+    const normalizedValue = toNormalizedDateString(inputValue, customDateFormats);
 
     if (normalizedValue !== null) {
       onChange(normalizedValue);
@@ -139,7 +200,7 @@ export function DatePicker({ value, onChange, className, placeholder }: DatePick
     }
 
     onChange(inputValue);
-  }, [onChange]);
+  }, [customDateFormats, onChange]);
 
   React.useEffect(() => {
     if (!open) return;

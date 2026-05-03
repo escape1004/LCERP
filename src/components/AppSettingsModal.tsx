@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { HelpCircle, List, Monitor, Settings, Shield, X } from 'lucide-react';
+import { HelpCircle, List, Monitor, Plus, Settings, Shield, Trash2, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
 import { Switch } from './ui/switch';
 import { Input } from './ui/input';
@@ -7,6 +7,7 @@ import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import type { Config } from '../types';
+import { DEFAULT_DATE_PARSE_FORMATS } from './ui/date-picker';
 
 interface AppSettingsModalProps {
   open: boolean;
@@ -29,6 +30,11 @@ const sections: SettingsSection[] = [
 ];
 
 const thumbnailPreviewScaleOptions = [100, 125, 150, 175, 200] as const;
+const getEffectiveDateParseFormats = (config: Config | null) => (
+  Array.isArray(config?.dateParseFormats) && config.dateParseFormats.length > 0
+    ? config.dateParseFormats
+    : [...DEFAULT_DATE_PARSE_FORMATS]
+);
 
 export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: AppSettingsModalProps) {
   const [activeSection, setActiveSection] = useState('general');
@@ -43,6 +49,8 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
   const [viewerMessage, setViewerMessage] = useState('');
   const [viewerAutoPlayMessage, setViewerAutoPlayMessage] = useState('');
   const [listMessage, setListMessage] = useState('');
+  const [dateFormatInput, setDateFormatInput] = useState('');
+  const [dateFormatMessage, setDateFormatMessage] = useState('');
 
   const currentSection = useMemo(
     () => sections.find((section) => section.id === activeSection) ?? sections[0],
@@ -89,6 +97,8 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
         setViewerMessage('');
         setViewerAutoPlayMessage('');
         setListMessage('');
+        setDateFormatInput('');
+        setDateFormatMessage('');
       })
       .catch((error) => {
         console.error('Failed to load app settings:', error);
@@ -235,6 +245,51 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
     }
   };
 
+  const saveDateParseFormats = async (formats: string[]) => {
+    const normalizedFormats = Array.from(new Set(formats.map((item) => item.trim()).filter(Boolean)));
+    setConfig((prev) => (prev ? { ...prev, dateParseFormats: normalizedFormats } : prev));
+    setDateFormatMessage('');
+    setIsSaving(true);
+
+    try {
+      const result = await window.electronAPI.setDateParseFormats(normalizedFormats);
+      if (result.success) {
+        const savedFormats = result.dateParseFormats ?? normalizedFormats;
+        setConfig((prev) => (prev ? { ...prev, dateParseFormats: savedFormats } : prev));
+        window.dispatchEvent(new CustomEvent('config:updated', { detail: { dateParseFormats: savedFormats } }));
+        return;
+      }
+
+      setDateFormatMessage(result.error || '날짜 변환 서식 저장에 실패했습니다.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleAddDateParseFormat = async () => {
+    const nextFormat = dateFormatInput.trim();
+    if (!nextFormat) return;
+
+    const dateFormats = getEffectiveDateParseFormats(config);
+    const formatSet = new Set(dateFormats.map((item) => item.toLowerCase()));
+
+    if (formatSet.has(nextFormat.toLowerCase())) {
+      setDateFormatMessage('이미 등록된 날짜 변환 서식입니다.');
+      return;
+    }
+
+    await saveDateParseFormats([...dateFormats, nextFormat]);
+    setDateFormatInput('');
+  };
+
+  const handleDeleteDateParseFormat = async (dateFormat: string) => {
+    await saveDateParseFormats(getEffectiveDateParseFormats(config).filter((item) => item !== dateFormat));
+  };
+
+  const handleResetDateParseFormats = async () => {
+    await saveDateParseFormats([...DEFAULT_DATE_PARSE_FORMATS]);
+  };
+
   const handleVideoAutoPlayChange = async (checked: boolean) => {
     setConfig((prev) => (prev ? { ...prev, videoAutoPlay: checked } : prev));
     setViewerAutoPlayMessage('');
@@ -337,6 +392,80 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
         </div>
 
         {generalMessage && <p className="text-sm text-discord-muted mt-2">{generalMessage}</p>}
+      </div>
+
+      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+        <div className="text-sm font-medium text-white">날짜 변환 서식</div>
+        <p className="text-sm text-discord-muted mt-2 leading-6">
+          날짜 필드에 붙여넣거나 입력할 때 인식할 서식을 추가합니다. 예: YYYY. MM. DD
+        </p>
+
+        <div className="mt-5">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div className="text-xs text-discord-muted">서식 리스트</div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void handleResetDateParseFormats()}
+              disabled={!config || isSaving}
+              className="h-8 border-gray-600 px-3 text-xs hover:bg-discord-hover text-discord-text"
+            >
+              기본값으로 초기화
+            </Button>
+          </div>
+          <div className="flex max-w-xl gap-2">
+            <Input
+              value={dateFormatInput}
+              onChange={(e) => {
+                setDateFormatInput(e.target.value);
+                setDateFormatMessage('');
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void handleAddDateParseFormat();
+                }
+              }}
+              placeholder="YYYY. MM. DD"
+              disabled={!config || isSaving}
+              className="bg-discord-bg border-gray-600 text-discord-text"
+            />
+            <Button
+              type="button"
+              onClick={() => void handleAddDateParseFormat()}
+              disabled={!config || isSaving || !dateFormatInput.trim()}
+              className="bg-discord-accent hover:bg-blue-600 text-white"
+            >
+              <Plus size={16} />
+            </Button>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            {getEffectiveDateParseFormats(config).length === 0 ? (
+              <span className="text-xs text-discord-muted">등록된 날짜 변환 서식이 없습니다.</span>
+            ) : (
+              getEffectiveDateParseFormats(config).map((dateFormat) => (
+                <span
+                  key={dateFormat}
+                  className="inline-flex items-center gap-2 rounded border border-gray-700 bg-discord-bg px-2 py-1 text-xs text-discord-text"
+                >
+                  {dateFormat}
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteDateParseFormat(dateFormat)}
+                    disabled={isSaving}
+                    className="text-discord-muted hover:text-red-400 disabled:opacity-50"
+                    aria-label={`${dateFormat} 삭제`}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </span>
+              ))
+            )}
+          </div>
+        </div>
+
+        {dateFormatMessage && <p className="text-sm text-discord-muted mt-2">{dateFormatMessage}</p>}
       </div>
 
       <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">

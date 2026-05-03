@@ -117,6 +117,7 @@ export interface Config {
   videoAutoPlay?: boolean;
   listThumbnailFit?: 'cover' | 'contain';
   thumbnailPreviewScale?: number;
+  dateParseFormats?: string[];
 }
 
 export interface Profile {
