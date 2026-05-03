@@ -122,6 +122,7 @@ export interface DataRecord {
   updatedAt: string;
   duration?: number;
   thumbnailPath?: string;
+  thumbnailTimestamp?: number;
 }
 
 export interface NewCategory {

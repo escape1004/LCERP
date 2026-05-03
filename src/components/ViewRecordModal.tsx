@@ -180,7 +180,11 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
     if (!isOpen || !record || !fileField || !filePath) return;
     const isVideoFile = /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(filePath);
     if (!isVideoFile) return;
-    const ts = record.data?.__thumbnailTimestamp;
+    const ts = record.thumbnailTimestamp
+      ?? record.data?.__thumbnailTimestamp
+      ?? (typeof record.duration === 'number' && record.duration > 0
+        ? (record.duration <= 1 ? 0 : record.duration / 2)
+        : undefined);
     if (!Number.isFinite(Number(ts))) return;
     const total = Math.max(0, Number(ts));
     const newHh = Math.floor(total / 3600);

@@ -508,7 +508,8 @@ function initializeDatabase() {
         data TEXT NOT NULL,
         createdAt TEXT,
         updatedAt TEXT,
-        duration INTEGER
+        duration INTEGER,
+        thumbnailTimestamp REAL
       )
     `);
 
@@ -526,6 +527,10 @@ function initializeDatabase() {
     // thumbnailPath 필드가 없으면 추가 (새로운 마이그레이션)
     if (!columns.some(col => col.name === 'thumbnailPath')) {
       db.exec('ALTER TABLE records ADD COLUMN thumbnailPath TEXT');
+    }
+
+    if (!columns.some(col => col.name === 'thumbnailTimestamp')) {
+      db.exec('ALTER TABLE records ADD COLUMN thumbnailTimestamp REAL');
     }
 
     if (!columns.some(col => col.name === 'profileId')) {
@@ -803,6 +808,13 @@ function getAutoThumbnailTimestamp(duration) {
     return 0;
   }
   return duration / 2;
+}
+
+function getThumbnailTimestampForFile(filePath, duration) {
+  if (typeof filePath !== 'string' || !/\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(filePath)) {
+    return null;
+  }
+  return getAutoThumbnailTimestamp(duration);
 }
 
 async function generateThumbnail(filePath) {
@@ -1091,7 +1103,7 @@ function getCategoryOrThrow(categoryId, profileId = getCurrentProfileIdOrThrow()
 
 function getCategoryRecordsForProfile(categoryId, profileId = getCurrentProfileIdOrThrow()) {
   return db.prepare(`
-    SELECT id, categoryId, data, createdAt, updatedAt, duration, thumbnailPath
+    SELECT id, categoryId, data, createdAt, updatedAt, duration, thumbnailPath, thumbnailTimestamp
     FROM records
     WHERE categoryId = ? AND profileId = ?
     ORDER BY createdAt DESC
@@ -1527,8 +1539,8 @@ function getUniqueFieldValueSets(categoryId, uniqueFields, profileId = getCurren
 
 const insertImportedRecordsBatch = db.transaction((recordsToInsert) => {
   const stmt = db.prepare(`
-    INSERT INTO records (id, profileId, categoryId, data, createdAt, updatedAt, duration)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO records (id, profileId, categoryId, data, createdAt, updatedAt, duration, thumbnailTimestamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   for (const record of recordsToInsert) {
@@ -1539,7 +1551,8 @@ const insertImportedRecordsBatch = db.transaction((recordsToInsert) => {
       JSON.stringify(record.data),
       record.createdAt,
       record.updatedAt,
-      record.duration ?? null
+      record.duration ?? null,
+      record.thumbnailTimestamp ?? null
     );
   }
 });
@@ -1856,18 +1869,25 @@ async function handleUpdateRecord(_, id, data) {
     log('=== handleUpdateRecord 시작 ===', { id, dataKeys: Object.keys(data) });
     
     const profileId = getCurrentProfileIdOrThrow();
-    const record = db.prepare('SELECT categoryId, duration FROM records WHERE id = ? AND profileId = ?').get(id, profileId);
+    const record = db.prepare('SELECT categoryId, duration, thumbnailTimestamp FROM records WHERE id = ? AND profileId = ?').get(id, profileId);
     if (!record) {
       throw new Error('Record not found');
     }
 
-    await checkDuplicateFields(record.categoryId, data, id, profileId);
+    const dataToSave = { ...data };
+    const requestedThumbnailTimestamp = Number(dataToSave.__thumbnailTimestamp);
+    delete dataToSave.__thumbnailTimestamp;
+
+    await checkDuplicateFields(record.categoryId, dataToSave, id, profileId);
 
     // 기존 duration 값 유지
     let duration = record.duration;
+    let thumbnailTimestamp = Number.isFinite(requestedThumbnailTimestamp)
+      ? Math.max(0, requestedThumbnailTimestamp)
+      : record.thumbnailTimestamp;
     
     // duration이 없거나 파일 경로가 변경된 경우에만 새로 계산
-    const fileField = Object.values(data).find(v => typeof v === 'string' && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(v));
+    const fileField = Object.values(dataToSave).find(v => typeof v === 'string' && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(v));
     if (fileField && (!duration || duration === null)) {
       try {
         const ffmpeg = require('fluent-ffmpeg');
@@ -1950,14 +1970,15 @@ async function handleUpdateRecord(_, id, data) {
     log('=== DB 업데이트 시작 ===');
     const stmt = db.prepare(`
       UPDATE records
-      SET data = ?, updatedAt = ?, duration = ?
+      SET data = ?, updatedAt = ?, duration = ?, thumbnailTimestamp = ?
       WHERE id = ? AND profileId = ?
     `);
     
     stmt.run(
-      JSON.stringify(data),
+      JSON.stringify(dataToSave),
       new Date().toISOString(),
       duration,
+      thumbnailTimestamp,
       id,
       profileId
     );
@@ -1970,8 +1991,8 @@ async function handleUpdateRecord(_, id, data) {
       if (category) {
         const fields = JSON.parse(category.fields);
         const fileField = fields.find(f => f.type === 'file');
-        if (fileField && data[fileField.id]) {
-          const newFilePath = data[fileField.id];
+        if (fileField && dataToSave[fileField.id]) {
+          const newFilePath = dataToSave[fileField.id];
           log('=== 새 파일 경로 ===', { newFilePath });
           log('=== 파일 경로 변경 여부 ===', { 
             prevFilePath, 
@@ -2009,8 +2030,9 @@ async function handleUpdateRecord(_, id, data) {
               log('=== 썸네일 생성 완료 ===', { thumbnailResult });
               
               // 새 레코드의 경우 썸네일 경로를 DB에 저장
-              db.prepare('UPDATE records SET thumbnailPath = ? WHERE id = ? AND profileId = ?').run(thumbnailResult, id, profileId);
-              log('[addRecord] 썸네일 경로 DB 저장 완료', { recordId: id, thumbnailPath: thumbnailResult });
+              thumbnailTimestamp = getThumbnailTimestampForFile(newFilePath, duration);
+              db.prepare('UPDATE records SET thumbnailPath = ?, thumbnailTimestamp = ? WHERE id = ? AND profileId = ?').run(thumbnailResult, thumbnailTimestamp, id, profileId);
+              log('[updateRecord] thumbnail path saved', { recordId: id, thumbnailPath: thumbnailResult, thumbnailTimestamp });
             } else {
               log('=== 썸네일 생성 실패 ===');
             }
@@ -2021,8 +2043,8 @@ async function handleUpdateRecord(_, id, data) {
           log('=== 파일 필드가 없거나 파일 경로가 비어있음 ===', { 
             hasFileField: !!fileField, 
             fileFieldId: fileField?.id,
-            hasFilePath: fileField ? !!data[fileField.id] : false,
-            filePath: fileField ? data[fileField.id] : null
+            hasFilePath: fileField ? !!dataToSave[fileField.id] : false,
+            filePath: fileField ? dataToSave[fileField.id] : null
           });
         }
       } else {
@@ -2072,7 +2094,7 @@ ipcMain.handle('db:getRecords', async (_, categoryId) => {
     const profileId = getCurrentProfileIdOrThrow();
     if (!categoryId) throw new Error('Category ID is required');
     ensureCategoryBelongsToCurrentProfile(categoryId);
-    const records = db.prepare('SELECT id, categoryId, data, createdAt, updatedAt, duration, thumbnailPath FROM records WHERE categoryId = ? AND profileId = ? ORDER BY createdAt DESC').all(categoryId, profileId);
+    const records = db.prepare('SELECT id, categoryId, data, createdAt, updatedAt, duration, thumbnailPath, thumbnailTimestamp FROM records WHERE categoryId = ? AND profileId = ? ORDER BY createdAt DESC').all(categoryId, profileId);
     return records.map(record => ({
       ...record,
       data: JSON.parse(record.data)
@@ -2096,8 +2118,8 @@ ipcMain.handle('db:addRecord', async (_, record) => {
     await checkDuplicateFields(record.categoryId, record.data, null, profileId);
     const recordId = record.id || crypto.randomUUID();
     const stmt = db.prepare(`
-      INSERT INTO records (id, profileId, categoryId, data, createdAt, updatedAt, duration)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO records (id, profileId, categoryId, data, createdAt, updatedAt, duration, thumbnailTimestamp)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const now = new Date().toISOString();
     // duration 계산
@@ -2157,7 +2179,8 @@ ipcMain.handle('db:addRecord', async (_, record) => {
         JSON.stringify(record.data),
         record.createdAt || now,
         record.updatedAt || now,
-        duration
+        duration,
+        null
       );
     } catch (e) {
       log('[addRecord] DB insert 예외', { recordId, error: e.message, stack: e.stack });
@@ -2178,8 +2201,9 @@ ipcMain.handle('db:addRecord', async (_, record) => {
               log('[addRecord] 썸네일 생성 완료', { thumbnailResult });
               
               // 새 레코드의 경우 썸네일 경로를 DB에 저장
-              db.prepare('UPDATE records SET thumbnailPath = ? WHERE id = ? AND profileId = ?').run(thumbnailResult, recordId, profileId);
-              log('[addRecord] 썸네일 경로 DB 저장 완료', { recordId, thumbnailPath: thumbnailResult });
+              const thumbnailTimestamp = getThumbnailTimestampForFile(filePath, duration);
+              db.prepare('UPDATE records SET thumbnailPath = ?, thumbnailTimestamp = ? WHERE id = ? AND profileId = ?').run(thumbnailResult, thumbnailTimestamp, recordId, profileId);
+              log('[addRecord] thumbnail path saved', { recordId, thumbnailPath: thumbnailResult, thumbnailTimestamp });
             } else {
               log('[addRecord] 썸네일 생성 실패(결과 null)', { filePath });
             }
@@ -3849,7 +3873,7 @@ ipcMain.handle('getThumbnailDataUrlHybrid', async (_, record, filePath) => {
       const isArchive = ['.zip', '.7z'].includes(ext);
 
       if (isVideo) {
-        const tsRaw = record?.data?.__thumbnailTimestamp;
+        const tsRaw = record?.thumbnailTimestamp ?? record?.data?.__thumbnailTimestamp;
         const timestampSec = Number.isFinite(Number(tsRaw)) ? Number(tsRaw) : null;
         thumbnailPath = await generateVideoThumbnailWithTime(normalizedPath, timestampSec);
       } else if (isImage || isArchive) {
@@ -3858,7 +3882,12 @@ ipcMain.handle('getThumbnailDataUrlHybrid', async (_, record, filePath) => {
 
       if (thumbnailPath && record?.id) {
         try {
-          db.prepare('UPDATE records SET thumbnailPath = ? WHERE id = ?').run(thumbnailPath, record.id);
+          const thumbnailTimestamp = isVideo
+            ? (Number.isFinite(Number(record?.thumbnailTimestamp ?? record?.data?.__thumbnailTimestamp))
+              ? Math.max(0, Number(record?.thumbnailTimestamp ?? record?.data?.__thumbnailTimestamp))
+              : getThumbnailTimestampForFile(normalizedPath, null))
+            : null;
+          db.prepare('UPDATE records SET thumbnailPath = ?, thumbnailTimestamp = COALESCE(?, thumbnailTimestamp) WHERE id = ?').run(thumbnailPath, thumbnailTimestamp, record.id);
         } catch (e) {
           log('썸네일 경로 업데이트 실패:', e);
         }

@@ -37,6 +37,8 @@ export interface DataRecord {
   createdAt: string;
   updatedAt: string;
   duration?: number;
+  thumbnailPath?: string;
+  thumbnailTimestamp?: number;
 }
 
 export interface NewRecord extends Omit<DataRecord, 'id' | 'createdAt' | 'updatedAt'> {}
