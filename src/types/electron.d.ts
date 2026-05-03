@@ -53,9 +53,9 @@ export interface ElectronAPI {
   deleteProfile: (profileId: string) => Promise<{ success: boolean; error?: string }>;
   
   // File dialog methods
-  openFileDialog: () => Promise<{ canceled: boolean; filePaths: string[] }>;
+  openFileDialog: (defaultPath?: string) => Promise<{ canceled: boolean; filePaths: string[] }>;
   openDirectoryDialog: () => Promise<{ canceled: boolean; filePaths: string[] }>;
-  openImageFileDialog: () => Promise<{ canceled: boolean; filePaths: string[] }>;
+  openImageFileDialog: (defaultPath?: string) => Promise<{ canceled: boolean; filePaths: string[] }>;
   getAppRoot: () => Promise<string>;
 
   // Utility methods

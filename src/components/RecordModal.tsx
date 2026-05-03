@@ -1122,6 +1122,18 @@ export const RecordModal: React.FC<RecordModalProps> = ({
       }
 
       case 'file':
+        const getFileDialogDefaultPath = () => {
+          if (field.thumbnailOnly) {
+            return typeof value === 'string' && value.trim() ? value : undefined;
+          }
+
+          if (field.pathMode === 'base') {
+            return field.basePath?.trim() || undefined;
+          }
+
+          return typeof value === 'string' && value.trim() ? value : undefined;
+        };
+
         return (
           <div className="flex items-center gap-2">
             <Input
@@ -1136,9 +1148,10 @@ export const RecordModal: React.FC<RecordModalProps> = ({
               type="button"
               onClick={async () => {
                 try {
+                  const defaultPath = getFileDialogDefaultPath();
                   const result = field.thumbnailOnly
-                    ? await window.electronAPI.openImageFileDialog()
-                    : await window.electronAPI.openFileDialog();
+                    ? await window.electronAPI.openImageFileDialog(defaultPath)
+                    : await window.electronAPI.openFileDialog(defaultPath);
                   if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
                     return;
                   }

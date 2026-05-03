@@ -2944,10 +2944,46 @@ ipcMain.handle('db:checkDuplicate', async (_, categoryId, fieldId, value, record
   }
 });
 
-ipcMain.handle('openFileDialog', async () => {
-  return await dialog.showOpenDialog({
+function getDialogDefaultPath(inputPath) {
+  if (!inputPath || typeof inputPath !== 'string') return undefined;
+
+  const trimmedPath = inputPath.trim();
+  if (!trimmedPath) return undefined;
+
+  const candidates = path.isAbsolute(trimmedPath)
+    ? [trimmedPath]
+    : [
+        path.join(app.getAppPath(), trimmedPath),
+        path.join(appDataDir, trimmedPath)
+      ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      const stat = fs.statSync(candidate);
+      return stat.isDirectory() ? candidate : path.dirname(candidate);
+    }
+
+    const parentDir = path.dirname(candidate);
+    if (parentDir && fs.existsSync(parentDir)) {
+      return parentDir;
+    }
+  }
+
+  return undefined;
+}
+
+ipcMain.handle('openFileDialog', async (_, defaultPath) => {
+  const dialogOptions = {
     properties: ['openFile'],
     title: '파일 선택'
+  };
+  const resolvedDefaultPath = getDialogDefaultPath(defaultPath);
+  if (resolvedDefaultPath) {
+    dialogOptions.defaultPath = resolvedDefaultPath;
+  }
+
+  return await dialog.showOpenDialog({
+    ...dialogOptions
   });
 });
 
@@ -2959,13 +2995,21 @@ ipcMain.handle('openDirectoryDialog', async () => {
 });
 
 // 이미지 전용 파일 선택 다이얼로그
-ipcMain.handle('openImageFileDialog', async () => {
-  return await dialog.showOpenDialog({
+ipcMain.handle('openImageFileDialog', async (_, defaultPath) => {
+  const dialogOptions = {
     properties: ['openFile'],
     title: '이미지 파일 선택',
     filters: [
       { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp'] }
     ]
+  };
+  const resolvedDefaultPath = getDialogDefaultPath(defaultPath);
+  if (resolvedDefaultPath) {
+    dialogOptions.defaultPath = resolvedDefaultPath;
+  }
+
+  return await dialog.showOpenDialog({
+    ...dialogOptions
   });
 });
 
