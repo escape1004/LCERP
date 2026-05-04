@@ -61,6 +61,17 @@ const clampPercentageValue = (value: number, max: number): number => {
   return Math.min(value, Math.max(0, max));
 };
 
+const getEditablePercentageValue = (value: any) => {
+  const numericMax = Number(value && typeof value === 'object' ? value.max : 0);
+  const max = Number.isFinite(numericMax) ? Math.max(0, numericMax) : 0;
+  const numericValue = Number(value && typeof value === 'object' ? value.value : 0);
+  const current = Number.isFinite(numericValue) ? Math.max(0, numericValue) : 0;
+  return {
+    value: max > 0 ? clampPercentageValue(current, max) : current,
+    max,
+  };
+};
+
 const normalizePercentageValue = (value: any) => {
   const numericMax = Number(value && typeof value === 'object' ? value.max : 0);
   const max = Number.isFinite(numericMax) ? Math.max(0, numericMax) : 0;
@@ -71,6 +82,10 @@ const normalizePercentageValue = (value: any) => {
     max
   };
 };
+
+const getPercentageTextClassName = (percent: number) => (
+  percent >= 100 ? 'text-discord-accent font-semibold' : 'text-discord-text font-semibold'
+);
 
 export const RecordModal: React.FC<RecordModalProps> = ({
   isOpen,
@@ -450,7 +465,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
       : field.type === 'checkbox'
           ? formData[field.id] ?? false
       : field.type === 'percentage'
-          ? normalizePercentageValue(formData[field.id])
+          ? getEditablePercentageValue(formData[field.id])
           : formData[field.id] ?? '';
     const hasError = !!errors[field.id];
     const hasDuplicateError = !!duplicateErrors[field.id];
@@ -563,6 +578,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                 const safeCurrent = Math.max(0, Number(currentValue || 0));
                 const safeMax = Math.max(0, Number(maxValue || 0));
                 const clampedCurrent = clampPercentageValue(safeCurrent, safeMax);
+                const percent = safeMax > 0 ? Math.round((clampedCurrent / safeMax) * 100) : 0;
 
                 return (
                   <>
@@ -577,9 +593,19 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                         const nextCurrent = parseNonNegativeNumberInput(nextValue);
                         const numericMax = Math.max(0, Number(maxValue || 0));
                         updateFieldValue(field.id, {
-                          value: clampPercentageValue(nextCurrent, numericMax),
+                          value: numericMax > 0 ? clampPercentageValue(nextCurrent, numericMax) : nextCurrent,
                           max: numericMax
                         });
+                      }}
+                      onBlur={() => {
+                        const numericCurrent = Math.max(0, Number(currentValue || 0));
+                        const numericMax = Math.max(0, Number(maxValue || 0));
+                        if (numericMax === 0 && numericCurrent > 0) {
+                          updateFieldValue(field.id, {
+                            value: numericCurrent,
+                            max: numericCurrent
+                          });
+                        }
                       }}
                       className={inputClassName}
                       ref={isFirstField ? firstFieldRef as React.Ref<HTMLInputElement> : undefined}
@@ -602,8 +628,8 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                       }}
                       className={inputClassName}
                     />
-                    <div className="min-w-[64px] text-right text-sm text-discord-muted">
-                      {`${safeMax > 0 ? Math.round((clampedCurrent / safeMax) * 100) : 0}%`}
+                    <div className={`min-w-[64px] text-right text-sm ${getPercentageTextClassName(percent)}`}>
+                      {`${percent}%`}
                     </div>
                   </>
                 );
