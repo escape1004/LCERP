@@ -2879,6 +2879,7 @@ ipcMain.handle('category:export', async (_, categoryId) => {
 
 ipcMain.handle('category:import', async () => {
   try {
+    const profileId = getCurrentProfileIdOrThrow();
     const { filePaths, canceled } = await dialog.showOpenDialog({
       title: '카테고리 붙여넣기',
       filters: [{ name: 'Category Export', extensions: ['json'] }],
@@ -2912,8 +2913,8 @@ ipcMain.handle('category:import', async () => {
         const key = parentId || null;
         if (!cache.has(key)) {
           const row = parentId
-            ? db.prepare('SELECT MAX(order_num) as maxOrder FROM categories WHERE parentId = ?').get(parentId)
-            : db.prepare('SELECT MAX(order_num) as maxOrder FROM categories WHERE parentId IS NULL').get();
+            ? db.prepare('SELECT MAX(order_num) as maxOrder FROM categories WHERE parentId = ? AND profileId = ?').get(parentId, profileId)
+            : db.prepare('SELECT MAX(order_num) as maxOrder FROM categories WHERE parentId IS NULL AND profileId = ?').get(profileId);
           cache.set(key, Number.isFinite(row?.maxOrder) ? row.maxOrder + 1 : 0);
         }
         const next = cache.get(key);
@@ -2923,8 +2924,8 @@ ipcMain.handle('category:import', async () => {
     })();
 
     const insertStmt = db.prepare(`
-      INSERT INTO categories (id, name, parentId, fields, order_num, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO categories (id, profileId, name, parentId, fields, order_num, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const dfsInsert = (parentId) => {
@@ -2936,6 +2937,7 @@ ipcMain.handle('category:import', async () => {
         const orderNum = getNextOrder(newParentId || null);
         insertStmt.run(
           newId,
+          profileId,
           child.name,
           newParentId,
           JSON.stringify(child.fields),
