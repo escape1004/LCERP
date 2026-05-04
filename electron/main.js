@@ -2092,6 +2092,7 @@ ipcMain.handle('db:getCategories', async () => {
     // fields를 배열로 변환
     return categories.map(cat => ({
       ...cat,
+      order: cat.order_num ?? 0,
       fields: JSON.parse(cat.fields)
     }));
   } catch (error) {
@@ -2147,7 +2148,7 @@ ipcMain.handle('db:addCategory', async (_, category) => {
       category.name,
       category.parentId || null,
       JSON.stringify(category.fields),
-      category.order_num || 0,
+      category.order_num ?? category.order ?? 0,
       now,
       now
     );
@@ -3526,10 +3527,11 @@ ipcMain.handle('getArchiveFileText', async (_, filePath, fileName) => {
 
 ipcMain.handle('db:updateCategory', (event, id, updates) => {
   const profileId = getCurrentProfileIdOrThrow();
-  ensureCategoryBelongsToCurrentProfile(id);
+  const existingCategory = ensureCategoryBelongsToCurrentProfile(id);
   const subtreeIds = getCategorySubtreeIds(id, profileId);
   const thumbnailEntries = collectThumbnailMigrationEntries(subtreeIds, profileId);
   const previousCategoryDirs = getStructuredThumbnailDirsForCategoryIds(subtreeIds, profileId);
+  const nextOrder = updates.order_num ?? updates.order ?? existingCategory.order_num ?? 0;
   const stmt = db.prepare(`
     UPDATE categories
     SET name = ?, parentId = ?, fields = ?, order_num = ?, updatedAt = ?
@@ -3539,7 +3541,7 @@ ipcMain.handle('db:updateCategory', (event, id, updates) => {
     updates.name,
     updates.parentId || null,
     JSON.stringify(updates.fields),
-    updates.order_num,
+    nextOrder,
     new Date().toISOString(),
     id,
     profileId

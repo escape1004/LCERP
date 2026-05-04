@@ -153,7 +153,10 @@ export const useERPStore = create<ERPStore>((set, get) => ({
   },
 
   updateCategory: async (id, updates) => {
-    await window.electronAPI.updateCategory(id, updates);
+    await window.electronAPI.updateCategory(id, {
+      ...updates,
+      order_num: updates.order_num ?? updates.order,
+    });
     await get().loadCategories();
   },
 
@@ -194,14 +197,16 @@ export const useERPStore = create<ERPStore>((set, get) => ({
   reorderCategories: async (categories) => {
     set({ categories });
     
-    for (const [index, category] of categories.entries()) {
+    for (const category of categories) {
       await window.electronAPI.updateCategory(category.id, {
         name: category.name,
         parentId: category.parentId,
         fields: category.fields,
-        order: category.order
+        order_num: category.order
       });
     }
+
+    await get().loadCategories();
   },
 
   addRecord: async (recordData: NewRecord) => {
