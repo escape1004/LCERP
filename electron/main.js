@@ -1407,6 +1407,133 @@ function getCategoryRecordsForProfile(categoryId, profileId = getCurrentProfileI
   }));
 }
 
+function getDashboardWarnings(previewLimit = 8, profileId = getCurrentProfileIdOrThrow()) {
+  const normalizedPreviewLimit = Number.isFinite(Number(previewLimit))
+    ? Math.max(0, Number(previewLimit))
+    : 8;
+
+  const categories = db.prepare(`
+    SELECT id, name, fields, order_num
+    FROM categories
+    WHERE profileId = ?
+    ORDER BY order_num ASC, createdAt ASC
+  `).all(profileId).map((category) => ({
+    ...category,
+    fields: JSON.parse(category.fields)
+  }));
+
+  const records = db.prepare(`
+    SELECT id, categoryId, data, createdAt
+    FROM records
+    WHERE profileId = ?
+    ORDER BY createdAt DESC
+  `).all(profileId).map((record) => ({
+    ...record,
+    data: JSON.parse(record.data)
+  }));
+
+  const recordsByCategoryId = new Map();
+  const recordIdsByCategoryId = new Map();
+
+  records.forEach((record) => {
+    if (!recordsByCategoryId.has(record.categoryId)) {
+      recordsByCategoryId.set(record.categoryId, []);
+      recordIdsByCategoryId.set(record.categoryId, new Set());
+    }
+    recordsByCategoryId.get(record.categoryId).push(record);
+    recordIdsByCategoryId.get(record.categoryId).add(record.id);
+  });
+
+  const items = [];
+  const counts = {
+    missingFiles: 0,
+    brokenRelations: 0
+  };
+
+  const pushPreviewItem = (item) => {
+    if (items.length < normalizedPreviewLimit) {
+      items.push(item);
+    }
+  };
+
+  categories.forEach((category) => {
+    const categoryRecords = recordsByCategoryId.get(category.id) || [];
+    const fileField = category.fields.find((field) => field.type === 'file');
+    const relationFields = category.fields.filter((field) => field.type === 'relation' && field.relationCategoryId);
+    const displayField = category.fields.find((field) => field.type === 'text') || category.fields[0];
+
+    categoryRecords.forEach((record) => {
+      const displayValue = displayField && record.data[displayField.id]
+        ? String(record.data[displayField.id])
+        : `${new Date(record.createdAt).toLocaleDateString('ko-KR')} 항목`;
+
+      if (fileField && !fileField.thumbnailOnly && record.data[fileField.id]) {
+        const filePath = String(record.data[fileField.id]);
+        let exists = false;
+        try {
+          exists = fs.existsSync(filePath);
+        } catch (_error) {
+          exists = false;
+        }
+
+        if (!exists) {
+          counts.missingFiles += 1;
+          pushPreviewItem({
+            id: `missing-file-${record.id}`,
+            categoryId: category.id,
+            recordId: record.id,
+            title: '원본 파일 누락',
+            description: `${category.name} / ${displayValue}`,
+            type: 'missing-file'
+          });
+        }
+      }
+
+      relationFields.forEach((relationField) => {
+        const relatedCategoryId = relationField.relationCategoryId;
+        if (!relatedCategoryId) return;
+
+        const relatedRecordIds = recordIdsByCategoryId.get(relatedCategoryId) || new Set();
+        const rawValue = record.data[relationField.id];
+
+        if (relationField.multiple && Array.isArray(rawValue)) {
+          const missingCount = rawValue.filter((relatedId) => !relatedRecordIds.has(String(relatedId))).length;
+          if (missingCount > 0) {
+            counts.brokenRelations += 1;
+            pushPreviewItem({
+              id: `broken-relation-${record.id}-${relationField.id}`,
+              categoryId: category.id,
+              recordId: record.id,
+              title: '관계 참조 깨짐',
+              description: `${category.name} / ${displayValue} (${missingCount}개 누락)`,
+              type: 'broken-relation'
+            });
+          }
+          return;
+        }
+
+        if (rawValue && !relatedRecordIds.has(String(rawValue))) {
+          counts.brokenRelations += 1;
+          pushPreviewItem({
+            id: `broken-relation-${record.id}-${relationField.id}`,
+            categoryId: category.id,
+            recordId: record.id,
+            title: '관계 참조 깨짐',
+            description: `${category.name} / ${displayValue}`,
+            type: 'broken-relation'
+          });
+        }
+      });
+    });
+  });
+
+  return {
+    totalCount: counts.missingFiles + counts.brokenRelations,
+    counts,
+    items
+  };
+}
+
 function getRelationKeyField(relatedCategory, relationField) {
   if (!relatedCategory || !Array.isArray(relatedCategory.fields)) return null;
 
@@ -3207,6 +3334,22 @@ ipcMain.handle('checkFileExists', async (_, filePath) => {
     return fs.existsSync(filePath);
   } catch (e) {
     return false;
+  }
+});
+
+ipcMain.handle('dashboard:getWarnings', async (_, previewLimit = 8) => {
+  try {
+    return getDashboardWarnings(previewLimit);
+  } catch (error) {
+    log('Error getting dashboard warnings:', error);
+    return {
+      totalCount: 0,
+      counts: {
+        missingFiles: 0,
+        brokenRelations: 0
+      },
+      items: []
+    };
   }
 });
 

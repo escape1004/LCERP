@@ -1,11 +1,17 @@
 import React, { useEffect } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Sidebar } from '../components/Sidebar';
 import { MainContent } from '../components/MainContent';
 import { useERPStore } from '../hooks/useERPStore';
 
+type CategoryRouteState = {
+  categoryId?: string;
+  recordId?: string;
+};
+
 const Index = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     categories,
     loadCategories,
@@ -13,28 +19,38 @@ const Index = () => {
     selectedCategoryId,
     selectCategory,
     showDbViewer,
+    pendingRecordFocus,
   } = useERPStore();
 
+  const routeState = (typeof location.state === 'object' && location.state !== null
+    ? location.state
+    : null) as CategoryRouteState | null;
+  const fallbackCategoryId = routeState?.categoryId || pendingRecordFocus?.categoryId || '';
+
   useEffect(() => {
-    // 컴포넌트 마운트 시 카테고리 로드
     void loadCategories();
   }, [loadCategories, currentProfile?.id]);
 
   useEffect(() => {
     if (showDbViewer) return;
 
+    if (!selectedCategoryId && fallbackCategoryId) {
+      void selectCategory(fallbackCategoryId);
+      return;
+    }
+
     if (!selectedCategoryId) {
       navigate('/dashboard', { replace: true });
       return;
     }
 
-    if (categories.length > 0 && !categories.some(category => category.id === selectedCategoryId)) {
+    if (categories.length > 0 && !categories.some((category) => category.id === selectedCategoryId)) {
       selectCategory(null);
       navigate('/dashboard', { replace: true });
     }
-  }, [categories, navigate, selectedCategoryId, selectCategory, showDbViewer]);
+  }, [categories, navigate, selectedCategoryId, selectCategory, showDbViewer, fallbackCategoryId]);
 
-  if (!showDbViewer && !selectedCategoryId) {
+  if (!showDbViewer && !selectedCategoryId && !fallbackCategoryId) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -42,7 +58,7 @@ const Index = () => {
     !showDbViewer
     && selectedCategoryId
     && categories.length > 0
-    && !categories.some(category => category.id === selectedCategoryId)
+    && !categories.some((category) => category.id === selectedCategoryId)
   ) {
     return <Navigate to="/dashboard" replace />;
   }

@@ -5,6 +5,7 @@ interface ERPStore {
   categories: Category[];
   records: Record<string, DataRecord[]>;
   selectedCategoryId: string | null;
+  pendingRecordFocus: { categoryId: string; recordId: string } | null;
   searchTerm: string;
   currentPage: number;
   itemsPerPage: number;
@@ -25,6 +26,8 @@ interface ERPStore {
   setCurrentPage: (page: number) => void;
   getCategoryRecords: (categoryId: string) => DataRecord[];
   setShowDbViewer: (show: boolean) => void;
+  setPendingRecordFocus: (target: { categoryId: string; recordId: string } | null) => void;
+  clearPendingRecordFocus: () => void;
   getRecordReferenceCount: (recordId: string, categoryId: string) => number;
   toggleDbViewer: () => void;
   checkDuplicate: (categoryId: string, fieldId: string, value: any, recordId?: string) => Promise<boolean>;
@@ -37,6 +40,7 @@ export const useERPStore = create<ERPStore>((set, get) => ({
   categories: [],
   records: {},
   selectedCategoryId: null,
+  pendingRecordFocus: null,
   searchTerm: '',
   currentPage: 1,
   itemsPerPage: 20,
@@ -276,6 +280,8 @@ export const useERPStore = create<ERPStore>((set, get) => ({
   },
 
   setShowDbViewer: (show) => set({ showDbViewer: show }),
+  setPendingRecordFocus: (target) => set({ pendingRecordFocus: target }),
+  clearPendingRecordFocus: () => set({ pendingRecordFocus: null }),
 
   getRecordReferenceCount: (recordId: string, categoryId: string) => {
     let count = 0;

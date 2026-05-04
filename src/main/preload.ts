@@ -82,6 +82,7 @@ const api: ElectronAPI = {
   send: (channel: string, ...args: any[]) => ipcRenderer.send(channel, ...args),
   openFile: (filePath: string) => ipcRenderer.invoke('openFile', filePath),
   checkFileExists: (filePath: string) => ipcRenderer.invoke('checkFileExists', filePath),
+  getDashboardWarnings: (previewLimit?: number) => ipcRenderer.invoke('dashboard:getWarnings', previewLimit),
   generateThumbnail: (filePath: string) => ipcRenderer.invoke('generateThumbnail', filePath),
   getThumbnailDataUrl: (filePath: string) => ipcRenderer.invoke('getThumbnailDataUrl', filePath),
   getFileDataUrl: (filePath: string) => ipcRenderer.invoke('getFileDataUrl', filePath),

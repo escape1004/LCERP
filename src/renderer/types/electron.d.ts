@@ -33,6 +33,21 @@ declare global {
       openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
       resetDatabase: () => Promise<{ success: boolean; backupPath?: string; error?: string }>;
       getFileSize: (filePath: string) => Promise<{ success: boolean; size?: string; error?: string }>;
+      getDashboardWarnings: (previewLimit?: number) => Promise<{
+        totalCount: number;
+        counts: {
+          missingFiles: number;
+          brokenRelations: number;
+        };
+        items: Array<{
+          id: string;
+          categoryId: string;
+          recordId: string;
+          title: string;
+          description: string;
+          type: 'missing-file' | 'broken-relation';
+        }>;
+      }>;
     }
   }
 }

@@ -5,6 +5,24 @@ export interface ThumbnailContext {
   thumbnailPath?: string;
 }
 
+export interface DashboardWarningItem {
+  id: string;
+  categoryId: string;
+  recordId: string;
+  title: string;
+  description: string;
+  type: 'missing-file' | 'broken-relation';
+}
+
+export interface DashboardWarningsResult {
+  totalCount: number;
+  counts: {
+    missingFiles: number;
+    brokenRelations: number;
+  };
+  items: DashboardWarningItem[];
+}
+
 export interface ElectronAPI {
   getTables: () => Promise<{ name: string }[]>;
   getTableData: (tableName: string) => Promise<TableData>;
@@ -49,6 +67,7 @@ export interface ElectronAPI {
   setThumbnailPreviewScale: (scale: number) => Promise<{ success: boolean; error?: string }>;
   openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
   checkFileExists: (filePath: string) => Promise<boolean>;
+  getDashboardWarnings: (previewLimit?: number) => Promise<DashboardWarningsResult>;
   checkDuplicate: (categoryId: string, fieldId: string, value: any, recordId?: string) => Promise<{ isDuplicate: boolean }>;
   send: (channel: string, ...args: any[]) => void;
   openFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;

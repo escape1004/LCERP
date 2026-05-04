@@ -45,6 +45,7 @@ const api: ElectronAPI = {
   getAppRoot: () => ipcRenderer.invoke('getAppRoot'),
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
   send: (channel: string, ...args: any[]) => ipcRenderer.send(channel, ...args),
+  getDashboardWarnings: (previewLimit?: number) => ipcRenderer.invoke('dashboard:getWarnings', previewLimit),
   getVideoDuration: (filePath: string) => ipcRenderer.invoke('getVideoDuration', filePath),
   getVideoCodecInfo: (filePath: string) => ipcRenderer.invoke('getVideoCodecInfo', filePath),
   getBookmarks: (categoryId: string, recordId: string) => ipcRenderer.invoke('getBookmarks', categoryId, recordId),

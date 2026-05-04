@@ -708,6 +708,8 @@ export const MainContent: React.FC = () => {
     invalidateCache,
     selectCategory,
     showDbViewer,
+    pendingRecordFocus,
+    clearPendingRecordFocus,
   } = useERPStore();
 
   const {
@@ -735,10 +737,10 @@ export const MainContent: React.FC = () => {
   const getInlinePercentageKey = useCallback((recordId: string, fieldId: string) => `${recordId}:${fieldId}`, []);
 
   useEffect(() => {
-    if (selectedCategoryId && !selectedCategorySafe) {
+    if (selectedCategoryId && categoriesSafe.length > 0 && !selectedCategorySafe) {
       selectCategory(null);
     }
-  }, [selectedCategoryId, selectedCategorySafe, selectCategory]);
+  }, [selectedCategoryId, selectedCategorySafe, selectCategory, categoriesSafe.length]);
 
   const getRecordFieldValue = useCallback((record: DataRecord, fieldId: string) => {
     const overrideKey = getInlinePercentageKey(record.id, fieldId);
@@ -1217,6 +1219,42 @@ export const MainContent: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    if (!pendingRecordFocus) return;
+    if (pendingRecordFocus.categoryId !== selectedCategoryId) return;
+
+    setSearchField('all');
+    setSearchTerm('');
+    setFileTypeFilter('all');
+
+    const targetIndex = sortedRecords.findIndex((record) => record.id === pendingRecordFocus.recordId);
+    if (targetIndex < 0) return;
+
+    const targetPage = Math.floor(targetIndex / itemsPerPage) + 1;
+    if (currentPage !== targetPage) {
+      setCurrentPage(targetPage);
+      return;
+    }
+
+    setSelectedRecordId(pendingRecordFocus.recordId);
+    clearPendingRecordFocus();
+
+    requestAnimationFrame(() => {
+      const targetRow = tableContainerRef.current?.querySelector<HTMLElement>(
+        `[data-record-id="${pendingRecordFocus.recordId}"]`
+      );
+      targetRow?.scrollIntoView({ block: 'center' });
+    });
+  }, [
+    pendingRecordFocus,
+    selectedCategoryId,
+    sortedRecords,
+    itemsPerPage,
+    currentPage,
+    setCurrentPage,
+    clearPendingRecordFocus,
+  ]);
+
   // 썸네일 생성/삭제 시 레코드 리스트 강제 리로드
   useEffect(() => {
     const handler = () => {
@@ -1577,6 +1615,16 @@ export const MainContent: React.FC = () => {
     setPageInputValue(currentPage.toString());
   };
 
+  if (!showDbViewer && selectedCategoryId && !selectedCategorySafe) {
+    return (
+      <div className="flex-1 h-full flex flex-col bg-discord-bg">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-discord-muted">카테고리 로딩 중...</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 h-full flex flex-col bg-discord-bg">
       {showDbViewer ? (
@@ -1835,6 +1883,7 @@ export const MainContent: React.FC = () => {
                         <ContextMenu key={record.id}>
                           <ContextMenuTrigger asChild>
                             <tr
+                              data-record-id={record.id}
                               className={`${selectedRecordId === record.id ? 'bg-discord-hover' : 'hover:bg-discord-hover'} group cursor-default`}
                               onClick={() => setSelectedRecordId(record.id)}
                               onDoubleClick={() => {
