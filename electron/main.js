@@ -208,6 +208,10 @@ function getCategorySubtreeIds(rootCategoryId, profileId) {
   return subtreeIds;
 }
 
+function getSqlPlaceholders(count) {
+  return Array.from({ length: count }, () => '?').join(', ');
+}
+
 function ensureRecordBelongsToCurrentProfile(recordId) {
   const record = getScopedRecord(recordId);
   if (!record) {
@@ -920,6 +924,158 @@ function copyLegacyThumbnailToStructuredPath(filePath, context = {}) {
   }
 }
 
+function ensureDirectoryExists(dirPath) {
+  if (!fs.existsSync(dirPath)) {
+    fs.mkdirSync(dirPath, { recursive: true });
+  }
+}
+
+function removeEmptyThumbnailDirsUpward(startDir) {
+  if (!startDir) return;
+
+  const thumbnailRoot = getThumbnailRootDir();
+  let currentDir = startDir;
+
+  while (currentDir) {
+    const relative = path.relative(thumbnailRoot, currentDir);
+    const isInsideRoot = relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+    if (!isInsideRoot) {
+      break;
+    }
+
+    if (!fs.existsSync(currentDir) || !fs.statSync(currentDir).isDirectory()) {
+      currentDir = path.dirname(currentDir);
+      continue;
+    }
+
+    if (fs.readdirSync(currentDir).length > 0) {
+      break;
+    }
+
+    fs.rmdirSync(currentDir);
+    if (currentDir === thumbnailRoot) {
+      break;
+    }
+
+    currentDir = path.dirname(currentDir);
+  }
+}
+
+function relocateThumbnailFile(sourcePath, targetPath) {
+  if (!sourcePath || !targetPath || sourcePath === targetPath || !fs.existsSync(sourcePath)) {
+    return false;
+  }
+
+  ensureDirectoryExists(path.dirname(targetPath));
+
+  if (!fs.existsSync(targetPath)) {
+    try {
+      fs.renameSync(sourcePath, targetPath);
+    } catch (_error) {
+      fs.copyFileSync(sourcePath, targetPath);
+      fs.unlinkSync(sourcePath);
+    }
+  } else if (fs.existsSync(sourcePath)) {
+    fs.unlinkSync(sourcePath);
+  }
+
+  removeEmptyThumbnailDirsUpward(path.dirname(sourcePath));
+  return true;
+}
+
+function collectThumbnailMigrationEntries(categoryIds, profileId) {
+  if (!categoryIds?.length || !profileId) {
+    return [];
+  }
+
+  const categories = db.prepare(`SELECT id, fields FROM categories WHERE profileId = ? AND id IN (${getSqlPlaceholders(categoryIds.length)})`).all(profileId, ...categoryIds);
+  const fileFieldByCategoryId = new Map();
+
+  categories.forEach(category => {
+    const fields = JSON.parse(category.fields);
+    const fileField = fields.find(field => field.type === 'file');
+    if (fileField) {
+      fileFieldByCategoryId.set(category.id, fileField.id);
+    }
+  });
+
+  if (fileFieldByCategoryId.size === 0) {
+    return [];
+  }
+
+  const records = db.prepare(`SELECT id, categoryId, profileId, data, thumbnailPath FROM records WHERE profileId = ? AND categoryId IN (${getSqlPlaceholders(categoryIds.length)})`).all(profileId, ...categoryIds);
+
+  return records.flatMap(record => {
+    const fileFieldId = fileFieldByCategoryId.get(record.categoryId);
+    if (!fileFieldId) {
+      return [];
+    }
+
+    const data = JSON.parse(record.data);
+    const filePath = data[fileFieldId];
+    if (!filePath || typeof filePath !== 'string' || filePath === '-') {
+      return [];
+    }
+
+    return [{
+      recordId: record.id,
+      categoryId: record.categoryId,
+      profileId: record.profileId || profileId,
+      filePath,
+      thumbnailPath: record.thumbnailPath || null
+    }];
+  });
+}
+
+function getStructuredThumbnailDirsForCategoryIds(categoryIds, profileId) {
+  return [...new Set(
+    (categoryIds || []).map(categoryId => getStructuredThumbnailDir({ categoryId, profileId }))
+  )];
+}
+
+function migrateStructuredThumbnailEntries(entries) {
+  let migratedCount = 0;
+  let updatedCount = 0;
+
+  entries.forEach(entry => {
+    try {
+      const normalizedPath = path.isAbsolute(entry.filePath) ? entry.filePath : path.join(appDataDir, entry.filePath);
+      const { thumbnailPath: expectedPath } = getThumbnailPathForContext(normalizedPath, {
+        recordId: entry.recordId,
+        categoryId: entry.categoryId,
+        profileId: entry.profileId
+      });
+
+      const candidatePaths = [
+        entry.thumbnailPath,
+        getLegacyThumbnailPath(normalizedPath)
+      ].filter(Boolean);
+
+      for (const candidatePath of [...new Set(candidatePaths)]) {
+        if (candidatePath && candidatePath !== expectedPath && fs.existsSync(candidatePath)) {
+          if (relocateThumbnailFile(candidatePath, expectedPath)) {
+            migratedCount++;
+          }
+          break;
+        }
+      }
+
+      if (fs.existsSync(expectedPath)) {
+        db.prepare('UPDATE records SET thumbnailPath = ? WHERE id = ?').run(expectedPath, entry.recordId);
+        updatedCount++;
+      }
+    } catch (error) {
+      log('thumbnail entry migration failed:', {
+        recordId: entry.recordId,
+        categoryId: entry.categoryId,
+        message: error.message
+      });
+    }
+  });
+
+  return { migratedCount, updatedCount };
+}
+
 // 썸네일 파일 삭제 함수
 const deleteThumbnail = (filePath, context = {}) => {
   try {
@@ -934,6 +1090,7 @@ const deleteThumbnail = (filePath, context = {}) => {
     for (const thumbnailPath of [...new Set(candidatePaths)]) {
       if (fs.existsSync(thumbnailPath)) {
         fs.unlinkSync(thumbnailPath);
+        removeEmptyThumbnailDirsUpward(path.dirname(thumbnailPath));
         deleted = true;
       }
     }
@@ -2205,19 +2362,20 @@ ipcMain.handle('db:updateRecord', handleUpdateRecord);
 ipcMain.handle('db:deleteCategory', async (_, id) => {
   const profileId = getCurrentProfileIdOrThrow();
   ensureCategoryBelongsToCurrentProfile(id);
-  const relationCleanupCount = cleanupRelationReferences(id);
-  const childCategories = db.prepare('SELECT id FROM categories WHERE parentId = ? AND profileId = ?').all(id, profileId);
+  const subtreeIds = getCategorySubtreeIds(id, profileId);
+  const relationCleanupCount = subtreeIds.reduce((count, categoryId) => count + cleanupRelationReferences(categoryId), 0);
+  const categoryDirs = getStructuredThumbnailDirsForCategoryIds(subtreeIds, profileId);
   let totalThumbnailCount = 0;
-  
-  childCategories.forEach(child => {
-    totalThumbnailCount += cleanupThumbnailsForCategory(child.id);
+
+  subtreeIds.forEach(categoryId => {
+    totalThumbnailCount += cleanupThumbnailsForCategory(categoryId);
   });
-  
-  totalThumbnailCount += cleanupThumbnailsForCategory(id);
-  
-  db.prepare('DELETE FROM categories WHERE parentId = ? AND profileId = ?').run(id, profileId);
-  db.prepare('DELETE FROM records WHERE categoryId = ? AND profileId = ?').run(id, profileId);
-  db.prepare('DELETE FROM categories WHERE id = ? AND profileId = ?').run(id, profileId);
+
+  db.prepare(`DELETE FROM records WHERE profileId = ? AND categoryId IN (${getSqlPlaceholders(subtreeIds.length)})`).run(profileId, ...subtreeIds);
+  db.prepare(`DELETE FROM categories WHERE profileId = ? AND id IN (${getSqlPlaceholders(subtreeIds.length)})`).run(profileId, ...subtreeIds);
+  categoryDirs
+    .sort((a, b) => b.length - a.length)
+    .forEach(dirPath => removeEmptyThumbnailDirsUpward(dirPath));
   
   return {
     success: true,
@@ -2466,11 +2624,21 @@ ipcMain.handle('profiles:update', (_event, profileId, updates = {}) => {
   }
 
   const avatarColor = updates.avatarColor || profile.avatarColor || DEFAULT_PROFILE_COLOR;
+  const categoryIds = db.prepare('SELECT id FROM categories WHERE profileId = ?').all(profileId).map(row => row.id);
+  const thumbnailEntries = collectThumbnailMigrationEntries(categoryIds, profileId);
+  const previousCategoryDirs = getStructuredThumbnailDirsForCategoryIds(categoryIds, profileId);
+  const previousProfileDir = path.join(getThumbnailRootDir(), sanitizeThumbnailPathSegment(profile.name || profileId, 'profile'));
   db.prepare(`
     UPDATE profiles
     SET name = ?, avatarColor = ?, updatedAt = ?
     WHERE id = ?
   `).run(name, avatarColor, new Date().toISOString(), profileId);
+
+  migrateStructuredThumbnailEntries(thumbnailEntries);
+  previousCategoryDirs
+    .sort((a, b) => b.length - a.length)
+    .forEach(dirPath => removeEmptyThumbnailDirsUpward(dirPath));
+  removeEmptyThumbnailDirsUpward(previousProfileDir);
 
   return { success: true, profile: getProfileById(profileId) };
 });
@@ -2487,6 +2655,8 @@ ipcMain.handle('profiles:delete', (_event, profileId) => {
   }
 
   const categoryIds = db.prepare('SELECT id FROM categories WHERE profileId = ?').all(profileId).map(row => row.id);
+  const categoryDirs = getStructuredThumbnailDirsForCategoryIds(categoryIds, profileId);
+  const profileDir = path.join(getThumbnailRootDir(), sanitizeThumbnailPathSegment(profile.name || profileId, 'profile'));
   categoryIds.forEach(categoryId => {
     cleanupThumbnailsForCategory(categoryId);
   });
@@ -2494,6 +2664,10 @@ ipcMain.handle('profiles:delete', (_event, profileId) => {
   db.prepare('DELETE FROM records WHERE profileId = ?').run(profileId);
   db.prepare('DELETE FROM categories WHERE profileId = ?').run(profileId);
   db.prepare('DELETE FROM profiles WHERE id = ?').run(profileId);
+  categoryDirs
+    .sort((a, b) => b.length - a.length)
+    .forEach(dirPath => removeEmptyThumbnailDirsUpward(dirPath));
+  removeEmptyThumbnailDirsUpward(profileDir);
 
   if (currentProfileId === profileId) {
     currentProfileId = null;
@@ -3352,6 +3526,10 @@ ipcMain.handle('getArchiveFileText', async (_, filePath, fileName) => {
 
 ipcMain.handle('db:updateCategory', (event, id, updates) => {
   const profileId = getCurrentProfileIdOrThrow();
+  ensureCategoryBelongsToCurrentProfile(id);
+  const subtreeIds = getCategorySubtreeIds(id, profileId);
+  const thumbnailEntries = collectThumbnailMigrationEntries(subtreeIds, profileId);
+  const previousCategoryDirs = getStructuredThumbnailDirsForCategoryIds(subtreeIds, profileId);
   const stmt = db.prepare(`
     UPDATE categories
     SET name = ?, parentId = ?, fields = ?, order_num = ?, updatedAt = ?
@@ -3366,6 +3544,10 @@ ipcMain.handle('db:updateCategory', (event, id, updates) => {
     id,
     profileId
   );
+  migrateStructuredThumbnailEntries(thumbnailEntries);
+  previousCategoryDirs
+    .sort((a, b) => b.length - a.length)
+    .forEach(dirPath => removeEmptyThumbnailDirsUpward(dirPath));
   return { success: true };
 });
 

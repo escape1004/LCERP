@@ -25,6 +25,7 @@ import {
   ContextMenuTrigger,
 } from './components/ui/context-menu';
 import { useERPStore } from './hooks/useERPStore';
+import { useLoadingStore } from './hooks/useLoadingStore';
 import type { Profile } from './types';
 
 const queryClient = new QueryClient();
@@ -109,6 +110,7 @@ function GateCard({ title, description, children, className = 'max-w-5xl' }: Gat
 
 const App = () => {
   const { currentProfile, setCurrentProfile, resetForProfile, setShowDbViewer, selectCategory } = useERPStore();
+  const { showLoading, hideLoading } = useLoadingStore();
   const [isAppSettingsOpen, setIsAppSettingsOpen] = useState(false);
   const [isCheckingPassword, setIsCheckingPassword] = useState(true);
   const [requiresPassword, setRequiresPassword] = useState(false);
@@ -242,6 +244,7 @@ const App = () => {
     } catch (error) {
       setProfileError(error instanceof Error ? error.message : '프로필 선택 중 오류가 발생했습니다.');
     } finally {
+      hideLoading();
       setIsProfileBusy(false);
     }
   };
@@ -281,6 +284,7 @@ const App = () => {
     } catch (error) {
       setProfileError(error instanceof Error ? error.message : '프로필 생성 중 오류가 발생했습니다.');
     } finally {
+      hideLoading();
       setIsProfileBusy(false);
     }
   };
@@ -304,6 +308,7 @@ const App = () => {
           return;
         }
 
+        showLoading('프로필 썸네일 경로를 정리하는 중...');
         const result = await window.electronAPI.updateProfile(editingProfile.id, {
           name,
           avatarColor,
@@ -387,6 +392,7 @@ const App = () => {
     setProfileError('');
 
     try {
+      showLoading('프로필과 하위 카테고리 썸네일을 정리하는 중...');
       const result = await window.electronAPI.deleteProfile(deleteTargetProfile.id);
       if (!result.success) {
         setProfileError(result.error || '프로필을 삭제할 수 없습니다.');
@@ -401,6 +407,7 @@ const App = () => {
     } catch (error) {
       setProfileError(error instanceof Error ? error.message : '프로필 삭제 중 오류가 발생했습니다.');
     } finally {
+      hideLoading();
       setIsProfileBusy(false);
       setShowDeleteConfirm(false);
       setDeleteInput('');

@@ -12,6 +12,7 @@ import {
 } from './ui/select';
 import { Category, FieldDefinition, NewCategory } from '../types';
 import { useERPStore } from '../hooks/useERPStore';
+import { useLoadingStore } from '../hooks/useLoadingStore';
 import { v4 as uuidv4 } from 'uuid';
 import { nanoid } from 'nanoid';
 import { AlertDialog } from './ui/alert-dialog';
@@ -260,6 +261,7 @@ export const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
   category,
 }) => {
   const { categories, addCategory, updateCategory } = useERPStore();
+  const { showLoading, hideLoading } = useLoadingStore();
   const [name, setName] = useState(category?.name || '');
   const [fields, setFields] = useState<FieldDefinition[]>(
     category ? JSON.parse(JSON.stringify(category.fields.map(normalizeCategoryField))) : []
@@ -344,6 +346,7 @@ export const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
       if (category) {
         // 수정
         const normalizedFields = fields.map(normalizeCategoryField);
+        showLoading('카테고리 썸네일 경로를 정리하는 중...');
         await updateCategory(category.id, {
           name,
           fields: normalizedFields.map((field, index) => ({ ...field, order: index })),
@@ -365,6 +368,8 @@ export const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
       onClose();
     } catch (error) {
       setError(error instanceof Error ? error.message : '저장 중 오류가 발생했습니다.');
+    } finally {
+      hideLoading();
     }
   };
 

@@ -12,6 +12,7 @@ import { toast } from './ui/use-toast';
 import { Switch } from './ui/switch';
 import { TagInput } from './ui/tag-input';
 import { AnimatedModal } from './ui/animated-modal';
+import { useLoadingStore } from '../hooks/useLoadingStore';
 
 interface CategoryModalProps {
   isOpen: boolean;
@@ -43,6 +44,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   category,
 }) => {
   const { categories, addCategory, updateCategory, getCategoryRecords, loadRecords } = useERPStore();
+  const { showLoading, hideLoading } = useLoadingStore();
   const [formData, setFormData] = useState({
     name: '',
     parentId: undefined,
@@ -264,6 +266,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
       const normalizedFields = formData.fields.map(normalizeCategoryField);
       if (category) {
         await migrateTextAffixValues(normalizedFields);
+        showLoading('카테고리 썸네일 경로를 정리하는 중...');
         await updateCategory(category.id, {
           name: formData.name,
           parentId: formData.parentId,
@@ -289,6 +292,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
         variant: 'destructive',
       });
     } finally {
+      hideLoading();
       setIsMigratingAffixes(false);
     }
   };

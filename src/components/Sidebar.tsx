@@ -235,6 +235,7 @@ export const Sidebar: React.FC = () => {
     if (!deleteTarget) return;
     try {
       setIsDeleting(true);
+      showLoading('카테고리와 하위 썸네일을 정리하는 중...');
       const deletedCategoryIds = getCategorySubtreeIds(deleteTarget.id);
       const shouldLeaveCategoryView = !!selectedCategoryId && deletedCategoryIds.includes(selectedCategoryId);
 
@@ -274,6 +275,7 @@ export const Sidebar: React.FC = () => {
     } catch (error) {
       toast({ title: '카테고리 삭제 중 오류가 발생했습니다.', variant: 'destructive' });
     } finally {
+      hideLoading();
       setIsDeleting(false);
     }
   };
