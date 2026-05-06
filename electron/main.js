@@ -4077,10 +4077,23 @@ ipcMain.handle('generateThumbnail', async (_, filePath, context = {}) => {
 ipcMain.handle('getVideoCodecInfo', async (_, filePath) => {
   try {
     const ffmpeg = require('fluent-ffmpeg');
-    const ffprobeStatic = require('ffprobe-static');
-    ffmpeg.setFfprobePath(ffprobeStatic.path);
+    const path = require('path');
+    const fs = require('fs');
+    const { ffprobePath } = getFfmpegToolPaths();
+    let normalizedPath = filePath;
+    if (!path.isAbsolute(filePath)) {
+      normalizedPath = path.join(appDataDir, filePath);
+    }
+    if (!ffprobePath || !fs.existsSync(ffprobePath)) {
+      log('getVideoCodecInfo: ffprobe 경로를 찾을 수 없음', { filePath: normalizedPath, ffprobePath });
+      return { error: 'ffprobe not found' };
+    }
+    if (!fs.existsSync(normalizedPath)) {
+      return { error: 'File not found' };
+    }
+    ffmpeg.setFfprobePath(ffprobePath);
     return await new Promise((resolve) => {
-      ffmpeg.ffprobe(filePath, (err, metadata) => {
+      ffmpeg.ffprobe(normalizedPath, (err, metadata) => {
         if (err) return resolve({ error: err.message });
         if (!metadata || !metadata.streams) return resolve({ error: 'No metadata' });
         const video = metadata.streams.find(s => s.codec_type === 'video');
