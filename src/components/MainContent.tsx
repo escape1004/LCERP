@@ -31,6 +31,7 @@ import {
 import { BulkAddModal } from './BulkAddModal';
 import { resolveFilePath } from '../lib/pathResolver';
 import { formatFieldDisplayValue } from '../lib/fieldFormat';
+import { DatePicker } from './ui/date-picker';
 
 // 해시태그 파싱 유틸리티 함수
 const parseHashtags = (text: string): { hashtags: string[]; plainText: string } => {
@@ -103,6 +104,16 @@ const parseNonNegativeNumberInput = (value: string): number => {
   if (value === '') return 0;
   const numericValue = Number(value);
   return Number.isFinite(numericValue) ? Math.max(0, numericValue) : 0;
+};
+
+const getFieldOptions = (field: FieldDefinition): string[] => {
+  const legacyField = field as FieldDefinition & { options?: string[] };
+  return legacyField.options ?? field.selectOptions ?? [];
+};
+
+const isFieldMultiple = (field: FieldDefinition): boolean => {
+  const legacyField = field as FieldDefinition & { multiple?: boolean };
+  return Boolean(legacyField.multiple ?? field.multiSelect);
 };
 
 const getPercentageTextClassName = (percent: number) => (
@@ -720,6 +731,10 @@ export const MainContent: React.FC = () => {
 
   // 검색어를 로컬 상태로 관리
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortField, setSortField] = useState<string>('');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [searchField, setSearchField] = useState<string>('all');
+  const [fileTypeFilter, setFileTypeFilter] = useState<string>('all'); // 'all', 'image', 'video', 'archive'
 
   // 컬럼 너비 관리 (카테고리별로 저장)
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
@@ -867,7 +882,7 @@ export const MainContent: React.FC = () => {
   // Reset pagination to page 1 when search term changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, setCurrentPage]);
+  }, [searchTerm, searchField, fileTypeFilter, setCurrentPage]);
 
   // Load related records when category changes
   useEffect(() => {
@@ -906,10 +921,11 @@ export const MainContent: React.FC = () => {
     // 카테고리를 수동으로 선택할 때만 로드
   }, []);
 
-  const [sortField, setSortField] = useState<string>('');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  const [searchField, setSearchField] = useState<string>('all');
-  const [fileTypeFilter, setFileTypeFilter] = useState<string>('all'); // 'all', 'image', 'video', 'archive'
+  const selectedSearchField = useMemo(
+    () => selectedCategorySafe?.fields.find((field) => field.id === searchField) ?? null,
+    [selectedCategorySafe, searchField]
+  );
+  const effectiveSearchField = (selectedSearchField || searchField === 'all') ? searchField : 'all';
 
   // 컬럼 리사이즈 핸들러
   const handleResizeStart = useCallback((columnId: string, e: React.MouseEvent) => {
@@ -965,6 +981,50 @@ export const MainContent: React.FC = () => {
   // 파일 필드 존재 여부
   const fileField = selectedCategorySafe?.fields.find(f => f.type === 'file');
 
+  const normalizedSearchTerm = searchTerm.trim().toLowerCase();
+
+  const matchesSearchValue = useCallback((field: FieldDefinition, value: any) => {
+    if (!normalizedSearchTerm) return true;
+
+    if (field.type === 'number') {
+      const numericSearch = Number(searchTerm);
+      return Number.isFinite(numericSearch) && Number(value) === numericSearch;
+    }
+
+    if (field.type === 'date') {
+      return String(value || '').trim() === searchTerm.trim();
+    }
+
+    if (field.type === 'select') {
+      if (isFieldMultiple(field) && Array.isArray(value)) {
+        return value.some((item) => String(item || '').toLowerCase() === normalizedSearchTerm);
+      }
+      return String(value || '').toLowerCase() === normalizedSearchTerm;
+    }
+
+    if (field.type === 'checkbox') {
+      if (searchTerm !== 'true' && searchTerm !== 'false') return false;
+      return Boolean(value) === (searchTerm === 'true');
+    }
+
+    if (field.type === 'percentage') {
+      const percentage = getPercentageMeta(field, value);
+      const numericSearch = Number(searchTerm);
+
+      if (Number.isFinite(numericSearch)) {
+        return percentage.value === numericSearch
+          || percentage.max === numericSearch
+          || percentage.percent === numericSearch;
+      }
+
+      return `${percentage.value} ${percentage.max} ${percentage.percent}`
+        .toLowerCase()
+        .includes(normalizedSearchTerm);
+    }
+
+    return String(value || '').toLowerCase().includes(normalizedSearchTerm);
+  }, [normalizedSearchTerm, searchTerm]);
+
   // 파일 확장자로 타입 확인 함수
   const getFileTypeFromPath = (filePath: string): 'image' | 'video' | 'archive' | 'other' => {
     if (!filePath || typeof filePath !== 'string') return 'other';
@@ -991,10 +1051,10 @@ export const MainContent: React.FC = () => {
     }
     
     // 검색어가 없으면 파일 타입 필터만 적용한 결과 반환
-    if (!searchTerm) return filteredByFileType;
+    if (!searchTerm.trim()) return filteredByFileType;
 
     return filteredByFileType.filter((record) => {
-      if (searchField === 'all') {
+      if (effectiveSearchField === 'all') {
         const visibleFields = selectedCategorySafe?.fields.filter(f => !f.hidden) || [];
         return visibleFields.some((field) => {
           const value = getRecordFieldValue(record, field.id);
@@ -1008,34 +1068,26 @@ export const MainContent: React.FC = () => {
               ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
               : relatedCategory.fields[0];
 
-            if (field.multiple && Array.isArray(value)) {
+            if (isFieldMultiple(field) && Array.isArray(value)) {
               return value.some((relatedId) => {
                 const relatedRecord = relatedRecords.find(r => r.id === relatedId);
                 if (!relatedRecord) return false;
                 const displayValue = relatedRecord.data[displayField?.id];
-                return String(displayValue || '').toLowerCase().includes(searchTerm.toLowerCase());
+                return String(displayValue || '').toLowerCase().includes(normalizedSearchTerm);
               });
             } else {
               const relatedRecord = relatedRecords.find(r => r.id === value);
               if (!relatedRecord) return false;
               const displayValue = relatedRecord.data[displayField?.id];
-              return String(displayValue || '').toLowerCase().includes(searchTerm.toLowerCase());
+              return String(displayValue || '').toLowerCase().includes(normalizedSearchTerm);
             }
           }
 
-          if (field.type === 'percentage') {
-            const percentage = getPercentageMeta(field, value);
-            return `${percentage.value} ${percentage.max} ${percentage.percent}`
-              .toLowerCase()
-              .includes(searchTerm.toLowerCase());
-          }
-
-          // 일반 필드
-          return String(value || '').toLowerCase().includes(searchTerm.toLowerCase());
+          return matchesSearchValue(field, value);
         });
       } else {
         // 특정 필드만 검색
-        const field = selectedCategorySafe?.fields.find(f => f.id === searchField);
+        const field = selectedCategorySafe?.fields.find(f => f.id === effectiveSearchField);
         if (!field) return false;
         const value = getRecordFieldValue(record, field.id);
 
@@ -1047,33 +1099,25 @@ export const MainContent: React.FC = () => {
             ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
             : relatedCategory.fields[0];
 
-          if (field.multiple && Array.isArray(value)) {
+          if (isFieldMultiple(field) && Array.isArray(value)) {
             return value.some((relatedId) => {
               const relatedRecord = relatedRecords.find(r => r.id === relatedId);
               if (!relatedRecord) return false;
               const displayValue = relatedRecord.data[displayField?.id];
-              return String(displayValue || '').toLowerCase().includes(searchTerm.toLowerCase());
+              return String(displayValue || '').toLowerCase().includes(normalizedSearchTerm);
             });
           } else {
             const relatedRecord = relatedRecords.find(r => r.id === value);
             if (!relatedRecord) return false;
             const displayValue = relatedRecord.data[displayField?.id];
-            return String(displayValue || '').toLowerCase().includes(searchTerm.toLowerCase());
+            return String(displayValue || '').toLowerCase().includes(normalizedSearchTerm);
           }
         }
 
-        if (field.type === 'percentage') {
-          const percentage = getPercentageMeta(field, value);
-          return `${percentage.value} ${percentage.max} ${percentage.percent}`
-            .toLowerCase()
-            .includes(searchTerm.toLowerCase());
-        }
-
-        // 일반 필드
-        return String(value || '').toLowerCase().includes(searchTerm.toLowerCase());
+        return matchesSearchValue(field, value);
       }
     });
-  }, [selectedCategoryId, searchTerm, searchField, fileTypeFilter, currentRecordsSafe, selectedCategorySafe, categoriesSafe, getCategoryRecords, fileField, getRecordFieldValue]);
+  }, [selectedCategoryId, searchTerm, effectiveSearchField, fileTypeFilter, currentRecordsSafe, selectedCategorySafe, categoriesSafe, getCategoryRecords, fileField, getRecordFieldValue, matchesSearchValue, normalizedSearchTerm]);
 
   // Sorting
   const sortedRecords = useMemo(() => {
@@ -1703,32 +1747,78 @@ export const MainContent: React.FC = () => {
 
             {/* Search */}
             <div className="flex gap-3">
-              <div className="relative flex-1">
-                <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-discord-muted" />
-                <Input
-                  ref={searchInputRef}
-                  placeholder={searchField === 'all' ? '전체 검색...' : `${selectedCategorySafe?.fields.find(f => f.id === searchField)?.name || ''} 검색...`}
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 bg-discord-sidebar border-gray-600 text-discord-text placeholder:text-gray-500"
-                />
+              <div className="flex flex-1 gap-2">
+                <div className="relative flex-1">
+                  {(effectiveSearchField === 'all' || !selectedSearchField || ['text', 'longtext', 'relation', 'file'].includes(selectedSearchField.type)) && (
+                    <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-discord-muted pointer-events-none" />
+                  )}
+                  {effectiveSearchField === 'all' || !selectedSearchField ? (
+                    <Input
+                      ref={searchInputRef}
+                      placeholder="전체 검색..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10 bg-discord-sidebar border-gray-600 text-discord-text placeholder:text-gray-500"
+                    />
+                  ) : selectedSearchField.type === 'date' ? (
+                    <DatePicker
+                      value={searchTerm}
+                      onChange={setSearchTerm}
+                      placeholder={`${selectedSearchField.name} 날짜 선택...`}
+                      className="bg-discord-sidebar border-gray-600 text-discord-text placeholder:text-gray-500"
+                    />
+                  ) : selectedSearchField.type === 'select' ? (
+                    <Select value={searchTerm} onValueChange={setSearchTerm}>
+                      <SelectTrigger className="bg-discord-sidebar border-gray-600 text-discord-text">
+                        <SelectValue placeholder={`${selectedSearchField.name} 선택...`} />
+                      </SelectTrigger>
+                      <SelectContent className="bg-discord-sidebar border-gray-600">
+                        {getFieldOptions(selectedSearchField).map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : selectedSearchField.type === 'checkbox' ? (
+                    <Select value={searchTerm} onValueChange={setSearchTerm}>
+                      <SelectTrigger className="bg-discord-sidebar border-gray-600 text-discord-text">
+                        <SelectValue placeholder={`${selectedSearchField.name} 상태 선택...`} />
+                      </SelectTrigger>
+                      <SelectContent className="bg-discord-sidebar border-gray-600">
+                        <SelectItem value="true">체크됨</SelectItem>
+                        <SelectItem value="false">체크 안 됨</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      ref={searchInputRef}
+                      type={selectedSearchField.type === 'number' || selectedSearchField.type === 'percentage' ? 'number' : 'text'}
+                      placeholder={`${selectedSearchField.name} 검색...`}
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className={`${selectedSearchField.type === 'number' || selectedSearchField.type === 'percentage' ? 'pr-4' : 'pl-10'} bg-discord-sidebar border-gray-600 text-discord-text placeholder:text-gray-500`}
+                    />
+                  )}
+                </div>
                 {searchTerm && (
                   <button
                     onClick={() => setSearchTerm('')}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-discord-muted hover:text-discord-text"
+                    className="shrink-0 px-3 rounded-md border border-gray-600 bg-discord-sidebar text-discord-muted hover:bg-discord-hover hover:text-discord-text transition-colors"
+                    aria-label="검색어 지우기"
                   >
                     <X size={16} />
                   </button>
                 )}
               </div>
-              <Select value={searchField} onValueChange={setSearchField}>
+              <Select value={effectiveSearchField} onValueChange={setSearchField}>
                 <SelectTrigger className="w-48 bg-discord-sidebar border-gray-600 text-discord-text">
                   <Filter size={16} className="mr-2" />
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-discord-sidebar border-gray-600">
                   <SelectItem value="all">전체 필드</SelectItem>
-                  {selectedCategorySafe?.fields.filter(f => !f.hidden && f.type !== 'checkbox').map(field => (
+                  {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
                     <SelectItem key={field.id} value={field.id}>
                       {field.name}
                     </SelectItem>
