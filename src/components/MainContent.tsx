@@ -1,5 +1,5 @@
 ﻿import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, Upload, FileText, ChevronDown, ChevronUp, ArrowUpWideNarrow, ArrowDownWideNarrow, ArrowUp01, ArrowDown01, SortAsc, SortDesc, Check, RefreshCw, HelpCircle } from 'lucide-react';
+import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, Upload, FileText, ChevronDown, ChevronUp, ArrowUpWideNarrow, ArrowDownWideNarrow, ArrowUp01, ArrowDown01, SortAsc, SortDesc, Check, RefreshCw, HelpCircle, ChevronsUpDown } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { useLoadingStore } from '../hooks/useLoadingStore';
 import { DataRecord, FieldDefinition, Category } from '../types';
@@ -9,6 +9,8 @@ import { RecordModal } from './RecordModal';
 import { ViewRecordModal } from './ViewRecordModal';
 import { ViewerModal } from './ViewerModal';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from './ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { CategoryContent } from './CategoryContent';
 import { DatabaseViewer } from './DatabaseViewer';
 import { toast } from './ui/use-toast';
@@ -32,6 +34,7 @@ import { BulkAddModal } from './BulkAddModal';
 import { resolveFilePath } from '../lib/pathResolver';
 import { formatFieldDisplayValue } from '../lib/fieldFormat';
 import { DatePicker } from './ui/date-picker';
+import { cn } from '../lib/utils';
 
 // 해시태그 파싱 유틸리티 함수
 const parseHashtags = (text: string): { hashtags: string[]; plainText: string } => {
@@ -731,10 +734,12 @@ export const MainContent: React.FC = () => {
 
   // 검색어를 로컬 상태로 관리
   const [searchTerm, setSearchTerm] = useState('');
+  const [multiSearchTerms, setMultiSearchTerms] = useState<string[]>([]);
   const [sortField, setSortField] = useState<string>('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [searchField, setSearchField] = useState<string>('all');
   const [fileTypeFilter, setFileTypeFilter] = useState<string>('all'); // 'all', 'image', 'video', 'archive'
+  const [multiSelectSearchOpen, setMultiSelectSearchOpen] = useState(false);
 
   // 컬럼 너비 관리 (카테고리별로 저장)
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
@@ -871,6 +876,7 @@ export const MainContent: React.FC = () => {
   useEffect(() => {
     setSearchField('all');
     setSearchTerm(''); // Reset search term when category changes
+    setMultiSearchTerms([]);
     setCurrentPage(1); // Reset pagination when category changes
     setSortField(''); // Reset sort field when category changes
     setSortDirection('asc'); // Reset sort direction when category changes
@@ -879,10 +885,14 @@ export const MainContent: React.FC = () => {
     scrollTableToTop(); // Reset scroll position when category changes
   }, [selectedCategoryId, setCurrentPage]);
 
+  useEffect(() => {
+    setMultiSelectSearchOpen(false);
+  }, [selectedCategoryId, searchField]);
+
   // Reset pagination to page 1 when search term changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, searchField, fileTypeFilter, setCurrentPage]);
+  }, [searchTerm, multiSearchTerms, searchField, fileTypeFilter, setCurrentPage]);
 
   // Load related records when category changes
   useEffect(() => {
@@ -926,6 +936,51 @@ export const MainContent: React.FC = () => {
     [selectedCategorySafe, searchField]
   );
   const effectiveSearchField = (selectedSearchField || searchField === 'all') ? searchField : 'all';
+  const isMultiValueSearchField = Boolean(
+    selectedSearchField
+    && (selectedSearchField.type === 'select' || selectedSearchField.type === 'relation')
+    && isFieldMultiple(selectedSearchField)
+  );
+  const relationSearchOptions = useMemo(() => {
+    if (!selectedSearchField || selectedSearchField.type !== 'relation' || !selectedSearchField.relationCategoryId) {
+      return [];
+    }
+
+    const relatedCategory = categoriesSafe.find((cat) => cat.id === selectedSearchField.relationCategoryId);
+    if (!relatedCategory) {
+      return [];
+    }
+
+    const relatedRecords = getCategoryRecords(selectedSearchField.relationCategoryId);
+    const displayField = selectedSearchField.displayFieldId
+      ? relatedCategory.fields.find((field) => field.id === selectedSearchField.displayFieldId)
+      : relatedCategory.fields[0];
+
+    return Array.from(
+      new Set(
+        relatedRecords
+          .map((record) => String(record.data[displayField?.id] || '').trim())
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b, 'ko'));
+  }, [selectedSearchField, categoriesSafe, getCategoryRecords]);
+  const normalizedMultiSearchTerms = useMemo(
+    () => multiSearchTerms.map((term) => term.trim().toLowerCase()).filter(Boolean),
+    [multiSearchTerms]
+  );
+  const hasActiveSearch = isMultiValueSearchField
+    ? multiSearchTerms.length > 0
+    : searchTerm.trim().length > 0;
+  const multiSearchLabel = multiSearchTerms.length === 0
+    ? ''
+    : multiSearchTerms.join(', ');
+  const toggleMultiSearchTerm = useCallback((term: string) => {
+    setMultiSearchTerms((prev) => (
+      prev.includes(term)
+        ? prev.filter((item) => item !== term)
+        : [...prev, term]
+    ));
+  }, []);
 
   // 컬럼 리사이즈 핸들러
   const handleResizeStart = useCallback((columnId: string, e: React.MouseEvent) => {
@@ -984,7 +1039,7 @@ export const MainContent: React.FC = () => {
   const normalizedSearchTerm = searchTerm.trim().toLowerCase();
 
   const matchesSearchValue = useCallback((field: FieldDefinition, value: any) => {
-    if (!normalizedSearchTerm) return true;
+    if (!normalizedSearchTerm && normalizedMultiSearchTerms.length === 0) return true;
 
     if (field.type === 'number') {
       const numericSearch = Number(searchTerm);
@@ -997,6 +1052,13 @@ export const MainContent: React.FC = () => {
 
     if (field.type === 'select') {
       if (isFieldMultiple(field) && Array.isArray(value)) {
+        if (
+          effectiveSearchField === field.id
+          && isMultiValueSearchField
+          && normalizedMultiSearchTerms.length > 0
+        ) {
+          return value.some((item) => normalizedMultiSearchTerms.includes(String(item || '').toLowerCase()));
+        }
         return value.some((item) => String(item || '').toLowerCase() === normalizedSearchTerm);
       }
       return String(value || '').toLowerCase() === normalizedSearchTerm;
@@ -1023,7 +1085,7 @@ export const MainContent: React.FC = () => {
     }
 
     return String(value || '').toLowerCase().includes(normalizedSearchTerm);
-  }, [normalizedSearchTerm, searchTerm]);
+  }, [normalizedSearchTerm, normalizedMultiSearchTerms, searchTerm, effectiveSearchField, isMultiValueSearchField]);
 
   // 파일 확장자로 타입 확인 함수
   const getFileTypeFromPath = (filePath: string): 'image' | 'video' | 'archive' | 'other' => {
@@ -1051,7 +1113,7 @@ export const MainContent: React.FC = () => {
     }
     
     // 검색어가 없으면 파일 타입 필터만 적용한 결과 반환
-    if (!searchTerm.trim()) return filteredByFileType;
+    if (!hasActiveSearch) return filteredByFileType;
 
     return filteredByFileType.filter((record) => {
       if (effectiveSearchField === 'all') {
@@ -1104,6 +1166,13 @@ export const MainContent: React.FC = () => {
               const relatedRecord = relatedRecords.find(r => r.id === relatedId);
               if (!relatedRecord) return false;
               const displayValue = relatedRecord.data[displayField?.id];
+              if (
+                effectiveSearchField === field.id
+                && isMultiValueSearchField
+                && normalizedMultiSearchTerms.length > 0
+              ) {
+                return normalizedMultiSearchTerms.includes(String(displayValue || '').toLowerCase());
+              }
               return String(displayValue || '').toLowerCase().includes(normalizedSearchTerm);
             });
           } else {
@@ -1117,7 +1186,7 @@ export const MainContent: React.FC = () => {
         return matchesSearchValue(field, value);
       }
     });
-  }, [selectedCategoryId, searchTerm, effectiveSearchField, fileTypeFilter, currentRecordsSafe, selectedCategorySafe, categoriesSafe, getCategoryRecords, fileField, getRecordFieldValue, matchesSearchValue, normalizedSearchTerm]);
+  }, [selectedCategoryId, searchTerm, effectiveSearchField, fileTypeFilter, currentRecordsSafe, selectedCategorySafe, categoriesSafe, getCategoryRecords, fileField, getRecordFieldValue, matchesSearchValue, normalizedSearchTerm, hasActiveSearch, isMultiValueSearchField, normalizedMultiSearchTerms]);
 
   // Sorting
   const sortedRecords = useMemo(() => {
@@ -1749,7 +1818,7 @@ export const MainContent: React.FC = () => {
             <div className="flex gap-3">
               <div className="flex flex-1 gap-2">
                 <div className="relative flex-1">
-                  {(effectiveSearchField === 'all' || !selectedSearchField || ['text', 'longtext', 'relation', 'file'].includes(selectedSearchField.type)) && (
+                  {(effectiveSearchField === 'all' || !selectedSearchField || ['text', 'longtext', 'file'].includes(selectedSearchField.type)) && (
                     <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-discord-muted pointer-events-none" />
                   )}
                   {effectiveSearchField === 'all' || !selectedSearchField ? (
@@ -1767,6 +1836,194 @@ export const MainContent: React.FC = () => {
                       placeholder={`${selectedSearchField.name} 날짜 선택...`}
                       className="bg-discord-sidebar border-gray-600 text-discord-text placeholder:text-gray-500"
                     />
+                  ) : selectedSearchField.type === 'select' && isFieldMultiple(selectedSearchField) ? (
+                    <Popover open={multiSelectSearchOpen} onOpenChange={setMultiSelectSearchOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={multiSelectSearchOpen}
+                          className={cn(
+                            "w-full justify-between bg-discord-sidebar border-gray-600 text-discord-text hover:bg-discord-hover hover:text-discord-text",
+                            multiSearchTerms.length === 0 && "text-discord-muted"
+                          )}
+                        >
+                          <span className="truncate">
+                            {multiSearchLabel || `${selectedSearchField.name} 선택...`}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0 bg-discord-sidebar border-gray-600">
+                        <Command className="bg-discord-sidebar border-none">
+                          <CommandInput
+                            placeholder={`${selectedSearchField.name} 검색...`}
+                            className="h-9 bg-discord-sidebar text-discord-text border-b border-gray-600"
+                          />
+                          <CommandList className="max-h-[200px] overflow-y-auto">
+                            <CommandEmpty className="py-2 pl-3 text-sm text-discord-muted">
+                              항목을 찾을 수 없습니다.
+                            </CommandEmpty>
+                            <CommandGroup>
+                              <CommandItem
+                                value=""
+                                onSelect={() => {
+                                  setMultiSearchTerms([]);
+                                }}
+                                className="text-discord-text hover:bg-discord-hover"
+                              >
+                                <Check className={cn("mr-2 h-4 w-4", multiSearchTerms.length === 0 ? "opacity-100" : "opacity-0")} />
+                                선택 해제
+                              </CommandItem>
+                              {getFieldOptions(selectedSearchField).map((option) => (
+                                <CommandItem
+                                  key={option}
+                                  value={option}
+                                  onSelect={() => {
+                                    toggleMultiSearchTerm(option);
+                                  }}
+                                  className="text-discord-text hover:bg-discord-hover"
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      multiSearchTerms.includes(option) ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  {option}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  ) : selectedSearchField.type === 'relation' && isFieldMultiple(selectedSearchField) ? (
+                    <Popover open={multiSelectSearchOpen} onOpenChange={setMultiSelectSearchOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={multiSelectSearchOpen}
+                          className={cn(
+                            "w-full justify-between bg-discord-sidebar border-gray-600 text-discord-text hover:bg-discord-hover hover:text-discord-text",
+                            multiSearchTerms.length === 0 && "text-discord-muted"
+                          )}
+                        >
+                          <span className="truncate">
+                            {multiSearchLabel || `${selectedSearchField.name} 선택...`}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0 bg-discord-sidebar border-gray-600">
+                        <Command className="bg-discord-sidebar border-none">
+                          <CommandInput
+                            placeholder={`${selectedSearchField.name} 검색...`}
+                            className="h-9 bg-discord-sidebar text-discord-text border-b border-gray-600"
+                          />
+                          <CommandList className="max-h-[200px] overflow-y-auto">
+                            <CommandEmpty className="py-2 pl-3 text-sm text-discord-muted">
+                              항목을 찾을 수 없습니다.
+                            </CommandEmpty>
+                            <CommandGroup>
+                              <CommandItem
+                                value=""
+                                onSelect={() => {
+                                  setMultiSearchTerms([]);
+                                }}
+                                className="text-discord-text hover:bg-discord-hover"
+                              >
+                                <Check className={cn("mr-2 h-4 w-4", multiSearchTerms.length === 0 ? "opacity-100" : "opacity-0")} />
+                                선택 해제
+                              </CommandItem>
+                              {relationSearchOptions.map((option) => (
+                                <CommandItem
+                                  key={option}
+                                  value={option}
+                                  onSelect={() => {
+                                    toggleMultiSearchTerm(option);
+                                  }}
+                                  className="text-discord-text hover:bg-discord-hover"
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      multiSearchTerms.includes(option) ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  {option}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  ) : selectedSearchField.type === 'relation' ? (
+                    <Popover open={multiSelectSearchOpen} onOpenChange={setMultiSelectSearchOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={multiSelectSearchOpen}
+                          className={cn(
+                            "w-full justify-between bg-discord-sidebar border-gray-600 text-discord-text hover:bg-discord-hover hover:text-discord-text",
+                            !searchTerm && "text-discord-muted"
+                          )}
+                        >
+                          <span className="truncate">
+                            {searchTerm || `${selectedSearchField.name} 선택...`}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0 bg-discord-sidebar border-gray-600">
+                        <Command className="bg-discord-sidebar border-none">
+                          <CommandInput
+                            placeholder={`${selectedSearchField.name} 검색...`}
+                            className="h-9 bg-discord-sidebar text-discord-text border-b border-gray-600"
+                          />
+                          <CommandList className="max-h-[200px] overflow-y-auto">
+                            <CommandEmpty className="py-2 pl-3 text-sm text-discord-muted">
+                              항목을 찾을 수 없습니다.
+                            </CommandEmpty>
+                            <CommandGroup>
+                              <CommandItem
+                                value=""
+                                onSelect={() => {
+                                  setSearchTerm('');
+                                  setMultiSelectSearchOpen(false);
+                                }}
+                                className="text-discord-text hover:bg-discord-hover"
+                              >
+                                <Check className={cn("mr-2 h-4 w-4", !searchTerm ? "opacity-100" : "opacity-0")} />
+                                선택 해제
+                              </CommandItem>
+                              {relationSearchOptions.map((option) => (
+                                <CommandItem
+                                  key={option}
+                                  value={option}
+                                  onSelect={() => {
+                                    setSearchTerm(option);
+                                    setMultiSelectSearchOpen(false);
+                                  }}
+                                  className="text-discord-text hover:bg-discord-hover"
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      searchTerm === option ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  {option}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   ) : selectedSearchField.type === 'select' ? (
                     <Select value={searchTerm} onValueChange={setSearchTerm}>
                       <SelectTrigger className="bg-discord-sidebar border-gray-600 text-discord-text">
@@ -1801,9 +2058,15 @@ export const MainContent: React.FC = () => {
                     />
                   )}
                 </div>
-                {searchTerm && (
+                {(isMultiValueSearchField ? multiSearchTerms.length > 0 : Boolean(searchTerm)) && (
                   <button
-                    onClick={() => setSearchTerm('')}
+                    onClick={() => {
+                      if (isMultiValueSearchField) {
+                        setMultiSearchTerms([]);
+                      } else {
+                        setSearchTerm('');
+                      }
+                    }}
                     className="shrink-0 px-3 rounded-md border border-gray-600 bg-discord-sidebar text-discord-muted hover:bg-discord-hover hover:text-discord-text transition-colors"
                     aria-label="검색어 지우기"
                   >
@@ -1811,7 +2074,15 @@ export const MainContent: React.FC = () => {
                   </button>
                 )}
               </div>
-              <Select value={effectiveSearchField} onValueChange={setSearchField}>
+              <Select
+                value={effectiveSearchField}
+                onValueChange={(value) => {
+                  setSearchField(value);
+                  setSearchTerm('');
+                  setMultiSearchTerms([]);
+                  setMultiSelectSearchOpen(false);
+                }}
+              >
                 <SelectTrigger className="w-48 bg-discord-sidebar border-gray-600 text-discord-text">
                   <Filter size={16} className="mr-2" />
                   <SelectValue />
@@ -1849,12 +2120,12 @@ export const MainContent: React.FC = () => {
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center">
                   <h3 className="text-lg font-semibold text-discord-text mb-2">
-                    {searchTerm ? '검색 결과가 없습니다' : '등록된 항목이 없습니다'}
+                    {hasActiveSearch ? '검색 결과가 없습니다' : '등록된 항목이 없습니다'}
                   </h3>
                   <p className="text-discord-muted mb-4">
-                    {searchTerm ? '다른 검색어로 시도해보세요' : '첫 번째 항목을 추가해보세요'}
+                    {hasActiveSearch ? '다른 검색어로 시도해보세요' : '첫 번째 항목을 추가해보세요'}
                   </p>
-                  {!searchTerm && (
+                  {!hasActiveSearch && (
                     <Button
                       onClick={() => {
                         setEditingRecord(null);
