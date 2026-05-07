@@ -123,6 +123,8 @@ const getPercentageTextClassName = (percent: number) => (
   percent >= 100 ? 'text-discord-accent font-semibold' : 'text-discord-text font-semibold'
 );
 
+const TOOLTIP_CONTENT_CLASSNAME = "relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words";
+
 const copyOnCtrlClick = async (
   e: React.MouseEvent,
   text: string,
@@ -932,14 +934,17 @@ export const MainContent: React.FC = () => {
     }
   }, [selectedCategoryId, categoriesSafe, loadRecords, getCategoryRecords]);
 
-  useEffect(() => {
-    // 첫 카테고리 자동 선택 로직 제거 (대시보드가 기본 화면)
-    // 카테고리를 수동으로 선택할 때만 로드
-  }, []);
-
+  const visibleFields = useMemo(
+    () => selectedCategorySafe?.fields.filter((field) => !field.hidden) ?? [],
+    [selectedCategorySafe]
+  );
+  const selectedCategoryFieldMap = useMemo(
+    () => new Map((selectedCategorySafe?.fields ?? []).map((field) => [field.id, field])),
+    [selectedCategorySafe]
+  );
   const selectedSearchField = useMemo(
-    () => selectedCategorySafe?.fields.find((field) => field.id === searchField) ?? null,
-    [selectedCategorySafe, searchField]
+    () => selectedCategoryFieldMap.get(searchField) ?? null,
+    [selectedCategoryFieldMap, searchField]
   );
   const effectiveSearchField = (selectedSearchField || searchField === 'all') ? searchField : 'all';
   const isMultiValueSearchField = Boolean(
@@ -1044,12 +1049,20 @@ export const MainContent: React.FC = () => {
   const supportsGalleryView = Boolean(fileField);
   const showGalleryView = supportsGalleryView && recordListView === 'gallery';
   const galleryTitleField = useMemo(
-    () => selectedCategorySafe?.fields.find((field) => !field.hidden && field.type !== 'file') ?? null,
-    [selectedCategorySafe]
+    () => visibleFields.find((field) => field.type !== 'file') ?? null,
+    [visibleFields]
   );
   const galleryDetailFields = useMemo(
-    () => selectedCategorySafe?.fields.filter((field) => !field.hidden && field.type !== 'file' && field.id !== galleryTitleField?.id).slice(0, 4) ?? [],
-    [selectedCategorySafe, galleryTitleField]
+    () => visibleFields.filter((field) => field.type !== 'file' && field.id !== galleryTitleField?.id).slice(0, 4),
+    [visibleFields, galleryTitleField]
+  );
+  const hasIncomingReferences = useMemo(
+    () => Boolean(
+      selectedCategorySafe && categoriesSafe.some((cat) =>
+        cat.fields.some((field) => field.type === 'relation' && field.relationCategoryId === selectedCategorySafe.id)
+      )
+    ),
+    [categoriesSafe, selectedCategorySafe]
   );
 
   useEffect(() => {
@@ -1156,7 +1169,6 @@ export const MainContent: React.FC = () => {
 
     return filteredByFileType.filter((record) => {
       if (effectiveSearchField === 'all') {
-        const visibleFields = selectedCategorySafe?.fields.filter(f => !f.hidden) || [];
         return visibleFields.some((field) => {
           const value = getRecordFieldValue(record, field.id);
 
@@ -1188,7 +1200,7 @@ export const MainContent: React.FC = () => {
         });
       } else {
         // 특정 필드만 검색
-        const field = selectedCategorySafe?.fields.find(f => f.id === effectiveSearchField);
+        const field = selectedCategoryFieldMap.get(effectiveSearchField);
         if (!field) return false;
         const value = getRecordFieldValue(record, field.id);
 
@@ -1225,7 +1237,7 @@ export const MainContent: React.FC = () => {
         return matchesSearchValue(field, value);
       }
     });
-  }, [selectedCategoryId, searchTerm, effectiveSearchField, fileTypeFilter, currentRecordsSafe, selectedCategorySafe, categoriesSafe, getCategoryRecords, fileField, getRecordFieldValue, matchesSearchValue, normalizedSearchTerm, hasActiveSearch, isMultiValueSearchField, normalizedMultiSearchTerms]);
+  }, [selectedCategoryId, searchTerm, effectiveSearchField, fileTypeFilter, currentRecordsSafe, categoriesSafe, getCategoryRecords, fileField, getRecordFieldValue, matchesSearchValue, normalizedSearchTerm, hasActiveSearch, isMultiValueSearchField, normalizedMultiSearchTerms, visibleFields, selectedCategoryFieldMap]);
 
   // Sorting
   const sortedRecords = useMemo(() => {
@@ -1274,7 +1286,7 @@ export const MainContent: React.FC = () => {
       let bValue = getRecordFieldValue(b, sortField);
 
       // 관계형 필드인 경우 실제 데이터 값으로 정렬
-      const sortFieldDef = selectedCategorySafe?.fields.find(f => f.id === sortField);
+      const sortFieldDef = selectedCategoryFieldMap.get(sortField);
       if (sortFieldDef?.type === 'relation') {
         const relatedCategory = categoriesSafe.find(cat => cat.id === sortFieldDef.relationCategoryId);
         if (relatedCategory) {
@@ -1356,7 +1368,7 @@ export const MainContent: React.FC = () => {
       if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [customFilteredRecords, sortField, sortDirection, selectedCategorySafe?.id, getRecordReferenceCount, fileField, getRecordFieldValue, categoriesSafe, getCategoryRecords, selectedCategorySafe?.fields]);
+  }, [customFilteredRecords, sortField, sortDirection, selectedCategorySafe?.id, getRecordReferenceCount, fileField, getRecordFieldValue, categoriesSafe, getCategoryRecords, selectedCategoryFieldMap]);
 
   // Pagination
   const totalPages = Math.ceil(sortedRecords.length / itemsPerPage);
@@ -1536,8 +1548,6 @@ export const MainContent: React.FC = () => {
   const effectiveGalleryZoom = galleryZoom + 10;
   const galleryCardMinWidth = Math.round(220 * (effectiveGalleryZoom / 100));
   const galleryThumbnailHeight = Math.round(224 * (effectiveGalleryZoom / 100));
-  const tooltipContentClassName = "relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words";
-
   const showGalleryZoomFeedback = useCallback(() => {
     setGalleryZoomFeedbackVisible(true);
     if (galleryZoomFeedbackTimeoutRef.current !== null) {
@@ -2213,7 +2223,7 @@ export const MainContent: React.FC = () => {
                 </SelectTrigger>
                 <SelectContent className="bg-discord-sidebar border-gray-600">
                   <SelectItem value="all">전체 필드</SelectItem>
-                  {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
+                  {visibleFields.map(field => (
                     <SelectItem key={field.id} value={field.id}>
                       {field.name}
                     </SelectItem>
@@ -2254,7 +2264,7 @@ export const MainContent: React.FC = () => {
                           <TableProperties size={16} />
                         </button>
                       </TooltipTrigger>
-                      <TooltipContent side="top" align="center" className={tooltipContentClassName}>테이블 뷰</TooltipContent>
+                      <TooltipContent side="top" align="center" className={TOOLTIP_CONTENT_CLASSNAME}>테이블 뷰</TooltipContent>
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -2272,7 +2282,7 @@ export const MainContent: React.FC = () => {
                           <LayoutGrid size={16} />
                         </button>
                       </TooltipTrigger>
-                      <TooltipContent side="top" align="center" className={tooltipContentClassName}>갤러리 뷰</TooltipContent>
+                      <TooltipContent side="top" align="center" className={TOOLTIP_CONTENT_CLASSNAME}>갤러리 뷰</TooltipContent>
                     </Tooltip>
                   </div>
                 </TooltipProvider>
@@ -2447,7 +2457,7 @@ export const MainContent: React.FC = () => {
                               />
                             </th>
                           )}
-                          {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
+                          {visibleFields.map(field => (
                             <th
                               key={field.id}
                               className={
@@ -2479,11 +2489,7 @@ export const MainContent: React.FC = () => {
                               />
                             </th>
                           ))}
-                          {selectedCategorySafe && categoriesSafe.some(cat => 
-                            cat.fields.some(field => 
-                              field.type === 'relation' && field.relationCategoryId === selectedCategorySafe.id
-                            )
-                          ) && (
+                          {hasIncomingReferences && (
                             <th 
                               className="px-2 py-2 text-left text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover relative"
                               style={{ width: `${getColumnWidth('__refCount')}px` }}
@@ -2543,7 +2549,7 @@ export const MainContent: React.FC = () => {
                                     />
                                   </td>
                                 )}
-                                {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
+                                {visibleFields.map(field => (
                                   <td key={field.id} className={`${
                                     field.type === 'checkbox'
                                       ? 'px-2 py-3 text-xs text-discord-text text-left overflow-hidden'
@@ -2599,11 +2605,7 @@ export const MainContent: React.FC = () => {
                                         : formatFieldValue(field, getRecordFieldValue(record, field.id), categoriesSafe, getCategoryRecords, handleViewRelatedRecord, () => setSelectedRecordId(record.id))}
                                   </td>
                                 ))}
-                                {selectedCategorySafe && categoriesSafe.some(cat => 
-                                  cat.fields.some(field => 
-                                    field.type === 'relation' && field.relationCategoryId === selectedCategorySafe.id
-                                  )
-                                ) && (
+                                {hasIncomingReferences && selectedCategorySafe && (
                                   <td className="px-2 py-3 text-xs text-discord-text text-left overflow-hidden" style={{ width: `${getColumnWidth('__refCount')}px` }}>
                                     {getRecordReferenceCount(record.id, selectedCategorySafe.id)}
                                   </td>
