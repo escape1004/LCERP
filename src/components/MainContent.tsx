@@ -1,5 +1,5 @@
 ﻿import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, Upload, FileText, ChevronDown, ChevronUp, ArrowUpWideNarrow, ArrowDownWideNarrow, ArrowUp01, ArrowDown01, SortAsc, SortDesc, Check, RefreshCw, HelpCircle, ChevronsUpDown } from 'lucide-react';
+import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, Upload, FileText, ChevronDown, ChevronUp, ArrowUpWideNarrow, ArrowDownWideNarrow, ArrowUp01, ArrowDown01, SortAsc, SortDesc, Check, RefreshCw, HelpCircle, ChevronsUpDown, LayoutGrid, TableProperties } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { useLoadingStore } from '../hooks/useLoadingStore';
 import { DataRecord, FieldDefinition, Category } from '../types';
@@ -532,13 +532,15 @@ const ThumbnailCell: React.FC<{
   onThumbnailClick: (filePath: string) => void;
   thumbnailFit: 'cover' | 'contain';
   thumbnailOnly?: boolean;
+  sizeClassName?: string;
+  sizeStyle?: React.CSSProperties;
   onPreviewChange?: (preview: {
     dataUrl: string | null;
     filePath: string;
     missingFile: boolean;
     thumbnailFit: 'cover' | 'contain';
   } | null) => void;
-}> = ({ filePath, record, onThumbnailClick, thumbnailFit, thumbnailOnly = false, onPreviewChange }) => {
+}> = ({ filePath, record, onThumbnailClick, thumbnailFit, thumbnailOnly = false, sizeClassName = 'w-24 h-24', sizeStyle, onPreviewChange }) => {
   const [dataUrl, setDataUrl] = React.useState<string | null>(null);
   const [fileExists, setFileExists] = React.useState<boolean | null>(null);
   const [isHovered, setIsHovered] = React.useState(false);
@@ -647,7 +649,8 @@ const ThumbnailCell: React.FC<{
 
   const thumbnailBody = (
     <div
-      className="relative w-24 h-24"
+      className={cn("relative", sizeClassName)}
+      style={sizeStyle}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -656,7 +659,8 @@ const ThumbnailCell: React.FC<{
           <img 
             src={dataUrl} 
             alt="썸네일" 
-            className={`w-24 h-24 ${thumbnailFit === 'contain' ? 'object-contain bg-black' : 'object-cover'} rounded border border-gray-700 ${canOpen ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
+            className={`${sizeClassName} ${thumbnailFit === 'contain' ? 'object-contain bg-black' : 'object-cover'} rounded border border-gray-700 ${canOpen ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
+            style={sizeStyle}
             onClick={() => filePath && canOpen && onThumbnailClick(filePath)}
             onError={handleThumbnailImageError}
           />
@@ -673,13 +677,14 @@ const ThumbnailCell: React.FC<{
         </>
       ) : filePath ? (
         <div 
-          className={`w-24 h-24 bg-gray-800 flex items-center justify-center text-gray-500 border border-gray-700 rounded transition-colors ${canOpen ? 'cursor-pointer hover:bg-gray-700' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
+          className={`${sizeClassName} bg-gray-800 flex items-center justify-center text-gray-500 border border-gray-700 rounded transition-colors ${canOpen ? 'cursor-pointer hover:bg-gray-700' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
+          style={sizeStyle}
           onClick={() => canOpen && onThumbnailClick(filePath)}
         >
           <span className="text-2xl">{missingFile ? '?' : '🖼️'}</span>
         </div>
       ) : (
-        <div className="w-24 h-24 bg-gray-900 flex items-center justify-center text-gray-600 border border-gray-800 rounded">
+        <div className={`${sizeClassName} bg-gray-900 flex items-center justify-center text-gray-600 border border-gray-800 rounded`} style={sizeStyle}>
           <span className="text-2xl">-</span>
         </div>
       )}
@@ -740,6 +745,7 @@ export const MainContent: React.FC = () => {
   const [searchField, setSearchField] = useState<string>('all');
   const [fileTypeFilter, setFileTypeFilter] = useState<string>('all'); // 'all', 'image', 'video', 'archive'
   const [multiSelectSearchOpen, setMultiSelectSearchOpen] = useState(false);
+  const [recordListView, setRecordListView] = useState<'table' | 'gallery'>('table');
 
   // 컬럼 너비 관리 (카테고리별로 저장)
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
@@ -1035,6 +1041,39 @@ export const MainContent: React.FC = () => {
 
   // 파일 필드 존재 여부
   const fileField = selectedCategorySafe?.fields.find(f => f.type === 'file');
+  const supportsGalleryView = Boolean(fileField);
+  const showGalleryView = supportsGalleryView && recordListView === 'gallery';
+  const galleryTitleField = useMemo(
+    () => selectedCategorySafe?.fields.find((field) => !field.hidden && field.type !== 'file') ?? null,
+    [selectedCategorySafe]
+  );
+  const galleryDetailFields = useMemo(
+    () => selectedCategorySafe?.fields.filter((field) => !field.hidden && field.type !== 'file' && field.id !== galleryTitleField?.id).slice(0, 4) ?? [],
+    [selectedCategorySafe, galleryTitleField]
+  );
+
+  useEffect(() => {
+    if (!fileField) {
+      setRecordListView('table');
+    }
+  }, [fileField]);
+
+  useEffect(() => {
+    if (!selectedCategoryId || !supportsGalleryView) return;
+
+    const savedView = localStorage.getItem(`recordListView_${selectedCategoryId}`);
+    if (savedView === 'gallery' || savedView === 'table') {
+      setRecordListView(savedView);
+      return;
+    }
+
+    setRecordListView('table');
+  }, [selectedCategoryId, supportsGalleryView]);
+
+  useEffect(() => {
+    if (!selectedCategoryId || !supportsGalleryView) return;
+    localStorage.setItem(`recordListView_${selectedCategoryId}`, recordListView);
+  }, [selectedCategoryId, supportsGalleryView, recordListView]);
 
   const normalizedSearchTerm = searchTerm.trim().toLowerCase();
 
@@ -1414,6 +1453,9 @@ export const MainContent: React.FC = () => {
     thumbnailFit: 'cover' | 'contain';
   } | null>(null);
   const [thumbnailPreviewScale, setThumbnailPreviewScale] = useState(100);
+  const [galleryZoom, setGalleryZoom] = useState(100);
+  const [galleryZoomFeedbackVisible, setGalleryZoomFeedbackVisible] = useState(false);
+  const galleryZoomFeedbackTimeoutRef = useRef<number | null>(null);
 
   // 뷰어 모달 상태
   const [viewerModalOpen, setViewerModalOpen] = useState(false);
@@ -1459,8 +1501,64 @@ export const MainContent: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (!selectedCategoryId || !supportsGalleryView) return;
+
+    const nextKey = `galleryZoomV2_${selectedCategoryId}`;
+    const savedZoomV2 = Number(localStorage.getItem(nextKey));
+    if (Number.isFinite(savedZoomV2) && savedZoomV2 >= 50 && savedZoomV2 <= 200) {
+      setGalleryZoom(savedZoomV2);
+      return;
+    }
+
+    const legacyZoom = Number(localStorage.getItem(`galleryZoom_${selectedCategoryId}`));
+    if (Number.isFinite(legacyZoom) && legacyZoom >= 70 && legacyZoom <= 160) {
+      setGalleryZoom(Math.min(200, Math.max(50, legacyZoom - 10)));
+      return;
+    }
+
+    setGalleryZoom(100);
+  }, [selectedCategoryId, supportsGalleryView]);
+
+  useEffect(() => {
+    if (!selectedCategoryId || !supportsGalleryView) return;
+    localStorage.setItem(`galleryZoomV2_${selectedCategoryId}`, String(galleryZoom));
+  }, [selectedCategoryId, supportsGalleryView, galleryZoom]);
+
+  useEffect(() => {
+    if (!showGalleryView) {
+      setThumbnailPreview(null);
+    }
+  }, [showGalleryView]);
+
   const previewWidth = Math.round(320 * (thumbnailPreviewScale / 100));
   const previewHeight = Math.round(220 * (thumbnailPreviewScale / 100));
+  const effectiveGalleryZoom = galleryZoom + 10;
+  const galleryCardMinWidth = Math.round(220 * (effectiveGalleryZoom / 100));
+  const galleryThumbnailHeight = Math.round(224 * (effectiveGalleryZoom / 100));
+  const tooltipContentClassName = "relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words";
+
+  const showGalleryZoomFeedback = useCallback(() => {
+    setGalleryZoomFeedbackVisible(true);
+    if (galleryZoomFeedbackTimeoutRef.current !== null) {
+      window.clearTimeout(galleryZoomFeedbackTimeoutRef.current);
+    }
+    galleryZoomFeedbackTimeoutRef.current = window.setTimeout(() => {
+      setGalleryZoomFeedbackVisible(false);
+      galleryZoomFeedbackTimeoutRef.current = null;
+    }, 900);
+  }, []);
+
+  const handleGalleryWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+    if (!event.ctrlKey || !showGalleryView) return;
+
+    event.preventDefault();
+    setGalleryZoom((prev) => {
+      const next = Math.min(200, Math.max(50, prev + (event.deltaY < 0 ? 10 : -10)));
+      return next;
+    });
+    showGalleryZoomFeedback();
+  }, [showGalleryView, showGalleryZoomFeedback]);
 
   // Ctrl+좌우 방향키 페이지 이동 핸들러
   useEffect(() => {
@@ -1545,37 +1643,6 @@ export const MainContent: React.FC = () => {
     }
   }, [selectedRecordId, sortedRecords]);
 
-  // Ctrl+마우스 휠 페이지 이동 핸들러
-  useEffect(() => {
-    const handleWheel = (e: WheelEvent) => {
-      // 모달이 열려있으면 단축키 비활성화
-      if (isRecordModalOpen || isViewModalOpen || viewerModalOpen || isConfirmDialogOpen || isAlertDialogOpen) {
-        return;
-      }
-
-      if (e.ctrlKey && selectedCategoryId) {
-        e.preventDefault();
-        if (e.deltaY > 0) {
-          // 아래로 스크롤 (다음 페이지)
-          if (currentPage < totalPages) {
-            setCurrentPage(currentPage + 1);
-            scrollTableToTop();
-          }
-        } else if (e.deltaY < 0) {
-          // 위로 스크롤 (이전 페이지)
-          if (currentPage > 1) {
-            setCurrentPage(currentPage - 1);
-            scrollTableToTop();
-          }
-        }
-      }
-    };
-    document.addEventListener('wheel', handleWheel, { passive: false });
-    return () => {
-      document.removeEventListener('wheel', handleWheel);
-    };
-  }, [selectedCategoryId, currentPage, totalPages, isRecordModalOpen, isViewModalOpen, viewerModalOpen, isConfirmDialogOpen, isAlertDialogOpen]);
-
   const handleSort = (fieldId: string) => {
     if (sortField === fieldId) {
       if (sortDirection === 'asc') {
@@ -1612,6 +1679,63 @@ export const MainContent: React.FC = () => {
     setRecordToDelete(record);
     setIsConfirmDialogOpen(true);
   };
+
+  const getGalleryFieldText = useCallback((record: DataRecord, field: FieldDefinition): string => {
+    const value = getRecordFieldValue(record, field.id);
+
+    if (value === null || value === undefined || value === '' || value === '-') {
+      return '-';
+    }
+
+    if (Array.isArray(value) && value.length === 0) {
+      return '-';
+    }
+
+    if (field.type === 'text' || field.type === 'longtext') {
+      return String(formatFieldDisplayValue(field, value));
+    }
+
+    if (field.type === 'percentage') {
+      const percentage = getPercentageMeta(field, value);
+      return `${percentage.value} / ${percentage.max} (${percentage.percent}%)`;
+    }
+
+    if (field.type === 'checkbox') {
+      return Boolean(value) ? '체크됨' : '체크 안 됨';
+    }
+
+    if (field.type === 'relation' && field.relationCategoryId) {
+      const relatedCategory = categoriesSafe.find((category) => category.id === field.relationCategoryId);
+      if (!relatedCategory) {
+        return String(value);
+      }
+
+      const relatedRecords = getCategoryRecords(field.relationCategoryId);
+      const displayField = field.displayFieldId
+        ? relatedCategory.fields.find((relatedField) => relatedField.id === field.displayFieldId)
+        : relatedCategory.fields[0];
+
+      if (Array.isArray(value)) {
+        const labels = value
+          .map((relatedId) => {
+            const relatedRecord = relatedRecords.find((item) => item.id === relatedId);
+            return relatedRecord ? String(relatedRecord.data[displayField?.id] || relatedId) : String(relatedId);
+          })
+          .filter(Boolean);
+
+        return labels.length > 0 ? labels.join(', ') : '-';
+      }
+
+      const relatedRecord = relatedRecords.find((item) => item.id === value);
+      return relatedRecord ? String(relatedRecord.data[displayField?.id] || value) : String(value);
+    }
+
+    if (field.type === 'select' && Array.isArray(value)) {
+      return value.map((item) => String(item)).join(', ');
+    }
+
+    return String(value);
+  }, [categoriesSafe, getCategoryRecords, getRecordFieldValue]);
 
   const confirmDelete = () => {
     if (recordToDelete) {
@@ -2111,6 +2235,48 @@ export const MainContent: React.FC = () => {
                   </SelectContent>
                 </Select>
               )}
+              {supportsGalleryView && (
+                <TooltipProvider>
+                  <div className="flex h-10 items-center border border-gray-600 bg-discord-sidebar shadow-sm">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => setRecordListView('table')}
+                          aria-label="테이블 뷰"
+                          className={cn(
+                            "flex h-full w-10 items-center justify-center border-r border-gray-600 transition-colors",
+                            recordListView === 'table'
+                              ? "bg-discord-accent text-white"
+                              : "text-discord-muted hover:bg-discord-hover hover:text-discord-text"
+                          )}
+                        >
+                          <TableProperties size={16} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" align="center" className={tooltipContentClassName}>테이블 뷰</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => setRecordListView('gallery')}
+                          aria-label="갤러리 뷰"
+                          className={cn(
+                            "flex h-full w-10 items-center justify-center transition-colors",
+                            recordListView === 'gallery'
+                              ? "bg-discord-accent text-white"
+                              : "text-discord-muted hover:bg-discord-hover hover:text-discord-text"
+                          )}
+                        >
+                          <LayoutGrid size={16} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" align="center" className={tooltipContentClassName}>갤러리 뷰</TooltipContent>
+                    </Tooltip>
+                  </div>
+                </TooltipProvider>
+              )}
             </div>
           </div>
 
@@ -2141,240 +2307,346 @@ export const MainContent: React.FC = () => {
               </div>
             ) : (
               <div className="flex-1 flex flex-col min-h-0">
-                {/* Table Container */}
-                <div ref={tableContainerRef} className="flex-1 min-h-0 overflow-auto discord-scrollbar">
-                  <table ref={tableRef} className="w-full table-fixed">
-                    <thead className="sticky top-0 z-10 bg-discord-sidebar border-b border-gray-700">
-                      <tr>
-                        {fileField && (
-                          <th 
-                            className="px-2 py-2 text-left text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover relative"
-                            style={{ width: `${getColumnWidth('__thumbnail')}px` }}
-                            onClick={() => handleSort('__thumbnail')}
-                          >
-                            <div className="flex items-center gap-1 select-none">
-                              썸네일
-                              {sortField === '__thumbnail' && (
-                                sortDirection === 'asc' ? (
-                                  <SortAsc size={16} className="text-white" />
-                                ) : (
-                                  <SortDesc size={16} className="text-white" />
-                                )
-                              )}
-                            </div>
-                            <div
-                              className={`absolute top-0 right-0 w-2 h-full cursor-col-resize transition-colors ${
-                                isResizing === '__thumbnail' 
-                                  ? 'bg-discord-accent' 
-                                  : 'bg-transparent hover:bg-discord-accent'
-                              }`}
-                              style={{ right: '0px' }}
-                              onMouseDown={(e) => handleResizeStart('__thumbnail', e)}
-                            />
-                          </th>
-                        )}
-                        {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
-                          <th
-                            key={field.id}
-                            className={
-                              field.type === 'checkbox'
-                                ? 'px-2 py-2 text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover text-left truncate relative'
-                                : 'px-2 py-2 text-left text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover relative'
-                            }
-                            style={{ width: `${getColumnWidth(field.id)}px` }}
-                            onClick={() => handleSort(field.id)}
-                          >
-                            <div className="flex items-center gap-1 select-none">
-                              {field.name}
-                              {sortField === field.id && (
-                                sortDirection === 'asc' ? (
-                                  <SortAsc size={16} className="text-white" />
-                                ) : (
-                                  <SortDesc size={16} className="text-white" />
-                                )
-                              )}
-                            </div>
-                            <div
-                              className={`absolute top-0 right-0 w-2 h-full cursor-col-resize transition-colors ${
-                                isResizing === field.id 
-                                  ? 'bg-discord-accent' 
-                                  : 'bg-transparent hover:bg-discord-accent'
-                              }`}
-                              style={{ right: '0px' }}
-                              onMouseDown={(e) => handleResizeStart(field.id, e)}
-                            />
-                          </th>
-                        ))}
-                        {/* 참조되는 카테고리인 경우에만 참조 횟수 컬럼 표시 */}
-                        {selectedCategorySafe && categoriesSafe.some(cat => 
-                          cat.fields.some(field => 
-                            field.type === 'relation' && field.relationCategoryId === selectedCategorySafe.id
-                          )
-                        ) && (
-                          <th 
-                            className="px-2 py-2 text-left text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover relative"
-                            style={{ width: `${getColumnWidth('__refCount')}px` }}
-                            onClick={() => handleSort('__refCount')}
-                          >
-                            <div className="flex items-center gap-1 select-none">
-                              참조 횟수
-                              {sortField === '__refCount' && (
-                                sortDirection === 'asc' ? (
-                                  <SortAsc size={16} className="text-white" />
-                                ) : (
-                                  <SortDesc size={16} className="text-white" />
-                                )
-                              )}
-                            </div>
-                            <div
-                              className={`absolute top-0 right-0 w-2 h-full cursor-col-resize transition-colors ${
-                                isResizing === '__refCount' 
-                                  ? 'bg-discord-accent' 
-                                  : 'bg-transparent hover:bg-discord-accent'
-                              }`}
-                              style={{ right: '0px' }}
-                              onMouseDown={(e) => handleResizeStart('__refCount', e)}
-                            />
-                          </th>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paginatedRecords.map((record) => (
-                        <ContextMenu key={record.id}>
-                          <ContextMenuTrigger asChild>
-                            <tr
-                              data-record-id={record.id}
-                              className={`${selectedRecordId === record.id ? 'bg-discord-hover' : 'hover:bg-discord-hover'} group cursor-default`}
-                              onClick={() => setSelectedRecordId(record.id)}
-                              onDoubleClick={() => {
-                                setSelectedRecordId(record.id);
-                                handleView(record);
-                              }}
-                            >
-                              {fileField && (
-                                <td className="px-2 py-3 text-xs text-discord-text overflow-hidden relative" style={{ width: `${getColumnWidth('__thumbnail')}px` }}>
+                {showGalleryView ? (
+                  <div
+                    ref={tableContainerRef}
+                    className="relative flex-1 min-h-0 overflow-auto discord-scrollbar px-6 py-6"
+                    onWheel={handleGalleryWheel}
+                  >
+                    {galleryZoomFeedbackVisible && (
+                      <div className="pointer-events-none absolute bottom-6 right-6 z-20">
+                        <div className="rounded-md border border-gray-600 bg-discord-sidebar/95 px-3 py-1.5 text-xs font-medium text-discord-text shadow-lg backdrop-blur-sm">
+                          갤러리 크기 {galleryZoom}%
+                        </div>
+                      </div>
+                    )}
+                    <div
+                      className="grid gap-3"
+                      style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${galleryCardMinWidth}px, 1fr))` }}
+                    >
+                      {paginatedRecords.map((record) => {
+                        const title = galleryTitleField ? getGalleryFieldText(record, galleryTitleField) : record.id;
+                        return (
+                          <ContextMenu key={record.id}>
+                            <ContextMenuTrigger asChild>
+                              <article
+                                data-record-id={record.id}
+                                className={cn(
+                                  "group overflow-hidden rounded-xl border bg-discord-sidebar/70 shadow-sm transition-colors",
+                                  selectedRecordId === record.id
+                                    ? "border-discord-accent bg-discord-hover"
+                                    : "border-gray-700 hover:border-gray-500 hover:bg-discord-hover"
+                                )}
+                                onClick={() => setSelectedRecordId(record.id)}
+                                onDoubleClick={() => {
+                                  setSelectedRecordId(record.id);
+                                  handleView(record);
+                                }}
+                              >
+                                <div className="border-b border-gray-800 bg-black/20 p-3">
                                   <ThumbnailCell
-                                    filePath={resolveFilePath(record.data[fileField.id], fileField) || undefined}
+                                    filePath={resolveFilePath(record.data[fileField?.id || ''], fileField) || undefined}
                                     record={record}
                                     thumbnailFit={listThumbnailFit}
-                                    thumbnailOnly={fileField.thumbnailOnly}
-                                    onPreviewChange={setThumbnailPreview}
+                                    thumbnailOnly={fileField?.thumbnailOnly}
+                                    sizeClassName="w-full"
+                                    sizeStyle={{ height: `${galleryThumbnailHeight}px` }}
+                                    onPreviewChange={undefined}
                                     onThumbnailClick={(filePath) => {
-                                      // 즉시 모달 열기 (파일 타입 확인은 모달 내에서 처리)
                                       setViewerFilePath(filePath);
-                                      setViewerFileType(null); // null로 설정하여 모달 내에서 타입 확인
+                                      setViewerFileType(null);
                                       setViewerCategoryId(selectedCategorySafe?.id || '');
                                       setViewerRecordId(record.id);
                                       setViewerModalOpen(true);
                                     }}
                                   />
-                                </td>
-                              )}
-                              {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
-                                <td key={field.id} className={`${
-                                  field.type === 'checkbox'
-                                    ? 'px-2 py-3 text-xs text-discord-text text-left overflow-hidden'
-                                    : field.type === 'percentage'
-                                      ? 'px-2 py-2 text-xs text-discord-text'
-                                    : 'px-2 py-3 text-xs text-discord-text overflow-hidden'
-                                }`} style={{ width: `${getColumnWidth(field.id)}px` }}>
-                                  {field.type === 'file' && field.thumbnailOnly
-                                    ? ''
-                                    : field.type === 'percentage'
-                                      ? (() => {
-                                          const currentValue = getRecordFieldValue(record, field.id);
-                                          const percentage = getPercentageMeta(field, currentValue);
-                                          const rawValue = currentValue && typeof currentValue === 'object' ? percentage.value : 0;
-                                          const rawMax = currentValue && typeof currentValue === 'object' ? percentage.max : 0;
-                                          return (
-                                            <div className="flex items-center gap-2">
-                                              <Input
-                                                type="number"
-                                                min={0}
-                                                step="0.01"
-                                                value={rawValue}
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setSelectedRecordId(record.id);
-                                                }}
-                                                onFocus={() => setSelectedRecordId(record.id)}
-                                                onChange={(e) => {
-                                                  void updateInlinePercentageValue(record, field, e.target.value);
-                                                }}
-                                                className="h-8 min-w-0 bg-discord-sidebar border-gray-600 text-discord-text"
-                                              />
-                                              <span className="text-discord-muted">/</span>
-                                              <Input
-                                                type="number"
-                                                min={0}
-                                                step="0.01"
-                                                value={rawMax}
-                                                readOnly
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setSelectedRecordId(record.id);
-                                                }}
-                                                onFocus={() => setSelectedRecordId(record.id)}
-                                                className="h-8 min-w-0 bg-discord-sidebar/70 border-gray-600 text-discord-muted cursor-default"
-                                              />
-                                              <span className={`min-w-[42px] text-right ${getPercentageTextClassName(percentage.percent)}`}>
-                                                {percentage.percent}%
-                                              </span>
-                                            </div>
-                                          );
-                                        })()
-                                      : formatFieldValue(field, getRecordFieldValue(record, field.id), categoriesSafe, getCategoryRecords, handleViewRelatedRecord, () => setSelectedRecordId(record.id))}
-                                </td>
-                              ))}
-                              {/* 참조되는 카테고리인 경우에만 참조 횟수 표시 */}
-                              {selectedCategorySafe && categoriesSafe.some(cat => 
-                                cat.fields.some(field => 
-                                  field.type === 'relation' && field.relationCategoryId === selectedCategorySafe.id
-                                )
-                              ) && (
-                                <td className="px-2 py-3 text-xs text-discord-text text-left overflow-hidden" style={{ width: `${getColumnWidth('__refCount')}px` }}>
-                                  {getRecordReferenceCount(record.id, selectedCategorySafe.id)}
-                                </td>
-                              )}
-                            </tr>
-                          </ContextMenuTrigger>
-                          <ContextMenuContent>
-                            <ContextMenuItem
-                              className="hidden"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedRecordId(record.id);
-                                handleView(record);
-                              }}
+                                </div>
+                                <div className="space-y-3 p-4">
+                                  <div>
+                                    <h3 className="truncate text-sm font-semibold text-discord-text">
+                                      {title}
+                                    </h3>
+                                  </div>
+                                  <div className="space-y-2">
+                                    {galleryDetailFields.map((field) => (
+                                      <div key={field.id} className="flex items-start justify-between gap-3 text-xs">
+                                        <span className="shrink-0 text-discord-muted">{field.name}</span>
+                                        <span className="line-clamp-2 text-right text-discord-text">
+                                          {getGalleryFieldText(record, field)}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </article>
+                            </ContextMenuTrigger>
+                            <ContextMenuContent>
+                              <ContextMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedRecordId(record.id);
+                                  handleView(record);
+                                }}
+                              >
+                                상세
+                              </ContextMenuItem>
+                              <ContextMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedRecordId(record.id);
+                                  handleEdit(record);
+                                }}
+                              >
+                                수정
+                              </ContextMenuItem>
+                              <ContextMenuItem
+                                className="text-discord-danger focus:text-discord-danger"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedRecordId(record.id);
+                                  handleDelete(record);
+                                }}
+                              >
+                                삭제
+                              </ContextMenuItem>
+                            </ContextMenuContent>
+                          </ContextMenu>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div ref={tableContainerRef} className="flex-1 min-h-0 overflow-auto discord-scrollbar">
+                    <table ref={tableRef} className="w-full table-fixed">
+                      <thead className="sticky top-0 z-10 bg-discord-sidebar border-b border-gray-700">
+                        <tr>
+                          {fileField && (
+                            <th 
+                              className="px-2 py-2 text-left text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover relative"
+                              style={{ width: `${getColumnWidth('__thumbnail')}px` }}
+                              onClick={() => handleSort('__thumbnail')}
                             >
-                              상세
-                            </ContextMenuItem>
-                            <ContextMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedRecordId(record.id);
-                                handleEdit(record);
-                              }}
+                              <div className="flex items-center gap-1 select-none">
+                                썸네일
+                                {sortField === '__thumbnail' && (
+                                  sortDirection === 'asc' ? (
+                                    <SortAsc size={16} className="text-white" />
+                                  ) : (
+                                    <SortDesc size={16} className="text-white" />
+                                  )
+                                )}
+                              </div>
+                              <div
+                                className={`absolute top-0 right-0 w-2 h-full cursor-col-resize transition-colors ${
+                                  isResizing === '__thumbnail' 
+                                    ? 'bg-discord-accent' 
+                                    : 'bg-transparent hover:bg-discord-accent'
+                                }`}
+                                style={{ right: '0px' }}
+                                onMouseDown={(e) => handleResizeStart('__thumbnail', e)}
+                              />
+                            </th>
+                          )}
+                          {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
+                            <th
+                              key={field.id}
+                              className={
+                                field.type === 'checkbox'
+                                  ? 'px-2 py-2 text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover text-left truncate relative'
+                                  : 'px-2 py-2 text-left text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover relative'
+                              }
+                              style={{ width: `${getColumnWidth(field.id)}px` }}
+                              onClick={() => handleSort(field.id)}
                             >
-                              수정
-                            </ContextMenuItem>
-                            <ContextMenuItem
-                              className="text-discord-danger focus:text-discord-danger"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedRecordId(record.id);
-                                handleDelete(record);
-                              }}
+                              <div className="flex items-center gap-1 select-none">
+                                {field.name}
+                                {sortField === field.id && (
+                                  sortDirection === 'asc' ? (
+                                    <SortAsc size={16} className="text-white" />
+                                  ) : (
+                                    <SortDesc size={16} className="text-white" />
+                                  )
+                                )}
+                              </div>
+                              <div
+                                className={`absolute top-0 right-0 w-2 h-full cursor-col-resize transition-colors ${
+                                  isResizing === field.id 
+                                    ? 'bg-discord-accent' 
+                                    : 'bg-transparent hover:bg-discord-accent'
+                                }`}
+                                style={{ right: '0px' }}
+                                onMouseDown={(e) => handleResizeStart(field.id, e)}
+                              />
+                            </th>
+                          ))}
+                          {selectedCategorySafe && categoriesSafe.some(cat => 
+                            cat.fields.some(field => 
+                              field.type === 'relation' && field.relationCategoryId === selectedCategorySafe.id
+                            )
+                          ) && (
+                            <th 
+                              className="px-2 py-2 text-left text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover relative"
+                              style={{ width: `${getColumnWidth('__refCount')}px` }}
+                              onClick={() => handleSort('__refCount')}
                             >
-                              삭제
-                            </ContextMenuItem>
-                          </ContextMenuContent>
-                        </ContextMenu>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                              <div className="flex items-center gap-1 select-none">
+                                참조 횟수
+                                {sortField === '__refCount' && (
+                                  sortDirection === 'asc' ? (
+                                    <SortAsc size={16} className="text-white" />
+                                  ) : (
+                                    <SortDesc size={16} className="text-white" />
+                                  )
+                                )}
+                              </div>
+                              <div
+                                className={`absolute top-0 right-0 w-2 h-full cursor-col-resize transition-colors ${
+                                  isResizing === '__refCount' 
+                                    ? 'bg-discord-accent' 
+                                    : 'bg-transparent hover:bg-discord-accent'
+                                }`}
+                                style={{ right: '0px' }}
+                                onMouseDown={(e) => handleResizeStart('__refCount', e)}
+                              />
+                            </th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginatedRecords.map((record) => (
+                          <ContextMenu key={record.id}>
+                            <ContextMenuTrigger asChild>
+                              <tr
+                                data-record-id={record.id}
+                                className={`${selectedRecordId === record.id ? 'bg-discord-hover' : 'hover:bg-discord-hover'} group cursor-default`}
+                                onClick={() => setSelectedRecordId(record.id)}
+                                onDoubleClick={() => {
+                                  setSelectedRecordId(record.id);
+                                  handleView(record);
+                                }}
+                              >
+                                {fileField && (
+                                  <td className="px-2 py-3 text-xs text-discord-text overflow-hidden relative" style={{ width: `${getColumnWidth('__thumbnail')}px` }}>
+                                    <ThumbnailCell
+                                      filePath={resolveFilePath(record.data[fileField.id], fileField) || undefined}
+                                      record={record}
+                                      thumbnailFit={listThumbnailFit}
+                                      thumbnailOnly={fileField.thumbnailOnly}
+                                      onPreviewChange={setThumbnailPreview}
+                                      onThumbnailClick={(filePath) => {
+                                        setViewerFilePath(filePath);
+                                        setViewerFileType(null);
+                                        setViewerCategoryId(selectedCategorySafe?.id || '');
+                                        setViewerRecordId(record.id);
+                                        setViewerModalOpen(true);
+                                      }}
+                                    />
+                                  </td>
+                                )}
+                                {selectedCategorySafe?.fields.filter(f => !f.hidden).map(field => (
+                                  <td key={field.id} className={`${
+                                    field.type === 'checkbox'
+                                      ? 'px-2 py-3 text-xs text-discord-text text-left overflow-hidden'
+                                      : field.type === 'percentage'
+                                        ? 'px-2 py-2 text-xs text-discord-text'
+                                      : 'px-2 py-3 text-xs text-discord-text overflow-hidden'
+                                  }`} style={{ width: `${getColumnWidth(field.id)}px` }}>
+                                    {field.type === 'file' && field.thumbnailOnly
+                                      ? ''
+                                      : field.type === 'percentage'
+                                        ? (() => {
+                                            const currentValue = getRecordFieldValue(record, field.id);
+                                            const percentage = getPercentageMeta(field, currentValue);
+                                            const rawValue = currentValue && typeof currentValue === 'object' ? percentage.value : 0;
+                                            const rawMax = currentValue && typeof currentValue === 'object' ? percentage.max : 0;
+                                            return (
+                                              <div className="flex items-center gap-2">
+                                                <Input
+                                                  type="number"
+                                                  min={0}
+                                                  step="0.01"
+                                                  value={rawValue}
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedRecordId(record.id);
+                                                  }}
+                                                  onFocus={() => setSelectedRecordId(record.id)}
+                                                  onChange={(e) => {
+                                                    void updateInlinePercentageValue(record, field, e.target.value);
+                                                  }}
+                                                  className="h-8 min-w-0 bg-discord-sidebar border-gray-600 text-discord-text"
+                                                />
+                                                <span className="text-discord-muted">/</span>
+                                                <Input
+                                                  type="number"
+                                                  min={0}
+                                                  step="0.01"
+                                                  value={rawMax}
+                                                  readOnly
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedRecordId(record.id);
+                                                  }}
+                                                  onFocus={() => setSelectedRecordId(record.id)}
+                                                  className="h-8 min-w-0 bg-discord-sidebar/70 border-gray-600 text-discord-muted cursor-default"
+                                                />
+                                                <span className={`min-w-[42px] text-right ${getPercentageTextClassName(percentage.percent)}`}>
+                                                  {percentage.percent}%
+                                                </span>
+                                              </div>
+                                            );
+                                          })()
+                                        : formatFieldValue(field, getRecordFieldValue(record, field.id), categoriesSafe, getCategoryRecords, handleViewRelatedRecord, () => setSelectedRecordId(record.id))}
+                                  </td>
+                                ))}
+                                {selectedCategorySafe && categoriesSafe.some(cat => 
+                                  cat.fields.some(field => 
+                                    field.type === 'relation' && field.relationCategoryId === selectedCategorySafe.id
+                                  )
+                                ) && (
+                                  <td className="px-2 py-3 text-xs text-discord-text text-left overflow-hidden" style={{ width: `${getColumnWidth('__refCount')}px` }}>
+                                    {getRecordReferenceCount(record.id, selectedCategorySafe.id)}
+                                  </td>
+                                )}
+                              </tr>
+                            </ContextMenuTrigger>
+                            <ContextMenuContent>
+                              <ContextMenuItem
+                                className="hidden"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedRecordId(record.id);
+                                  handleView(record);
+                                }}
+                              >
+                                상세
+                              </ContextMenuItem>
+                              <ContextMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedRecordId(record.id);
+                                  handleEdit(record);
+                                }}
+                              >
+                                수정
+                              </ContextMenuItem>
+                              <ContextMenuItem
+                                className="text-discord-danger focus:text-discord-danger"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedRecordId(record.id);
+                                  handleDelete(record);
+                                }}
+                              >
+                                삭제
+                              </ContextMenuItem>
+                            </ContextMenuContent>
+                          </ContextMenu>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
 
                 {thumbnailPreview && (
                   <div className="fixed bottom-6 right-6 z-50 pointer-events-none">
