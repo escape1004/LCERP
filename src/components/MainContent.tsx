@@ -277,28 +277,14 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
               <span 
                 className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block" 
                 onClick={async (e) => {
-                  onSelectRow?.();
-                  e.stopPropagation();
-                  try {
-                    await navigator.clipboard.writeText(String(value));
-                    toast({ 
-                      title: '복사 완료', 
-                      description: '숫자가 클립보드에 복사되었습니다.' 
-                    });
-                  } catch (error) {
-                    toast({ 
-                      title: '복사 실패', 
-                      description: '클립보드 복사에 실패했습니다.', 
-                      variant: 'destructive' 
-                    });
-                  }
+                  await copyOnCtrlClick(e, String(value), '숫자가 클립보드에 복사되었습니다.', onSelectRow);
                 }}
               >
                 {String(value)}
               </span>
             </TooltipTrigger>
             <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-              복사하기
+              Ctrl+클릭하여 복사
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
