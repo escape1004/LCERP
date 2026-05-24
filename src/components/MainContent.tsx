@@ -1676,6 +1676,18 @@ export const MainContent: React.FC = () => {
     setIsConfirmDialogOpen(true);
   };
 
+  const handleContextMenuDelete = async (event: Event | React.SyntheticEvent, record: DataRecord) => {
+    event.stopPropagation();
+    setSelectedRecordId(record.id);
+
+    if ('shiftKey' in event && event.shiftKey) {
+      await deleteRecord(record.id);
+      return;
+    }
+
+    handleDelete(record);
+  };
+
   const getGalleryFieldText = useCallback((record: DataRecord, field: FieldDefinition): string => {
     const value = getRecordFieldValue(record, field.id);
 
@@ -2397,10 +2409,8 @@ export const MainContent: React.FC = () => {
                               </ContextMenuItem>
                               <ContextMenuItem
                                 className="text-discord-danger focus:text-discord-danger"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedRecordId(record.id);
-                                  handleDelete(record);
+                                onClick={async (e) => {
+                                  await handleContextMenuDelete(e, record);
                                 }}
                               >
                                 삭제
@@ -2620,10 +2630,8 @@ export const MainContent: React.FC = () => {
                               </ContextMenuItem>
                               <ContextMenuItem
                                 className="text-discord-danger focus:text-discord-danger"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedRecordId(record.id);
-                                  handleDelete(record);
+                                onClick={async (e) => {
+                                  await handleContextMenuDelete(e, record);
                                 }}
                               >
                                 삭제
