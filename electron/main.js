@@ -10,6 +10,7 @@ const http = require('http');
 const { execSync } = require('child_process');
 const XLSX = require('xlsx');
 const AdmZip = require('adm-zip');
+const { format, isValid, parse } = require('date-fns');
 
 // 콘솔 출력 인코딩을 UTF-8로 고정 (Windows 환경 한글 깨짐 방지)
 if (process.stdout && typeof process.stdout.setDefaultEncoding === 'function') {
@@ -57,6 +58,24 @@ const defaultConfig = {
 let appConfig = { ...defaultConfig };
 let currentProfileId = null;
 const DEFAULT_PROFILE_COLOR = '#5865F2';
+const DEFAULT_DATE_PARSE_FORMATS = [
+  'yyyy-MM-dd',
+  'yyyy.MM.dd',
+  'yyyy. MM. dd',
+  'yyyy/MM/dd',
+  'MM/dd/yyyy',
+  'MM-dd-yyyy',
+  'MM/dd/yy',
+  'MM-dd-yy',
+  'yy-MM-dd',
+  'yy.MM.dd',
+  'yy/MM/dd',
+  'yyyy-MM',
+  'yyyy.MM',
+  'yyyy/MM',
+  'yyyyMMdd',
+  'yyMMdd'
+];
 
 // save 폴더가 없으면 생성
 if (!fs.existsSync(appDataDir)) {
@@ -127,6 +146,132 @@ function normalizeDateParseFormats(value) {
       return true;
     })
     .slice(0, 50);
+}
+
+function normalizeDateParseFormat(dateFormat) {
+  return String(dateFormat || '')
+    .trim()
+    .replace(/Y/g, 'y')
+    .replace(/D/g, 'd');
+}
+
+function getDateParseFormats(customFormats = []) {
+  const seen = new Set();
+  const configuredFormats = [
+    ...DEFAULT_DATE_PARSE_FORMATS,
+    ...customFormats
+  ];
+  return configuredFormats
+    .map(normalizeDateParseFormat)
+    .filter((dateFormat) => {
+      if (!dateFormat || seen.has(dateFormat)) return false;
+      seen.add(dateFormat);
+      return true;
+    });
+}
+
+function getStoredDateOutputFormat(dateFormat) {
+  return /d/.test(normalizeDateParseFormat(dateFormat)) ? 'yyyy-MM-dd' : 'yyyy-MM';
+}
+
+function normalizeImportedDateValue(rawValue) {
+  if (rawValue === null || rawValue === undefined) {
+    return '';
+  }
+
+  if (rawValue instanceof Date && isValid(rawValue)) {
+    return format(rawValue, 'yyyy-MM-dd');
+  }
+
+  if (typeof rawValue === 'number' && Number.isFinite(rawValue)) {
+    const parsedDateCode = XLSX.SSF.parse_date_code(rawValue);
+    if (parsedDateCode && parsedDateCode.y && parsedDateCode.m && parsedDateCode.d) {
+      const parsedDate = new Date(parsedDateCode.y, parsedDateCode.m - 1, parsedDateCode.d);
+      if (
+        isValid(parsedDate) &&
+        parsedDate.getFullYear() === parsedDateCode.y &&
+        parsedDate.getMonth() === parsedDateCode.m - 1 &&
+        parsedDate.getDate() === parsedDateCode.d
+      ) {
+        return format(parsedDate, 'yyyy-MM-dd');
+      }
+    }
+  }
+
+  const text = String(rawValue).trim();
+  if (!text) {
+    return '';
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text) || /^\d{4}-\d{2}$/.test(text)) {
+    return text;
+  }
+
+  const supportedFullDatePatterns = [
+    /^(\d{4})-(\d{1,2})-(\d{1,2})$/,
+    /^(\d{4})\.(\d{1,2})\.(\d{1,2})$/,
+    /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/
+  ];
+
+  for (const pattern of supportedFullDatePatterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+
+    const [, yearStr, monthStr, dayStr] = match;
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+    const day = parseInt(dayStr, 10);
+    const parsedDate = new Date(year, month - 1, day);
+
+    if (
+      year >= 1900 &&
+      year <= 2100 &&
+      month >= 1 &&
+      month <= 12 &&
+      day >= 1 &&
+      day <= 31 &&
+      isValid(parsedDate) &&
+      parsedDate.getFullYear() === year &&
+      parsedDate.getMonth() === month - 1 &&
+      parsedDate.getDate() === day
+    ) {
+      return `${yearStr.padStart(4, '0')}-${monthStr.padStart(2, '0')}-${dayStr.padStart(2, '0')}`;
+    }
+
+    return text;
+  }
+
+  const supportedYearMonthPatterns = [
+    /^(\d{4})-(\d{1,2})$/,
+    /^(\d{4})\.(\d{1,2})$/,
+    /^(\d{4})\/(\d{1,2})$/
+  ];
+
+  for (const pattern of supportedYearMonthPatterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+
+    const [, yearStr, monthStr] = match;
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+    if (year >= 1900 && year <= 2100 && month >= 1 && month <= 12) {
+      return `${yearStr}-${monthStr.padStart(2, '0')}`;
+    }
+    return text;
+  }
+
+  for (const dateFormat of getDateParseFormats(normalizeDateParseFormats(appConfig.dateParseFormats) ?? [])) {
+    try {
+      const parsedDate = parse(text, dateFormat, new Date());
+      if (isValid(parsedDate)) {
+        return format(parsedDate, getStoredDateOutputFormat(dateFormat));
+      }
+    } catch (error) {
+      // Ignore invalid format tokens and continue trying other formats.
+    }
+  }
+
+  return text;
 }
 
 function applyWindowZoom(targetWindow) {
@@ -1866,7 +2011,9 @@ function parseImportedFieldValue(field, rawValue) {
     case 'relation':
       return field?.multiple ? parseArrayImportValue(text) : String(text);
     case 'file':
+      return String(text);
     case 'date':
+      return normalizeImportedDateValue(text);
     case 'text':
     default:
       return String(text);
@@ -2069,9 +2216,9 @@ function exportCategoryRecordsToExcel(filePath, category, records) {
 
 function readImportRowsFromFile(filePath) {
   const workbook = XLSX.readFile(filePath, {
-    raw: false,
+    raw: true,
     dense: true,
-    cellDates: false
+    cellDates: true
   });
   const firstSheetName = workbook.SheetNames[0];
   if (!firstSheetName) {
@@ -2080,7 +2227,7 @@ function readImportRowsFromFile(filePath) {
   const worksheet = workbook.Sheets[firstSheetName];
   return XLSX.utils.sheet_to_json(worksheet, {
     defval: '',
-    raw: false
+    raw: true
   });
 }
 
