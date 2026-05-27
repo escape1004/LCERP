@@ -17,6 +17,7 @@ import { AlertDialog } from './ui/alert-dialog';
 import { DatePicker } from './ui/date-picker';
 import { AnimatedModal } from './ui/animated-modal';
 import { formatFieldDisplayValue, hasTextAffixes } from '../lib/fieldFormat';
+import { getRelationDisplayLabel, getRelationPrimaryLabel } from '../utils/relationDisplay';
 import {
   Tooltip,
   TooltipContent,
@@ -412,50 +413,11 @@ export const RecordModal: React.FC<RecordModalProps> = ({
   };
 
   const getRelationLabel = (record: DataRecord, field: FieldDefinition): string => {
-    const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
-    if (!relatedCategory) return record.id;
-    const displayField = field.displayFieldId
-      ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
-      : relatedCategory.fields[0];
-    const mainLabel = displayField ? record.data[displayField.id] : record.id;
-
-    // 보조라벨 처리
-    const subField = field.subDisplayFieldId
-      ? relatedCategory.fields.find(f => f.id === field.subDisplayFieldId)
-      : undefined;
-
-    if (subField) {
-      const subValue = record.data[subField.id];
-      if (subField.type === 'relation' && subField.relationCategoryId) {
-        // 보조라벨이 relation 타입인 경우, 하위 카테고리의 레코드에서 찾기
-        const subCategory = categories.find(cat => cat.id === subField.relationCategoryId);
-        const subRecords = getCategoryRecords(subField.relationCategoryId);
-        const subRecord = subRecords.find(r => r.id === subValue);
-        if (subRecord) {
-          const subLabel = getRelationLabel(subRecord, subField);
-          if (subLabel && subLabel !== 'undefined' && subLabel !== '' && subLabel !== 'null' && subLabel !== undefined && subLabel !== null) {
-            return `${mainLabel}(${subLabel})`;
-          } else {
-            return String(mainLabel);
-          }
-        } else {
-          return String(mainLabel);
-        }
-      } else if (subValue !== undefined && subValue !== null && subValue !== '') {
-        // 보조라벨이 일반 타입인 경우
-        return `${mainLabel}(${subValue})`;
-      }
-    }
-    return String(mainLabel);
+    return getRelationDisplayLabel(record, field, categories, getCategoryRecords);
   };
 
   const getMainLabel = (record: DataRecord, field: FieldDefinition): string => {
-    const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
-    if (!relatedCategory) return record.id;
-    const displayField = field.displayFieldId
-      ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
-      : relatedCategory.fields[0];
-    return displayField ? record.data[displayField.id] : record.id;
+    return getRelationPrimaryLabel(record, field, categories);
   };
 
   const renderField = (field: FieldDefinition, isFirstField: boolean = false) => {

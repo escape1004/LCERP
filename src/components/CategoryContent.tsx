@@ -20,6 +20,7 @@ import {
   ContextMenuTrigger,
 } from "./ui/context-menu";
 import { BulkAddModal } from './BulkAddModal';
+import { getRelationDisplayLabel } from '../utils/relationDisplay';
 
 interface CategoryContentProps {
   categoryId: string | null;
@@ -689,17 +690,17 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
         if (!relatedCategory) return String(value);
         
         const relatedRecords = records[field.relationCategoryId] || [];
-        const displayField = field.displayFieldId
-          ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
-          : relatedCategory.fields[0];
-        
         if (Array.isArray(value)) {
           const names = value
             .map(id => {
               const record = relatedRecords.find(r => r.id === id);
               if (!record) return null;
-              const displayValue = record.data[displayField?.id];
-              return displayValue || null;
+              return getRelationDisplayLabel(
+                record,
+                field,
+                categories,
+                (categoryId) => records[categoryId] || []
+              );
             })
             .filter(Boolean);
           
@@ -707,9 +708,13 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
         } else {
           const record = relatedRecords.find(r => r.id === value);
           if (!record) return '-';
-          
-          const displayValue = record.data[displayField?.id];
-          return displayValue || '-';
+
+          return getRelationDisplayLabel(
+            record,
+            field,
+            categories,
+            (categoryId) => records[categoryId] || []
+          ) || '-';
         }
       
       default:

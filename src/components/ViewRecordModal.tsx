@@ -13,6 +13,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } 
 import { resolveFilePath } from '../lib/pathResolver';
 import { AnimatedModal } from './ui/animated-modal';
 import { formatFieldDisplayValue } from '../lib/fieldFormat';
+import { getRelationDisplayLabel } from '../utils/relationDisplay';
 
 // 해시태그 파싱 유틸리티 함수
 const parseHashtags = (text: string): { hashtags: string[]; plainText: string } => {
@@ -794,10 +795,6 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         if (!relatedCategory) return String(value);
         
         const relatedRecords = getCategoryRecords(field.relationCategoryId);
-        const displayField = field.displayFieldId
-          ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
-          : relatedCategory.fields[0];
-        
         if (Array.isArray(value)) {
           return (
             <TooltipProvider>
@@ -820,7 +817,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                             }, 200);
                           }}
                         >
-                          {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
+                          {getRelationDisplayLabel(relatedRecord, field, categories, getCategoryRecords)}
                         </span>
                       );
                     })}
@@ -850,7 +847,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                         }, 200);
                       }}
                     >
-                      {String(relatedRecord.data[displayField?.id] || relatedRecord.id)}
+                      {getRelationDisplayLabel(relatedRecord, field, categories, getCategoryRecords)}
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">

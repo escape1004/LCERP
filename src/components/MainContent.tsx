@@ -33,6 +33,7 @@ import {
 import { BulkAddModal } from './BulkAddModal';
 import { resolveFilePath } from '../lib/pathResolver';
 import { formatFieldDisplayValue } from '../lib/fieldFormat';
+import { getRelationDisplayLabel } from '../utils/relationDisplay';
 import { DatePicker } from './ui/date-picker';
 import { cn } from '../lib/utils';
 
@@ -310,10 +311,6 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
       const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
       if (!relatedCategory) return String(value);
       const relatedRecords = getCategoryRecords(field.relationCategoryId);
-      const displayField = field.displayFieldId
-        ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
-        : relatedCategory.fields[0];
-
       if (Array.isArray(value)) {
         // 다중 선택 관계형 필드 - 더보기 기능 추가
         const MultiSelectRelationField: React.FC = () => {
@@ -339,7 +336,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
                             }
                           }}
                         >
-                          {displayField ? relatedRecord.data[displayField.id] : relatedRecord.id}
+                          {getRelationDisplayLabel(relatedRecord, field, categories, getCategoryRecords)}
                         </span>
                       </TooltipTrigger>
                       <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
@@ -390,7 +387,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
                       }
                     }}
                   >
-                    {displayField ? relatedRecord.data[displayField.id] : relatedRecord.id}
+                    {getRelationDisplayLabel(relatedRecord, field, categories, getCategoryRecords)}
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
