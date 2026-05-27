@@ -1759,27 +1759,20 @@ function getRelationExportValue(field, value, relationResolvers) {
     return field.multiple ? JSON.stringify(Array.isArray(value) ? value : []) : String(value ?? '');
   }
 
-  const toKeyValue = (recordId) => {
+  const toRelationIdValue = (recordId) => {
     const relatedRecord = resolver.relatedRecords.find((record) => record.id === recordId);
     if (!relatedRecord) {
       return String(recordId ?? '');
     }
-
-    const keyField = resolver.keyField || resolver.displayField;
-    if (!keyField) {
-      return relatedRecord.id;
-    }
-
-    const keyValue = relatedRecord.data[keyField.id];
-    return keyValue === undefined || keyValue === null ? '' : String(keyValue);
+    return relatedRecord.id;
   };
 
   if (field.multiple) {
-    const relationValues = Array.isArray(value) ? value.map(toKeyValue).filter(Boolean) : [];
+    const relationValues = Array.isArray(value) ? value.map(toRelationIdValue).filter(Boolean) : [];
     return JSON.stringify(relationValues);
   }
 
-  return toKeyValue(value);
+  return toRelationIdValue(value);
 }
 
 function getExcelHeaderLabel(field) {
@@ -2127,6 +2120,7 @@ const insertImportedRecordsBatch = db.transaction((recordsToInsert) => {
 
 async function exportCategoryRecordsToCsv(filePath, category, records) {
   const relationResolvers = buildRelationResolvers(category.fields);
+  const headers = ['고유키', ...category.fields.map((field) => field.name)];
   const writeChunk = (stream, chunk) => new Promise((resolve, reject) => {
     const handleError = (error) => reject(error);
     stream.once('error', handleError);
@@ -2148,17 +2142,18 @@ async function exportCategoryRecordsToCsv(filePath, category, records) {
     stream.on('finish', resolve);
     try {
       await writeChunk(stream, '\uFEFF');
-      await writeChunk(stream, `${category.fields.map((field) => escapeCsvCell(field.name)).join(',')}\r\n`);
+      await writeChunk(stream, `${headers.map((header) => escapeCsvCell(header)).join(',')}\r\n`);
 
       for (const record of records) {
-        const row = category.fields
-          .map((field) => {
+        const row = [
+          escapeCsvCell(record.id),
+          ...category.fields.map((field) => {
             const exportValue = field.type === 'relation'
               ? getRelationExportValue(field, record.data[field.id], relationResolvers)
               : serializeExportValue(field, record.data[field.id]);
             return escapeCsvCell(exportValue);
           })
-          .join(',');
+        ].join(',');
 
         await writeChunk(stream, `${row}\r\n`);
       }
@@ -2174,32 +2169,42 @@ async function exportCategoryRecordsToCsv(filePath, category, records) {
 function exportCategoryRecordsToExcel(filePath, category, records) {
   const relationResolvers = buildRelationResolvers(category.fields);
   const workbook = XLSX.utils.book_new();
-  const headers = category.fields.map((field) => getExcelHeaderLabel(field));
+  const headers = ['고유키', ...category.fields.map((field) => getExcelHeaderLabel(field))];
   const worksheet = XLSX.utils.aoa_to_sheet([headers]);
 
   for (let index = 0; index < records.length; index += IMPORT_EXPORT_BATCH_SIZE) {
-    const batch = records.slice(index, index + IMPORT_EXPORT_BATCH_SIZE).map((record) =>
-      category.fields.map((field) => (
+    const batch = records.slice(index, index + IMPORT_EXPORT_BATCH_SIZE).map((record) => ([
+      record.id,
+      ...category.fields.map((field) => (
         field.type === 'relation'
           ? getRelationExportValue(field, record.data[field.id], relationResolvers)
           : serializeExportValue(field, record.data[field.id])
       ))
-    );
+    ]));
 
     XLSX.utils.sheet_add_aoa(worksheet, batch, { origin: -1 });
   }
 
-  worksheet['!cols'] = category.fields.map((field, index) => ({
-    wch: getExcelColumnWidth(
-      field,
-      headers[index],
-      records.map((record) => (
-        field.type === 'relation'
-          ? getRelationExportValue(field, record.data[field.id], relationResolvers)
-          : serializeExportValue(field, record.data[field.id])
-      ))
-    )
-  }));
+  worksheet['!cols'] = [
+    {
+      wch: getExcelColumnWidth(
+        { type: 'text' },
+        headers[0],
+        records.map((record) => record.id)
+      )
+    },
+    ...category.fields.map((field, index) => ({
+      wch: getExcelColumnWidth(
+        field,
+        headers[index + 1],
+        records.map((record) => (
+          field.type === 'relation'
+            ? getRelationExportValue(field, record.data[field.id], relationResolvers)
+            : serializeExportValue(field, record.data[field.id])
+        ))
+      )
+    }))
+  ];
 
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Records');
   const workbookBuffer = XLSX.write(workbook, {
