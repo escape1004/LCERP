@@ -1529,6 +1529,34 @@ function sanitizeFileName(name) {
   return String(name || 'category').replace(/[<>:"/\\|?*\u0000-\u001F]/g, '_').trim() || 'category';
 }
 
+function sanitizeExcelSheetName(name) {
+  const sanitized = String(name || 'Records')
+    .replace(/[\[\]\*\/\\\:\?]/g, '_')
+    .trim();
+  return (sanitized || 'Records').slice(0, 31);
+}
+
+function ensureUniqueSheetName(baseName, usedNames) {
+  const initialName = sanitizeExcelSheetName(baseName);
+  if (!usedNames.has(initialName)) {
+    usedNames.add(initialName);
+    return initialName;
+  }
+
+  let suffix = 2;
+  while (suffix < 1000) {
+    const suffixLabel = ` (${suffix})`;
+    const candidate = `${initialName.slice(0, Math.max(0, 31 - suffixLabel.length))}${suffixLabel}`;
+    if (!usedNames.has(candidate)) {
+      usedNames.add(candidate);
+      return candidate;
+    }
+    suffix += 1;
+  }
+
+  throw new Error('Unable to allocate a unique Excel sheet name.');
+}
+
 function getCategoryOrThrow(categoryId, profileId = getCurrentProfileIdOrThrow()) {
   const category = db.prepare('SELECT * FROM categories WHERE id = ? AND profileId = ?').get(categoryId, profileId);
   if (!category) {
@@ -1549,7 +1577,49 @@ function getCategoryRecordsForProfile(categoryId, profileId = getCurrentProfileI
   `).all(categoryId, profileId).map((record) => ({
     ...record,
     data: JSON.parse(record.data)
+  })); 
+}
+
+function getCategoryExportSubtree(rootCategoryId, profileId = getCurrentProfileIdOrThrow()) {
+  const categories = db.prepare(`
+    SELECT id, name, parentId, fields, order_num, createdAt, updatedAt
+    FROM categories
+    WHERE profileId = ?
+    ORDER BY order_num ASC, createdAt ASC
+  `).all(profileId).map((category) => ({
+    ...category,
+    fields: JSON.parse(category.fields)
   }));
+
+  const categoriesById = new Map(categories.map((category) => [category.id, category]));
+  const rootCategory = categoriesById.get(rootCategoryId);
+  if (!rootCategory) {
+    throw new Error(`Category not found: ${rootCategoryId}`);
+  }
+
+  const childrenByParentId = new Map();
+  categories.forEach((category) => {
+    const key = category.parentId || '__root__';
+    if (!childrenByParentId.has(key)) {
+      childrenByParentId.set(key, []);
+    }
+    childrenByParentId.get(key).push(category);
+  });
+
+  const orderedCategories = [];
+  const visit = (category, pathNames) => {
+    const currentPathNames = [...pathNames, category.name];
+    orderedCategories.push({
+      ...category,
+      exportPathNames: currentPathNames
+    });
+
+    const children = childrenByParentId.get(category.id) || [];
+    children.forEach((child) => visit(child, currentPathNames));
+  };
+
+  visit(rootCategory, []);
+  return orderedCategories;
 }
 
 function getDashboardWarnings(previewLimit = 8, profileId = getCurrentProfileIdOrThrow()) {
@@ -1779,6 +1849,24 @@ function getExcelHeaderLabel(field) {
   return `${field.name}${field.type === 'relation' ? '*' : ''}`;
 }
 
+function getExportHeaders(category, excelMode = false) {
+  return [
+    '고유키',
+    ...category.fields.map((field) => (excelMode ? getExcelHeaderLabel(field) : field.name))
+  ];
+}
+
+function getExportRowValues(category, record, relationResolvers) {
+  return [
+    record.id,
+    ...category.fields.map((field) => (
+      field.type === 'relation'
+        ? getRelationExportValue(field, record.data[field.id], relationResolvers)
+        : serializeExportValue(field, record.data[field.id])
+    ))
+  ];
+}
+
 function getExcelColumnWidth(field, header, values) {
   const maxLength = values.reduce((max, value) => {
     const text = value === null || value === undefined ? '' : String(value);
@@ -1841,54 +1929,65 @@ function buildDiscordStyleSheetXml() {
 }
 
 function applyDiscordExcelStyling(buffer, options) {
-  const { recordColumnCount, recordRowCount } = options;
+  const sheetDimensions = Array.isArray(options?.sheetDimensions)
+    ? options.sheetDimensions
+    : [{
+        recordColumnCount: options?.recordColumnCount || 1,
+        recordRowCount: options?.recordRowCount || 1
+      }];
   const zip = new AdmZip(buffer);
   const stylesPath = 'xl/styles.xml';
-  const recordsSheetPath = 'xl/worksheets/sheet1.xml';
-  const recordsSheetXml = zip.readAsText(recordsSheetPath);
-
-  const lastCellRef = XLSX.utils.encode_cell({
-    c: Math.max(recordColumnCount - 1, 0),
-    r: Math.max(recordRowCount - 1, 0)
-  });
-  const autoFilterRef = `A1:${XLSX.utils.encode_cell({ c: Math.max(recordColumnCount - 1, 0), r: 0 })}`;
-
-  let styledRecordsSheetXml = recordsSheetXml.replace(
-    '<sheetView workbookViewId="0"/>',
-    '<sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A2" sqref="A2"/></sheetView>'
-  );
-
-  styledRecordsSheetXml = styledRecordsSheetXml.replace(
-    /<row r="1">([\s\S]*?)<\/row>/,
-    (_match, rowContent) => {
-      const styledRow = rowContent.replace(/<c r="([A-Z]+1)"/g, '<c r="$1" s="1"');
-      return `<row r="1" ht="24" customHeight="1">${styledRow}</row>`;
+  sheetDimensions.forEach((sheetDimension, index) => {
+    const recordsSheetPath = `xl/worksheets/sheet${index + 1}.xml`;
+    if (!zip.getEntry(recordsSheetPath)) {
+      return;
     }
-  );
 
-  styledRecordsSheetXml = styledRecordsSheetXml.replace(
-    /<row r="([2-9]\d*)">([\s\S]*?)<\/row>/g,
-    (_match, rowNumber, rowContent) => {
-      const styleId = Number(rowNumber) % 2 === 0 ? '2' : '3';
-      const styledRow = rowContent.replace(/<c r="([A-Z]+\d+)"/g, `<c r="$1" s="${styleId}"`);
-      return `<row r="${rowNumber}" ht="22" customHeight="1">${styledRow}</row>`;
-    }
-  );
+    const recordsSheetXml = zip.readAsText(recordsSheetPath);
+    const lastCellRef = XLSX.utils.encode_cell({
+      c: Math.max((sheetDimension?.recordColumnCount || 1) - 1, 0),
+      r: Math.max((sheetDimension?.recordRowCount || 1) - 1, 0)
+    });
+    const autoFilterRef = `A1:${XLSX.utils.encode_cell({ c: Math.max((sheetDimension?.recordColumnCount || 1) - 1, 0), r: 0 })}`;
 
-  if (!styledRecordsSheetXml.includes('<autoFilter ')) {
-    styledRecordsSheetXml = styledRecordsSheetXml.replace(
-      '</sheetData>',
-      `</sheetData><autoFilter ref="${autoFilterRef}"/>`
+    let styledRecordsSheetXml = recordsSheetXml.replace(
+      '<sheetView workbookViewId="0"/>',
+      '<sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A2" sqref="A2"/></sheetView>'
     );
-  }
 
-  styledRecordsSheetXml = styledRecordsSheetXml.replace(
-    /<ignoredError numberStoredAsText="1" sqref="[^"]*"\/>/,
-    `<ignoredError numberStoredAsText="1" sqref="A1:${lastCellRef}"/>`
-  );
+    styledRecordsSheetXml = styledRecordsSheetXml.replace(
+      /<row r="1">([\s\S]*?)<\/row>/,
+      (_match, rowContent) => {
+        const styledRow = rowContent.replace(/<c r="([A-Z]+1)"/g, '<c r="$1" s="1"');
+        return `<row r="1" ht="24" customHeight="1">${styledRow}</row>`;
+      }
+    );
+
+    styledRecordsSheetXml = styledRecordsSheetXml.replace(
+      /<row r="([2-9]\d*)">([\s\S]*?)<\/row>/g,
+      (_match, rowNumber, rowContent) => {
+        const styleId = Number(rowNumber) % 2 === 0 ? '2' : '3';
+        const styledRow = rowContent.replace(/<c r="([A-Z]+\d+)"/g, `<c r="$1" s="${styleId}"`);
+        return `<row r="${rowNumber}" ht="22" customHeight="1">${styledRow}</row>`;
+      }
+    );
+
+    if (!styledRecordsSheetXml.includes('<autoFilter ')) {
+      styledRecordsSheetXml = styledRecordsSheetXml.replace(
+        '</sheetData>',
+        `</sheetData><autoFilter ref="${autoFilterRef}"/>`
+      );
+    }
+
+    styledRecordsSheetXml = styledRecordsSheetXml.replace(
+      /<ignoredError numberStoredAsText="1" sqref="[^"]*"\/>/,
+      `<ignoredError numberStoredAsText="1" sqref="A1:${lastCellRef}"/>`
+    );
+
+    zip.updateFile(recordsSheetPath, Buffer.from(styledRecordsSheetXml, 'utf8'));
+  });
 
   zip.updateFile(stylesPath, Buffer.from(buildDiscordStyleSheetXml(), 'utf8'));
-  zip.updateFile(recordsSheetPath, Buffer.from(styledRecordsSheetXml, 'utf8'));
   return zip.toBuffer();
 }
 
@@ -1912,6 +2011,61 @@ function escapeCsvCell(value) {
     return `"${text.replace(/"/g, '""')}"`;
   }
   return text;
+}
+
+function buildCategoryRecordsCsvContent(category, records) {
+  const relationResolvers = buildRelationResolvers(category.fields);
+  const headers = getExportHeaders(category, false);
+  const lines = [headers.map((header) => escapeCsvCell(header)).join(',')];
+
+  records.forEach((record) => {
+    const row = getExportRowValues(category, record, relationResolvers)
+      .map((value) => escapeCsvCell(value))
+      .join(',');
+    lines.push(row);
+  });
+
+  return `\uFEFF${lines.join('\r\n')}\r\n`;
+}
+
+function appendCategoryRecordsWorksheet(workbook, sheetName, category, records) {
+  const relationResolvers = buildRelationResolvers(category.fields);
+  const headers = getExportHeaders(category, true);
+  const worksheet = XLSX.utils.aoa_to_sheet([headers]);
+
+  for (let index = 0; index < records.length; index += IMPORT_EXPORT_BATCH_SIZE) {
+    const batch = records.slice(index, index + IMPORT_EXPORT_BATCH_SIZE).map((record) => (
+      getExportRowValues(category, record, relationResolvers)
+    ));
+    XLSX.utils.sheet_add_aoa(worksheet, batch, { origin: -1 });
+  }
+
+  worksheet['!cols'] = [
+    {
+      wch: getExcelColumnWidth(
+        { type: 'text' },
+        headers[0],
+        records.map((record) => record.id)
+      )
+    },
+    ...category.fields.map((field, index) => ({
+      wch: getExcelColumnWidth(
+        field,
+        headers[index + 1],
+        records.map((record) => (
+          field.type === 'relation'
+            ? getRelationExportValue(field, record.data[field.id], relationResolvers)
+            : serializeExportValue(field, record.data[field.id])
+        ))
+      )
+    }))
+  ];
+
+  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+  return {
+    recordColumnCount: headers.length,
+    recordRowCount: records.length + 1
+  };
 }
 
 function parseBooleanImportValue(value) {
@@ -2119,8 +2273,6 @@ const insertImportedRecordsBatch = db.transaction((recordsToInsert) => {
 });
 
 async function exportCategoryRecordsToCsv(filePath, category, records) {
-  const relationResolvers = buildRelationResolvers(category.fields);
-  const headers = ['고유키', ...category.fields.map((field) => field.name)];
   const writeChunk = (stream, chunk) => new Promise((resolve, reject) => {
     const handleError = (error) => reject(error);
     stream.once('error', handleError);
@@ -2141,22 +2293,7 @@ async function exportCategoryRecordsToCsv(filePath, category, records) {
     stream.on('error', reject);
     stream.on('finish', resolve);
     try {
-      await writeChunk(stream, '\uFEFF');
-      await writeChunk(stream, `${headers.map((header) => escapeCsvCell(header)).join(',')}\r\n`);
-
-      for (const record of records) {
-        const row = [
-          escapeCsvCell(record.id),
-          ...category.fields.map((field) => {
-            const exportValue = field.type === 'relation'
-              ? getRelationExportValue(field, record.data[field.id], relationResolvers)
-              : serializeExportValue(field, record.data[field.id]);
-            return escapeCsvCell(exportValue);
-          })
-        ].join(',');
-
-        await writeChunk(stream, `${row}\r\n`);
-      }
+      await writeChunk(stream, buildCategoryRecordsCsvContent(category, records));
 
       stream.end();
     } catch (error) {
@@ -2167,54 +2304,15 @@ async function exportCategoryRecordsToCsv(filePath, category, records) {
 }
 
 function exportCategoryRecordsToExcel(filePath, category, records) {
-  const relationResolvers = buildRelationResolvers(category.fields);
   const workbook = XLSX.utils.book_new();
-  const headers = ['고유키', ...category.fields.map((field) => getExcelHeaderLabel(field))];
-  const worksheet = XLSX.utils.aoa_to_sheet([headers]);
-
-  for (let index = 0; index < records.length; index += IMPORT_EXPORT_BATCH_SIZE) {
-    const batch = records.slice(index, index + IMPORT_EXPORT_BATCH_SIZE).map((record) => ([
-      record.id,
-      ...category.fields.map((field) => (
-        field.type === 'relation'
-          ? getRelationExportValue(field, record.data[field.id], relationResolvers)
-          : serializeExportValue(field, record.data[field.id])
-      ))
-    ]));
-
-    XLSX.utils.sheet_add_aoa(worksheet, batch, { origin: -1 });
-  }
-
-  worksheet['!cols'] = [
-    {
-      wch: getExcelColumnWidth(
-        { type: 'text' },
-        headers[0],
-        records.map((record) => record.id)
-      )
-    },
-    ...category.fields.map((field, index) => ({
-      wch: getExcelColumnWidth(
-        field,
-        headers[index + 1],
-        records.map((record) => (
-          field.type === 'relation'
-            ? getRelationExportValue(field, record.data[field.id], relationResolvers)
-            : serializeExportValue(field, record.data[field.id])
-        ))
-      )
-    }))
-  ];
-
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Records');
+  const sheetDimension = appendCategoryRecordsWorksheet(workbook, 'Records', category, records);
   const workbookBuffer = XLSX.write(workbook, {
     type: 'buffer',
     bookType: 'xlsx',
     compression: true
   });
   const styledBuffer = applyDiscordExcelStyling(workbookBuffer, {
-    recordColumnCount: headers.length,
-    recordRowCount: records.length + 1
+    sheetDimensions: [sheetDimension]
   });
   fs.writeFileSync(filePath, styledBuffer);
 }
@@ -3246,9 +3344,14 @@ ipcMain.handle('category:exportRecords', async (_, categoryId, format = 'csv') =
 
     ensureCategoryBelongsToCurrentProfile(categoryId);
     const category = getCategoryOrThrow(categoryId, profileId);
-    const records = getCategoryRecordsForProfile(categoryId, profileId);
+    const subtreeCategories = getCategoryExportSubtree(categoryId, profileId);
+    const categoryRecords = subtreeCategories.map((subtreeCategory) => ({
+      category: subtreeCategory,
+      records: getCategoryRecordsForProfile(subtreeCategory.id, profileId)
+    }));
+    const hasDescendants = subtreeCategories.length > 1;
     const normalizedFormat = format === 'xlsx' ? 'xlsx' : 'csv';
-    const extension = normalizedFormat === 'xlsx' ? 'xlsx' : 'csv';
+    const extension = normalizedFormat === 'xlsx' ? 'xlsx' : (hasDescendants ? 'zip' : 'csv');
     const safeCategoryName = sanitizeFileName(category.name);
 
     const { canceled, filePath } = await dialog.showSaveDialog({
@@ -3256,7 +3359,9 @@ ipcMain.handle('category:exportRecords', async (_, categoryId, format = 'csv') =
       defaultPath: `${safeCategoryName}.${extension}`,
       filters: [
         {
-          name: normalizedFormat === 'xlsx' ? 'Excel Workbook' : 'CSV File',
+          name: normalizedFormat === 'xlsx'
+            ? 'Excel Workbook'
+            : (hasDescendants ? 'ZIP Archive' : 'CSV File'),
           extensions: [extension]
         }
       ]
@@ -3267,15 +3372,44 @@ ipcMain.handle('category:exportRecords', async (_, categoryId, format = 'csv') =
     }
 
     if (normalizedFormat === 'xlsx') {
-      exportCategoryRecordsToExcel(filePath, category, records);
+      if (hasDescendants) {
+        const workbook = XLSX.utils.book_new();
+        const usedSheetNames = new Set();
+        const sheetDimensions = [];
+
+        categoryRecords.forEach(({ category: exportCategory, records: exportRecords }) => {
+          const preferredSheetName = exportCategory.exportPathNames.join(' - ');
+          const sheetName = ensureUniqueSheetName(preferredSheetName, usedSheetNames);
+          sheetDimensions.push(appendCategoryRecordsWorksheet(workbook, sheetName, exportCategory, exportRecords));
+        });
+
+        const workbookBuffer = XLSX.write(workbook, {
+          type: 'buffer',
+          bookType: 'xlsx',
+          compression: true
+        });
+        const styledBuffer = applyDiscordExcelStyling(workbookBuffer, { sheetDimensions });
+        fs.writeFileSync(filePath, styledBuffer);
+      } else {
+        exportCategoryRecordsToExcel(filePath, category, categoryRecords[0]?.records || []);
+      }
     } else {
-      await exportCategoryRecordsToCsv(filePath, category, records);
+      if (hasDescendants) {
+        const zip = new AdmZip();
+        categoryRecords.forEach(({ category: exportCategory, records: exportRecords }) => {
+          const entryPath = `${exportCategory.exportPathNames.map((segment) => sanitizeFileName(segment)).join('/')}.csv`;
+          zip.addFile(entryPath, Buffer.from(buildCategoryRecordsCsvContent(exportCategory, exportRecords), 'utf8'));
+        });
+        zip.writeZip(filePath);
+      } else {
+        await exportCategoryRecordsToCsv(filePath, category, categoryRecords[0]?.records || []);
+      }
     }
 
     return {
       success: true,
       path: filePath,
-      recordCount: records.length,
+      recordCount: categoryRecords.reduce((sum, entry) => sum + entry.records.length, 0),
       format: normalizedFormat
     };
   } catch (error) {

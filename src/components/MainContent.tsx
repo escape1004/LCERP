@@ -1773,7 +1773,9 @@ export const MainContent: React.FC = () => {
         return;
       }
 
-      const formatLabel = format === 'xlsx' ? 'Excel' : 'CSV';
+      const formatLabel = result.path?.toLowerCase().endsWith('.zip')
+        ? 'CSV ZIP'
+        : (format === 'xlsx' ? 'Excel' : 'CSV');
       showAlert(
         '내보내기 완료',
         `${selectedCategorySafe.name} 카테고리의 ${result.recordCount ?? 0}개 레코드를 ${formatLabel} 파일로 저장했습니다.`,
