@@ -2463,25 +2463,38 @@ export const MainContent: React.FC = () => {
                                 </div>
                                 <div className="space-y-3 p-4">
                                   <div>
-                                    <h3 className="truncate text-sm font-semibold text-discord-text">
-                                      {renderGalleryCopyableText(
-                                        title,
-                                        '값이 클립보드에 복사되었습니다.',
-                                        selectGalleryRecord,
-                                        'block truncate rounded px-1 py-0.5 transition-colors hover:bg-discord-hover/50'
-                                      )}
-                                    </h3>
+                                    <div className="min-w-0 text-sm font-semibold text-discord-text">
+                                      {galleryTitleField
+                                        ? formatFieldValue(
+                                            galleryTitleField,
+                                            getRecordFieldValue(record, galleryTitleField.id),
+                                            categoriesSafe,
+                                            getCategoryRecords,
+                                            handleViewRelatedRecord,
+                                            selectGalleryRecord
+                                          )
+                                        : renderGalleryCopyableText(
+                                            title,
+                                            '값이 클립보드에 복사되었습니다.',
+                                            selectGalleryRecord,
+                                            'block truncate rounded px-1 py-0.5 transition-colors hover:bg-discord-hover/50'
+                                          )}
+                                    </div>
                                   </div>
                                   <div className="space-y-2">
                                     {galleryDetailFields.map((field) => (
-                                      <div key={field.id} className="flex items-start justify-between gap-3 text-xs">
-                                        <span className="shrink-0 text-discord-muted">{field.name}</span>
-                                        {renderGalleryCopyableText(
-                                          getGalleryFieldText(record, field),
-                                          '값이 클립보드에 복사되었습니다.',
-                                          selectGalleryRecord,
-                                          'line-clamp-2 text-right text-discord-text rounded px-1 py-0.5 transition-colors hover:bg-discord-hover/50'
-                                        )}
+                                      <div key={field.id} className="flex items-center gap-3 text-xs">
+                                        <span className="shrink-0 self-center text-discord-muted">{field.name} :</span>
+                                        <div className="min-w-0 flex-1 text-discord-text">
+                                          {formatFieldValue(
+                                            field,
+                                            getRecordFieldValue(record, field.id),
+                                            categoriesSafe,
+                                            getCategoryRecords,
+                                            handleViewRelatedRecord,
+                                            selectGalleryRecord
+                                          )}
+                                        </div>
                                       </div>
                                     ))}
                                   </div>
