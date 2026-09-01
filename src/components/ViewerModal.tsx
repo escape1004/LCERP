@@ -958,8 +958,16 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       } else {
         // 압축파일 내 이미지/텍스트 파일 네비게이션
         if (e.key === 'ArrowLeft') {
+          e.preventDefault();
           handlePrevious();
         } else if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          handleNext();
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          handlePrevious();
+        } else if (e.key === 'ArrowDown') {
+          e.preventDefault();
           handleNext();
         }
       }
@@ -1793,7 +1801,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                         return (
                           <li
                             key={file.name}
-                            className={`flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-discord-hover rounded ${idx === currentArchiveIndex ? 'bg-discord-hover font-bold text-discord-accent' : ''}`}
+                            className={`flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-discord-hover rounded ${idx === currentArchiveIndex ? 'bg-discord-hover font-bold' : ''}`}
                             onClick={() => {
                               if (idx !== currentArchiveIndex) {
                                 setCurrentArchiveDataUrl(null);
@@ -1806,7 +1814,6 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                             {isVideo && <FileVideo size={14} className="text-green-400 flex-shrink-0" />}
                             {isText && <FileText size={14} className="text-green-400 flex-shrink-0" />}
                             <span className="truncate flex-1">{file.name}</span>
-                            {idx === currentArchiveIndex && <ChevronRight size={16} />}
                           </li>
                         );
                       })}
@@ -1866,7 +1873,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                         // 텍스트 파일 표시
                         <div className="w-full h-full bg-discord-bg text-discord-text p-4 overflow-auto">
                           {currentArchiveText ? (
-                            <pre className="whitespace-pre-wrap font-mono text-sm leading-relaxed">
+                            <pre className="select-text whitespace-pre-wrap font-mono text-sm leading-relaxed">
                               {currentArchiveText}
                             </pre>
                           ) : (
