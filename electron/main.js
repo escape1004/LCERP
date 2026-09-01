@@ -717,6 +717,131 @@ function initializeDatabase() {
   }
 }
 
+function normalizeZipPath(entryPath) {
+  return String(entryPath || '').replace(/\\/g, '/');
+}
+
+function isSameZipEntry(entryPath, requestedPath) {
+  return normalizeZipPath(entryPath) === normalizeZipPath(requestedPath);
+}
+
+function getArchiveVideoCachePath(archivePath, fileName) {
+  const hash = crypto.createHash('sha1')
+    .update(`${archivePath}|${normalizeZipPath(fileName)}`)
+    .digest('hex');
+  const ext = path.extname(fileName).toLowerCase() || '.mp4';
+  const cacheDir = path.join(appDataDir, 'archive-video-cache');
+  fs.mkdirSync(cacheDir, { recursive: true });
+  return path.join(cacheDir, `${hash}${ext}`);
+}
+
+const archiveVideoExtractPromises = new Map();
+
+async function ensureArchiveVideoExtracted(archivePath, fileName) {
+  const cachePath = getArchiveVideoCachePath(archivePath, fileName);
+  const inflight = archiveVideoExtractPromises.get(cachePath);
+  if (inflight) return inflight;
+
+  const extractPromise = (async () => {
+    const directory = await unzipper.Open.file(archivePath);
+    const file = directory.files.find((entry) => (
+      entry.type !== 'Directory'
+      && !String(entry.path || '').endsWith('/')
+      && isSameZipEntry(entry.path, fileName)
+    ));
+
+    if (!file) {
+      return null;
+    }
+
+    const expectedSize = Number(file.uncompressedSize) || 0;
+    if (fs.existsSync(cachePath)) {
+      const cachedSize = fs.statSync(cachePath).size;
+      if (expectedSize <= 0 || cachedSize === expectedSize) {
+        return cachePath;
+      }
+      fs.unlinkSync(cachePath);
+    }
+
+    await new Promise((resolve, reject) => {
+      const writeStream = fs.createWriteStream(cachePath);
+      file.stream()
+        .on('error', reject)
+        .pipe(writeStream)
+        .on('error', reject)
+        .on('finish', resolve);
+    });
+
+    return cachePath;
+  })();
+
+  archiveVideoExtractPromises.set(cachePath, extractPromise);
+  try {
+    return await extractPromise;
+  } catch (error) {
+    try {
+      if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
+    } catch {
+      // ignore cache cleanup errors
+    }
+    throw error;
+  } finally {
+    archiveVideoExtractPromises.delete(cachePath);
+  }
+}
+
+function serveLocalFileWithRange(req, res, filePath, mimeType) {
+  const stat = fs.statSync(filePath);
+  const fileSize = stat.size;
+  const range = req.headers.range;
+  const commonHeaders = {
+    'Content-Type': mimeType,
+    'Accept-Ranges': 'bytes',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, HEAD',
+    'Access-Control-Allow-Headers': 'Range'
+  };
+
+  if (range) {
+    const parts = range.replace(/bytes=/, '').split('-');
+    const start = parseInt(parts[0], 10);
+    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+    if (Number.isNaN(start) || start >= fileSize || start < 0) {
+      res.writeHead(416, {
+        ...commonHeaders,
+        'Content-Range': `bytes */${fileSize}`
+      });
+      res.end();
+      return;
+    }
+
+    const safeEnd = Math.min(end, fileSize - 1);
+    const chunkSize = (safeEnd - start) + 1;
+    res.writeHead(206, {
+      ...commonHeaders,
+      'Content-Range': `bytes ${start}-${safeEnd}/${fileSize}`,
+      'Content-Length': chunkSize
+    });
+    if (req.method === 'HEAD') {
+      res.end();
+      return;
+    }
+    fs.createReadStream(filePath, { start, end: safeEnd }).pipe(res);
+    return;
+  }
+
+  res.writeHead(200, {
+    ...commonHeaders,
+    'Content-Length': fileSize
+  });
+  if (req.method === 'HEAD') {
+    res.end();
+    return;
+  }
+  fs.createReadStream(filePath).pipe(res);
+}
+
 let videoServerPort = 17345;
 globalThis.videoServerPort = videoServerPort;
 function startVideoHttpServer() {
@@ -735,10 +860,6 @@ function startVideoHttpServer() {
         res.end('Not found');
         return;
       }
-      // Range 헤더 지원
-      const stat = fs.statSync(resolvedPath);
-      const fileSize = stat.size;
-      const range = req.headers.range;
       const mimeTypes = {
         '.mp4': 'video/mp4',
         '.webm': 'video/webm',
@@ -753,64 +874,37 @@ function startVideoHttpServer() {
         '.ts': 'video/mp2t'
       };
       const mimeType = mimeTypes[ext] || 'application/octet-stream';
-      if (range) {
-        const parts = range.replace(/bytes=/, '').split('-');
-        const start = parseInt(parts[0], 10);
-        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-        const chunkSize = (end - start) + 1;
-        const file = fs.createReadStream(resolvedPath, { start, end });
-        res.writeHead(206, {
-          'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-          'Accept-Ranges': 'bytes',
-          'Content-Length': chunkSize,
-          'Content-Type': mimeType,
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, HEAD',
-          'Access-Control-Allow-Headers': 'Range'
-        });
-        file.pipe(res);
-      } else {
-        res.writeHead(200, {
-          'Content-Length': fileSize,
-          'Content-Type': mimeType,
-          'Accept-Ranges': 'bytes',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, HEAD',
-          'Content-Type': mimeType
-        });
-        fs.createReadStream(resolvedPath).pipe(res);
-      }
+      serveLocalFileWithRange(req, res, resolvedPath, mimeType);
     } else if (urlObj.pathname === '/archive-video') {
-      // 압축파일 내 동영상 스트리밍 (대용량 대응: 전체 버퍼링 없이 스트림으로 전달)
       const archivePath = decodeURIComponent(urlObj.searchParams.get('archive') || '');
       const fileName = decodeURIComponent(urlObj.searchParams.get('file') || '');
-      
+
       if (!archivePath || !fileName) {
         res.writeHead(400);
         res.end('Missing parameters');
         return;
       }
-      
+
       let resolvedArchivePath = archivePath;
       if (!path.isAbsolute(archivePath)) {
         resolvedArchivePath = path.join(appDataDir, archivePath);
       }
-      
+
       if (!fs.existsSync(resolvedArchivePath)) {
         res.writeHead(404);
         res.end('Archive not found');
         return;
       }
-      
+
       const fileExt = path.extname(fileName).toLowerCase();
       const isVideo = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'].includes(fileExt);
-      
+
       if (!isVideo) {
         res.writeHead(400);
         res.end('Not a video file');
         return;
       }
-      
+
       const mimeTypes = {
         '.mp4': 'video/mp4',
         '.webm': 'video/webm',
@@ -825,45 +919,20 @@ function startVideoHttpServer() {
         '.ts': 'video/mp2t'
       };
       const mimeType = mimeTypes[fileExt] || 'application/octet-stream';
-      
-      const unzipper = require('unzipper');
-      let responded = false;
-      
-      fs.createReadStream(resolvedArchivePath)
-        .pipe(unzipper.Parse())
-        .on('entry', (entry) => {
-          if (responded) {
-            entry.autodrain();
+
+      ensureArchiveVideoExtracted(resolvedArchivePath, fileName)
+        .then((extractedPath) => {
+          if (!extractedPath || !fs.existsSync(extractedPath)) {
+            if (!res.headersSent) {
+              res.writeHead(404);
+              res.end('File not found in archive');
+            }
             return;
           }
-          
-          if (entry.path === fileName && entry.type === 'File') {
-            responded = true;
-            res.writeHead(200, {
-              'Content-Type': mimeType,
-              'Access-Control-Allow-Origin': '*',
-              'Access-Control-Allow-Methods': 'GET, HEAD'
-            });
-            
-            entry.on('error', () => {
-              if (!res.headersSent) {
-                res.writeHead(500);
-              }
-              res.end('Error reading file from archive');
-            });
-            
-            entry.pipe(res);
-          } else {
-            entry.autodrain();
-          }
+          serveLocalFileWithRange(req, res, extractedPath, mimeType);
         })
-        .on('close', () => {
-          if (!responded && !res.headersSent) {
-            res.writeHead(404);
-            res.end('File not found in archive');
-          }
-        })
-        .on('error', () => {
+        .catch((error) => {
+          log('Error streaming archive video:', error);
           if (!res.headersSent) {
             res.writeHead(500);
             res.end('Error reading archive');
@@ -3785,7 +3854,7 @@ ipcMain.handle('getArchiveFiles', async (_, filePath) => {
         .pipe(unzipper.Parse())
         .on('entry', function (entry) {
           entries.push({
-            name: entry.path,
+            name: normalizeZipPath(entry.path),
             size: entry.vars.uncompressedSize,
             isDirectory: entry.type === 'Directory',
             comment: ''
@@ -3815,7 +3884,7 @@ ipcMain.handle('getArchiveFileDataUrl', async (_, filePath, fileName) => {
       fs.createReadStream(filePath)
         .pipe(unzipper.Parse())
         .on('entry', function (entry) {
-          if (entry.path === fileName && entry.type === 'File') {
+          if (isSameZipEntry(entry.path, fileName) && entry.type === 'File') {
             const chunks = [];
             entry.on('data', chunk => chunks.push(chunk));
             entry.on('end', () => {
@@ -3880,7 +3949,7 @@ ipcMain.handle('getArchiveFileStreamInfo', async (_, filePath, fileName) => {
       fs.createReadStream(filePath)
         .pipe(unzipper.Parse())
         .on('entry', function (entry) {
-          if (entry.path === fileName && entry.type === 'File') {
+          if (isSameZipEntry(entry.path, fileName) && entry.type === 'File') {
             const fileSizeInMB = entry.vars.uncompressedSize / (1024 * 1024);
             
             // 50MB 이상인 경우 스트리밍 방식 사용
@@ -3927,7 +3996,7 @@ ipcMain.handle('getArchiveFileText', async (_, filePath, fileName) => {
       fs.createReadStream(filePath)
         .pipe(unzipper.Parse())
         .on('entry', function (entry) {
-          if (entry.path === fileName && entry.type === 'File') {
+          if (isSameZipEntry(entry.path, fileName) && entry.type === 'File') {
             const fileExt = path.extname(fileName).toLowerCase();
             
             // 텍스트 파일만 처리
