@@ -128,12 +128,19 @@ const App = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState('');
   const customColorInputRef = useRef<HTMLInputElement | null>(null);
+  const passwordInputRef = useRef<HTMLInputElement | null>(null);
 
   const selectedProfileInitial = useMemo(
     () => (newProfileName.trim().charAt(0) || 'P').toUpperCase(),
     [newProfileName]
   );
   const isCustomColorSelected = !PROFILE_COLORS.includes(selectedProfileColor);
+
+  const keepPasswordInputFocus = () => {
+    window.requestAnimationFrame(() => {
+      passwordInputRef.current?.focus();
+    });
+  };
 
   useEffect(() => {
     const handleAuxClick = (e: MouseEvent) => {
@@ -425,7 +432,14 @@ const App = () => {
           />
           <div className="flex-1 min-h-0">
             {isCheckingPassword ? null : requiresPassword ? (
-              <div className="h-full flex items-center justify-center bg-discord-bg p-6">
+              <div
+                className="h-full flex items-center justify-center bg-discord-bg p-6"
+                onMouseDownCapture={(e) => {
+                  if (e.target === passwordInputRef.current) return;
+                  e.preventDefault();
+                  keepPasswordInputFocus();
+                }}
+              >
                 <GateCard
                   title="앱 잠금 해제"
                   description="비밀번호를 입력한 뒤 프로필을 선택할 수 있습니다."
@@ -433,6 +447,7 @@ const App = () => {
                 >
                   <div className="max-w-md space-y-3">
                     <Input
+                      ref={passwordInputRef}
                       type="password"
                       value={passwordInput}
                       onChange={(e) => {
@@ -442,6 +457,11 @@ const App = () => {
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           void handleUnlock();
+                        }
+                      }}
+                      onBlur={() => {
+                        if (requiresPassword) {
+                          keepPasswordInputFocus();
                         }
                       }}
                       className="bg-discord-bg border-gray-600 text-discord-text"
