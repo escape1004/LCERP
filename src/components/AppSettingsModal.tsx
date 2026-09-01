@@ -389,9 +389,9 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
       </div>
 
       <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
-        <div className="text-sm font-medium text-white">브라우저 확대 배율</div>
+        <div className="text-sm font-medium text-white">UI 확대 배율</div>
         <p className="text-sm text-discord-muted mt-2 leading-6">
-          앱 전체 화면에 적용할 확대 배율을 고정합니다. 단축키나 브라우저 기본 확대/축소로는 변경되지 않습니다.
+          앱 전체 화면에 적용할 확대 배율을 고정합니다. 단축키나 UI 기본 확대/축소로는 변경되지 않습니다.
         </p>
 
         <div className="mt-5 flex items-end gap-3 max-w-md">
