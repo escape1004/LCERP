@@ -18,6 +18,7 @@ import { AlertTriangle, Archive, Calendar, FileText, Folder, Image, Link2Off, Vi
 import { Sidebar } from '../components/Sidebar';
 import { useERPStore } from '../hooks/useERPStore';
 import { Category, DashboardWarningItem, DataRecord } from '../types';
+import { isSeparatorCategory } from '../lib/category';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { RecordModal } from '../components/RecordModal';
 import { ViewRecordModal } from '../components/ViewRecordModal';
@@ -108,9 +109,11 @@ export default function Dashboard() {
 
         const store = useERPStore.getState();
         const loadedCategories = store.categories;
-        const allCategories = [...loadedCategories].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        const allCategories = loadedCategories
+          .filter((cat) => !isSeparatorCategory(cat))
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         const rootCategories = loadedCategories
-          .filter((cat) => !cat.parentId)
+          .filter((cat) => !cat.parentId && !isSeparatorCategory(cat))
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
         if (rootCategories.length === 0) {
@@ -211,7 +214,7 @@ export default function Dashboard() {
   };
 
   const totalStats = useMemo(() => {
-    const rootCategories = categories.filter((cat) => !cat.parentId);
+    const rootCategories = categories.filter((cat) => !cat.parentId && !isSeparatorCategory(cat));
     return {
       totalCategories: rootCategories.length,
       totalRecords: categoryStats.reduce((sum, stat) => sum + stat.recordCount, 0),
@@ -391,7 +394,7 @@ export default function Dashboard() {
     );
   }
 
-  const rootCategories = categories.filter((cat) => !cat.parentId);
+  const rootCategories = categories.filter((cat) => !cat.parentId && !isSeparatorCategory(cat));
   if (rootCategories.length === 0) {
     return (
       <div className="flex h-full overflow-hidden">

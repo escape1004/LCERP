@@ -1,7 +1,10 @@
+export type CategoryItemType = 'category' | 'separator';
+
 export interface Category {
   id: string;
   profileId?: string;
   name: string;
+  itemType?: CategoryItemType;
   parentId?: string;
   fields: FieldDefinition[];
   order: number;
@@ -11,6 +14,7 @@ export interface Category {
 
 export interface NewCategory {
   name: string;
+  itemType?: CategoryItemType;
   parentId?: string;
   fields: FieldDefinition[];
   order: number;
@@ -20,6 +24,7 @@ export interface NewCategory {
 
 export interface CategoryUpdate {
   name: string;
+  itemType?: CategoryItemType;
   parentId?: string;
   fields: FieldDefinition[];
   order?: number;

@@ -19,6 +19,7 @@ export interface FieldDefinition {
 export interface Category {
   id: string;
   name: string;
+  itemType?: 'category' | 'separator';
   parentId?: string;
   fields: FieldDefinition[];
   order: number;

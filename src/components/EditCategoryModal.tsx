@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from './ui/select';
 import { Category, FieldDefinition, NewCategory } from '../types';
+import { isSeparatorCategory } from '../lib/category';
 import { useERPStore } from '../hooks/useERPStore';
 import { useLoadingStore } from '../hooks/useLoadingStore';
 import { v4 as uuidv4 } from 'uuid';
@@ -223,7 +224,7 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, onChange, onDelete, ca
               <SelectValue placeholder="카테고리 선택" />
             </SelectTrigger>
             <SelectContent>
-              {categories.map((category) => (
+              {categories.filter((category) => !isSeparatorCategory(category)).map((category) => (
                 <SelectItem key={category.id} value={category.id}>
                   {category.name}
                 </SelectItem>
@@ -445,7 +446,7 @@ export const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
                     field={field}
                     onChange={(updatedField) => handleFieldChange(index, updatedField)}
                     onDelete={() => deleteField(index)}
-                    categories={categories.filter(cat => cat.id !== category?.id)}
+                    categories={categories.filter(cat => cat.id !== category?.id && !isSeparatorCategory(cat))}
                     onShowAlert={showAlert}
                   />
                 ))}

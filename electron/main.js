@@ -659,6 +659,7 @@ function initializeDatabase() {
         parentId TEXT,
         fields TEXT NOT NULL,
         order_num INTEGER,
+        itemType TEXT DEFAULT 'category',
         createdAt TEXT,
         updatedAt TEXT,
         FOREIGN KEY (parentId) REFERENCES categories(id)
@@ -683,6 +684,10 @@ function initializeDatabase() {
     const categoryColumns = db.prepare("PRAGMA table_info(categories)").all();
     if (!categoryColumns.some(col => col.name === 'profileId')) {
       db.exec('ALTER TABLE categories ADD COLUMN profileId TEXT');
+    }
+    if (!categoryColumns.some(col => col.name === 'itemType')) {
+      db.exec("ALTER TABLE categories ADD COLUMN itemType TEXT DEFAULT 'category'");
+      db.exec("UPDATE categories SET itemType = 'category' WHERE itemType IS NULL OR itemType = ''");
     }
 
     const columns = db.prepare("PRAGMA table_info(records)").all();
@@ -2470,6 +2475,7 @@ ipcMain.handle('db:getCategories', async () => {
     return categories.map(cat => ({
       ...cat,
       order: cat.order_num ?? 0,
+      itemType: cat.itemType === 'separator' ? 'separator' : 'category',
       fields: JSON.parse(cat.fields)
     }));
   } catch (error) {
@@ -2517,15 +2523,16 @@ ipcMain.handle('db:addCategory', async (_, category) => {
   
   try {
     db.prepare(`
-      INSERT INTO categories (id, profileId, name, parentId, fields, order_num, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO categories (id, profileId, name, parentId, fields, order_num, itemType, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       profileId,
       category.name,
-      category.parentId || null,
-      JSON.stringify(category.fields),
+      category.itemType === 'separator' ? null : (category.parentId || null),
+      JSON.stringify(category.itemType === 'separator' ? [] : (category.fields || [])),
       category.order_num ?? category.order ?? 0,
+      category.itemType === 'separator' ? 'separator' : 'category',
       now,
       now
     );
@@ -3218,7 +3225,7 @@ function getCategorySubtree(rootId, allCategories) {
 
 ipcMain.handle('category:export', async (_, categoryId) => {
   try {
-    const categories = db.prepare('SELECT id, name, parentId, fields, order_num, createdAt, updatedAt FROM categories').all();
+    const categories = db.prepare('SELECT id, name, parentId, fields, order_num, itemType, createdAt, updatedAt FROM categories').all();
     const subtree = getCategorySubtree(categoryId, categories);
     if (subtree.length === 0) {
       return { success: false, error: 'Category not found' };
@@ -3234,6 +3241,7 @@ ipcMain.handle('category:export', async (_, categoryId) => {
         parentId: cat.parentId,
         fields: JSON.parse(cat.fields),
         order_num: cat.order_num ?? 0,
+        itemType: cat.itemType === 'separator' ? 'separator' : 'category',
         createdAt: cat.createdAt,
         updatedAt: cat.updatedAt
       }))
@@ -3301,8 +3309,8 @@ ipcMain.handle('category:import', async () => {
     })();
 
     const insertStmt = db.prepare(`
-      INSERT INTO categories (id, profileId, name, parentId, fields, order_num, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO categories (id, profileId, name, parentId, fields, order_num, itemType, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const dfsInsert = (parentId) => {
@@ -3310,15 +3318,17 @@ ipcMain.handle('category:import', async () => {
       for (const child of children) {
         const newId = generateUUID();
         oldToNew.set(child.id, newId);
-        const newParentId = parentId ? oldToNew.get(parentId) : null;
+        const isSeparator = child.itemType === 'separator';
+        const newParentId = isSeparator ? null : (parentId ? oldToNew.get(parentId) : null);
         const orderNum = getNextOrder(newParentId || null);
         insertStmt.run(
           newId,
           profileId,
           child.name,
           newParentId,
-          JSON.stringify(child.fields),
+          JSON.stringify(isSeparator ? [] : (child.fields || [])),
           orderNum,
+          isSeparator ? 'separator' : 'category',
           now,
           now
         );
@@ -3963,16 +3973,22 @@ ipcMain.handle('db:updateCategory', (event, id, updates) => {
   const thumbnailEntries = collectThumbnailMigrationEntries(subtreeIds, profileId);
   const previousCategoryDirs = getStructuredThumbnailDirsForCategoryIds(subtreeIds, profileId);
   const nextOrder = updates.order_num ?? updates.order ?? existingCategory.order_num ?? 0;
+  const nextItemType = updates.itemType === 'separator' || existingCategory.itemType === 'separator'
+    ? 'separator'
+    : (updates.itemType || existingCategory.itemType || 'category');
+  const nextParentId = nextItemType === 'separator' ? null : (updates.parentId || null);
+  const nextFields = nextItemType === 'separator' ? [] : (updates.fields ?? JSON.parse(existingCategory.fields || '[]'));
   const stmt = db.prepare(`
     UPDATE categories
-    SET name = ?, parentId = ?, fields = ?, order_num = ?, updatedAt = ?
+    SET name = ?, parentId = ?, fields = ?, order_num = ?, itemType = ?, updatedAt = ?
     WHERE id = ? AND profileId = ?
   `);
   stmt.run(
     updates.name,
-    updates.parentId || null,
-    JSON.stringify(updates.fields),
+    nextParentId,
+    JSON.stringify(nextFields),
     nextOrder,
+    nextItemType,
     new Date().toISOString(),
     id,
     profileId

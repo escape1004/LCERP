@@ -3,6 +3,7 @@ import { X, GripVertical, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-re
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { useERPStore } from '../hooks/useERPStore';
 import { Category, FieldDefinition, NewCategory } from '../types';
+import { isSeparatorCategory } from '../lib/category';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -276,6 +277,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
         const now = new Date().toISOString();
         const newCategory: NewCategory = {
           name: formData.name,
+          itemType: 'category',
           parentId: formData.parentId,
           fields: normalizedFields,
           order: categories.length,
@@ -457,7 +459,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                 <SelectContent className="bg-discord-sidebar border-gray-600">
                   <SelectItem value="none">없음 (최상위 카테고리)</SelectItem>
                   {categories
-                    .filter(cat => !cat.parentId && cat.id !== category?.id)
+                    .filter(cat => !cat.parentId && cat.id !== category?.id && !isSeparatorCategory(cat))
                     .map(cat => (
                       <SelectItem key={cat.id} value={cat.id}>
                         {cat.name}
@@ -793,7 +795,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                           </SelectTrigger>
                                           <SelectContent className="bg-[#2b2d31] border-gray-600">
                                             {(() => {
-                                              const selectableCategories = categories.filter(c => c.id !== category?.id);
+                                              const selectableCategories = categories.filter(c => c.id !== category?.id && !isSeparatorCategory(c));
                                               if (selectableCategories.length === 0) {
                                                 return (
                                                   <div className="px-4 py-2 text-sm text-center text-gray-500">

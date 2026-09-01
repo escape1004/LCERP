@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Sidebar } from '../components/Sidebar';
 import { MainContent } from '../components/MainContent';
 import { useERPStore } from '../hooks/useERPStore';
+import { isSeparatorCategory } from '../lib/category';
 
 type CategoryRouteState = {
   categoryId?: string;
@@ -44,7 +45,10 @@ const Index = () => {
       return;
     }
 
-    if (categories.length > 0 && !categories.some((category) => category.id === selectedCategoryId)) {
+    if (
+      categories.length > 0
+      && !categories.some((category) => category.id === selectedCategoryId && !isSeparatorCategory(category))
+    ) {
       selectCategory(null);
       navigate('/dashboard', { replace: true });
     }
@@ -58,7 +62,7 @@ const Index = () => {
     !showDbViewer
     && selectedCategoryId
     && categories.length > 0
-    && !categories.some((category) => category.id === selectedCategoryId)
+    && !categories.some((category) => category.id === selectedCategoryId && !isSeparatorCategory(category))
   ) {
     return <Navigate to="/dashboard" replace />;
   }

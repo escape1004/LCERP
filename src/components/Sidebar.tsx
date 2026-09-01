@@ -5,6 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useERPStore } from '../hooks/useERPStore';
 import { useLoadingStore } from '../hooks/useLoadingStore';
 import { Category, Profile } from '../types';
+import { isSeparatorCategory } from '../lib/category';
 import { Button } from './ui/button';
 import { CategoryModal } from './CategoryModal';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -40,6 +41,7 @@ export const Sidebar: React.FC = () => {
     showDbViewer,
     deleteCategory,
     loadCategories,
+    addCategory,
     currentProfile,
     setCurrentProfile,
     resetForProfile,
@@ -184,6 +186,38 @@ export const Sidebar: React.FC = () => {
     }
   };
 
+  const handleAddSeparator = async () => {
+    const now = new Date().toISOString();
+    const rootItems = categories.filter((cat) => !cat.parentId);
+    const nextOrder = rootItems.reduce((max, cat) => Math.max(max, cat.order ?? 0), -1) + 1;
+
+    try {
+      await addCategory({
+        name: '구분선',
+        itemType: 'separator',
+        fields: [],
+        order: nextOrder,
+        createdAt: now,
+        updatedAt: now,
+      });
+    } catch (error) {
+      toast({ title: '구분선 추가 중 오류가 발생했습니다.', variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteSeparator = async (separator: Category) => {
+    try {
+      if (selectedCategoryId === separator.id) {
+        selectCategory(null);
+        setShowDbViewer(false);
+        navigate('/dashboard', { replace: true });
+      }
+      await deleteCategory(separator.id);
+    } catch (error) {
+      toast({ title: '구분선 삭제 중 오류가 발생했습니다.', variant: 'destructive' });
+    }
+  };
+
   const openDeleteConfirm = (category: Category) => {
     setDeleteTarget(category);
     setDeleteInput('');
@@ -280,7 +314,36 @@ export const Sidebar: React.FC = () => {
     }
   };
 
+  const renderSeparator = (category: Category, level = 0, dragHandleProps?: any) => (
+    <div key={category.id}>
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <div
+            className="flex items-center px-3 py-2 mb-1 rounded cursor-grab hover:bg-discord-hover/60"
+            style={{ paddingLeft: `${12 + level * 12}px` }}
+            onClick={(event) => event.preventDefault()}
+            {...dragHandleProps}
+          >
+            <div className="h-px flex-1 bg-gray-600" />
+          </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuItem
+            className="text-red-400 focus:text-red-300"
+            onClick={() => void handleDeleteSeparator(category)}
+          >
+            구분선 삭제
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+    </div>
+  );
+
   const renderCategory = (category: Category, level = 0) => {
+    if (isSeparatorCategory(category)) {
+      return renderSeparator(category, level);
+    }
+
     const subCategories = getSubCategories(category.id);
     const isSelected = selectedCategoryId === category.id;
     const showSubCategories = shouldShowSubCategories(category.id);
@@ -384,6 +447,10 @@ export const Sidebar: React.FC = () => {
   };
 
   const renderDraggableCategory = (category: Category, level = 0, dragHandleProps?: any) => {
+    if (isSeparatorCategory(category)) {
+      return renderSeparator(category, level, dragHandleProps);
+    }
+
     const subCategories = getSubCategories(category.id);
     const isSelected = selectedCategoryId === category.id;
     const showSubCategories = shouldShowSubCategories(category.id);
@@ -608,6 +675,9 @@ export const Sidebar: React.FC = () => {
               <ContextMenuContent>
                 <ContextMenuItem onClick={handleImportCategories}>
                   카테고리 붙여넣기
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => void handleAddSeparator()}>
+                  구분선 추가
                 </ContextMenuItem>
               </ContextMenuContent>
             </ContextMenu>
