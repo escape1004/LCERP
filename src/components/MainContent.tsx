@@ -228,6 +228,31 @@ const renderUrl = (url: string, onSelectRow?: () => void, displayText?: string) 
   </div>
 );
 
+const renderGalleryCopyableText = (
+  text: string,
+  successDescription: string,
+  onSelectRow?: () => void,
+  className?: string
+) => (
+  <TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={className}
+          onClick={async (e) => {
+            await copyOnCtrlClick(e, text, successDescription, onSelectRow);
+          }}
+        >
+          {text}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" align="center" className={TOOLTIP_CONTENT_CLASSNAME}>
+        Ctrl+클릭하여 복사
+      </TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
+);
+
 // 필드 값 포맷팅 함수
 const formatFieldValue = (field: FieldDefinition, value: any, categories: Category[], getCategoryRecords: (categoryId: string) => DataRecord[], onViewRelatedRecord?: (record: DataRecord, category: Category) => void, onSelectRow?: () => void) => {
   const urlPattern = /^https?:\/\/.+/;
@@ -2333,6 +2358,7 @@ export const MainContent: React.FC = () => {
                     >
                       {paginatedRecords.map((record) => {
                         const title = galleryTitleField ? getGalleryFieldText(record, galleryTitleField) : record.id;
+                        const selectGalleryRecord = () => setSelectedRecordId(record.id);
                         return (
                           <ContextMenu key={record.id}>
                             <ContextMenuTrigger asChild>
@@ -2371,16 +2397,24 @@ export const MainContent: React.FC = () => {
                                 <div className="space-y-3 p-4">
                                   <div>
                                     <h3 className="truncate text-sm font-semibold text-discord-text">
-                                      {title}
+                                      {renderGalleryCopyableText(
+                                        title,
+                                        '값이 클립보드에 복사되었습니다.',
+                                        selectGalleryRecord,
+                                        'block truncate rounded px-1 py-0.5 transition-colors hover:bg-discord-hover/50'
+                                      )}
                                     </h3>
                                   </div>
                                   <div className="space-y-2">
                                     {galleryDetailFields.map((field) => (
                                       <div key={field.id} className="flex items-start justify-between gap-3 text-xs">
                                         <span className="shrink-0 text-discord-muted">{field.name}</span>
-                                        <span className="line-clamp-2 text-right text-discord-text">
-                                          {getGalleryFieldText(record, field)}
-                                        </span>
+                                        {renderGalleryCopyableText(
+                                          getGalleryFieldText(record, field),
+                                          '값이 클립보드에 복사되었습니다.',
+                                          selectGalleryRecord,
+                                          'line-clamp-2 text-right text-discord-text rounded px-1 py-0.5 transition-colors hover:bg-discord-hover/50'
+                                        )}
                                       </div>
                                     ))}
                                   </div>
