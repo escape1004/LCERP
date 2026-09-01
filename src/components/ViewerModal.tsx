@@ -1791,33 +1791,45 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                 <div className="w-full h-full flex flex-row">
                   {/* 사이드 파일 리스트 */}
                   <div className="h-full w-48 bg-discord-sidebar border-r border-gray-700 overflow-y-auto flex-shrink-0">
-                    <ul className="py-2">
-                      {archiveFiles.map((file, idx) => {
-                        const fileExt = file.name.toLowerCase().split('.').pop();
-                        const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name);
-                        const isVideo = /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(file.name);
-                        const isText = fileExt === 'txt';
-                        
-                        return (
-                          <li
-                            key={file.name}
-                            className={`flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-discord-hover rounded ${idx === currentArchiveIndex ? 'bg-discord-hover font-bold' : ''}`}
-                            onClick={() => {
-                              if (idx !== currentArchiveIndex) {
-                                setCurrentArchiveDataUrl(null);
-                                setCurrentArchiveText(null);
-                                setCurrentArchiveIndex(idx);
-                              }
-                            }}
-                          >
-                            {isImage && <FileImage size={14} className="text-blue-400 flex-shrink-0" />}
-                            {isVideo && <FileVideo size={14} className="text-green-400 flex-shrink-0" />}
-                            {isText && <FileText size={14} className="text-green-400 flex-shrink-0" />}
-                            <span className="truncate flex-1">{file.name}</span>
-                          </li>
-                        );
-                      })}
-                    </ul>
+                    <TooltipProvider>
+                      <ul className="py-2">
+                        {archiveFiles.map((file, idx) => {
+                          const fileExt = file.name.toLowerCase().split('.').pop();
+                          const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name);
+                          const isVideo = /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(file.name);
+                          const isText = fileExt === 'txt';
+                          
+                          return (
+                            <Tooltip key={file.name}>
+                              <TooltipTrigger asChild>
+                                <li
+                                  className={`flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-discord-hover rounded ${idx === currentArchiveIndex ? 'bg-discord-hover font-bold' : ''}`}
+                                  onClick={() => {
+                                    if (idx !== currentArchiveIndex) {
+                                      setCurrentArchiveDataUrl(null);
+                                      setCurrentArchiveText(null);
+                                      setCurrentArchiveIndex(idx);
+                                    }
+                                  }}
+                                >
+                                  {isImage && <FileImage size={14} className="text-blue-400 flex-shrink-0" />}
+                                  {isVideo && <FileVideo size={14} className="text-green-400 flex-shrink-0" />}
+                                  {isText && <FileText size={14} className="text-green-400 flex-shrink-0" />}
+                                  <span className="truncate flex-1 min-w-0">{file.name}</span>
+                                </li>
+                              </TooltipTrigger>
+                              <TooltipContent
+                                side="right"
+                                align="center"
+                                className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs max-w-sm break-all"
+                              >
+                                {file.name}
+                              </TooltipContent>
+                            </Tooltip>
+                          );
+                        })}
+                      </ul>
+                    </TooltipProvider>
                   </div>
                   {/* 파일 내용 영역 */}
                   <div className="flex-1 flex flex-col h-full">
