@@ -71,6 +71,7 @@ export interface ElectronAPI {
   getDashboardWarnings: (previewLimit?: number) => Promise<DashboardWarningsResult>;
   checkDuplicate: (categoryId: string, fieldId: string, value: any, recordId?: string) => Promise<{ isDuplicate: boolean }>;
   send: (channel: string, ...args: any[]) => void;
+  onRandomRecordShortcut: (callback: () => void) => () => void;
   openFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
   generateThumbnail: (filePath: string) => Promise<string | null>;
   getThumbnailDataUrl: (filePath: string) => Promise<string | null>;

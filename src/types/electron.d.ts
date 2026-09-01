@@ -80,6 +80,7 @@ export interface ElectronAPI {
   
   // New method
   send: (channel: string, ...args: any[]) => void;
+  onRandomRecordShortcut: (callback: () => void) => () => void;
 
   // New method
   getVideoDuration: (filePath: string) => Promise<number | null>;

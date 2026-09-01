@@ -527,6 +527,22 @@ function createWindow() {
 
     if (isZoomShortcut || isNumpadZoomShortcut) {
       event.preventDefault();
+      return;
+    }
+
+    const isReloadShortcut =
+      input.type === 'keyDown' &&
+      !input.isAutoRepeat &&
+      input.control &&
+      !input.alt &&
+      !input.meta &&
+      (input.key === 'r' || input.key === 'R');
+
+    if (isReloadShortcut) {
+      event.preventDefault();
+      if (!input.shift) {
+        mainWindow.webContents.send('shortcut:random-record');
+      }
     }
   });
 

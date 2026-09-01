@@ -1630,6 +1630,83 @@ export const MainContent: React.FC = () => {
     showGalleryZoomFeedback();
   }, [showGalleryView, showGalleryZoomFeedback, selectedCategoryId]);
 
+  const openRandomCategoryRecord = useCallback(() => {
+    const target = document.activeElement as HTMLElement | null;
+    const isEditableTarget = !!target && (
+      target.tagName === 'INPUT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.tagName === 'SELECT' ||
+      target.isContentEditable
+    );
+    if (isEditableTarget) {
+      return;
+    }
+
+    if (
+      showDbViewer ||
+      !selectedCategoryId ||
+      !selectedCategorySafe ||
+      isRecordModalOpen ||
+      isViewModalOpen ||
+      viewerModalOpen ||
+      isConfirmDialogOpen ||
+      isAlertDialogOpen
+    ) {
+      return;
+    }
+
+    if (currentRecordsSafe.length === 0) {
+      toast({
+        title: '레코드가 없습니다',
+        description: '이 카테고리에 레코드가 없어 무작위 열기를 할 수 없습니다.',
+      });
+      return;
+    }
+
+    const record = currentRecordsSafe[Math.floor(Math.random() * currentRecordsSafe.length)];
+    setSelectedRecordId(record.id);
+
+    const filePath = fileField
+      ? resolveFilePath(record.data[fileField.id], fileField)
+      : null;
+
+    if (filePath) {
+      setViewerFilePath(filePath);
+      setViewerFileType(null);
+      setViewerCategoryId(selectedCategorySafe.id);
+      setViewerRecordId(record.id);
+      setViewerModalOpen(true);
+      return;
+    }
+
+    setViewingRecord(record);
+    setViewingCategory(selectedCategorySafe.id);
+    setIsViewModalOpen(true);
+  }, [
+    showDbViewer,
+    selectedCategoryId,
+    selectedCategorySafe,
+    isRecordModalOpen,
+    isViewModalOpen,
+    viewerModalOpen,
+    isConfirmDialogOpen,
+    isAlertDialogOpen,
+    currentRecordsSafe,
+    fileField,
+  ]);
+
+  const openRandomCategoryRecordRef = useRef(openRandomCategoryRecord);
+  openRandomCategoryRecordRef.current = openRandomCategoryRecord;
+
+  useEffect(() => {
+    const unsubscribe = window.electronAPI.onRandomRecordShortcut?.(() => {
+      openRandomCategoryRecordRef.current();
+    });
+    return () => {
+      unsubscribe?.();
+    };
+  }, []);
+
   // Ctrl+좌우 방향키 페이지 이동 핸들러
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1643,6 +1720,12 @@ export const MainContent: React.FC = () => {
 
       // 모달이 열려있으면 단축키 비활성화
       if (isRecordModalOpen || isViewModalOpen || viewerModalOpen || isConfirmDialogOpen || isAlertDialogOpen) {
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === 'r' || e.key === 'R')) {
+        e.preventDefault();
+        openRandomCategoryRecord();
         return;
       }
 
@@ -1703,7 +1786,7 @@ export const MainContent: React.FC = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedCategoryId, selectedRecordId, paginatedRecords, sortedRecords, loadRecords, currentPage, totalPages, showLoading, hideLoading, isRecordModalOpen, isViewModalOpen, viewerModalOpen, isConfirmDialogOpen, isAlertDialogOpen]);
+  }, [selectedCategoryId, selectedRecordId, paginatedRecords, sortedRecords, loadRecords, currentPage, totalPages, showLoading, hideLoading, isRecordModalOpen, isViewModalOpen, viewerModalOpen, isConfirmDialogOpen, isAlertDialogOpen, openRandomCategoryRecord]);
 
   useEffect(() => {
     if (!selectedRecordId) return;

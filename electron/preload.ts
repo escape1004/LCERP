@@ -45,6 +45,11 @@ const api: ElectronAPI = {
   getAppRoot: () => ipcRenderer.invoke('getAppRoot'),
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
   send: (channel: string, ...args: any[]) => ipcRenderer.send(channel, ...args),
+  onRandomRecordShortcut: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on('shortcut:random-record', listener);
+    return () => ipcRenderer.removeListener('shortcut:random-record', listener);
+  },
   getDashboardWarnings: (previewLimit?: number) => ipcRenderer.invoke('dashboard:getWarnings', previewLimit),
   getVideoDuration: (filePath: string) => ipcRenderer.invoke('getVideoDuration', filePath),
   getVideoCodecInfo: (filePath: string) => ipcRenderer.invoke('getVideoCodecInfo', filePath),
