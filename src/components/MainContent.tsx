@@ -26,7 +26,10 @@ import { CategoryModal } from './CategoryModal';
 import { format } from "date-fns";
 import {
   ContextMenu,
+  ContextMenuCheckboxItem,
   ContextMenuContent,
+  ContextMenuLabel,
+  ContextMenuSeparator,
   ContextMenuItem,
   ContextMenuTrigger,
 } from "./ui/context-menu";
@@ -756,6 +759,7 @@ export const MainContent: React.FC = () => {
   const [fileTypeFilter, setFileTypeFilter] = useState<string>('all'); // 'all', 'image', 'video', 'archive'
   const [multiSelectSearchOpen, setMultiSelectSearchOpen] = useState(false);
   const [recordListView, setRecordListView] = useState<'table' | 'gallery'>('table');
+  const [galleryVisibleFieldIds, setGalleryVisibleFieldIds] = useState<string[]>([]);
 
   // 컬럼 너비 관리 (카테고리별로 저장)
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
@@ -1060,9 +1064,13 @@ export const MainContent: React.FC = () => {
     () => visibleFields.find((field) => field.type !== 'file') ?? null,
     [visibleFields]
   );
-  const galleryDetailFields = useMemo(
-    () => visibleFields.filter((field) => field.type !== 'file' && field.id !== galleryTitleField?.id).slice(0, 4),
+  const gallerySelectableFields = useMemo(
+    () => visibleFields.filter((field) => field.type !== 'file' && field.id !== galleryTitleField?.id),
     [visibleFields, galleryTitleField]
+  );
+  const galleryDetailFields = useMemo(
+    () => gallerySelectableFields.filter((field) => galleryVisibleFieldIds.includes(field.id)),
+    [gallerySelectableFields, galleryVisibleFieldIds]
   );
   const hasIncomingReferences = useMemo(
     () => Boolean(
@@ -1072,6 +1080,37 @@ export const MainContent: React.FC = () => {
     ),
     [categoriesSafe, selectedCategorySafe]
   );
+
+  useEffect(() => {
+    if (!selectedCategoryId || !supportsGalleryView) {
+      setGalleryVisibleFieldIds([]);
+      return;
+    }
+
+    const storageKey = `galleryVisibleFields_${selectedCategoryId}`;
+    const savedFieldIds = localStorage.getItem(storageKey);
+
+    if (savedFieldIds) {
+      try {
+        const parsed = JSON.parse(savedFieldIds);
+        if (Array.isArray(parsed)) {
+          const validFieldIds = gallerySelectableFields
+            .map((field) => field.id)
+            .filter((fieldId) => parsed.includes(fieldId));
+          setGalleryVisibleFieldIds(validFieldIds);
+          return;
+        }
+      } catch {
+      }
+    }
+
+    setGalleryVisibleFieldIds(gallerySelectableFields.slice(0, 4).map((field) => field.id));
+  }, [selectedCategoryId, supportsGalleryView, gallerySelectableFields]);
+
+  useEffect(() => {
+    if (!selectedCategoryId || !supportsGalleryView) return;
+    localStorage.setItem(`galleryVisibleFields_${selectedCategoryId}`, JSON.stringify(galleryVisibleFieldIds));
+  }, [selectedCategoryId, supportsGalleryView, galleryVisibleFieldIds]);
 
   useEffect(() => {
     if (!fileField) {
@@ -2288,24 +2327,52 @@ export const MainContent: React.FC = () => {
                       </TooltipTrigger>
                       <TooltipContent side="top" align="center" className={TOOLTIP_CONTENT_CLASSNAME}>테이블 뷰</TooltipContent>
                     </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          onClick={() => setRecordListView('gallery')}
-                          aria-label="갤러리 뷰"
-                          className={cn(
-                            "flex h-full w-10 items-center justify-center transition-colors",
-                            recordListView === 'gallery'
-                              ? "bg-discord-accent text-white"
-                              : "text-discord-muted hover:bg-discord-hover hover:text-discord-text"
-                          )}
-                        >
-                          <LayoutGrid size={16} />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" align="center" className={TOOLTIP_CONTENT_CLASSNAME}>갤러리 뷰</TooltipContent>
-                    </Tooltip>
+                    <ContextMenu>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <ContextMenuTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={() => setRecordListView('gallery')}
+                              aria-label="갤러리 뷰"
+                              className={cn(
+                                "flex h-full w-10 items-center justify-center transition-colors",
+                                recordListView === 'gallery'
+                                  ? "bg-discord-accent text-white"
+                                  : "text-discord-muted hover:bg-discord-hover hover:text-discord-text"
+                              )}
+                            >
+                              <LayoutGrid size={16} />
+                            </button>
+                          </ContextMenuTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" align="center" className={TOOLTIP_CONTENT_CLASSNAME}>갤러리 뷰</TooltipContent>
+                      </Tooltip>
+                      <ContextMenuContent className="min-w-[220px]">
+                        <ContextMenuLabel>갤러리 표시 항목</ContextMenuLabel>
+                        <ContextMenuSeparator />
+                        {galleryTitleField && (
+                          <ContextMenuCheckboxItem checked disabled>
+                            {galleryTitleField.name} (제목)
+                          </ContextMenuCheckboxItem>
+                        )}
+                        {gallerySelectableFields.map((field) => (
+                          <ContextMenuCheckboxItem
+                            key={field.id}
+                            checked={galleryVisibleFieldIds.includes(field.id)}
+                            onCheckedChange={(checked) => {
+                              setGalleryVisibleFieldIds((prev) => (
+                                checked === true
+                                  ? (prev.includes(field.id) ? prev : [...prev, field.id])
+                                  : prev.filter((fieldId) => fieldId !== field.id)
+                              ));
+                            }}
+                          >
+                            {field.name}
+                          </ContextMenuCheckboxItem>
+                        ))}
+                      </ContextMenuContent>
+                    </ContextMenu>
                   </div>
                 </TooltipProvider>
               )}
