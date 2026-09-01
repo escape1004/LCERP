@@ -955,19 +955,6 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
       } else {
         setHasEmbeddedCover(false);
       }
-/*        const codecInfo = await window.electronAPI.getVideoCodecInfo(filePath);
-        const hasCoverAfterRemoval = codecInfo?.hasEmbeddedCover === true;
-        setHasEmbeddedCover(hasCoverAfterRemoval);
-        if (hasCoverAfterRemoval) {
-          toast({
-            title: '而ㅼ뒪? ?몃꽕???쒓굅 ?ㅽ뙣',
-            description: '而ㅼ뒪? ?몃꽕?쇱씠 ?븘吏??섏씠??硫붾젰?곸뿉 ?꾨땲?뚯뒿?덈떎.',
-            variant: 'destructive',
-          });
-          return;
-        }
-*/
-
       return () => { ignore = true; };
     }, [isVideo, filePath]);
 
