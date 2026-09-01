@@ -56,6 +56,9 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   // 재생바 관련 상태 추가
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [loopRange, setLoopRange] = useState<{ start: number; end: number } | null>(null);
+  const [loopDraft, setLoopDraft] = useState<{ start: number; end: number } | null>(null);
+  const loopSelectionRef = useRef<{ input: HTMLInputElement; anchorTime: number } | null>(null);
   
   // 동영상 에러 상태 추가
   const [videoError, setVideoError] = useState<string | null>(null);
@@ -120,6 +123,49 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   // 파일 없음 상태 추가
   const [fileNotFound, setFileNotFound] = useState(false);
 
+  const isVideoFileName = useCallback((name?: string) => {
+    return Boolean(name && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(name));
+  }, []);
+
+  const getEffectiveFileType = useCallback(() => fileType || detectedFileType, [fileType, detectedFileType]);
+
+  const getActiveVideoElement = useCallback(() => {
+    const effectiveType = getEffectiveFileType();
+    if (effectiveType === 'video') {
+      return videoRef.current;
+    }
+
+    if (effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
+      const currentFile = archiveFiles[currentArchiveIndex];
+      if (isVideoFileName(currentFile?.name)) {
+        return archiveVideoRef.current;
+      }
+    }
+
+    return null;
+  }, [archiveFiles, currentArchiveIndex, getEffectiveFileType, isVideoFileName]);
+
+  const clearLoopSelection = useCallback(() => {
+    loopSelectionRef.current = null;
+    setLoopDraft(null);
+    setLoopRange(null);
+  }, []);
+
+  const handleLoopRangeEnded = useCallback(() => {
+    const activeVideo = getActiveVideoElement();
+    if (!activeVideo || !loopRange) return;
+
+    activeVideo.currentTime = loopRange.start;
+    setCurrentTime(loopRange.start);
+    activeVideo.play().catch(() => {});
+  }, [getActiveVideoElement, loopRange]);
+
+  const getSeekTimeFromPointer = useCallback((clientX: number, input: HTMLInputElement) => {
+    const rect = input.getBoundingClientRect();
+    const ratio = rect.width <= 0 ? 0 : Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    return ratio * duration;
+  }, [duration]);
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -182,6 +228,53 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       setDisplayRecordId(recordId);
     }
   }, [recordId]);
+
+  useEffect(() => {
+    clearLoopSelection();
+  }, [clearLoopSelection, displayFilePath, displayFileType, currentArchiveIndex, isOpen]);
+
+  useEffect(() => {
+    const handleMouseMove = (event: MouseEvent) => {
+      const selection = loopSelectionRef.current;
+      if (!selection) return;
+
+      const nextTime = getSeekTimeFromPointer(event.clientX, selection.input);
+      const start = Math.min(selection.anchorTime, nextTime);
+      const end = Math.max(selection.anchorTime, nextTime);
+      setLoopDraft({ start, end });
+    };
+
+    const handleMouseUp = (event: MouseEvent) => {
+      const selection = loopSelectionRef.current;
+      if (!selection) return;
+
+      const nextTime = getSeekTimeFromPointer(event.clientX, selection.input);
+      const start = Math.min(selection.anchorTime, nextTime);
+      const end = Math.max(selection.anchorTime, nextTime);
+
+      loopSelectionRef.current = null;
+      setLoopDraft(null);
+
+      if (end - start < 0.1) {
+        return;
+      }
+
+      setLoopRange({ start, end });
+      const activeVideo = getActiveVideoElement();
+      if (activeVideo && activeVideo.currentTime < start) {
+        activeVideo.currentTime = start;
+        setCurrentTime(start);
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [getActiveVideoElement, getSeekTimeFromPointer]);
 
   // 파일이 없을 때 북마크 자동 삭제
   useEffect(() => {
@@ -373,6 +466,12 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     }
   }, [playbackSpeed, fileType, detectedFileType, archiveFiles, currentArchiveIndex]);
 
+  useEffect(() => {
+    const activeVideo = getActiveVideoElement();
+    if (!activeVideo) return;
+    activeVideo.loop = isLooping && !loopRange;
+  }, [getActiveVideoElement, isLooping, loopRange]);
+
   // 배속 메뉴 외부 클릭 시 닫기
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -479,16 +578,11 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   };
 
   const handleLoopToggle = () => {
-    setIsLooping(!isLooping);
-    const effectiveType = fileType || detectedFileType;
-    if (videoRef.current && effectiveType === 'video') {
-      videoRef.current.loop = !isLooping;
-    }
-    if (archiveVideoRef.current && effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
-      const currentFile = archiveFiles[currentArchiveIndex];
-      if (currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name)) {
-        archiveVideoRef.current.loop = !isLooping;
-      }
+    const nextLooping = !isLooping;
+    setIsLooping(nextLooping);
+    const activeVideo = getActiveVideoElement();
+    if (activeVideo) {
+      activeVideo.loop = nextLooping && !loopRange;
     }
   };
 
@@ -556,62 +650,96 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
 
   // 재생바 관련 핸들러 추가
   const handleTimeUpdate = () => {
-    const effectiveType = fileType || detectedFileType;
-    if (videoRef.current && effectiveType === 'video') {
-      setCurrentTime(videoRef.current.currentTime);
-    }
-    if (archiveVideoRef.current && effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
-      const currentFile = archiveFiles[currentArchiveIndex];
-      if (currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name)) {
-        setCurrentTime(archiveVideoRef.current.currentTime);
+    const activeVideo = getActiveVideoElement();
+    if (!activeVideo) return;
+
+    if (loopRange && activeVideo.currentTime >= loopRange.end) {
+      activeVideo.currentTime = loopRange.start;
+      if (activeVideo.paused) {
+        activeVideo.play().catch(() => {});
       }
+      setCurrentTime(loopRange.start);
+      return;
     }
+
+    setCurrentTime(activeVideo.currentTime);
   };
 
   const handleLoadedMetadata = () => {
-    const effectiveType = fileType || detectedFileType;
-    if (videoRef.current && effectiveType === 'video') {
-      setDuration(videoRef.current.duration);
-      videoRef.current.volume = isMuted ? 0 : volume;
-      videoRef.current.muted = isMuted;
-      videoRef.current.loop = isLooping;
-      videoRef.current.playbackRate = playbackSpeed;
-      if (!videoAutoPlay) {
-        videoRef.current.pause();
-        videoRef.current.currentTime = 0;
-        setIsPlaying(false);
-      }
-    }
-    if (archiveVideoRef.current && effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
-      const currentFile = archiveFiles[currentArchiveIndex];
-      if (currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name)) {
-        setDuration(archiveVideoRef.current.duration);
-        archiveVideoRef.current.volume = isMuted ? 0 : volume;
-        archiveVideoRef.current.muted = isMuted;
-        archiveVideoRef.current.loop = isLooping;
-        archiveVideoRef.current.playbackRate = playbackSpeed;
-        if (!videoAutoPlay) {
-          archiveVideoRef.current.pause();
-          archiveVideoRef.current.currentTime = 0;
-          setIsPlaying(false);
-        }
-      }
+    const activeVideo = getActiveVideoElement();
+    if (!activeVideo) return;
+
+    setDuration(activeVideo.duration);
+    activeVideo.volume = isMuted ? 0 : volume;
+    activeVideo.muted = isMuted;
+    activeVideo.loop = isLooping && !loopRange;
+    activeVideo.playbackRate = playbackSpeed;
+    if (!videoAutoPlay) {
+      activeVideo.pause();
+      activeVideo.currentTime = 0;
+      setIsPlaying(false);
     }
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTime = parseFloat(e.target.value);
     setCurrentTime(newTime);
-    const effectiveType = fileType || detectedFileType;
-    if (videoRef.current && effectiveType === 'video') {
-      videoRef.current.currentTime = newTime;
+    const activeVideo = getActiveVideoElement();
+    if (activeVideo) {
+      activeVideo.currentTime = newTime;
     }
-    if (archiveVideoRef.current && effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
-      const currentFile = archiveFiles[currentArchiveIndex];
-      if (currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name)) {
-        archiveVideoRef.current.currentTime = newTime;
-      }
+  };
+
+  const handleSeekBarMouseDown = (e: React.MouseEvent<HTMLInputElement>) => {
+    const input = e.currentTarget;
+
+    if (e.shiftKey) {
+      e.preventDefault();
+      const anchorTime = getSeekTimeFromPointer(e.clientX, input);
+      loopSelectionRef.current = { input, anchorTime };
+      setLoopDraft({ start: anchorTime, end: anchorTime });
+      return;
     }
+
+    if (loopRange) {
+      clearLoopSelection();
+    }
+  };
+
+  const getVisibleLoopRange = () => loopDraft || loopRange;
+
+  const getSeekBarStyle = (): React.CSSProperties => {
+    const visibleRange = getVisibleLoopRange();
+    if (!visibleRange || duration <= 0) return {};
+
+    const startPercent = Math.max(0, Math.min(100, (visibleRange.start / duration) * 100));
+    const endPercent = Math.max(startPercent, Math.min(100, (visibleRange.end / duration) * 100));
+    const gradient = `linear-gradient(to right, #4b5563 0%, #4b5563 ${startPercent}%, #5865f2 ${startPercent}%, #5865f2 ${endPercent}%, #4b5563 ${endPercent}%, #4b5563 100%)`;
+
+    return {
+      ['--slider-track-bg' as string]: gradient,
+    };
+  };
+
+  const renderLoopRangeMarkers = () => {
+    const visibleRange = getVisibleLoopRange();
+    if (!visibleRange || duration <= 0) return null;
+
+    const startPercent = Math.max(0, Math.min(100, (visibleRange.start / duration) * 100));
+    const endPercent = Math.max(startPercent, Math.min(100, (visibleRange.end / duration) * 100));
+
+    return (
+      <div className="pointer-events-none absolute inset-x-0 top-[12px] z-[1] h-2">
+        <div
+          className="absolute left-0 top-0 h-full w-[2px] -translate-x-1/2 rounded-full bg-[#c7d2fe] shadow-[0_0_6px_rgba(199,210,254,0.55)]"
+          style={{ left: `${startPercent}%` }}
+        />
+        <div
+          className="absolute left-0 top-0 h-full w-[2px] -translate-x-1/2 rounded-full bg-[#c7d2fe] shadow-[0_0_6px_rgba(199,210,254,0.55)]"
+          style={{ left: `${endPercent}%` }}
+        />
+      </div>
+    );
   };
 
   const formatTime = (time: number) => {
@@ -1408,6 +1536,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                           onPause={() => setIsPlaying(false)}
                           onLoadedMetadata={handleLoadedMetadata}
                           onTimeUpdate={handleTimeUpdate}
+                          onEnded={handleLoopRangeEnded}
                           onClick={handleVideoClick}
                           onError={(e) => {
                             const video = e.target as HTMLVideoElement;
@@ -1472,9 +1601,12 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                           step={0.01}
                           value={currentTime}
                           onChange={handleSeek}
+                          onMouseDown={handleSeekBarMouseDown}
+                          style={getSeekBarStyle()}
                           className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
                           id="seekbar"
                         />
+                        {renderLoopRangeMarkers()}
                         {/* 북마크 마커 (일반 동영상에서만 표시) */}
                         {(effectiveFileType === 'video' && Array.isArray(bookmarks)) && bookmarks.map(bm => (
                           <div
@@ -1508,7 +1640,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                       </div>
                       <div className="flex justify-between text-white text-xs mt-1">
                         <span>{formatTime(currentTime)}</span>
-                        <span>{formatTime(duration)}</span>
+                        <span>{loopRange ? `${formatTime(loopRange.start)} - ${formatTime(loopRange.end)} · ` : ''}{formatTime(duration)}</span>
                       </div>
                     </div>
                     {/* 컨트롤바: 좌우 분리 */}
@@ -1821,6 +1953,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                   onPause={() => setIsPlaying(false)}
                                   onLoadedMetadata={handleLoadedMetadata}
                                   onTimeUpdate={handleTimeUpdate}
+                                  onEnded={handleLoopRangeEnded}
                                   onClick={handleVideoClick}
                                   onError={(e) => {
                                     const video = e.target as HTMLVideoElement;
@@ -1884,9 +2017,12 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                     step={0.01}
                                     value={currentTime}
                                     onChange={handleSeek}
+                                    onMouseDown={handleSeekBarMouseDown}
+                                    style={getSeekBarStyle()}
                                     className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
                                     id="seekbar"
                                   />
+                                  {renderLoopRangeMarkers()}
                                   {/* 북마크 마커 (일반 동영상에서만 표시) */}
                                   {(effectiveFileType === 'video' && Array.isArray(bookmarks)) && bookmarks.map(bm => (
                                     <div
@@ -1920,7 +2056,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                 </div>
                                 <div className="flex justify-between text-white text-xs mt-1">
                                   <span>{formatTime(currentTime)}</span>
-                                  <span>{formatTime(duration)}</span>
+                                  <span>{loopRange ? `${formatTime(loopRange.start)} - ${formatTime(loopRange.end)} · ` : ''}{formatTime(duration)}</span>
                                 </div>
                               </div>
                               {/* 컨트롤바: 좌우 분리 */}
