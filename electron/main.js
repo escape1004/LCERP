@@ -1338,6 +1338,102 @@ function getThumbnailTimestampForFile(filePath, duration) {
   return getAutoThumbnailTimestamp(duration);
 }
 
+const ARCHIVE_IMAGE_RE = /\.(jpg|jpeg|png|gif|webp)$/i;
+const ARCHIVE_VIDEO_RE = /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i;
+
+function listArchiveFileEntries(directory) {
+  return directory.files
+    .filter((entry) => entry.type !== 'Directory' && !String(entry.path || '').endsWith('/'))
+    .sort((a, b) => normalizeZipPath(a.path).localeCompare(normalizeZipPath(b.path), 'en'));
+}
+
+async function writeVideoFileThumbnail(sourcePath, thumbnailPath, thumbnailDir) {
+  const ffmpeg = require('fluent-ffmpeg');
+  const { ffmpegPath, ffprobePath } = getFfmpegToolPaths();
+  if (!ffmpegPath || !ffprobePath) {
+    log('ffmpeg/ffprobe 경로를 찾을 수 없음', { ffmpegPath, ffprobePath });
+    return false;
+  }
+
+  ffmpeg.setFfmpegPath(ffmpegPath);
+  ffmpeg.setFfprobePath(ffprobePath);
+
+  const duration = await new Promise((resolve) => {
+    ffmpeg.ffprobe(sourcePath, (err, metadata) => {
+      if (err || !metadata?.format?.duration) return resolve(null);
+      resolve(Number(metadata.format.duration));
+    });
+  });
+
+  const embeddedCoverPath = await extractEmbeddedVideoCover(sourcePath, thumbnailPath);
+  if (embeddedCoverPath && fs.existsSync(embeddedCoverPath)) {
+    return true;
+  }
+
+  await new Promise((resolve, reject) => {
+    ffmpeg(sourcePath)
+      .screenshots({
+        timestamps: [getAutoThumbnailTimestamp(duration)],
+        filename: path.basename(thumbnailPath),
+        folder: thumbnailDir,
+        size: '400x?'
+      })
+      .on('end', resolve)
+      .on('error', reject);
+  });
+
+  return fs.existsSync(thumbnailPath);
+}
+
+async function generateThumbnailFromArchive(archivePath, thumbnailPath, thumbnailDir) {
+  try {
+    const ext = path.extname(archivePath).toLowerCase();
+    if (ext === '.7z') {
+      log('7z 아카이브 썸네일은 지원하지 않음');
+      return null;
+    }
+
+    const directory = await unzipper.Open.file(archivePath);
+    const files = listArchiveFileEntries(directory);
+    const firstImage = files.find((entry) => ARCHIVE_IMAGE_RE.test(entry.path));
+
+    if (firstImage) {
+      const sharp = require('sharp');
+      const buffer = await firstImage.buffer();
+      await sharp(buffer)
+        .resize(400, 400, { fit: 'inside' })
+        .toFile(thumbnailPath);
+      log('아카이브 이미지 썸네일 생성 완료:', thumbnailPath);
+      return thumbnailPath;
+    }
+
+    const firstVideo = files.find((entry) => ARCHIVE_VIDEO_RE.test(entry.path));
+    if (!firstVideo) {
+      log('아카이브에서 이미지/영상을 찾을 수 없음');
+      return null;
+    }
+
+    log('아카이브 내 첫 영상으로 썸네일 생성 시도:', firstVideo.path);
+    const extractedPath = await ensureArchiveVideoExtracted(archivePath, firstVideo.path);
+    if (!extractedPath || !fs.existsSync(extractedPath)) {
+      log('아카이브 영상 추출 실패:', firstVideo.path);
+      return null;
+    }
+
+    const created = await writeVideoFileThumbnail(extractedPath, thumbnailPath, thumbnailDir);
+    if (!created) {
+      log('아카이브 영상 썸네일 생성 실패:', firstVideo.path);
+      return null;
+    }
+
+    log('아카이브 영상 썸네일 생성 완료:', thumbnailPath);
+    return thumbnailPath;
+  } catch (error) {
+    log('아카이브 썸네일 생성 실패:', error);
+    return null;
+  }
+}
+
 async function generateThumbnail(filePath, context = {}) {
   try {
     let normalizedPath = filePath;
@@ -1427,46 +1523,8 @@ async function generateThumbnail(filePath, context = {}) {
           });
       });
     } else if (isArchive) {
-      // 스트리밍 방식으로 첫 이미지 추출
-      let found = false;
-      await new Promise((resolve, reject) => {
-        fs.createReadStream(normalizedPath)
-          .pipe(unzipper.Parse())
-          .on('entry', async function (entry) {
-            const fileName = entry.path;
-            if (/\.(jpg|jpeg|png|gif|webp)$/i.test(fileName) && !found) {
-              found = true;
-              const chunks = [];
-              entry.on('data', chunk => chunks.push(chunk));
-              entry.on('end', async () => {
-                const buffer = Buffer.concat(chunks);
-                try {
-                  await sharp(buffer)
-                    .resize(400, 400, { fit: 'inside' })
-                    .toFile(thumbnailPath);
-                  log('아카이브 썸네일 생성 완료:', thumbnailPath);
-                  resolve();
-                } catch (err) {
-                  log('아카이브 썸네일 생성 실패:', err);
-                  reject(err);
-                }
-              });
-            } else {
-              entry.autodrain();
-            }
-          })
-          .on('close', () => {
-            if (!found) {
-              log('아카이브에서 이미지를 찾을 수 없음');
-              resolve();
-            }
-          })
-          .on('error', (err) => {
-            log('아카이브 처리 실패:', err);
-            reject(err);
-          });
-      });
-      if (!found) return null;
+      const archiveThumbnail = await generateThumbnailFromArchive(normalizedPath, thumbnailPath, thumbnailDir);
+      if (!archiveThumbnail) return null;
     }
     
     return thumbnailPath;
@@ -4270,52 +4328,8 @@ const regenerateImageOrArchiveThumbnail = async (filePath, context = {}) => {
         .toFile(thumbnailPath);
       log('이미지 썸네일 재생성 완료:', thumbnailPath);
     } else if (isArchive) {
-      // 압축파일 썸네일 재생성 (대용량 대응을 위해 스트리밍 처리)
-      let found = false;
-      await new Promise((resolve, reject) => {
-        fs.createReadStream(normalizedPath)
-          .pipe(unzipper.Parse())
-          .on('entry', async (entry) => {
-            const fileName = entry.path;
-            if (/\.(jpg|jpeg|png|gif|webp)$/i.test(fileName) && !found && entry.type === 'File') {
-              found = true;
-              const chunks = [];
-              entry.on('data', (chunk) => chunks.push(chunk));
-              entry.on('end', async () => {
-                const buffer = Buffer.concat(chunks);
-                try {
-                  await sharp(buffer)
-                    .resize(400, 400, { fit: 'inside' })
-                    .toFile(thumbnailPath);
-                  log('압축파일 썸네일 재생성 완료:', thumbnailPath);
-                  resolve(null);
-                } catch (err) {
-                  log('압축파일 썸네일 재생성 실패:', err);
-                  reject(err);
-                }
-              });
-              entry.on('error', (err) => {
-                log('압축파일 엔트리 처리 실패:', err);
-                reject(err);
-              });
-            } else {
-              entry.autodrain();
-            }
-          })
-          .on('close', () => {
-            if (!found) {
-              log('압축파일 내 이미지 파일을 찾을 수 없음');
-            }
-            resolve(null);
-          })
-          .on('error', (err) => {
-            log('압축파일 처리 실패:', err);
-            reject(err);
-          });
-      });
-      if (!found) {
-        return null;
-      }
+      const archiveThumbnail = await generateThumbnailFromArchive(normalizedPath, thumbnailPath, thumbnailDir);
+      if (!archiveThumbnail) return null;
     }
     
     return thumbnailPath;

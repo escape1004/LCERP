@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { X, ExternalLink, ChevronRight, Check, HelpCircle, Upload } from 'lucide-react';
+import { X, ExternalLink, ChevronRight, Check, HelpCircle, Upload, Archive } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { useLoadingStore } from '../hooks/useLoadingStore';
 import { Category, DataRecord, FieldDefinition } from '../types';
@@ -479,12 +479,13 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                 </Tooltip>
               </TooltipProvider>
             ) : resolvedPath ? (
-              // 파일은 있지만 썸네일이 없는 경우
               <div 
                 className={`w-[96px] h-[96px] bg-gray-900 flex items-center justify-center text-xs text-gray-500 border border-gray-700 rounded transition-colors ${canOpen ? 'cursor-pointer hover:bg-gray-800' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
                 onClick={() => canOpen && handleThumbnailClick(resolvedPath)}
               >
-                {missingFile ? '파일 없음' : '썸네일 없음'}
+                {missingFile ? '파일 없음' : ['.zip', '.7z'].includes(ext) ? (
+                  <Archive size={28} className="text-yellow-400/80" />
+                ) : '썸네일 없음'}
               </div>
             ) : (
               // 파일이 없는 경우
@@ -1106,7 +1107,9 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         className={`w-[320px] h-[320px] bg-gray-900 flex items-center justify-center text-lg text-gray-500 border border-gray-700 rounded-xl transition-colors ${canOpenFile ? 'cursor-pointer hover:bg-gray-800' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
         onClick={() => canOpenFile && handleThumbnailClick(filePath)}
       >
-        {missingFile ? '파일 없음' : '썸네일 없음'}
+        {missingFile ? '파일 없음' : ['.zip', '.7z'].includes(ext) ? (
+          <Archive size={56} className="text-yellow-400/80" />
+        ) : '썸네일 없음'}
       </div>
     ) : (
       <div className="w-[320px] h-[320px] bg-gray-950 flex items-center justify-center text-lg text-gray-600 border border-gray-800 rounded-xl">

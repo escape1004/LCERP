@@ -1,5 +1,5 @@
 ﻿import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, Upload, FileText, ChevronDown, ChevronUp, ArrowUpWideNarrow, ArrowDownWideNarrow, ArrowUp01, ArrowDown01, SortAsc, SortDesc, Check, RefreshCw, HelpCircle, ChevronsUpDown, LayoutGrid, TableProperties } from 'lucide-react';
+import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, Upload, FileText, ChevronDown, ChevronUp, ArrowUpWideNarrow, ArrowDownWideNarrow, ArrowUp01, ArrowDown01, SortAsc, SortDesc, Check, RefreshCw, HelpCircle, ChevronsUpDown, LayoutGrid, TableProperties, Archive } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { useLoadingStore } from '../hooks/useLoadingStore';
 import { DataRecord, FieldDefinition, Category } from '../types';
@@ -644,6 +644,7 @@ const ThumbnailCell: React.FC<{
   const isHashBased = record && !record.thumbnailPath;
   const missingFile = !thumbnailOnly && !!filePath && fileExists === false;
   const canOpen = !!filePath && fileExists !== false && !thumbnailOnly;
+  const isArchiveFile = !!filePath && /\.(zip|7z)$/i.test(filePath);
 
   React.useEffect(() => {
     if (!onPreviewChange) return;
@@ -679,7 +680,7 @@ const ThumbnailCell: React.FC<{
           />
           {isHashBased && (
             <div className="absolute top-1 left-1 z-10">
-              <RefreshCw size={16} className="text-[#5865F2] drop-shadow-[0_1px_4px_rgba(0,0,0,0.7)]" />
+              <RefreshCw size={16} className="text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.7)]" />
             </div>
           )}
           {missingFile && (
@@ -694,7 +695,13 @@ const ThumbnailCell: React.FC<{
           style={sizeStyle}
           onClick={() => canOpen && onThumbnailClick(filePath)}
         >
-          <span className="text-2xl">{missingFile ? '?' : '🖼️'}</span>
+          {missingFile ? (
+            <span className="text-2xl">?</span>
+          ) : isArchiveFile ? (
+            <Archive size={28} className="text-yellow-400/80" />
+          ) : (
+            <span className="text-2xl">🖼️</span>
+          )}
         </div>
       ) : (
         <div className={`${sizeClassName} bg-gray-900 flex items-center justify-center text-gray-600 border border-gray-800 rounded`} style={sizeStyle}>
@@ -720,7 +727,7 @@ const ThumbnailCell: React.FC<{
           {thumbnailBody}
         </TooltipTrigger>
         <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-          {filePath ? (missingFile ? '원본 파일이 존재하지 않습니다' : dataUrl ? '썸네일 클릭 시 뷰어 모달 열기' : '클릭 시 뷰어 모달 열기 (썸네일 없음)') : '첨부파일이 없습니다'}
+          {filePath ? (missingFile ? '원본 파일이 존재하지 않습니다' : dataUrl ? '썸네일 클릭 시 뷰어 모달 열기' : isArchiveFile ? '클릭 시 뷰어 모달 열기 (압축파일)' : '클릭 시 뷰어 모달 열기 (썸네일 없음)') : '첨부파일이 없습니다'}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
@@ -2782,12 +2789,20 @@ export const MainContent: React.FC = () => {
                           />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center rounded-lg border border-dashed border-[#3b3f46] bg-[#18191c] text-center">
-                            <div>
-                              <div className="text-4xl leading-none">
-                                {thumbnailPreview.missingFile ? '?' : '🖼️'}
-                              </div>
+                            <div className="flex flex-col items-center">
+                              {thumbnailPreview.missingFile ? (
+                                <div className="text-4xl leading-none">?</div>
+                              ) : /\.(zip|7z)$/i.test(thumbnailPreview.filePath) ? (
+                                <Archive size={40} className="text-yellow-400/80" />
+                              ) : (
+                                <div className="text-4xl leading-none">🖼️</div>
+                              )}
                               <p className="mt-3 text-sm text-[#dcddde]">
-                                {thumbnailPreview.missingFile ? '원본 파일을 찾을 수 없습니다' : '썸네일을 불러오는 중입니다'}
+                                {thumbnailPreview.missingFile
+                                  ? '원본 파일을 찾을 수 없습니다'
+                                  : /\.(zip|7z)$/i.test(thumbnailPreview.filePath)
+                                    ? '압축파일 미리보기'
+                                    : '썸네일을 불러오는 중입니다'}
                               </p>
                             </div>
                           </div>
