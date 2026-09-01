@@ -5,6 +5,7 @@ export interface Category {
   profileId?: string;
   name: string;
   itemType?: CategoryItemType;
+  memo?: string;
   parentId?: string;
   fields: FieldDefinition[];
   order: number;
@@ -15,6 +16,7 @@ export interface Category {
 export interface NewCategory {
   name: string;
   itemType?: CategoryItemType;
+  memo?: string;
   parentId?: string;
   fields: FieldDefinition[];
   order: number;
@@ -25,6 +27,7 @@ export interface NewCategory {
 export interface CategoryUpdate {
   name: string;
   itemType?: CategoryItemType;
+  memo?: string;
   parentId?: string;
   fields: FieldDefinition[];
   order?: number;
@@ -122,6 +125,7 @@ export interface Config {
   videoAutoPlay?: boolean;
   listThumbnailFit?: 'cover' | 'contain';
   thumbnailPreviewScale?: number;
+  defaultGalleryZoom?: number;
   dateParseFormats?: string[];
 }
 

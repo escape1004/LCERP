@@ -1,5 +1,5 @@
 ﻿import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, Upload, FileText, ChevronDown, ChevronUp, ArrowUpWideNarrow, ArrowDownWideNarrow, ArrowUp01, ArrowDown01, SortAsc, SortDesc, Check, RefreshCw, HelpCircle, ChevronsUpDown, LayoutGrid, TableProperties, Archive } from 'lucide-react';
+import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, Upload, FileText, ChevronDown, ChevronUp, ArrowUpWideNarrow, ArrowDownWideNarrow, ArrowUp01, ArrowDown01, SortAsc, SortDesc, Check, RefreshCw, HelpCircle, ChevronsUpDown, LayoutGrid, TableProperties, Archive, Info } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { useLoadingStore } from '../hooks/useLoadingStore';
 import { DataRecord, FieldDefinition, Category } from '../types';
@@ -534,6 +534,7 @@ declare global {
     'config:updated': CustomEvent<{
       listThumbnailFit?: 'cover' | 'contain';
       thumbnailPreviewScale?: number;
+      defaultGalleryZoom?: number;
     }>;
   }
 }
@@ -1520,6 +1521,7 @@ export const MainContent: React.FC = () => {
   } | null>(null);
   const [thumbnailPreviewScale, setThumbnailPreviewScale] = useState(100);
   const [galleryZoom, setGalleryZoom] = useState(100);
+  const [defaultGalleryZoom, setDefaultGalleryZoom] = useState(100);
   const [galleryZoomFeedbackVisible, setGalleryZoomFeedbackVisible] = useState(false);
   const galleryZoomFeedbackTimeoutRef = useRef<number | null>(null);
 
@@ -1539,23 +1541,29 @@ export const MainContent: React.FC = () => {
       if (!cancelled) {
         setListThumbnailFit(config?.listThumbnailFit === 'contain' ? 'contain' : 'cover');
         setThumbnailPreviewScale(Math.min(200, Math.max(75, Number(config?.thumbnailPreviewScale ?? 100))));
+        setDefaultGalleryZoom(Math.min(200, Math.max(50, Number(config?.defaultGalleryZoom ?? 100))));
       }
     }).catch(() => {
       if (!cancelled) {
         setListThumbnailFit('cover');
         setThumbnailPreviewScale(100);
+        setDefaultGalleryZoom(100);
       }
     });
 
     const handleConfigUpdated = (event: CustomEvent<{
       listThumbnailFit?: 'cover' | 'contain';
       thumbnailPreviewScale?: number;
+      defaultGalleryZoom?: number;
     }>) => {
       if (event.detail.listThumbnailFit) {
         setListThumbnailFit(event.detail.listThumbnailFit);
       }
       if (event.detail.thumbnailPreviewScale) {
         setThumbnailPreviewScale(Math.min(200, Math.max(75, Number(event.detail.thumbnailPreviewScale))));
+      }
+      if (event.detail.defaultGalleryZoom) {
+        setDefaultGalleryZoom(Math.min(200, Math.max(50, Number(event.detail.defaultGalleryZoom))));
       }
     };
 
@@ -1583,13 +1591,8 @@ export const MainContent: React.FC = () => {
       return;
     }
 
-    setGalleryZoom(100);
-  }, [selectedCategoryId, supportsGalleryView]);
-
-  useEffect(() => {
-    if (!selectedCategoryId || !supportsGalleryView) return;
-    localStorage.setItem(`galleryZoomV2_${selectedCategoryId}`, String(galleryZoom));
-  }, [selectedCategoryId, supportsGalleryView, galleryZoom]);
+    setGalleryZoom(defaultGalleryZoom);
+  }, [selectedCategoryId, supportsGalleryView, defaultGalleryZoom]);
 
   useEffect(() => {
     if (!showGalleryView) {
@@ -1619,10 +1622,13 @@ export const MainContent: React.FC = () => {
     event.preventDefault();
     setGalleryZoom((prev) => {
       const next = Math.min(200, Math.max(50, prev + (event.deltaY < 0 ? 10 : -10)));
+      if (selectedCategoryId) {
+        localStorage.setItem(`galleryZoomV2_${selectedCategoryId}`, String(next));
+      }
       return next;
     });
     showGalleryZoomFeedback();
-  }, [showGalleryView, showGalleryZoomFeedback]);
+  }, [showGalleryView, showGalleryZoomFeedback, selectedCategoryId]);
 
   // Ctrl+좌우 방향키 페이지 이동 핸들러
   useEffect(() => {
@@ -1951,10 +1957,32 @@ export const MainContent: React.FC = () => {
           {/* Header */}
           <div className="shrink-0 p-6 border-b border-gray-700">
             <div className="flex items-center justify-between mb-4">
-              <div>
-                  <h1 className="text-xl font-bold text-discord-text">
+              <div className="flex min-w-0 items-center gap-2">
+                <h1 className="truncate text-xl font-bold text-discord-text">
                   {selectedCategorySafe?.name || '카테고리를 선택해주세요'}
-                  </h1>
+                </h1>
+                {!!selectedCategorySafe?.memo?.trim() && (
+                  <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-discord-muted hover:text-discord-text"
+                          aria-label="카테고리 메모"
+                        >
+                          <Info size={16} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="right"
+                        align="center"
+                        className="relative max-w-sm whitespace-pre-wrap break-words bg-[#23272a] bg-opacity-95 px-3 py-2 text-xs text-white border border-gray-700 rounded shadow-2xl"
+                      >
+                        {selectedCategorySafe.memo}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
               </div>
               <div className="flex gap-3">
                 <ContextMenu>

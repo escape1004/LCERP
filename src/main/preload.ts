@@ -102,6 +102,7 @@ const api: ElectronAPI = {
   setRememberWindowBounds: (enabled: boolean) => ipcRenderer.invoke('setRememberWindowBounds', enabled),
   setZoomPercent: (percent: number) => ipcRenderer.invoke('setZoomPercent', percent),
   setThumbnailPreviewScale: (scale: number) => ipcRenderer.invoke('setThumbnailPreviewScale', scale),
+  setDefaultGalleryZoom: (scale: number) => ipcRenderer.invoke('setDefaultGalleryZoom', scale),
   setDateParseFormats: (formats: string[]) => ipcRenderer.invoke('setDateParseFormats', formats),
   setAppPassword: (password: string) => ipcRenderer.invoke('setAppPassword', password),
   clearAppPassword: () => ipcRenderer.invoke('clearAppPassword'),

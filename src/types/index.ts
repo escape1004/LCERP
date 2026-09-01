@@ -20,6 +20,7 @@ export interface Category {
   id: string;
   name: string;
   itemType?: 'category' | 'separator';
+  memo?: string;
   parentId?: string;
   fields: FieldDefinition[];
   order: number;
@@ -60,6 +61,7 @@ export interface Config {
   videoAutoPlay?: boolean;
   listThumbnailFit?: 'cover' | 'contain';
   thumbnailPreviewScale?: number;
+  defaultGalleryZoom?: number;
   dateParseFormats?: string[];
 }
 

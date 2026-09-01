@@ -52,6 +52,7 @@ const defaultConfig = {
   listThumbnailFit: 'cover',
   zoomPercent: 100,
   thumbnailPreviewScale: 100,
+  defaultGalleryZoom: 100,
   dateParseFormats: null
 };
 
@@ -130,6 +131,19 @@ function normalizeThumbnailPreviewScale(value) {
 
 function getConfiguredThumbnailPreviewScale() {
   return normalizeThumbnailPreviewScale(appConfig.thumbnailPreviewScale) ?? 100;
+}
+
+function normalizeDefaultGalleryZoom(value) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return null;
+  }
+
+  return Math.min(200, Math.max(50, Math.round(numericValue / 10) * 10));
+}
+
+function getConfiguredDefaultGalleryZoom() {
+  return normalizeDefaultGalleryZoom(appConfig.defaultGalleryZoom) ?? 100;
 }
 
 function normalizeDateParseFormats(value) {
@@ -660,6 +674,7 @@ function initializeDatabase() {
         fields TEXT NOT NULL,
         order_num INTEGER,
         itemType TEXT DEFAULT 'category',
+        memo TEXT,
         createdAt TEXT,
         updatedAt TEXT,
         FOREIGN KEY (parentId) REFERENCES categories(id)
@@ -688,6 +703,9 @@ function initializeDatabase() {
     if (!categoryColumns.some(col => col.name === 'itemType')) {
       db.exec("ALTER TABLE categories ADD COLUMN itemType TEXT DEFAULT 'category'");
       db.exec("UPDATE categories SET itemType = 'category' WHERE itemType IS NULL OR itemType = ''");
+    }
+    if (!categoryColumns.some(col => col.name === 'memo')) {
+      db.exec('ALTER TABLE categories ADD COLUMN memo TEXT');
     }
 
     const columns = db.prepare("PRAGMA table_info(records)").all();
@@ -2603,6 +2621,7 @@ ipcMain.handle('db:getCategories', async () => {
       ...cat,
       order: cat.order_num ?? 0,
       itemType: cat.itemType === 'separator' ? 'separator' : 'category',
+      memo: typeof cat.memo === 'string' ? cat.memo : '',
       fields: JSON.parse(cat.fields)
     }));
   } catch (error) {
@@ -2650,8 +2669,8 @@ ipcMain.handle('db:addCategory', async (_, category) => {
   
   try {
     db.prepare(`
-      INSERT INTO categories (id, profileId, name, parentId, fields, order_num, itemType, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO categories (id, profileId, name, parentId, fields, order_num, itemType, memo, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       profileId,
@@ -2660,6 +2679,7 @@ ipcMain.handle('db:addCategory', async (_, category) => {
       JSON.stringify(category.itemType === 'separator' ? [] : (category.fields || [])),
       category.order_num ?? category.order ?? 0,
       category.itemType === 'separator' ? 'separator' : 'category',
+      category.itemType === 'separator' ? '' : (typeof category.memo === 'string' ? category.memo : ''),
       now,
       now
     );
@@ -3081,6 +3101,7 @@ ipcMain.handle('getConfig', () => {
     videoAutoPlay: appConfig.videoAutoPlay !== false,
     listThumbnailFit: appConfig.listThumbnailFit === 'contain' ? 'contain' : 'cover',
     thumbnailPreviewScale: getConfiguredThumbnailPreviewScale(),
+    defaultGalleryZoom: getConfiguredDefaultGalleryZoom(),
     dateParseFormats: normalizeDateParseFormats(appConfig.dateParseFormats)
   };
 });
@@ -3283,15 +3304,15 @@ ipcMain.handle('setListThumbnailFit', (_event, fit) => {
   return { success: true };
 });
 
-ipcMain.handle('setThumbnailPreviewScale', (_event, scale) => {
-  const normalized = normalizeThumbnailPreviewScale(scale);
+ipcMain.handle('setDefaultGalleryZoom', (_event, scale) => {
+  const normalized = normalizeDefaultGalleryZoom(scale);
   if (normalized === null) {
-    return { success: false, error: 'Thumbnail preview scale must be a number.' };
+    return { success: false, error: 'Gallery zoom must be a number.' };
   }
 
-  appConfig.thumbnailPreviewScale = normalized;
+  appConfig.defaultGalleryZoom = normalized;
   saveAppConfig();
-  return { success: true };
+  return { success: true, defaultGalleryZoom: normalized };
 });
 
 ipcMain.handle('setDateParseFormats', (_event, formats) => {
@@ -3352,7 +3373,7 @@ function getCategorySubtree(rootId, allCategories) {
 
 ipcMain.handle('category:export', async (_, categoryId) => {
   try {
-    const categories = db.prepare('SELECT id, name, parentId, fields, order_num, itemType, createdAt, updatedAt FROM categories').all();
+    const categories = db.prepare('SELECT id, name, parentId, fields, order_num, itemType, memo, createdAt, updatedAt FROM categories').all();
     const subtree = getCategorySubtree(categoryId, categories);
     if (subtree.length === 0) {
       return { success: false, error: 'Category not found' };
@@ -3369,6 +3390,7 @@ ipcMain.handle('category:export', async (_, categoryId) => {
         fields: JSON.parse(cat.fields),
         order_num: cat.order_num ?? 0,
         itemType: cat.itemType === 'separator' ? 'separator' : 'category',
+        memo: typeof cat.memo === 'string' ? cat.memo : '',
         createdAt: cat.createdAt,
         updatedAt: cat.updatedAt
       }))
@@ -3436,8 +3458,8 @@ ipcMain.handle('category:import', async () => {
     })();
 
     const insertStmt = db.prepare(`
-      INSERT INTO categories (id, profileId, name, parentId, fields, order_num, itemType, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO categories (id, profileId, name, parentId, fields, order_num, itemType, memo, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const dfsInsert = (parentId) => {
@@ -3456,6 +3478,7 @@ ipcMain.handle('category:import', async () => {
           JSON.stringify(isSeparator ? [] : (child.fields || [])),
           orderNum,
           isSeparator ? 'separator' : 'category',
+          isSeparator ? '' : (typeof child.memo === 'string' ? child.memo : ''),
           now,
           now
         );
@@ -4105,9 +4128,12 @@ ipcMain.handle('db:updateCategory', (event, id, updates) => {
     : (updates.itemType || existingCategory.itemType || 'category');
   const nextParentId = nextItemType === 'separator' ? null : (updates.parentId || null);
   const nextFields = nextItemType === 'separator' ? [] : (updates.fields ?? JSON.parse(existingCategory.fields || '[]'));
+  const nextMemo = nextItemType === 'separator'
+    ? ''
+    : (updates.memo !== undefined ? String(updates.memo ?? '') : (existingCategory.memo || ''));
   const stmt = db.prepare(`
     UPDATE categories
-    SET name = ?, parentId = ?, fields = ?, order_num = ?, itemType = ?, updatedAt = ?
+    SET name = ?, parentId = ?, fields = ?, order_num = ?, itemType = ?, memo = ?, updatedAt = ?
     WHERE id = ? AND profileId = ?
   `);
   stmt.run(
@@ -4116,6 +4142,7 @@ ipcMain.handle('db:updateCategory', (event, id, updates) => {
     JSON.stringify(nextFields),
     nextOrder,
     nextItemType,
+    nextMemo,
     new Date().toISOString(),
     id,
     profileId

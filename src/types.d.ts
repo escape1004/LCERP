@@ -65,6 +65,7 @@ export interface ElectronAPI {
   setVideoAutoPlay: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
   setListThumbnailFit: (fit: 'cover' | 'contain') => Promise<{ success: boolean; error?: string }>;
   setThumbnailPreviewScale: (scale: number) => Promise<{ success: boolean; error?: string }>;
+  setDefaultGalleryZoom: (scale: number) => Promise<{ success: boolean; defaultGalleryZoom?: number; error?: string }>;
   openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
   checkFileExists: (filePath: string) => Promise<boolean>;
   getDashboardWarnings: (previewLimit?: number) => Promise<DashboardWarningsResult>;

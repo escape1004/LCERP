@@ -207,6 +207,7 @@ export const useERPStore = create<ERPStore>((set, get) => ({
         parentId: category.parentId,
         fields: category.fields,
         itemType: category.itemType,
+        memo: category.memo,
         order_num: category.order
       });
     }

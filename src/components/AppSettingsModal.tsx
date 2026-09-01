@@ -30,6 +30,7 @@ const sections: SettingsSection[] = [
 ];
 
 const thumbnailPreviewScaleOptions = [100, 125, 150, 175, 200] as const;
+const galleryZoomOptions = [50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200] as const;
 const getEffectiveDateParseFormats = (config: Config | null) => (
   Array.isArray(config?.dateParseFormats) && config.dateParseFormats.length > 0
     ? config.dateParseFormats
@@ -240,6 +241,28 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
 
       setConfig((prev) => (prev ? { ...prev, thumbnailPreviewScale: previousScale } : prev));
       setListMessage(result.error || '썸네일 미리보기 배율 저장에 실패했습니다.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDefaultGalleryZoomChange = async (scale: number) => {
+    const previousScale = Math.min(200, Math.max(50, Number(config?.defaultGalleryZoom ?? 100)));
+    setConfig((prev) => (prev ? { ...prev, defaultGalleryZoom: scale } : prev));
+    setListMessage('');
+    setIsSaving(true);
+
+    try {
+      const result = await window.electronAPI.setDefaultGalleryZoom(scale);
+      if (result.success) {
+        const savedScale = result.defaultGalleryZoom ?? scale;
+        setConfig((prev) => (prev ? { ...prev, defaultGalleryZoom: savedScale } : prev));
+        window.dispatchEvent(new CustomEvent('config:updated', { detail: { defaultGalleryZoom: savedScale } }));
+        return;
+      }
+
+      setConfig((prev) => (prev ? { ...prev, defaultGalleryZoom: previousScale } : prev));
+      setListMessage(result.error || '갤러리뷰 기본 배율 저장에 실패했습니다.');
     } finally {
       setIsSaving(false);
     }
@@ -570,9 +593,40 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
             </SelectContent>
           </Select>
         </div>
-
-        {listMessage && <p className="text-sm text-discord-muted mt-2">{listMessage}</p>}
       </div>
+
+      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+        <div className="text-sm font-medium text-white">갤러리뷰 기본 배율</div>
+        <p className="text-sm text-discord-muted mt-2 leading-6">
+          카테고리별로 갤러리 배율을 조절하지 않은 경우 이 값을 사용합니다. Ctrl+휠로 바꾼 배율은 해당 카테고리에만 저장됩니다.
+        </p>
+
+        <div className="mt-5 max-w-md">
+          <div className="text-xs text-discord-muted mb-2">기본 배율</div>
+          <Select
+            value={String(config?.defaultGalleryZoom ?? 100)}
+            onValueChange={(value) => void handleDefaultGalleryZoomChange(Number(value))}
+            disabled={!config || isSaving}
+          >
+            <SelectTrigger className="bg-discord-sidebar border-gray-600 text-discord-text">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-discord-sidebar border-gray-600 text-discord-text">
+              {galleryZoomOptions.map((scale) => (
+                <SelectItem
+                  key={scale}
+                  value={String(scale)}
+                  className="text-discord-text focus:bg-discord-hover focus:text-discord-text hover:bg-discord-hover"
+                >
+                  {scale}%
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {listMessage && <p className="text-sm text-discord-muted">{listMessage}</p>}
     </div>
   );
 

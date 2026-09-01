@@ -6,6 +6,7 @@ import { Category, FieldDefinition, NewCategory } from '../types';
 import { isSeparatorCategory } from '../lib/category';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
+import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Checkbox } from './ui/checkbox';
@@ -48,7 +49,8 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   const { showLoading, hideLoading } = useLoadingStore();
   const [formData, setFormData] = useState({
     name: '',
-    parentId: undefined,
+    parentId: undefined as string | undefined,
+    memo: '',
     fields: [] as FieldDefinition[],
   });
   const [initialFormData, setInitialFormData] = useState(formData);
@@ -102,6 +104,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
       const categoryData = {
         name: category.name,
         parentId: category.parentId,
+        memo: category.memo || '',
         fields: category.fields.map(normalizeCategoryField),
       };
       setFormData(JSON.parse(JSON.stringify(categoryData)));
@@ -110,6 +113,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
       const initialData = {
         name: '',
         parentId: undefined,
+        memo: '',
         fields: [],
       };
       setFormData(initialData);
@@ -271,6 +275,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
         await updateCategory(category.id, {
           name: formData.name,
           parentId: formData.parentId,
+          memo: formData.memo.trim(),
           fields: normalizedFields,
         });
       } else {
@@ -278,6 +283,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
         const newCategory: NewCategory = {
           name: formData.name,
           itemType: 'category',
+          memo: formData.memo.trim(),
           parentId: formData.parentId,
           fields: normalizedFields,
           order: categories.length,
@@ -467,6 +473,16 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                     ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div>
+              <Label className="text-discord-text font-medium">메모</Label>
+              <Textarea
+                value={formData.memo}
+                onChange={(e) => setFormData(prev => ({ ...prev, memo: e.target.value }))}
+                className="mt-2 min-h-[88px] bg-discord-sidebar border-gray-600 text-discord-text placeholder:text-gray-500"
+                placeholder="카테고리 메모를 입력하세요 (선택사항)"
+              />
             </div>
 
             {/* Fields */}
