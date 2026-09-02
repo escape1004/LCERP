@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { HelpCircle, List, Monitor, Plus, Settings, Shield, Trash2, X } from 'lucide-react';
+﻿import { useEffect, useMemo, useState } from 'react';
+import { HelpCircle, Keyboard, List, Monitor, Plus, Settings, Shield, Trash2, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
 import { Switch } from './ui/switch';
 import { Input } from './ui/input';
@@ -31,6 +31,42 @@ const sections: SettingsSection[] = [
 
 const thumbnailPreviewScaleOptions = [100, 125, 150, 175, 200] as const;
 const galleryZoomOptions = [50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200] as const;
+const shortcutSections = [
+  {
+    title: '레코드 목록 페이지',
+    description: '카테고리 레코드 리스트와 갤러리 화면에서 사용하는 단축키입니다.',
+    items: [
+      { keys: 'Ctrl+R / Cmd+R', description: '현재 카테고리에서 랜덤으로 레코드를 엽니다.' },
+      { keys: 'F5', description: '현재 카테고리 레코드 목록을 새로고침합니다.' },
+      { keys: 'Ctrl+F', description: '검색 입력창으로 포커스를 이동합니다.' },
+      { keys: 'Ctrl+N', description: '새 레코드 등록 모달을 엽니다.' },
+      { keys: 'F2', description: '선택된 레코드를 수정합니다.' },
+      { keys: 'ArrowUp / ArrowDown', description: '현재 페이지 안에서 레코드 선택을 위아래로 이동합니다.' },
+      { keys: 'Ctrl+ArrowLeft', description: '이전 페이지로 이동합니다.' },
+      { keys: 'Ctrl+ArrowRight', description: '다음 페이지로 이동합니다.' },
+    ],
+  },
+  {
+    title: '레코드 상세 모달',
+    description: '레코드 상세 정보 모달에서 사용하는 단축키입니다.',
+    items: [
+      { keys: 'Esc', description: '상세 모달을 닫습니다.' },
+      { keys: 'Ctrl+Click', description: '텍스트 필드와 관계형 필드 값을 클립보드에 복사합니다.' },
+    ],
+  },
+  {
+    title: '파일 뷰어',
+    description: '이미지, 동영상, 압축파일 뷰어에서 사용하는 단축키입니다.',
+    items: [
+      { keys: 'Esc', description: '뷰어를 닫습니다.' },
+      { keys: 'Space', description: '동영상 재생 또는 일시정지를 전환합니다.' },
+      { keys: 'ArrowLeft / ArrowRight', description: '동영상은 설정된 간격만큼 이동하고, 압축파일 내 이미지나 텍스트는 이전/다음 항목으로 이동합니다.' },
+      { keys: 'ArrowUp / ArrowDown', description: '동영상은 볼륨을 조절하고, 압축파일 내 이미지나 텍스트는 이전/다음 항목으로 이동합니다.' },
+      { keys: ', / <', description: '동영상 재생 속도를 한 단계 낮춥니다.' },
+      { keys: '. / >', description: '동영상 재생 속도를 한 단계 높입니다.' },
+    ],
+  },
+] as const;
 const getEffectiveDateParseFormats = (config: Config | null) => (
   Array.isArray(config?.dateParseFormats) && config.dateParseFormats.length > 0
     ? config.dateParseFormats
@@ -53,9 +89,34 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
   const [dateFormatInput, setDateFormatInput] = useState('');
   const [dateFormatMessage, setDateFormatMessage] = useState('');
 
+  const settingsSections = useMemo(() => {
+    const shortcutsSection = {
+      id: 'shortcuts',
+      label: '단축키',
+      description: '페이지별 키보드 도움말',
+      icon: Keyboard,
+    };
+    const viewerIndex = sections.findIndex((section) => section.id === 'viewer');
+    const alreadyExists = sections.some((section) => section.id === shortcutsSection.id);
+
+    if (alreadyExists) {
+      return sections;
+    }
+
+    if (viewerIndex < 0) {
+      return [...sections, shortcutsSection];
+    }
+
+    return [
+      ...sections.slice(0, viewerIndex + 1),
+      shortcutsSection,
+      ...sections.slice(viewerIndex + 1),
+    ];
+  }, []);
+
   const currentSection = useMemo(
-    () => sections.find((section) => section.id === activeSection) ?? sections[0],
-    [activeSection]
+    () => settingsSections.find((section) => section.id === activeSection) ?? settingsSections[0],
+    [activeSection, settingsSections]
   );
 
   useEffect(() => {
@@ -681,6 +742,31 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
     </div>
   );
 
+  const renderShortcutsSection = () => (
+    <div className="space-y-4">
+      {shortcutSections.map((section) => (
+        <div key={section.title} className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+          <div className="text-sm font-medium text-white">{section.title}</div>
+          <p className="mt-2 text-sm leading-6 text-discord-muted">{section.description}</p>
+
+          <div className="mt-5 space-y-3">
+            {section.items.map((item) => (
+              <div
+                key={`${section.title}-${item.keys}`}
+                className="flex items-start justify-between gap-4 rounded-lg border border-gray-700 bg-discord-bg/70 px-4 py-3"
+              >
+                <div className="min-w-[160px] shrink-0 rounded-md bg-black/20 px-3 py-1.5 text-xs font-semibold tracking-wide text-blue-300">
+                  {item.keys}
+                </div>
+                <div className="flex-1 text-sm leading-6 text-discord-text">{item.description}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
   const renderSecuritySection = () => (
     <div className="space-y-4">
       <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
@@ -754,7 +840,7 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
             </div>
 
             <nav className="p-3 space-y-1">
-              {sections.map((section) => {
+              {settingsSections.map((section) => {
                 const Icon = section.icon;
                 const isActive = currentSection.id === section.id;
 
@@ -803,7 +889,9 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
                   ? renderListSection()
                   : currentSection.id === 'viewer'
                     ? renderViewerSection()
-                    : renderSecuritySection()}
+                    : currentSection.id === 'shortcuts'
+                      ? renderShortcutsSection()
+                      : renderSecuritySection()}
             </div>
           </section>
         </div>
