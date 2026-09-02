@@ -40,6 +40,20 @@ import { getRelationDisplayLabel } from '../utils/relationDisplay';
 import { DatePicker } from './ui/date-picker';
 import { cn } from '../lib/utils';
 
+type PercentageValue = {
+  value: number;
+  max: number;
+};
+
+type FieldValue = string | number | boolean | null | undefined | PercentageValue | Array<string | number>;
+
+const isPercentageValue = (value: unknown): value is PercentageValue => (
+  typeof value === 'object'
+  && value !== null
+  && 'value' in value
+  && 'max' in value
+);
+
 // 해시태그 파싱 유틸리티 함수
 const parseHashtags = (text: string): { hashtags: string[]; plainText: string } => {
   const hashtagRegex = /#(\S+)/g;
@@ -91,9 +105,9 @@ const renderTextWithHashtags = (text: string) => {
   return parts;
 };
 
-const getPercentageMeta = (field: FieldDefinition, value: any) => {
-  const currentValue = value && typeof value === 'object' ? value.value : value;
-  const maxValue = value && typeof value === 'object' ? value.max : 0;
+const getPercentageMeta = (_field: FieldDefinition, value: unknown) => {
+  const currentValue = isPercentageValue(value) ? value.value : value;
+  const maxValue = isPercentageValue(value) ? value.max : 0;
   const numericValue = Number(currentValue || 0);
   const numericMax = Number(maxValue || 0);
   const safeMax = Number.isFinite(numericMax) ? Math.max(0, numericMax) : 0;
@@ -257,7 +271,7 @@ const renderGalleryCopyableText = (
 );
 
 // 필드 값 포맷팅 함수
-const formatFieldValue = (field: FieldDefinition, value: any, categories: Category[], getCategoryRecords: (categoryId: string) => DataRecord[], onViewRelatedRecord?: (record: DataRecord, category: Category) => void, onSelectRow?: () => void) => {
+const formatFieldValue = (field: FieldDefinition, value: FieldValue, categories: Category[], getCategoryRecords: (categoryId: string) => DataRecord[], onViewRelatedRecord?: (record: DataRecord, category: Category) => void, onSelectRow?: () => void) => {
   const urlPattern = /^https?:\/\/.+/;
   
   // 빈 값 처리 - 레코드 리스트 테이블과 동일하게
@@ -334,7 +348,7 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
     case 'checkbox':
       return value ? <Check className="w-5 h-5 text-discord-accent" /> : <X className="w-5 h-5 text-discord-danger" />;
     
-    case 'relation':
+    case 'relation': {
       if (!field.relationCategoryId) return String(value);
       const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
       if (!relatedCategory) return String(value);
@@ -399,33 +413,33 @@ const formatFieldValue = (field: FieldDefinition, value: any, categories: Catego
           );
         };
         return <MultiSelectRelationField />;
-      } else {
-        const relatedRecord = relatedRecords.find(r => r.id === value);
-        return relatedRecord 
-          ? (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span
-                    className="text-green-500 hover:underline cursor-pointer truncate block"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (onViewRelatedRecord) {
-                        onViewRelatedRecord(relatedRecord, relatedCategory);
-                      }
-                    }}
-                  >
-                    {getRelationDisplayLabel(relatedRecord, field, categories, getCategoryRecords)}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-                  상세 보기
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )
-          : <span className="truncate block">{String(value)}</span>;
       }
+      const relatedRecord = relatedRecords.find(r => r.id === value);
+      return relatedRecord 
+        ? (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  className="text-green-500 hover:underline cursor-pointer truncate block"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onViewRelatedRecord) {
+                      onViewRelatedRecord(relatedRecord, relatedCategory);
+                    }
+                  }}
+                >
+                  {getRelationDisplayLabel(relatedRecord, field, categories, getCategoryRecords)}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
+                상세 보기
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )
+        : <span className="truncate block">{String(value)}</span>;
+    }
     
     default:
       if (typeof value === 'string' && urlPattern.test(value)) {
@@ -779,9 +793,15 @@ export const MainContent: React.FC = () => {
   const inlinePercentageRequestRef = useRef<Record<string, number>>({});
 
   // categories, selectedCategory, currentRecords에 기본값 보장
-  const categoriesSafe = categories || [];
-  const selectedCategorySafe = categoriesSafe.find(cat => cat.id === selectedCategoryId) || null;
-  const currentRecordsSafe = selectedCategoryId ? getCategoryRecords(selectedCategoryId) || [] : [];
+  const categoriesSafe = useMemo(() => categories ?? [], [categories]);
+  const selectedCategorySafe = useMemo(
+    () => categoriesSafe.find((cat) => cat.id === selectedCategoryId) ?? null,
+    [categoriesSafe, selectedCategoryId]
+  );
+  const currentRecordsSafe = useMemo(
+    () => (selectedCategoryId ? getCategoryRecords(selectedCategoryId) ?? [] : []),
+    [selectedCategoryId, getCategoryRecords]
+  );
   const getInlinePercentageKey = useCallback((recordId: string, fieldId: string) => `${recordId}:${fieldId}`, []);
 
   useEffect(() => {
@@ -1013,6 +1033,13 @@ export const MainContent: React.FC = () => {
     ));
   }, []);
 
+  // 기본 컬럼 너비 반환
+  const getDefaultColumnWidth = useCallback((columnId: string): number => {
+    if (columnId === '__thumbnail') return 112;
+    if (columnId === '__refCount') return 96;
+    return 150; // 기본 필드 너비
+  }, []);
+
   // 컬럼 리사이즈 핸들러
   const handleResizeStart = useCallback((columnId: string, e: React.MouseEvent) => {
     e.preventDefault();
@@ -1021,7 +1048,7 @@ export const MainContent: React.FC = () => {
     setResizeStartX(e.clientX);
     const currentWidth = columnWidths[columnId] || getDefaultColumnWidth(columnId);
     setResizeStartWidth(currentWidth);
-  }, [columnWidths]);
+  }, [columnWidths, getDefaultColumnWidth]);
 
   const handleResizeMove = useCallback((e: MouseEvent) => {
     if (!isResizing) return;
@@ -1051,13 +1078,6 @@ export const MainContent: React.FC = () => {
       };
     }
   }, [isResizing, handleResizeMove, handleResizeEnd]);
-
-  // 기본 컬럼 너비 반환
-  const getDefaultColumnWidth = useCallback((columnId: string): number => {
-    if (columnId === '__thumbnail') return 112;
-    if (columnId === '__refCount') return 96;
-    return 150; // 기본 필드 너비
-  }, []);
 
   // 컬럼 너비 가져오기
   const getColumnWidth = useCallback((columnId: string): number => {
@@ -1109,6 +1129,7 @@ export const MainContent: React.FC = () => {
           return;
         }
       } catch {
+        // Ignore malformed persisted gallery preferences and fall back to defaults.
       }
     }
 
@@ -1145,7 +1166,7 @@ export const MainContent: React.FC = () => {
 
   const normalizedSearchTerm = searchTerm.trim().toLowerCase();
 
-  const matchesSearchValue = useCallback((field: FieldDefinition, value: any) => {
+  const matchesSearchValue = useCallback((field: FieldDefinition, value: FieldValue) => {
     if (!normalizedSearchTerm && normalizedMultiSearchTerms.length === 0) return true;
 
     if (field.type === 'number') {
@@ -1292,7 +1313,7 @@ export const MainContent: React.FC = () => {
         return matchesSearchValue(field, value);
       }
     });
-  }, [selectedCategoryId, searchTerm, effectiveSearchField, fileTypeFilter, currentRecordsSafe, categoriesSafe, getCategoryRecords, fileField, getRecordFieldValue, matchesSearchValue, normalizedSearchTerm, hasActiveSearch, isMultiValueSearchField, normalizedMultiSearchTerms, visibleFields, selectedCategoryFieldMap]);
+  }, [selectedCategoryId, effectiveSearchField, fileTypeFilter, currentRecordsSafe, categoriesSafe, getCategoryRecords, fileField, getRecordFieldValue, matchesSearchValue, normalizedSearchTerm, hasActiveSearch, isMultiValueSearchField, normalizedMultiSearchTerms, visibleFields, selectedCategoryFieldMap]);
 
   // Sorting
   const sortedRecords = useMemo(() => {
@@ -1385,7 +1406,7 @@ export const MainContent: React.FC = () => {
       }
 
       // 빈 값 처리 (모든 필드 타입에 적용)
-      const isEmptyValue = (val: any): boolean => {
+      const isEmptyValue = (val: unknown): boolean => {
         if (val === null || val === undefined) return true;
         if (typeof val === 'string' && val.trim() === '') return true;
         if (Array.isArray(val) && val.length === 0) return true;
@@ -1786,7 +1807,7 @@ export const MainContent: React.FC = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedCategoryId, selectedRecordId, paginatedRecords, sortedRecords, loadRecords, currentPage, totalPages, showLoading, hideLoading, isRecordModalOpen, isViewModalOpen, viewerModalOpen, isConfirmDialogOpen, isAlertDialogOpen, openRandomCategoryRecord]);
+  }, [selectedCategoryId, selectedRecordId, paginatedRecords, sortedRecords, loadRecords, currentPage, totalPages, showLoading, hideLoading, isRecordModalOpen, isViewModalOpen, viewerModalOpen, isConfirmDialogOpen, isAlertDialogOpen, openRandomCategoryRecord, setCurrentPage]);
 
   useEffect(() => {
     if (!selectedRecordId) return;
@@ -1866,7 +1887,7 @@ export const MainContent: React.FC = () => {
     }
 
     if (field.type === 'checkbox') {
-      return Boolean(value) ? '체크됨' : '체크 안 됨';
+      return value ? '체크됨' : '체크 안 됨';
     }
 
     if (field.type === 'relation' && field.relationCategoryId) {

@@ -3,7 +3,6 @@ import { format, isValid, parse } from 'date-fns';
 import { X, Search, Check, ChevronsUpDown, ChevronRight, CheckCircle2, XCircle } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import type { Category, DataRecord, FieldDefinition, NewRecord } from '../types';
-import type { ElectronAPI } from '../types/electron';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -62,10 +61,22 @@ const clampPercentageValue = (value: number, max: number): number => {
   return Math.min(value, Math.max(0, max));
 };
 
-const getEditablePercentageValue = (value: any) => {
-  const numericMax = Number(value && typeof value === 'object' ? value.max : 0);
+type PercentageValue = {
+  value: number;
+  max: number;
+};
+
+const isPercentageValue = (value: unknown): value is PercentageValue => (
+  typeof value === 'object'
+  && value !== null
+  && 'value' in value
+  && 'max' in value
+);
+
+const getEditablePercentageValue = (value: unknown) => {
+  const numericMax = Number(isPercentageValue(value) ? value.max : 0);
   const max = Number.isFinite(numericMax) ? Math.max(0, numericMax) : 0;
-  const numericValue = Number(value && typeof value === 'object' ? value.value : 0);
+  const numericValue = Number(isPercentageValue(value) ? value.value : 0);
   const current = Number.isFinite(numericValue) ? Math.max(0, numericValue) : 0;
   return {
     value: max > 0 ? clampPercentageValue(current, max) : current,
@@ -73,10 +84,10 @@ const getEditablePercentageValue = (value: any) => {
   };
 };
 
-const normalizePercentageValue = (value: any) => {
-  const numericMax = Number(value && typeof value === 'object' ? value.max : 0);
+const normalizePercentageValue = (value: unknown) => {
+  const numericMax = Number(isPercentageValue(value) ? value.max : 0);
   const max = Number.isFinite(numericMax) ? Math.max(0, numericMax) : 0;
-  const numericValue = Number(value && typeof value === 'object' ? value.value : 0);
+  const numericValue = Number(isPercentageValue(value) ? value.value : 0);
   const current = Number.isFinite(numericValue) ? Math.max(0, numericValue) : 0;
   return {
     value: clampPercentageValue(current, max),
@@ -95,7 +106,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
   record,
 }) => {
   const { addRecord, updateRecord, categories, getCategoryRecords, checkDuplicate, selectCategory, loadRecords } = useERPStore();
-  const [formData, setFormData] = useState<Record<string, any>>({});
+  const [formData, setFormData] = useState<Record<string, unknown>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [duplicateErrors, setDuplicateErrors] = useState<Record<string, string>>({});
   const [isValidating, setIsValidating] = useState(false);
@@ -114,9 +125,8 @@ export const RecordModal: React.FC<RecordModalProps> = ({
   });
   const [ambiguousDialogOpen, setAmbiguousDialogOpen] = useState(false);
   const [ambiguousOptions, setAmbiguousOptions] = useState<{ value: string, records: DataRecord[] }[]>([]);
-  const [pendingAmbiguous, setPendingAmbiguous] = useState<{ value: string, records: DataRecord[] } | null>(null);
   const [pendingAmbiguousField, setPendingAmbiguousField] = useState<FieldDefinition | null>(null);
-  const [pendingAmbiguousCurrentValues, setPendingAmbiguousCurrentValues] = useState<any[]>([]);
+  const [pendingAmbiguousCurrentValues, setPendingAmbiguousCurrentValues] = useState<string[]>([]);
 
   // 첫 번째 필드에 포커스하기 위한 ref
   const firstFieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement>(null);
@@ -132,7 +142,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
       });
       return nextData;
     } else if (category) {
-      const initialData: Record<string, any> = {};
+      const initialData: Record<string, unknown> = {};
       category.fields.forEach(field => {
         initialData[field.id] = field.type === 'checkbox'
           ? false
@@ -158,7 +168,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
       setFormData({ ...record.data });
     } else if (isOpen && category) {
       // 새 레코드 추가 시, 모든 필드의 기본값 세팅
-      const initialData: Record<string, any> = {};
+      const initialData: Record<string, unknown> = {};
       category.fields.forEach(field => {
         initialData[field.id] = field.type === 'checkbox'
           ? false
@@ -241,7 +251,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     return Object.keys(newErrors).length === 0;
   }, [formData, category?.fields]);
 
-  const checkFieldDuplicate = useCallback(async (fieldId: string, value: any) => {
+  const checkFieldDuplicate = useCallback(async (fieldId: string, value: unknown) => {
     if (!category) return;
     try {
       setIsDuplicateChecking(true);
@@ -312,10 +322,9 @@ export const RecordModal: React.FC<RecordModalProps> = ({
           if (newFilePath !== prevFilePath && newFilePath) {
             // 파일이 변경되었으므로 기존 북마크 삭제 (에러 처리 추가)
             try {
-              if ((window.electronAPI as any).removeAllBookmarks) {
-                const result = await (window.electronAPI as any).removeAllBookmarks(category.id, record.id);
-                if (result && result.success) {
-                } else if (result && result.error) {
+              if (window.electronAPI.removeAllBookmarks) {
+                const result = await window.electronAPI.removeAllBookmarks(category.id, record.id);
+                if (result.error) {
                   console.error('북마크 삭제 실패:', result.error);
                 }
               }
@@ -350,7 +359,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     }
   };
 
-  const updateFieldValue = (fieldId: string, value: any) => {
+  const updateFieldValue = (fieldId: string, value: unknown) => {
     setFormData(prev => ({
       ...prev,
       [fieldId]: value,
@@ -1109,7 +1118,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
         break;
       }
 
-      case 'file':
+      case 'file': {
         const getFileDialogDefaultPath = () => {
           if (field.thumbnailOnly) {
             return typeof value === 'string' && value.trim() ? value : undefined;
@@ -1169,6 +1178,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
             {renderError()}
           </div>
         );
+      }
 
       default:
         return null;

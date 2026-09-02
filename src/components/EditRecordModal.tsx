@@ -14,7 +14,7 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({
   onClose,
 }) => {
   const { updateRecord } = useERPStore();
-  const [formData, setFormData] = useState<Record<string, any>>(JSON.parse(JSON.stringify(record.data)));
+  const [formData, setFormData] = useState<Record<string, unknown>>(JSON.parse(JSON.stringify(record.data)));
   const [error, setError] = useState<string>('');
 
   // ESC 키로 모달 닫기
