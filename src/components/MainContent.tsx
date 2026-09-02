@@ -371,8 +371,15 @@ const formatFieldValue = (field: FieldDefinition, value: FieldValue, categories:
                       <TooltipTrigger asChild>
                         <span
                           className="px-2 py-1 text-xs rounded bg-green-600/20 text-green-500 cursor-pointer hover:bg-green-600/30"
-                          onClick={(e) => {
+                          onClick={async (e) => {
+                            const label = getRelationDisplayLabel(relatedRecord, field, categories, getCategoryRecords);
+                            if (e.ctrlKey) {
+                              await copyOnCtrlClick(e, label, '관계형 필드 값이 클립보드에 복사되었습니다.', onSelectRow);
+                              return;
+                            }
+
                             e.stopPropagation();
+                            onSelectRow?.();
                             if (onViewRelatedRecord) {
                               onViewRelatedRecord(relatedRecord, relatedCategory);
                             }
@@ -382,7 +389,7 @@ const formatFieldValue = (field: FieldDefinition, value: FieldValue, categories:
                         </span>
                       </TooltipTrigger>
                       <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-                        상세 보기
+                        클릭하여 상세 보기, Ctrl+클릭하여 복사
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -422,8 +429,15 @@ const formatFieldValue = (field: FieldDefinition, value: FieldValue, categories:
               <TooltipTrigger asChild>
                 <span
                   className="text-green-500 hover:underline cursor-pointer truncate block"
-                  onClick={(e) => {
+                  onClick={async (e) => {
+                    const label = getRelationDisplayLabel(relatedRecord, field, categories, getCategoryRecords);
+                    if (e.ctrlKey) {
+                      await copyOnCtrlClick(e, label, '관계형 필드 값이 클립보드에 복사되었습니다.', onSelectRow);
+                      return;
+                    }
+
                     e.stopPropagation();
+                    onSelectRow?.();
                     if (onViewRelatedRecord) {
                       onViewRelatedRecord(relatedRecord, relatedCategory);
                     }
@@ -433,7 +447,7 @@ const formatFieldValue = (field: FieldDefinition, value: FieldValue, categories:
                 </span>
               </TooltipTrigger>
               <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-                상세 보기
+                클릭하여 상세 보기, Ctrl+클릭하여 복사
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>

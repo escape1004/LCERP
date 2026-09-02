@@ -809,7 +809,13 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                         <span
                           key={relatedId}
                           className="px-2 py-1 text-xs rounded bg-green-600/20 text-green-500 cursor-pointer hover:bg-green-600/30"
-                          onClick={() => {
+                          onClick={async (e) => {
+                            const label = getRelationDisplayLabel(relatedRecord, field, categories, getCategoryRecords);
+                            if (e.ctrlKey) {
+                              await copyOnCtrlClick(e, label, '관계형 필드 값이 클립보드에 복사되었습니다.');
+                              return;
+                            }
+
                             onClose();
                             setTimeout(() => {
                               if (onViewRecord) {
@@ -839,7 +845,13 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                   <TooltipTrigger asChild>
                     <span
                       className="text-green-500 cursor-pointer hover:underline"
-                      onClick={() => {
+                      onClick={async (e) => {
+                        const label = getRelationDisplayLabel(relatedRecord, field, categories, getCategoryRecords);
+                        if (e.ctrlKey) {
+                          await copyOnCtrlClick(e, label, '관계형 필드 값이 클립보드에 복사되었습니다.');
+                          return;
+                        }
+
                         onClose();
                         setTimeout(() => {
                           if (onViewRecord) {
