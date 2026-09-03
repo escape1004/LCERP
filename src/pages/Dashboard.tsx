@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Bar,
@@ -14,11 +14,22 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { AlertTriangle, Archive, Calendar, FileText, Folder, Image, Link2Off, Video } from 'lucide-react';
+import {
+  AlertTriangle,
+  Archive,
+  Calendar,
+  FileText,
+  Folder,
+  Image,
+  Link2Off,
+  TimerReset,
+  Video,
+} from 'lucide-react';
 import { Sidebar } from '../components/Sidebar';
 import { useERPStore } from '../hooks/useERPStore';
 import { Category, DashboardWarningItem, DataRecord } from '../types';
 import { isSeparatorCategory } from '../lib/category';
+import { resolveFilePath } from '../lib/pathResolver';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { RecordModal } from '../components/RecordModal';
 import { ViewRecordModal } from '../components/ViewRecordModal';
@@ -36,7 +47,61 @@ interface CategoryStats {
   recentRecords: DataRecord[];
 }
 
+interface RankedRecord {
+  record: DataRecord;
+  category: Category;
+  referenceCount: number;
+  displayValue: string;
+}
+
+interface ChildCategoryDashboardSection {
+  category: Category;
+  recordRanking: RankedRecord[];
+  recentRecords: Array<{
+    record: DataRecord;
+    category: Category;
+  }>;
+}
+
+const ALL_ROOT_CATEGORIES_VALUE = '__all__';
+const SUPPORTED_THUMBNAIL_EXTS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp4', '.avi', '.mkv', '.mov', '.zip', '.7z'];
+
 const formatNumber = (num: number): string => num.toLocaleString('ko-KR');
+
+const getFileTypeCounts = (category: Category, records: DataRecord[]) => {
+  const fileField = category.fields.find((field) => field.type === 'file');
+  let imageCount = 0;
+  let videoCount = 0;
+  let archiveCount = 0;
+
+  records.forEach((record) => {
+    if (!fileField || !record.data[fileField.id]) {
+      return;
+    }
+
+    const filePath = String(record.data[fileField.id] || '');
+    const ext = filePath.slice(filePath.lastIndexOf('.')).toLowerCase();
+
+    if (/\.(jpg|jpeg|png|gif|webp)$/i.test(ext)) {
+      imageCount += 1;
+    } else if (/\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(ext)) {
+      videoCount += 1;
+    } else if (/\.(zip|7z|rar)$/i.test(ext)) {
+      archiveCount += 1;
+    }
+  });
+
+  return { imageCount, videoCount, archiveCount };
+};
+
+const getCategoryDisplayField = (category: Category) => category.fields.find((field) => field.type === 'text') || category.fields[0];
+
+const getRecordDisplayValue = (category: Category, record: DataRecord) => {
+  const displayField = getCategoryDisplayField(category);
+  return displayField && record.data[displayField.id]
+    ? String(record.data[displayField.id])
+    : new Date(record.createdAt).toLocaleDateString('ko-KR');
+};
 
 const CustomTooltip = ({ active, payload, label, labelFormatter }: any) => {
   if (!active || !payload || payload.length === 0) {
@@ -86,9 +151,96 @@ const StatCard: React.FC<{ title: string; value: string | number; icon: React.Re
   </div>
 );
 
+const RecordThumbnail: React.FC<{ category: Category; record: DataRecord }> = ({ category, record }) => {
+  const fileField = useMemo(
+    () => category.fields.find((field) => field.type === 'file') || null,
+    [category]
+  );
+  const filePath = useMemo(
+    () => (fileField ? resolveFilePath(record.data[fileField.id], fileField) : null),
+    [fileField, record]
+  );
+  const fileExt = useMemo(
+    () => (filePath ? filePath.slice(filePath.lastIndexOf('.')).toLowerCase() : ''),
+    [filePath]
+  );
+  const isArchiveFile = fileExt === '.zip' || fileExt === '.7z';
+  const isSupportedThumbnail = !!filePath && SUPPORTED_THUMBNAIL_EXTS.includes(fileExt);
+  const [thumbnailDataUrl, setThumbnailDataUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let ignore = false;
+
+    if (!isSupportedThumbnail || !filePath) {
+      setThumbnailDataUrl(null);
+      setLoading(false);
+      return () => {
+        ignore = true;
+      };
+    }
+
+    setLoading(true);
+    window.electronAPI.getThumbnailDataUrlHybrid(record, filePath)
+      .then((result) => {
+        if (!ignore) {
+          setThumbnailDataUrl(result || null);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setThumbnailDataUrl(null);
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [filePath, isSupportedThumbnail, record]);
+
+  if (!fileField) {
+    return null;
+  }
+
+  return (
+    <div className="w-14 h-14 shrink-0 rounded border border-gray-700 bg-black/40 flex items-center justify-center overflow-hidden">
+      {loading ? (
+        <span className="text-[10px] text-discord-muted">로딩</span>
+      ) : thumbnailDataUrl ? (
+        <img src={thumbnailDataUrl} alt="썸네일" className="w-full h-full object-cover" />
+      ) : filePath ? (
+        <div className="w-full h-full bg-gray-800 flex items-center justify-center text-gray-500">
+          {isArchiveFile ? (
+            <Archive size={18} className="text-yellow-400/80" />
+          ) : (
+            <span className="text-lg">🖼️</span>
+          )}
+        </div>
+      ) : (
+        <div className="w-full h-full bg-gray-900 flex items-center justify-center text-gray-600">
+          <span className="text-lg">-</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { categories, loadCategories, loadRecords, getCategoryRecords, selectCategory, showDbViewer, currentProfile, setPendingRecordFocus, setShowDbViewer } = useERPStore();
+  const {
+    categories,
+    loadCategories,
+    loadRecords,
+    getCategoryRecords,
+    selectCategory,
+    showDbViewer,
+    currentProfile,
+    setPendingRecordFocus,
+    setShowDbViewer,
+    getRecordReferenceCount,
+  } = useERPStore();
   const [loading, setLoading] = useState(true);
   const [categoryStats, setCategoryStats] = useState<CategoryStats[]>([]);
   const [dateUnit, setDateUnit] = useState<'day' | 'month' | 'year'>('day');
@@ -96,6 +248,7 @@ export default function Dashboard() {
   const [recordModalOpen, setRecordModalOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<DataRecord | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+  const [selectedRootCategoryId, setSelectedRootCategoryId] = useState<string>(ALL_ROOT_CATEGORIES_VALUE);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [warningItems, setWarningItems] = useState<DashboardWarningItem[]>([]);
   const [warningTotalCount, setWarningTotalCount] = useState(0);
@@ -112,9 +265,7 @@ export default function Dashboard() {
         const allCategories = loadedCategories
           .filter((cat) => !isSeparatorCategory(cat))
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-        const rootCategories = loadedCategories
-          .filter((cat) => !cat.parentId && !isSeparatorCategory(cat))
-          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        const rootCategories = allCategories.filter((cat) => !cat.parentId);
 
         if (rootCategories.length === 0) {
           setCategoryStats([]);
@@ -127,31 +278,9 @@ export default function Dashboard() {
         await Promise.all(allCategories.map((category) => loadRecords(category.id)));
         const warningResult = await window.electronAPI.getDashboardWarnings(8);
 
-        const stats: CategoryStats[] = rootCategories.map((category) => {
-          const records = getCategoryRecords(category.id) || [];
-          const fileField = category.fields.find((field) => field.type === 'file');
-
-          let imageCount = 0;
-          let videoCount = 0;
-          let archiveCount = 0;
-
-          records.forEach((record) => {
-            if (!fileField || !record.data[fileField.id]) {
-              return;
-            }
-
-            const filePath = String(record.data[fileField.id] || '');
-            const ext = filePath.slice(filePath.lastIndexOf('.')).toLowerCase();
-
-            if (/\.(jpg|jpeg|png|gif|webp)$/i.test(ext)) {
-              imageCount += 1;
-            } else if (/\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(ext)) {
-              videoCount += 1;
-            } else if (/\.(zip|7z|rar)$/i.test(ext)) {
-              archiveCount += 1;
-            }
-          });
-
+        const stats: CategoryStats[] = allCategories.map((category) => {
+          const records = store.getCategoryRecords(category.id) || [];
+          const { imageCount, videoCount, archiveCount } = getFileTypeCounts(category, records);
           const recentRecords = [...records]
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
             .slice(0, 5);
@@ -176,71 +305,158 @@ export default function Dashboard() {
     };
 
     void loadAllData();
-  }, [loadCategories, loadRecords, getCategoryRecords, currentProfile?.id]);
+  }, [loadCategories, loadRecords, currentProfile?.id]);
 
-  const getWarningRecordContext = (item: DashboardWarningItem) => {
-    const category = categories.find((candidate) => candidate.id === item.categoryId) || null;
-    const record = getCategoryRecords(item.categoryId).find((candidate) => candidate.id === item.recordId) || null;
-    return { category, record };
-  };
+  const visibleCategories = useMemo(
+    () => categories.filter((cat) => !isSeparatorCategory(cat)).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+    [categories]
+  );
 
-  const openWarningRecordView = (item: DashboardWarningItem) => {
-    const { category, record } = getWarningRecordContext(item);
-    if (!category || !record) return;
-    setSelectedCategory(category);
-    setSelectedRecord(record);
-    setViewRecordModalOpen(true);
-  };
+  const rootCategories = useMemo(
+    () => visibleCategories.filter((cat) => !cat.parentId),
+    [visibleCategories]
+  );
 
-  const openWarningRecordEdit = (item: DashboardWarningItem) => {
-    const { category, record } = getWarningRecordContext(item);
-    if (!category || !record) return;
-    setSelectedCategory(category);
-    setSelectedRecord(record);
-    setRecordModalOpen(true);
-  };
+  useEffect(() => {
+    if (selectedRootCategoryId === ALL_ROOT_CATEGORIES_VALUE) {
+      return;
+    }
 
-  const moveToWarningRecord = async (item: DashboardWarningItem) => {
-    await loadCategories();
-    setPendingRecordFocus({ categoryId: item.categoryId, recordId: item.recordId });
-    setShowDbViewer(false);
-    void selectCategory(item.categoryId);
-    navigate('/category', {
-      state: {
-        categoryId: item.categoryId,
-        recordId: item.recordId,
-      },
+    if (!rootCategories.some((category) => category.id === selectedRootCategoryId)) {
+      setSelectedRootCategoryId(ALL_ROOT_CATEGORIES_VALUE);
+    }
+  }, [rootCategories, selectedRootCategoryId]);
+
+  const selectedRootCategory = useMemo(
+    () => rootCategories.find((category) => category.id === selectedRootCategoryId) || null,
+    [rootCategories, selectedRootCategoryId]
+  );
+
+  const categoryMap = useMemo(
+    () => new Map(visibleCategories.map((category) => [category.id, category])),
+    [visibleCategories]
+  );
+
+  const childrenByParentId = useMemo(() => {
+    const map = new Map<string, Category[]>();
+    visibleCategories.forEach((category) => {
+      if (!category.parentId) {
+        return;
+      }
+
+      const siblings = map.get(category.parentId) || [];
+      siblings.push(category);
+      map.set(category.parentId, siblings);
     });
-  };
+
+    map.forEach((items) => items.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
+    return map;
+  }, [visibleCategories]);
+
+  const selectedCategoryIds = useMemo(() => {
+    if (!selectedRootCategory) {
+      return new Set(visibleCategories.map((category) => category.id));
+    }
+
+    const ids = new Set<string>();
+    const stack = [selectedRootCategory.id];
+
+    while (stack.length > 0) {
+      const currentId = stack.pop();
+      if (!currentId || ids.has(currentId)) {
+        continue;
+      }
+
+      ids.add(currentId);
+      const children = childrenByParentId.get(currentId) || [];
+      children.forEach((child) => stack.push(child.id));
+    }
+
+    return ids;
+  }, [childrenByParentId, selectedRootCategory, visibleCategories]);
+
+  const scopedCategoryStats = useMemo(
+    () => categoryStats.filter((stat) => selectedCategoryIds.has(stat.category.id)),
+    [categoryStats, selectedCategoryIds]
+  );
+
+  const childCategoryStats = useMemo(
+    () => scopedCategoryStats.filter((stat) => stat.category.parentId === selectedRootCategory?.id),
+    [scopedCategoryStats, selectedRootCategory?.id]
+  );
+
+  const descendantCategoryStats = useMemo(
+    () => scopedCategoryStats.filter((stat) => stat.category.id !== selectedRootCategory?.id),
+    [scopedCategoryStats, selectedRootCategory?.id]
+  );
+
+  const filteredWarnings = useMemo(
+    () => warningItems.filter((item) => selectedCategoryIds.has(item.categoryId)),
+    [selectedCategoryIds, warningItems]
+  );
+
+  const filteredWarningCounts = useMemo(() => {
+    return filteredWarnings.reduce(
+      (acc, item) => {
+        if (item.type === 'missing-file') {
+          acc.missingFiles += 1;
+        } else if (item.type === 'broken-relation') {
+          acc.brokenRelations += 1;
+        }
+        return acc;
+      },
+      { missingFiles: 0, brokenRelations: 0 }
+    );
+  }, [filteredWarnings]);
+
+  const selectedWarningTotalCount = selectedRootCategory ? filteredWarnings.length : warningTotalCount;
+  const selectedWarningCounts = selectedRootCategory ? filteredWarningCounts : warningCounts;
 
   const totalStats = useMemo(() => {
-    const rootCategories = categories.filter((cat) => !cat.parentId && !isSeparatorCategory(cat));
     return {
       totalCategories: rootCategories.length,
-      totalRecords: categoryStats.reduce((sum, stat) => sum + stat.recordCount, 0),
-      totalImages: categoryStats.reduce((sum, stat) => sum + stat.imageCount, 0),
-      totalVideos: categoryStats.reduce((sum, stat) => sum + stat.videoCount, 0),
-      totalArchives: categoryStats.reduce((sum, stat) => sum + stat.archiveCount, 0),
+      totalRecords: scopedCategoryStats.reduce((sum, stat) => sum + stat.recordCount, 0),
+      totalImages: scopedCategoryStats.reduce((sum, stat) => sum + stat.imageCount, 0),
+      totalVideos: scopedCategoryStats.reduce((sum, stat) => sum + stat.videoCount, 0),
+      totalArchives: scopedCategoryStats.reduce((sum, stat) => sum + stat.archiveCount, 0),
+      totalChildCategories: descendantCategoryStats.length,
     };
-  }, [categories, categoryStats]);
+  }, [descendantCategoryStats.length, rootCategories.length, scopedCategoryStats]);
 
   const summaryCards = useMemo(() => {
-    const cards = [
-      {
+    const cards: Array<{
+      key: string;
+      title: string;
+      value: number;
+      icon: React.ReactNode;
+      color: string;
+    }> = [];
+
+    if (!selectedRootCategory) {
+      cards.push({
         key: 'categories',
         title: '전체 카테고리',
         value: totalStats.totalCategories,
         icon: <Folder size={24} className="text-white" />,
         color: 'bg-blue-500',
-      },
-      {
-        key: 'records',
-        title: '전체 항목',
-        value: totalStats.totalRecords,
-        icon: <FileText size={24} className="text-white" />,
-        color: 'bg-green-500',
-      },
-    ];
+      });
+    } else {
+      cards.push({
+        key: 'childCategories',
+        title: '하위 카테고리',
+        value: totalStats.totalChildCategories,
+        icon: <Folder size={24} className="text-white" />,
+        color: 'bg-blue-500',
+      });
+    }
+
+    cards.push({
+      key: 'records',
+      title: selectedRootCategory ? '카테고리 전체 항목' : '전체 항목',
+      value: totalStats.totalRecords,
+      icon: <FileText size={24} className="text-white" />,
+      color: 'bg-green-500',
+    });
 
     if (totalStats.totalImages > 0) {
       cards.push({
@@ -273,10 +489,10 @@ export default function Dashboard() {
     }
 
     return cards;
-  }, [totalStats]);
+  }, [selectedRootCategory, totalStats]);
 
   const categoryRecordData = useMemo(() => {
-    return categoryStats
+    return scopedCategoryStats
       .filter((stat) => stat.recordCount > 0)
       .sort((a, b) => b.recordCount - a.recordCount)
       .slice(0, 10)
@@ -286,7 +502,20 @@ export default function Dashboard() {
         records: stat.recordCount,
         categoryId: stat.category.id,
       }));
-  }, [categoryStats]);
+  }, [scopedCategoryStats]);
+
+  const childCategoryRecordData = useMemo(() => {
+    return descendantCategoryStats
+      .filter((stat) => stat.recordCount > 0)
+      .sort((a, b) => b.recordCount - a.recordCount)
+      .slice(0, 10)
+      .map((stat) => ({
+        name: stat.category.name,
+        fullName: stat.category.name,
+        records: stat.recordCount,
+        categoryId: stat.category.id,
+      }));
+  }, [descendantCategoryStats]);
 
   const fileTypeData = useMemo(() => {
     return [
@@ -295,9 +524,6 @@ export default function Dashboard() {
       { name: '압축파일', value: totalStats.totalArchives, color: '#EAB308' },
     ].filter((item) => item.value > 0);
   }, [totalStats]);
-
-  const hasAnyRecords = categoryStats.some((stat) => stat.recordCount > 0);
-  const hasAnyAttachments = fileTypeData.length > 0;
 
   const dateTrendData = useMemo(() => {
     const dateMap = new Map<string, number>();
@@ -311,7 +537,7 @@ export default function Dashboard() {
         dateMap.set(dateStr, 0);
       }
 
-      categoryStats.forEach((stat) => {
+      scopedCategoryStats.forEach((stat) => {
         const records = getCategoryRecords(stat.category.id) || [];
         records.forEach((record) => {
           const dateStr = record.createdAt.split('T')[0];
@@ -335,7 +561,7 @@ export default function Dashboard() {
         dateMap.set(monthStr, 0);
       }
 
-      categoryStats.forEach((stat) => {
+      scopedCategoryStats.forEach((stat) => {
         const records = getCategoryRecords(stat.category.id) || [];
         records.forEach((record) => {
           const recordDate = new Date(record.createdAt);
@@ -359,7 +585,7 @@ export default function Dashboard() {
       dateMap.set(yearStr, 0);
     }
 
-    categoryStats.forEach((stat) => {
+    scopedCategoryStats.forEach((stat) => {
       const records = getCategoryRecords(stat.category.id) || [];
       records.forEach((record) => {
         const yearStr = String(new Date(record.createdAt).getFullYear());
@@ -373,15 +599,104 @@ export default function Dashboard() {
       date: `${date}년`,
       count,
     }));
-  }, [categoryStats, getCategoryRecords, dateUnit]);
-
-  const hasTrendData = dateTrendData.some((entry) => entry.count > 0);
+  }, [dateUnit, getCategoryRecords, scopedCategoryStats]);
 
   const populatedCategoryStats = useMemo(() => {
-    return categoryStats
+    return scopedCategoryStats
       .filter((stat) => stat.recordCount > 0)
       .sort((a, b) => (a.category.order ?? 0) - (b.category.order ?? 0));
-  }, [categoryStats]);
+  }, [scopedCategoryStats]);
+
+  const childCategoryDashboardSections = useMemo<ChildCategoryDashboardSection[]>(() => {
+    if (!selectedRootCategory) {
+      return [];
+    }
+
+    return childCategoryStats.map((childStat) => {
+      const categoryIds = new Set<string>();
+      const stack = [childStat.category.id];
+
+      while (stack.length > 0) {
+        const currentId = stack.pop();
+        if (!currentId || categoryIds.has(currentId)) {
+          continue;
+        }
+
+        categoryIds.add(currentId);
+        const children = childrenByParentId.get(currentId) || [];
+        children.forEach((child) => stack.push(child.id));
+      }
+
+      const subtreeStats = scopedCategoryStats.filter((stat) => categoryIds.has(stat.category.id));
+      const recordRanking = subtreeStats
+        .flatMap((stat) =>
+          (getCategoryRecords(stat.category.id) || []).map((record) => ({
+            record,
+            category: stat.category,
+            referenceCount: getRecordReferenceCount(record.id, stat.category.id),
+            displayValue: getRecordDisplayValue(stat.category, record),
+          }))
+        )
+        .filter((item) => item.referenceCount > 0)
+        .sort((a, b) => {
+          if (b.referenceCount !== a.referenceCount) {
+            return b.referenceCount - a.referenceCount;
+          }
+          return new Date(b.record.updatedAt).getTime() - new Date(a.record.updatedAt).getTime();
+        })
+        .slice(0, 5);
+
+      const recentRecords = subtreeStats
+        .flatMap((stat) => stat.recentRecords.map((record) => ({ record, category: stat.category })))
+        .sort((a, b) => new Date(b.record.createdAt).getTime() - new Date(a.record.createdAt).getTime())
+        .slice(0, 5);
+
+      return {
+        category: childStat.category,
+        recordRanking,
+        recentRecords,
+      };
+    });
+  }, [childCategoryStats, childrenByParentId, getCategoryRecords, getRecordReferenceCount, scopedCategoryStats, selectedRootCategory]);
+
+  const hasAnyRecords = scopedCategoryStats.some((stat) => stat.recordCount > 0);
+  const hasAnyAttachments = fileTypeData.length > 0;
+  const hasTrendData = dateTrendData.some((entry) => entry.count > 0);
+
+  const getWarningRecordContext = (item: DashboardWarningItem) => {
+    const category = categoryMap.get(item.categoryId) || null;
+    const record = category ? getCategoryRecords(item.categoryId).find((candidate) => candidate.id === item.recordId) || null : null;
+    return { category, record };
+  };
+
+  const openWarningRecordView = (item: DashboardWarningItem) => {
+    const { category, record } = getWarningRecordContext(item);
+    if (!category || !record) return;
+    setSelectedCategory(category);
+    setSelectedRecord(record);
+    setViewRecordModalOpen(true);
+  };
+
+  const openWarningRecordEdit = (item: DashboardWarningItem) => {
+    const { category, record } = getWarningRecordContext(item);
+    if (!category || !record) return;
+    setSelectedCategory(category);
+    setSelectedRecord(record);
+    setRecordModalOpen(true);
+  };
+
+  const moveToWarningRecord = async (item: DashboardWarningItem) => {
+    await loadCategories();
+    setPendingRecordFocus({ categoryId: item.categoryId, recordId: item.recordId });
+    setShowDbViewer(false);
+    void selectCategory(item.categoryId);
+    navigate('/category', {
+      state: {
+        categoryId: item.categoryId,
+        recordId: item.recordId,
+      },
+    });
+  };
 
   if (loading) {
     return (
@@ -394,14 +709,15 @@ export default function Dashboard() {
     );
   }
 
-  const rootCategories = categories.filter((cat) => !cat.parentId && !isSeparatorCategory(cat));
   if (rootCategories.length === 0) {
     return (
       <div className="flex h-full overflow-hidden">
         <Sidebar />
         <div className="flex-1 overflow-y-auto bg-discord-bg discord-scrollbar">
           <div className="p-6">
-            <h1 className="text-2xl font-bold text-discord-text mb-6">대시보드</h1>
+            <div className="flex items-center justify-between gap-4 mb-6">
+              <h1 className="text-2xl font-bold text-discord-text">대시보드</h1>
+            </div>
             <div className="bg-discord-sidebar rounded-lg p-8 border border-gray-700 text-center flex flex-col items-center">
               <div className="order-last mt-6 flex justify-center">
                 <Button
@@ -431,74 +747,98 @@ export default function Dashboard() {
       ) : (
         <div className="flex-1 overflow-y-auto bg-discord-bg discord-scrollbar">
           <div className="p-6">
-            <h1 className="text-2xl font-bold text-discord-text mb-6">대시보드</h1>
+            <div className="flex flex-col gap-4 mb-6 md:flex-row md:items-center md:justify-between">
+              <h1 className="text-2xl font-bold text-discord-text">대시보드</h1>
+              <Select value={selectedRootCategoryId} onValueChange={setSelectedRootCategoryId}>
+                <SelectTrigger className="w-full md:w-72 bg-discord-sidebar border-gray-600 text-discord-text">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-discord-sidebar border-gray-600">
+                  <SelectItem value={ALL_ROOT_CATEGORIES_VALUE} className="text-discord-text focus:bg-discord-hover">
+                    전체 카테고리
+                  </SelectItem>
+                  {rootCategories.map((category) => (
+                    <SelectItem key={category.id} value={category.id} className="text-discord-text focus:bg-discord-hover">
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+            <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 ${summaryCards.length >= 5 ? 'lg:grid-cols-5' : summaryCards.length === 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
               {summaryCards.map((card) => (
                 <StatCard key={card.key} title={card.title} value={card.value} icon={card.icon} color={card.color} />
               ))}
             </div>
 
-            {warningTotalCount > 0 && (
-            <div className="bg-discord-sidebar rounded-lg p-6 border border-gray-700 mb-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-amber-500/15 text-amber-300">
-                    <AlertTriangle size={18} />
+            {selectedWarningTotalCount > 0 && (
+              <div className="bg-discord-sidebar rounded-lg p-6 border border-gray-700 mb-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-amber-500/15 text-amber-300">
+                      <AlertTriangle size={18} />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-semibold text-discord-text">주의 항목</h2>
+                      <p className="text-sm text-discord-muted">{`확인이 필요한 항목 ${formatNumber(selectedWarningTotalCount)}개`}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="text-lg font-semibold text-discord-text">주의 항목</h2>
-                    <p className="text-sm text-discord-muted">{`확인이 필요한 항목 ${formatNumber(warningTotalCount)}개`}</p>
+                  <div className="flex gap-2 text-xs text-discord-muted">
+                    {selectedWarningCounts.missingFiles > 0 && <span>파일 누락 {formatNumber(selectedWarningCounts.missingFiles)}</span>}
+                    {selectedWarningCounts.brokenRelations > 0 && <span>참조 깨짐 {formatNumber(selectedWarningCounts.brokenRelations)}</span>}
                   </div>
                 </div>
-                <div className="flex gap-2 text-xs text-discord-muted">
-                  {warningCounts.missingFiles > 0 && <span>파일 누락 {formatNumber(warningCounts.missingFiles)}</span>}
-                  {warningCounts.brokenRelations > 0 && <span>참조 깨짐 {formatNumber(warningCounts.brokenRelations)}</span>}
-                </div>
-              </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                {warningItems.map((item) => (
-                  <ContextMenu key={item.id}>
-                    <ContextMenuTrigger asChild>
-                      <button
-                        type="button"
-                        className="text-left bg-discord-bg rounded-lg border border-gray-700 px-4 py-3 hover:border-discord-accent hover:bg-discord-hover transition-colors"
-                        onClick={() => openWarningRecordView(item)}
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          {item.type === 'missing-file' ? (
-                            <AlertTriangle size={14} className="text-amber-300" />
-                          ) : (
-                            <Link2Off size={14} className="text-rose-300" />
-                          )}
-                          <span className="text-sm font-medium text-discord-text">{item.title}</span>
-                        </div>
-                        <p className="text-sm text-discord-muted">{item.description}</p>
-                      </button>
-                    </ContextMenuTrigger>
-                    <ContextMenuContent>
-                      <ContextMenuItem onClick={() => openWarningRecordEdit(item)}>
-                        수정하기
-                      </ContextMenuItem>
-                      <ContextMenuItem onClick={() => void moveToWarningRecord(item)}>
-                        해당 위치로 이동
-                      </ContextMenuItem>
-                    </ContextMenuContent>
-                  </ContextMenu>
-                ))}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  {filteredWarnings.map((item) => (
+                    <ContextMenu key={item.id}>
+                      <ContextMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="text-left bg-discord-bg rounded-lg border border-gray-700 px-4 py-3 hover:border-discord-accent hover:bg-discord-hover transition-colors"
+                          onClick={() => openWarningRecordView(item)}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            {item.type === 'missing-file' ? (
+                              <AlertTriangle size={14} className="text-amber-300" />
+                            ) : (
+                              <Link2Off size={14} className="text-rose-300" />
+                            )}
+                            <span className="text-sm font-medium text-discord-text">{item.title}</span>
+                          </div>
+                          <p className="text-sm text-discord-muted">{item.description}</p>
+                        </button>
+                      </ContextMenuTrigger>
+                      <ContextMenuContent>
+                        <ContextMenuItem onClick={() => openWarningRecordEdit(item)}>
+                          수정하기
+                        </ContextMenuItem>
+                        <ContextMenuItem onClick={() => void moveToWarningRecord(item)}>
+                          해당 위치로 이동
+                        </ContextMenuItem>
+                      </ContextMenuContent>
+                    </ContextMenu>
+                  ))}
+                </div>
+                {!selectedRootCategory && warningTotalCount > warningItems.length && (
+                  <p className="mt-4 text-xs text-discord-muted">
+                    상위 {formatNumber(warningItems.length)}개만 표시 중입니다. 전체 경고는 {formatNumber(warningTotalCount)}개입니다.
+                  </p>
+                )}
               </div>
-              {warningTotalCount > warningItems.length && (
-                <p className="mt-4 text-xs text-discord-muted">
-                  상위 {formatNumber(warningItems.length)}개만 표시 중입니다. 전체 경고는 {formatNumber(warningTotalCount)}개입니다.
-                </p>
-              )}
-            </div>
             )}
 
-            {(categoryRecordData.length > 0 || hasAnyAttachments) && (
-              <div className={`grid grid-cols-1 gap-6 mb-6 ${categoryRecordData.length > 0 && hasAnyAttachments ? 'lg:grid-cols-2' : ''}`}>
-                {categoryRecordData.length > 0 && (
+            {(hasAnyAttachments || (!selectedRootCategory && categoryRecordData.length > 0) || (selectedRootCategory && childCategoryRecordData.length > 0)) && (
+              <div
+                className={`grid grid-cols-1 gap-6 mb-6 ${
+                  hasAnyAttachments &&
+                  ((!selectedRootCategory && categoryRecordData.length > 0) || (selectedRootCategory && childCategoryRecordData.length > 0))
+                    ? 'lg:grid-cols-2'
+                    : ''
+                }`}
+              >
+                {!selectedRootCategory && categoryRecordData.length > 0 && (
                   <div className="bg-discord-sidebar rounded-lg p-6 border border-gray-700">
                     <h2 className="text-lg font-semibold text-discord-text mb-4">카테고리별 항목 수 (상위 10개)</h2>
                     <ResponsiveContainer width="100%" height={300}>
@@ -558,6 +898,32 @@ export default function Dashboard() {
                   </div>
                 )}
 
+                {selectedRootCategory && childCategoryRecordData.length > 0 && (
+                  <div className="bg-discord-sidebar rounded-lg p-6 border border-gray-700">
+                    <h2 className="text-lg font-semibold text-discord-text mb-4">하위 카테고리별 항목 수</h2>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart
+                        data={childCategoryRecordData}
+                        onClick={(data: any) => {
+                          if (data?.activePayload?.length) {
+                            const clickedData = data.activePayload[0].payload;
+                            if (clickedData?.categoryId) {
+                              selectCategory(clickedData.categoryId);
+                              navigate('/category');
+                            }
+                          }
+                        }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                        <XAxis dataKey="name" stroke="#9CA3AF" fontSize={12} interval={0} />
+                        <YAxis stroke="#9CA3AF" fontSize={12} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Bar dataKey="records" fill="#5865F2" style={{ cursor: 'pointer' }} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+
                 {hasAnyAttachments && (
                   <div className="bg-discord-sidebar rounded-lg p-6 border border-gray-700">
                     <h2 className="text-lg font-semibold text-discord-text mb-4">첨부파일 유형 분포</h2>
@@ -588,7 +954,7 @@ export default function Dashboard() {
               </div>
             )}
 
-            {hasAnyRecords && hasTrendData && (
+            {!selectedRootCategory && hasAnyRecords && hasTrendData && (
               <div className="bg-discord-sidebar rounded-lg p-6 border border-gray-700 mb-6">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold text-discord-text">최근 항목 추가 추이</h2>
@@ -615,12 +981,103 @@ export default function Dashboard() {
               </div>
             )}
 
-            {populatedCategoryStats.length > 0 && (
+            {selectedRootCategory && childCategoryDashboardSections.length > 0 && (
+              <div className="space-y-6 mb-6">
+                {childCategoryDashboardSections.map((section) => (
+                  <div key={section.category.id} className="bg-discord-sidebar rounded-lg p-6 border border-gray-700">
+                    <div className="flex items-center justify-between gap-3 mb-4">
+                      <h2
+                        className="text-lg font-semibold text-discord-text cursor-pointer hover:text-discord-accent transition-colors"
+                        onClick={() => {
+                          selectCategory(section.category.id);
+                          navigate('/category');
+                        }}
+                      >
+                        {section.category.name}
+                      </h2>
+                      <span className="text-sm text-discord-muted">직속 하위 카테고리 대시보드</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                      <div className="bg-discord-bg rounded-lg p-6 border border-gray-700">
+                        <div className="flex items-center gap-2 mb-4">
+                          <TimerReset size={18} className="text-discord-accent" />
+                          <h3 className="text-lg font-semibold text-discord-text">참조 랭킹</h3>
+                        </div>
+                        {section.recordRanking.length > 0 ? (
+                          <div className="space-y-3">
+                            {section.recordRanking.map((item, index) => (
+                              <button
+                                key={item.record.id}
+                                type="button"
+                                className="w-full min-h-[88px] text-left bg-discord-sidebar rounded-lg border border-gray-700 px-4 py-3 hover:border-discord-accent hover:bg-discord-hover transition-colors"
+                                onClick={() => {
+                                  setSelectedCategory(item.category);
+                                  setSelectedRecord(item.record);
+                                  setViewRecordModalOpen(true);
+                                }}
+                              >
+                                <div className="flex min-h-[64px] items-center justify-between gap-3">
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <RecordThumbnail category={item.category} record={item.record} />
+                                    <div className="min-w-0">
+                                      <p className="text-sm text-discord-muted mb-1">#{index + 1}</p>
+                                      <p className="text-sm font-medium text-discord-text break-all">{item.displayValue}</p>
+                                    </div>
+                                  </div>
+                                  <span className="text-sm text-white">{formatNumber(item.referenceCount)}회</span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-discord-muted">참조된 레코드가 아직 없습니다.</p>
+                        )}
+                      </div>
+
+                      <div className="bg-discord-bg rounded-lg p-6 border border-gray-700">
+                        <div className="flex items-center gap-2 mb-4">
+                          <Calendar size={18} className="text-discord-accent" />
+                          <h3 className="text-lg font-semibold text-discord-text">최근 추가 항목</h3>
+                        </div>
+                        {section.recentRecords.length > 0 ? (
+                          <div className="space-y-3">
+                            {section.recentRecords.map(({ record, category }) => (
+                              <button
+                                key={record.id}
+                                type="button"
+                                className="w-full min-h-[88px] text-left bg-discord-sidebar rounded-lg border border-gray-700 px-4 py-3 hover:border-discord-accent hover:bg-discord-hover transition-colors"
+                                onClick={() => {
+                                  setSelectedCategory(category);
+                                  setSelectedRecord(record);
+                                  setViewRecordModalOpen(true);
+                                }}
+                              >
+                                <div className="flex min-h-[64px] items-center gap-3 min-w-0">
+                                  <RecordThumbnail category={category} record={record} />
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-medium text-discord-text break-all">{getRecordDisplayValue(category, record)}</p>
+                                    <p className="text-xs text-discord-muted mt-1">{new Date(record.createdAt).toLocaleString('ko-KR')}</p>
+                                  </div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-discord-muted">최근 추가된 항목이 없습니다.</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!selectedRootCategory && populatedCategoryStats.length > 0 && (
               <div className="bg-discord-sidebar rounded-lg p-6 border border-gray-700">
                 <h2 className="text-lg font-semibold text-discord-text mb-4">카테고리별 상세 통계</h2>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {populatedCategoryStats.map((stat) => {
-                    const displayField = stat.category.fields.find((field) => field.type === 'text') || stat.category.fields[0];
                     const attachmentItems = [
                       stat.imageCount > 0
                         ? { key: 'image', icon: <Image size={16} className="text-purple-400" />, label: `이미지: ${formatNumber(stat.imageCount)}` }
@@ -664,9 +1121,7 @@ export default function Dashboard() {
                             <p className="text-xs text-discord-muted mb-2">최근 추가된 항목:</p>
                             <div className="space-y-1">
                               {stat.recentRecords.map((record) => {
-                                const displayValue = displayField && record.data[displayField.id]
-                                  ? String(record.data[displayField.id])
-                                  : new Date(record.createdAt).toLocaleDateString('ko-KR');
+                                const displayValue = getRecordDisplayValue(stat.category, record);
                                 const dateStr = new Date(record.createdAt).toLocaleDateString('ko-KR');
 
                                 return (
