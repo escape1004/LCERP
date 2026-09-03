@@ -66,6 +66,9 @@ export interface ElectronAPI {
   setListThumbnailFit: (fit: 'cover' | 'contain') => Promise<{ success: boolean; error?: string }>;
   setThumbnailPreviewScale: (scale: number) => Promise<{ success: boolean; error?: string }>;
   setDefaultGalleryZoom: (scale: number) => Promise<{ success: boolean; defaultGalleryZoom?: number; error?: string }>;
+  setTranslationTargetLanguage: (language: string) => Promise<{ success: boolean; translationTargetLanguage?: string; error?: string }>;
+  setOpenAiApiKey: (apiKey: string) => Promise<{ success: boolean; hasOpenAiApiKey?: boolean; error?: string }>;
+  clearOpenAiApiKey: () => Promise<{ success: boolean; hasOpenAiApiKey?: boolean; error?: string }>;
   openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
   checkFileExists: (filePath: string) => Promise<boolean>;
   getDashboardWarnings: (previewLimit?: number) => Promise<DashboardWarningsResult>;
@@ -100,6 +103,7 @@ export interface ElectronAPI {
   getBookmarks: (categoryId: string, recordId: string) => Promise<{ success: boolean; bookmarks: { time: number; createdAt: string }[]; error?: string }>;
   addBookmark: (categoryId: string, recordId: string, time: number) => Promise<{ success: boolean; bookmark?: { time: number; createdAt: string }; error?: string }>;
   removeBookmark: (categoryId: string, recordId: string, time: number) => Promise<{ success: boolean; error?: string }>;
+  translateText: (payload: { text: string; targetLanguage: string }) => Promise<{ success: boolean; translatedText?: string; error?: string }>;
   migrateThumbnailPaths: () => Promise<{ success: boolean; totalProcessed?: number; totalUpdated?: number; error?: string }>;
   checkThumbnailSync: () => Promise<any>;
   cleanupThumbnailSync: (options?: any) => Promise<any>;
@@ -132,6 +136,7 @@ export interface Field {
   required: boolean;
   unique: boolean;
   order: number;
+  enableTranslation?: boolean;
   textPrefix?: string;
   textSuffix?: string;
   pathMode?: 'direct' | 'base';

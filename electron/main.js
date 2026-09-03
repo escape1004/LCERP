@@ -47,6 +47,8 @@ const defaultConfig = {
   rememberWindowBounds: false,
   windowBounds: null,
   passwordHash: null,
+  openAiApiKey: '',
+  translationTargetLanguage: 'ko',
   videoSeekSeconds: 5,
   videoAutoPlay: true,
   listThumbnailFit: 'cover',
@@ -146,6 +148,32 @@ function getConfiguredDefaultGalleryZoom() {
   return normalizeDefaultGalleryZoom(appConfig.defaultGalleryZoom) ?? 100;
 }
 
+function normalizeTranslationTargetLanguage(value) {
+  const normalizedValue = String(value || '').trim();
+  const supportedLanguages = ['ko', 'en', 'ja', 'zh-CN', 'zh-TW'];
+  return supportedLanguages.includes(normalizedValue) ? normalizedValue : 'ko';
+}
+
+function getConfiguredTranslationTargetLanguage() {
+  return normalizeTranslationTargetLanguage(appConfig.translationTargetLanguage);
+}
+
+function getTranslationLanguageLabel(language) {
+  switch (normalizeTranslationTargetLanguage(language)) {
+    case 'en':
+      return 'English';
+    case 'ja':
+      return 'Japanese';
+    case 'zh-CN':
+      return 'Simplified Chinese';
+    case 'zh-TW':
+      return 'Traditional Chinese';
+    case 'ko':
+    default:
+      return 'Korean';
+  }
+}
+
 function normalizeDateParseFormats(value) {
   if (!Array.isArray(value)) {
     return null;
@@ -186,6 +214,82 @@ function getDateParseFormats(customFormats = []) {
 
 function getStoredDateOutputFormat(dateFormat) {
   return /d/.test(normalizeDateParseFormat(dateFormat)) ? 'yyyy-MM-dd' : 'yyyy-MM';
+}
+
+function extractResponseText(responseBody) {
+  if (typeof responseBody?.output_text === 'string' && responseBody.output_text.trim()) {
+    return responseBody.output_text.trim();
+  }
+
+  if (Array.isArray(responseBody?.output)) {
+    const textParts = [];
+    responseBody.output.forEach((item) => {
+      if (!Array.isArray(item?.content)) return;
+      item.content.forEach((content) => {
+        if (content?.type === 'output_text' && typeof content?.text === 'string') {
+          textParts.push(content.text);
+        }
+      });
+    });
+
+    if (textParts.length > 0) {
+      return textParts.join('\n').trim();
+    }
+  }
+
+  return '';
+}
+
+async function translateTextWithOpenAi(text, targetLanguage) {
+  const apiKey = String(appConfig.openAiApiKey || '').trim();
+  if (!apiKey) {
+    throw new Error('OpenAI API 키가 설정되지 않았습니다.');
+  }
+
+  const normalizedText = String(text || '').trim();
+  if (!normalizedText) {
+    return '';
+  }
+
+  const languageLabel = getTranslationLanguageLabel(targetLanguage);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-5.6-luna',
+        store: false,
+        input: `Detect the source language automatically and translate the text into ${languageLabel}.\nReturn only the translated text.\nDo not add explanations, labels, notes, or quotation marks.\nIf the input is already in ${languageLabel}, return it unchanged.\n\nText:\n${normalizedText}`
+      }),
+      signal: controller.signal
+    });
+
+    const responseBody = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const apiError = responseBody?.error?.message || `OpenAI API 요청에 실패했습니다. (${response.status})`;
+      throw new Error(apiError);
+    }
+
+    const translatedText = extractResponseText(responseBody);
+    if (!translatedText) {
+      throw new Error('번역 결과를 읽지 못했습니다.');
+    }
+
+    return translatedText;
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error('번역 요청 시간이 초과되었습니다.');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 function normalizeImportedDateValue(rawValue) {
@@ -3118,7 +3222,9 @@ ipcMain.handle('getConfig', () => {
     listThumbnailFit: appConfig.listThumbnailFit === 'contain' ? 'contain' : 'cover',
     thumbnailPreviewScale: getConfiguredThumbnailPreviewScale(),
     defaultGalleryZoom: getConfiguredDefaultGalleryZoom(),
-    dateParseFormats: normalizeDateParseFormats(appConfig.dateParseFormats)
+    dateParseFormats: normalizeDateParseFormats(appConfig.dateParseFormats),
+    hasOpenAiApiKey: Boolean(String(appConfig.openAiApiKey || '').trim()),
+    translationTargetLanguage: getConfiguredTranslationTargetLanguage()
   };
 });
 
@@ -3335,6 +3441,44 @@ ipcMain.handle('setDateParseFormats', (_event, formats) => {
   appConfig.dateParseFormats = normalizeDateParseFormats(formats);
   saveAppConfig();
   return { success: true, dateParseFormats: appConfig.dateParseFormats ?? [] };
+});
+
+ipcMain.handle('setTranslationTargetLanguage', (_event, language) => {
+  appConfig.translationTargetLanguage = normalizeTranslationTargetLanguage(language);
+  saveAppConfig();
+  return {
+    success: true,
+    translationTargetLanguage: appConfig.translationTargetLanguage
+  };
+});
+
+ipcMain.handle('setOpenAiApiKey', (_event, apiKey) => {
+  const normalizedApiKey = String(apiKey || '').trim();
+  if (!normalizedApiKey) {
+    return { success: false, error: 'OpenAI API 키를 입력해주세요.' };
+  }
+
+  appConfig.openAiApiKey = normalizedApiKey;
+  saveAppConfig();
+  return { success: true, hasOpenAiApiKey: true };
+});
+
+ipcMain.handle('clearOpenAiApiKey', () => {
+  appConfig.openAiApiKey = '';
+  saveAppConfig();
+  return { success: true, hasOpenAiApiKey: false };
+});
+
+ipcMain.handle('translateText', async (_event, payload = {}) => {
+  try {
+    const translatedText = await translateTextWithOpenAi(
+      payload.text,
+      payload.targetLanguage || getConfiguredTranslationTargetLanguage()
+    );
+    return { success: true, translatedText };
+  } catch (error) {
+    return { success: false, error: error.message || '자동 번역에 실패했습니다.' };
+  }
 });
 
 ipcMain.handle('backupDatabase', () => {

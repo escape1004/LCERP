@@ -41,6 +41,7 @@ export interface FieldDefinition {
   required: boolean;
   unique: boolean;
   order: number;
+  enableTranslation?: boolean;
   textPrefix?: string;
   textSuffix?: string;
   pathMode?: 'direct' | 'base';
@@ -121,12 +122,14 @@ export interface Config {
   rememberWindowBounds?: boolean;
   zoomPercent?: number;
   hasAppPassword?: boolean;
+  hasOpenAiApiKey?: boolean;
   videoSeekSeconds?: number;
   videoAutoPlay?: boolean;
   listThumbnailFit?: 'cover' | 'contain';
   thumbnailPreviewScale?: number;
   defaultGalleryZoom?: number;
   dateParseFormats?: string[];
+  translationTargetLanguage?: string;
 }
 
 export interface Profile {

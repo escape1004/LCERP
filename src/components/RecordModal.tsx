@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { format, isValid, parse } from 'date-fns';
-import { X, Search, Check, ChevronsUpDown, ChevronRight, CheckCircle2, XCircle } from 'lucide-react';
+import { X, Search, Check, ChevronsUpDown, ChevronRight, CheckCircle2, XCircle, Languages } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import type { Category, DataRecord, FieldDefinition, NewRecord } from '../types';
 import { Button } from './ui/button';
@@ -17,6 +17,8 @@ import { DatePicker } from './ui/date-picker';
 import { AnimatedModal } from './ui/animated-modal';
 import { formatFieldDisplayValue, hasTextAffixes } from '../lib/fieldFormat';
 import { getRelationDisplayLabel, getRelationPrimaryLabel } from '../utils/relationDisplay';
+import type { Config } from '../types';
+import { OPENAI_TRANSLATION_MODEL, getTranslatedFieldId, getTranslationMetaFieldId, isTranslationEnabledField } from '../lib/translation';
 import {
   Tooltip,
   TooltipContent,
@@ -127,6 +129,8 @@ export const RecordModal: React.FC<RecordModalProps> = ({
   const [ambiguousOptions, setAmbiguousOptions] = useState<{ value: string, records: DataRecord[] }[]>([]);
   const [pendingAmbiguousField, setPendingAmbiguousField] = useState<FieldDefinition | null>(null);
   const [pendingAmbiguousCurrentValues, setPendingAmbiguousCurrentValues] = useState<string[]>([]);
+  const [config, setConfig] = useState<Config | null>(null);
+  const [translatingFieldIds, setTranslatingFieldIds] = useState<Set<string>>(new Set());
 
   // 첫 번째 필드에 포커스하기 위한 ref
   const firstFieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement>(null);
@@ -182,6 +186,25 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     setDuplicateErrors({});
     setOpenComboboxes({});
   }, [isOpen, record, category]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let cancelled = false;
+    window.electronAPI.getConfig()
+      .then((nextConfig) => {
+        if (!cancelled) {
+          setConfig(nextConfig);
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to load translation config:', error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
 
   // 모달이 닫힐 때 formData를 초기화하여 이전 모달 상태가 남지 않도록 함
 
@@ -348,8 +371,10 @@ export const RecordModal: React.FC<RecordModalProps> = ({
           updatedAt: now
         };
         await addRecord(newRecord);
-        await loadRecords(category.id);
       }
+      toast({
+        title: record ? '레코드가 저장되었습니다.' : '레코드가 등록되었습니다.',
+      });
       onClose();
     } catch (error) {
       console.error('레코드 저장 중 오류 발생:', error);
@@ -414,6 +439,123 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     return normalizedValue;
   };
 
+  const updateTranslationValue = (fieldId: string, value: string, autoTranslated: boolean) => {
+    setFormData((prev) => ({
+      ...prev,
+      [getTranslatedFieldId(fieldId)]: value,
+      [getTranslationMetaFieldId(fieldId)]: value.trim()
+        ? {
+            provider: 'openai',
+            model: OPENAI_TRANSLATION_MODEL,
+            autoTranslated,
+            targetLanguage: config?.translationTargetLanguage || 'ko',
+            translatedAt: new Date().toISOString(),
+          }
+        : null,
+    }));
+  };
+
+  const handleAutoTranslate = async (field: FieldDefinition) => {
+    const rawValue = formData[field.id];
+    const sourceText = typeof rawValue === 'string' ? rawValue.trim() : '';
+
+    if (!sourceText) {
+      showAlert('번역 불가', '원문을 먼저 입력해주세요.', 'warning');
+      return;
+    }
+
+    if (!config?.hasOpenAiApiKey) {
+      showAlert('OpenAI API 키 필요', '환경설정 > 번역에서 OpenAI API 키를 먼저 저장해주세요.', 'warning');
+      return;
+    }
+
+    setTranslatingFieldIds((prev) => new Set(prev).add(field.id));
+    try {
+      const result = await window.electronAPI.translateText({
+        text: sourceText,
+        targetLanguage: config.translationTargetLanguage || 'ko',
+      });
+
+      if (!result.success || !result.translatedText) {
+        showAlert('자동 번역 실패', result.error || '자동 번역에 실패했습니다.', 'error');
+        return;
+      }
+
+      updateTranslationValue(field.id, result.translatedText, true);
+      toast({
+        title: '자동 번역 완료',
+        description: `${field.name} 번역문을 입력했습니다.`,
+      });
+    } catch (error) {
+      console.error('Auto translation failed:', error);
+      showAlert('자동 번역 실패', '자동 번역 처리 중 오류가 발생했습니다.', 'error');
+    } finally {
+      setTranslatingFieldIds((prev) => {
+        const next = new Set(prev);
+        next.delete(field.id);
+        return next;
+      });
+    }
+  };
+
+  const renderTranslationInput = (field: FieldDefinition) => {
+    if (!isTranslationEnabledField(field)) {
+      return null;
+    }
+
+    const translationFieldId = getTranslatedFieldId(field.id);
+    const translationValue = typeof formData[translationFieldId] === 'string'
+      ? String(formData[translationFieldId])
+      : '';
+    const isTranslating = translatingFieldIds.has(field.id);
+
+    return (
+      <div className="space-y-2 pt-1">
+        <div className="flex items-center gap-2 text-sm font-medium text-discord-text">
+          {field.name} 번역
+          <Languages size={15} className="text-blue-300" />
+        </div>
+
+        {field.type === 'longtext' ? (
+          <div className="relative">
+            <Textarea
+              value={translationValue}
+              onChange={(e) => updateTranslationValue(field.id, e.target.value, false)}
+              placeholder="번역문을 입력하세요"
+              className="min-h-[100px] bg-discord-sidebar border-gray-600 pr-28 text-discord-text placeholder:text-gray-500"
+            />
+            <Button
+              type="button"
+              onClick={() => void handleAutoTranslate(field)}
+              disabled={isTranslating}
+              className="absolute right-2 top-2 h-8 rounded-md bg-[#5865f2] px-3 text-xs font-medium text-white hover:bg-[#4752c4] disabled:bg-[#4e5d94] disabled:text-white/70"
+            >
+              {isTranslating ? '번역 중...' : '자동 번역'}
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Input
+              type="text"
+              value={translationValue}
+              onChange={(e) => updateTranslationValue(field.id, e.target.value, false)}
+              placeholder="번역문을 입력하세요"
+              className="bg-discord-sidebar border-gray-600 text-discord-text"
+            />
+            <Button
+              type="button"
+              onClick={() => void handleAutoTranslate(field)}
+              disabled={isTranslating}
+              className="h-10 shrink-0 rounded-md bg-[#5865f2] px-3 py-0 text-xs font-medium text-white hover:bg-[#4752c4] disabled:bg-[#4e5d94] disabled:text-white/70"
+            >
+              {isTranslating ? '번역 중...' : '자동 번역'}
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const toggleCombobox = (fieldId: string) => {
     setOpenComboboxes(prev => ({
       ...prev,
@@ -468,6 +610,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                 className={inputClassName}
                 ref={isFirstField ? firstFieldRef as React.Ref<HTMLInputElement> : undefined}
               />
+              {renderTranslationInput(field)}
               {renderError()}
             </div>
           );
@@ -499,6 +642,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                 </div>
               )}
             </div>
+            {renderTranslationInput(field)}
             {renderError()}
           </div>
         );
@@ -520,6 +664,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
               )}
               ref={isFirstField ? firstFieldRef as React.Ref<HTMLTextAreaElement> : undefined}
             />
+            {renderTranslationInput(field)}
             {renderError()}
           </div>
         );

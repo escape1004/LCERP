@@ -224,8 +224,12 @@ export const useERPStore = create<ERPStore>((set, get) => ({
     await window.electronAPI.addRecord(record);
     
     // 캐시 무효화 후 새로 생성한 레코드의 카테고리로 loadRecords 호출
-    get().invalidateCache(recordData.categoryId);
-    await get().loadRecords(recordData.categoryId);
+    try {
+      get().invalidateCache(recordData.categoryId);
+      await get().loadRecords(recordData.categoryId);
+    } catch (error) {
+      console.error('Failed to refresh records after addRecord:', error);
+    }
     return id;
   },
 
@@ -233,8 +237,12 @@ export const useERPStore = create<ERPStore>((set, get) => ({
     await window.electronAPI.updateRecord(id, data);
     if (get().selectedCategoryId) {
       // 캐시 무효화 후 새로 로드
-      get().invalidateCache(get().selectedCategoryId);
-      await get().loadRecords(get().selectedCategoryId);
+      try {
+        get().invalidateCache(get().selectedCategoryId);
+        await get().loadRecords(get().selectedCategoryId);
+      } catch (error) {
+        console.error('Failed to refresh records after updateRecord:', error);
+      }
     }
   },
 

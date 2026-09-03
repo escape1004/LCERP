@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
-import { HelpCircle, Keyboard, List, Monitor, Plus, Settings, Shield, Trash2, X } from 'lucide-react';
+import { HelpCircle, Keyboard, Languages, List, Monitor, Plus, Settings, Shield, Trash2, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
 import { Switch } from './ui/switch';
 import { Input } from './ui/input';
@@ -31,6 +31,13 @@ const sections: SettingsSection[] = [
 
 const thumbnailPreviewScaleOptions = [100, 125, 150, 175, 200] as const;
 const galleryZoomOptions = [50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200] as const;
+const translationLanguageOptions = [
+  { value: 'ko', label: '한국어' },
+  { value: 'en', label: '영어' },
+  { value: 'ja', label: '일본어' },
+  { value: 'zh-CN', label: '중국어(간체)' },
+  { value: 'zh-TW', label: '중국어(번체)' },
+] as const;
 const shortcutSections = [
   {
     title: '레코드 목록 페이지',
@@ -88,6 +95,8 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
   const [listMessage, setListMessage] = useState('');
   const [dateFormatInput, setDateFormatInput] = useState('');
   const [dateFormatMessage, setDateFormatMessage] = useState('');
+  const [translationApiKeyInput, setTranslationApiKeyInput] = useState('');
+  const [translationMessage, setTranslationMessage] = useState('');
 
   const settingsSections = useMemo(() => {
     const shortcutsSection = {
@@ -96,21 +105,30 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
       description: '페이지별 키보드 도움말',
       icon: Keyboard,
     };
-    const viewerIndex = sections.findIndex((section) => section.id === 'viewer');
-    const alreadyExists = sections.some((section) => section.id === shortcutsSection.id);
+    const translationSection = {
+      id: 'translation',
+      label: '번역',
+      description: '자동 번역과 OpenAI 설정',
+      icon: Languages,
+    };
+    const securityIndex = sections.findIndex((section) => section.id === 'security');
+    const alreadyExists =
+      sections.some((section) => section.id === shortcutsSection.id) ||
+      sections.some((section) => section.id === translationSection.id);
 
     if (alreadyExists) {
       return sections;
     }
 
-    if (viewerIndex < 0) {
-      return [...sections, shortcutsSection];
+    if (securityIndex < 0) {
+      return [...sections, shortcutsSection, translationSection];
     }
 
     return [
-      ...sections.slice(0, viewerIndex + 1),
+      ...sections.slice(0, securityIndex),
       shortcutsSection,
-      ...sections.slice(viewerIndex + 1),
+      translationSection,
+      ...sections.slice(securityIndex),
     ];
   }, []);
 
@@ -161,6 +179,8 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
         setListMessage('');
         setDateFormatInput('');
         setDateFormatMessage('');
+        setTranslationApiKeyInput('');
+        setTranslationMessage('');
       })
       .catch((error) => {
         console.error('Failed to load app settings:', error);
@@ -384,6 +404,69 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
         setConfig((prev) => (prev ? { ...prev, videoAutoPlay: !checked } : prev));
         setViewerAutoPlayMessage(result.error || '뷰어 설정 저장에 실패했습니다.');
       }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleTranslationTargetLanguageChange = async (language: string) => {
+    if (!config) return;
+
+    const previousLanguage = config.translationTargetLanguage || 'ko';
+    setConfig((prev) => (prev ? { ...prev, translationTargetLanguage: language } : prev));
+    setTranslationMessage('');
+    setIsSaving(true);
+
+    try {
+      const result = await window.electronAPI.setTranslationTargetLanguage(language);
+      if (result.success) {
+        const savedLanguage = result.translationTargetLanguage || language;
+        setConfig((prev) => (prev ? { ...prev, translationTargetLanguage: savedLanguage } : prev));
+        return;
+      }
+
+      setConfig((prev) => (prev ? { ...prev, translationTargetLanguage: previousLanguage } : prev));
+      setTranslationMessage(result.error || '번역 언어 저장에 실패했습니다.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveOpenAiApiKey = async () => {
+    const normalizedApiKey = translationApiKeyInput.trim();
+    if (!normalizedApiKey) {
+      setTranslationMessage('OpenAI API 키를 입력해주세요.');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const result = await window.electronAPI.setOpenAiApiKey(normalizedApiKey);
+      if (result.success) {
+        setConfig((prev) => (prev ? { ...prev, hasOpenAiApiKey: true } : prev));
+        setTranslationApiKeyInput('');
+        setTranslationMessage('OpenAI API 키가 저장되었습니다.');
+        return;
+      }
+
+      setTranslationMessage(result.error || 'OpenAI API 키 저장에 실패했습니다.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleClearOpenAiApiKey = async () => {
+    setIsSaving(true);
+    try {
+      const result = await window.electronAPI.clearOpenAiApiKey();
+      if (result.success) {
+        setConfig((prev) => (prev ? { ...prev, hasOpenAiApiKey: false } : prev));
+        setTranslationApiKeyInput('');
+        setTranslationMessage('저장된 OpenAI API 키가 제거되었습니다.');
+        return;
+      }
+
+      setTranslationMessage(result.error || 'OpenAI API 키 삭제에 실패했습니다.');
     } finally {
       setIsSaving(false);
     }
@@ -691,6 +774,112 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
     </div>
   );
 
+  const renderTranslationSection = () => (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+        <div className="text-sm font-medium text-white">OpenAI 준비 순서</div>
+        <p className="mt-2 text-sm leading-6 text-discord-muted">
+          자동 번역을 쓰려면 먼저 OpenAI 사이트에서 API 결제 설정을 마쳐야 합니다.
+        </p>
+        <div className="mt-4 space-y-2 rounded-lg border border-gray-700 bg-discord-bg/80 px-4 py-4 text-sm text-discord-text">
+          <div>1. OpenAI 계정으로 로그인합니다.</div>
+          <div>2. 결제 수단에서 카드를 등록하고 API 크레딧을 충전합니다.</div>
+          <div>3. API Keys 메뉴에서 새 API 키를 생성합니다.</div>
+          <div>4. 생성한 키를 이 화면의 OpenAI API 키 입력칸에 붙여넣고 저장합니다.</div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+        <div className="text-sm font-medium text-white">자동 번역 엔진</div>
+        <p className="text-sm text-discord-muted mt-2 leading-6">
+          현재 자동 번역은 OpenAI `GPT-5.6 Luna` 모델을 사용합니다. 번역문은 사람이 직접 수정할 수 있고, 자동 번역 버튼을 눌렀을 때만 API가 호출됩니다.
+        </p>
+        <div className="mt-4 rounded-lg border border-gray-700 bg-discord-bg/80 px-4 py-3 text-sm text-discord-text">
+          모델: GPT-5.6 Luna
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+        <div className="text-sm font-medium text-white">기본 번역 언어</div>
+        <p className="text-sm text-discord-muted mt-2 leading-6">
+          원문 언어는 자동으로 감지하고, 여기서 선택한 언어로 번역합니다.
+        </p>
+
+        <div className="mt-5 max-w-md">
+          <div className="text-xs text-discord-muted mb-2">대상 언어</div>
+          <Select
+            value={config?.translationTargetLanguage || 'ko'}
+            onValueChange={(value) => void handleTranslationTargetLanguageChange(value)}
+            disabled={!config || isSaving}
+          >
+            <SelectTrigger className="bg-discord-sidebar border-gray-600 text-discord-text">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-discord-sidebar border-gray-600 text-discord-text">
+              {translationLanguageOptions.map((language) => (
+                <SelectItem
+                  key={language.value}
+                  value={language.value}
+                  className="text-discord-text focus:bg-discord-hover focus:text-discord-text hover:bg-discord-hover"
+                >
+                  {language.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+        <div className="text-sm font-medium text-white">OpenAI API 키</div>
+        <p className="text-sm text-discord-muted mt-2 leading-6">
+          키는 이 앱의 로컬 환경설정에 저장됩니다. 저장된 키가 있더라도 보안상 이 화면에는 다시 표시하지 않습니다.
+        </p>
+
+        <div className="mt-3 text-xs text-discord-muted">
+          저장 상태: {config?.hasOpenAiApiKey ? '저장됨' : '미설정'}
+        </div>
+
+        <div className="mt-5 grid gap-3 max-w-xl">
+          <Input
+            type="password"
+            value={translationApiKeyInput}
+            onChange={(e) => {
+              setTranslationApiKeyInput(e.target.value);
+              setTranslationMessage('');
+            }}
+            placeholder={config?.hasOpenAiApiKey ? '새 OpenAI API 키 입력' : 'OpenAI API 키 입력'}
+            className="bg-discord-bg border-gray-600 text-discord-text"
+          />
+
+          {translationMessage && <p className="text-sm text-discord-muted">{translationMessage}</p>}
+
+          <div className="flex gap-3 pt-2">
+            <Button
+              type="button"
+              onClick={() => void handleSaveOpenAiApiKey()}
+              className="bg-discord-accent hover:bg-blue-600 text-white"
+              disabled={isSaving}
+            >
+              {config?.hasOpenAiApiKey ? 'API 키 변경' : 'API 키 저장'}
+            </Button>
+            {config?.hasOpenAiApiKey && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleClearOpenAiApiKey()}
+                className="border-gray-600 hover:bg-discord-hover text-discord-text"
+                disabled={isSaving}
+              >
+                API 키 삭제
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   const renderViewerSection = () => (
     <div className="space-y-4">
       <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
@@ -885,7 +1074,9 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
             <div className="flex-1 min-h-0 overflow-y-auto p-6 bg-discord-bg">
               {currentSection.id === 'general'
                 ? renderGeneralSection()
-                : currentSection.id === 'list'
+                : currentSection.id === 'translation'
+                  ? renderTranslationSection()
+                  : currentSection.id === 'list'
                   ? renderListSection()
                   : currentSection.id === 'viewer'
                     ? renderViewerSection()

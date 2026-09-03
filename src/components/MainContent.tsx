@@ -1,5 +1,5 @@
 ﻿import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, Upload, FileText, ChevronDown, ChevronUp, ArrowUpWideNarrow, ArrowDownWideNarrow, ArrowUp01, ArrowDown01, SortAsc, SortDesc, Check, RefreshCw, HelpCircle, ChevronsUpDown, LayoutGrid, TableProperties, Archive, Info, ImageOff } from 'lucide-react';
+import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, Upload, FileText, ChevronDown, ChevronUp, ArrowUpWideNarrow, ArrowDownWideNarrow, ArrowUp01, ArrowDown01, SortAsc, SortDesc, Check, RefreshCw, HelpCircle, ChevronsUpDown, LayoutGrid, TableProperties, Archive, Info, ImageOff, Languages } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { useLoadingStore } from '../hooks/useLoadingStore';
 import { DataRecord, FieldDefinition, Category } from '../types';
@@ -39,6 +39,7 @@ import { formatFieldDisplayValue } from '../lib/fieldFormat';
 import { getRelationDisplayLabel } from '../utils/relationDisplay';
 import { DatePicker } from './ui/date-picker';
 import { cn } from '../lib/utils';
+import { getTranslatedFieldValue, getTranslationMeta, isTranslationEnabledField } from '../lib/translation';
 
 type PercentageValue = {
   value: number;
@@ -271,7 +272,15 @@ const renderGalleryCopyableText = (
 );
 
 // 필드 값 포맷팅 함수
-const formatFieldValue = (field: FieldDefinition, value: FieldValue, categories: Category[], getCategoryRecords: (categoryId: string) => DataRecord[], onViewRelatedRecord?: (record: DataRecord, category: Category) => void, onSelectRow?: () => void) => {
+const formatFieldValue = (
+  field: FieldDefinition,
+  value: FieldValue,
+  categories: Category[],
+  getCategoryRecords: (categoryId: string) => DataRecord[],
+  onViewRelatedRecord?: (record: DataRecord, category: Category) => void,
+  onSelectRow?: () => void,
+  recordData?: Record<string, unknown>
+) => {
   const urlPattern = /^https?:\/\/.+/;
   
   // 빈 값 처리 - 레코드 리스트 테이블과 동일하게
@@ -288,27 +297,56 @@ const formatFieldValue = (field: FieldDefinition, value: FieldValue, categories:
     case 'text':
     case 'longtext': {
       const formattedValue = formatFieldDisplayValue(field, value);
+      const translatedText = isTranslationEnabledField(field)
+        ? getTranslatedFieldValue(recordData, field.id)
+        : '';
+      const translationMeta = translatedText ? getTranslationMeta(recordData, field.id) : null;
       if (urlPattern.test(formattedValue)) {
         return renderUrl(formattedValue, onSelectRow);
       }
       return (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span 
-                className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block" 
-                onClick={async (e) => {
-                  await copyOnCtrlClick(e, formattedValue, '값이 클립보드에 복사되었습니다.', onSelectRow);
-                }}
-              >
-                {typeof formattedValue === 'string' ? renderTextWithHashtags(formattedValue) : String(formattedValue)}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-              Ctrl+클릭하여 복사
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <div className="flex items-center gap-1 min-w-0">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span 
+                  className="min-w-0 flex-1 text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block" 
+                  onClick={async (e) => {
+                    await copyOnCtrlClick(e, formattedValue, '값이 클립보드에 복사되었습니다.', onSelectRow);
+                  }}
+                >
+                  {typeof formattedValue === 'string' ? renderTextWithHashtags(formattedValue) : String(formattedValue)}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" align="center" className={TOOLTIP_CONTENT_CLASSNAME}>
+                Ctrl+클릭하여 복사
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          {translatedText && (
+            <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className="inline-flex shrink-0 cursor-help items-center rounded p-1 text-blue-300 transition-colors hover:bg-discord-hover hover:text-blue-200"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectRow?.();
+                    }}
+                  >
+                    <Languages size={14} />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center" className={TOOLTIP_CONTENT_CLASSNAME}>
+                  <div className="max-w-xs whitespace-pre-wrap break-words">{translatedText}</div>
+                  {translationMeta?.autoTranslated && (
+                    <div className="mt-1 text-[11px] text-blue-200">자동 번역</div>
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
       );
     }
     
@@ -812,10 +850,9 @@ export const MainContent: React.FC = () => {
     () => categoriesSafe.find((cat) => cat.id === selectedCategoryId) ?? null,
     [categoriesSafe, selectedCategoryId]
   );
-  const currentRecordsSafe = useMemo(
-    () => (selectedCategoryId ? getCategoryRecords(selectedCategoryId) ?? [] : []),
-    [selectedCategoryId, getCategoryRecords]
-  );
+  const currentRecordsSafe = selectedCategoryId
+    ? getCategoryRecords(selectedCategoryId) ?? []
+    : [];
   const getInlinePercentageKey = useCallback((recordId: string, fieldId: string) => `${recordId}:${fieldId}`, []);
 
   useEffect(() => {
@@ -1180,7 +1217,7 @@ export const MainContent: React.FC = () => {
 
   const normalizedSearchTerm = searchTerm.trim().toLowerCase();
 
-  const matchesSearchValue = useCallback((field: FieldDefinition, value: FieldValue) => {
+  const matchesSearchValue = useCallback((field: FieldDefinition, value: FieldValue, recordData?: Record<string, unknown>) => {
     if (!normalizedSearchTerm && normalizedMultiSearchTerms.length === 0) return true;
 
     if (field.type === 'number') {
@@ -1224,6 +1261,13 @@ export const MainContent: React.FC = () => {
       return `${percentage.value} ${percentage.max} ${percentage.percent}`
         .toLowerCase()
         .includes(normalizedSearchTerm);
+    }
+
+    if ((field.type === 'text' || field.type === 'longtext') && isTranslationEnabledField(field)) {
+      const translatedText = getTranslatedFieldValue(recordData, field.id);
+      return [String(value || ''), translatedText].some((item) =>
+        item.toLowerCase().includes(normalizedSearchTerm)
+      );
     }
 
     return String(value || '').toLowerCase().includes(normalizedSearchTerm);
@@ -1286,7 +1330,7 @@ export const MainContent: React.FC = () => {
             }
           }
 
-          return matchesSearchValue(field, value);
+          return matchesSearchValue(field, value, record.data as Record<string, unknown>);
         });
       } else {
         // 특정 필드만 검색
@@ -1324,7 +1368,7 @@ export const MainContent: React.FC = () => {
           }
         }
 
-        return matchesSearchValue(field, value);
+        return matchesSearchValue(field, value, record.data as Record<string, unknown>);
       }
     });
   }, [selectedCategoryId, effectiveSearchField, fileTypeFilter, currentRecordsSafe, categoriesSafe, getCategoryRecords, fileField, getRecordFieldValue, matchesSearchValue, normalizedSearchTerm, hasActiveSearch, isMultiValueSearchField, normalizedMultiSearchTerms, visibleFields, selectedCategoryFieldMap]);
@@ -2624,7 +2668,8 @@ export const MainContent: React.FC = () => {
                                             categoriesSafe,
                                             getCategoryRecords,
                                             handleViewRelatedRecord,
-                                            selectGalleryRecord
+                                            selectGalleryRecord,
+                                            record.data as Record<string, unknown>
                                           )
                                         : renderGalleryCopyableText(
                                             title,
@@ -2645,7 +2690,8 @@ export const MainContent: React.FC = () => {
                                             categoriesSafe,
                                             getCategoryRecords,
                                             handleViewRelatedRecord,
-                                            selectGalleryRecord
+                                            selectGalleryRecord,
+                                            record.data as Record<string, unknown>
                                           )}
                                         </div>
                                       </div>
@@ -2864,7 +2910,7 @@ export const MainContent: React.FC = () => {
                                               </div>
                                             );
                                           })()
-                                        : formatFieldValue(field, getRecordFieldValue(record, field.id), categoriesSafe, getCategoryRecords, handleViewRelatedRecord, () => setSelectedRecordId(record.id))}
+                                        : formatFieldValue(field, getRecordFieldValue(record, field.id), categoriesSafe, getCategoryRecords, handleViewRelatedRecord, () => setSelectedRecordId(record.id), record.data as Record<string, unknown>)}
                                   </td>
                                 ))}
                                 {hasIncomingReferences && selectedCategorySafe && (

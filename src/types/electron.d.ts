@@ -1,5 +1,16 @@
 import type { Category, NewCategory, CategoryUpdate, DataRecord, NewRecord, TableData, Config, Profile } from './index';
 
+export interface TranslateTextPayload {
+  text: string;
+  targetLanguage: string;
+}
+
+export interface TranslateTextResult {
+  success: boolean;
+  translatedText?: string;
+  error?: string;
+}
+
 export interface ElectronAPI {
   // Database viewer methods
   getTables: () => Promise<{ name: string }[]>;
@@ -43,6 +54,10 @@ export interface ElectronAPI {
   setListThumbnailFit: (fit: 'cover' | 'contain') => Promise<{ success: boolean; error?: string }>;
   setThumbnailPreviewScale: (scale: number) => Promise<{ success: boolean; error?: string }>;
   setDefaultGalleryZoom: (scale: number) => Promise<{ success: boolean; defaultGalleryZoom?: number; error?: string }>;
+  setTranslationTargetLanguage: (language: string) => Promise<{ success: boolean; translationTargetLanguage?: string; error?: string }>;
+  setOpenAiApiKey: (apiKey: string) => Promise<{ success: boolean; hasOpenAiApiKey?: boolean; error?: string }>;
+  clearOpenAiApiKey: () => Promise<{ success: boolean; hasOpenAiApiKey?: boolean; error?: string }>;
+  translateText: (payload: TranslateTextPayload) => Promise<TranslateTextResult>;
 
   // Profile methods
   getProfiles: () => Promise<Profile[]>;

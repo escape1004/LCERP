@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { X, ExternalLink, ChevronRight, Check, HelpCircle, Upload, Archive, ImageOff } from 'lucide-react';
+import { X, ExternalLink, ChevronRight, Check, HelpCircle, Upload, Archive, ImageOff, Languages } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { useLoadingStore } from '../hooks/useLoadingStore';
 import { Category, DataRecord, FieldDefinition } from '../types';
@@ -14,6 +14,7 @@ import { resolveFilePath } from '../lib/pathResolver';
 import { AnimatedModal } from './ui/animated-modal';
 import { formatFieldDisplayValue } from '../lib/fieldFormat';
 import { getRelationDisplayLabel } from '../utils/relationDisplay';
+import { getTranslatedFieldValue, getTranslationMeta, isTranslationEnabledField } from '../lib/translation';
 
 // 해시태그 파싱 유틸리티 함수
 const parseHashtags = (text: string): { hashtags: string[]; plainText: string } => {
@@ -599,7 +600,12 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
       
       case 'text': {
         const strValue = formatFieldDisplayValue(field, value);
-        const { hashtags, plainText } = parseHashtags(strValue);
+        const translatedText = isTranslationEnabledField(field)
+          ? getTranslatedFieldValue(record.data as Record<string, unknown>, field.id)
+          : '';
+        const translationMeta = translatedText
+          ? getTranslationMeta(record.data as Record<string, unknown>, field.id)
+          : null;
         
         // URL 자동 감지 및 렌더링
         if (urlPattern.test(strValue)) {
@@ -607,6 +613,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         }
         
         return (
+          <div className="flex items-start gap-1">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -624,12 +631,35 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+            {translatedText && (
+              <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="mt-0.5 inline-flex shrink-0 cursor-help items-center rounded p-1 text-blue-300 transition-colors hover:bg-discord-hover hover:text-blue-200">
+                      <Languages size={14} />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" align="center" className="relative max-w-xs break-words rounded border border-gray-700 bg-[#23272a] bg-opacity-95 px-3 py-2 text-xs text-white shadow-2xl after:absolute after:left-1/2 after:top-full after:mt-0.5 after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:content-['']">
+                    <div className="whitespace-pre-wrap break-words">{translatedText}</div>
+                    {translationMeta?.autoTranslated && (
+                      <div className="mt-1 text-[11px] text-blue-200">자동 번역</div>
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
         );
       }
       
       case 'longtext': {
         const strValue = String(value);
-        const { hashtags, plainText } = parseHashtags(strValue);
+        const translatedText = isTranslationEnabledField(field)
+          ? getTranslatedFieldValue(record.data as Record<string, unknown>, field.id)
+          : '';
+        const translationMeta = translatedText
+          ? getTranslationMeta(record.data as Record<string, unknown>, field.id)
+          : null;
         
         // URL 자동 감지 및 렌더링
         if (urlPattern.test(strValue)) {
@@ -637,6 +667,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         }
         
         return (
+          <div className="flex items-start gap-2">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -654,6 +685,24 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+            {translatedText && (
+              <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="mt-1 inline-flex shrink-0 cursor-help items-center rounded p-1 text-blue-300 transition-colors hover:bg-discord-hover hover:text-blue-200">
+                      <Languages size={14} />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" align="center" className="relative max-w-xs break-words rounded border border-gray-700 bg-[#23272a] bg-opacity-95 px-3 py-2 text-xs text-white shadow-2xl after:absolute after:left-1/2 after:top-full after:mt-0.5 after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:content-['']">
+                    <div className="whitespace-pre-wrap break-words">{translatedText}</div>
+                    {translationMeta?.autoTranslated && (
+                      <div className="mt-1 text-[11px] text-blue-200">자동 번역</div>
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
         );
       }
       

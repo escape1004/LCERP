@@ -313,6 +313,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
       required: false,
       unique: false,
       order: formData.fields.length,
+      enableTranslation: false,
       textPrefix: '',
       textSuffix: '',
       pathMode: 'direct',
@@ -344,6 +345,9 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     newFields[index] = { ...newFields[index], ...updates };
     if (updates.type === 'percentage') {
       newFields[index] = { ...newFields[index], required: false, unique: false };
+    }
+    if (updates.type && updates.type !== 'text' && updates.type !== 'longtext') {
+      newFields[index] = { ...newFields[index], enableTranslation: false };
     }
     if (updates.type === 'file' && !newFields[index].pathMode) {
       newFields[index] = { ...newFields[index], pathMode: 'direct', basePath: '', thumbnailOnly: false };
@@ -624,6 +628,18 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                               />
                                               <label htmlFor={`multiple-${field.id}`} className="text-sm text-gray-300">
                                                 다중 선택
+                                              </label>
+                                            </div>
+                                          )}
+                                          {(field.type === 'text' || field.type === 'longtext') && (
+                                            <div className="flex items-center gap-2">
+                                              <Checkbox
+                                                id={`translation-${field.id}`}
+                                                checked={field.enableTranslation}
+                                                onCheckedChange={(checked) => updateField(index, { enableTranslation: checked as boolean })}
+                                              />
+                                              <label htmlFor={`translation-${field.id}`} className="text-sm text-gray-300">
+                                                번역 기능
                                               </label>
                                             </div>
                                           )}

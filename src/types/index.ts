@@ -5,6 +5,7 @@ export interface FieldDefinition {
   required: boolean;
   unique: boolean;
   order: number;
+  enableTranslation?: boolean;
   textPrefix?: string;
   textSuffix?: string;
   pathMode?: 'direct' | 'base';
@@ -57,12 +58,14 @@ export interface Config {
   backupInterval: number;
   rememberWindowBounds?: boolean;
   hasAppPassword?: boolean;
+  hasOpenAiApiKey?: boolean;
   videoSeekSeconds?: number;
   videoAutoPlay?: boolean;
   listThumbnailFit?: 'cover' | 'contain';
   thumbnailPreviewScale?: number;
   defaultGalleryZoom?: number;
   dateParseFormats?: string[];
+  translationTargetLanguage?: string;
 }
 
 export {}; 
