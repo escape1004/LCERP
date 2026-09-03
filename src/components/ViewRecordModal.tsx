@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { X, ExternalLink, ChevronRight, Check, HelpCircle, Upload, Archive } from 'lucide-react';
+import { X, ExternalLink, ChevronRight, Check, HelpCircle, Upload, Archive, ImageOff } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { useLoadingStore } from '../hooks/useLoadingStore';
 import { Category, DataRecord, FieldDefinition } from '../types';
@@ -1116,16 +1116,20 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
       </div>
     ) : filePath ? (
       <div 
-        className={`w-[320px] h-[320px] bg-gray-900 flex items-center justify-center text-lg text-gray-500 border border-gray-700 rounded-xl transition-colors ${canOpenFile ? 'cursor-pointer hover:bg-gray-800' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
+        className={`w-[320px] h-[320px] flex items-center justify-center rounded-xl border border-dashed border-[#4f545c] bg-[radial-gradient(circle_at_top,_rgba(88,101,242,0.20),_transparent_58%),linear-gradient(180deg,_#2b2d31_0%,_#1e1f22_100%)] text-[#b5bac1] transition-colors ${canOpenFile ? 'cursor-pointer hover:border-[#6d73c9] hover:bg-[radial-gradient(circle_at_top,_rgba(88,101,242,0.30),_transparent_58%),linear-gradient(180deg,_#313338_0%,_#232428_100%)]' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
         onClick={() => canOpenFile && handleThumbnailClick(filePath)}
       >
-        {missingFile ? '파일 없음' : ['.zip', '.7z'].includes(ext) ? (
-          <Archive size={56} className="text-yellow-400/80" />
-        ) : '썸네일 없음'}
+        {missingFile ? (
+          <HelpCircle size={40} className="text-[#dcddde]" />
+        ) : ['.zip', '.7z'].includes(ext) ? (
+          <Archive size={56} className="text-[#f0b232]" />
+        ) : (
+          <ImageOff size={44} className="text-[#b9bbbe]" />
+        )}
       </div>
     ) : (
-      <div className="w-[320px] h-[320px] bg-gray-950 flex items-center justify-center text-lg text-gray-600 border border-gray-800 rounded-xl">
-        파일 없음
+      <div className="w-[320px] h-[320px] flex items-center justify-center rounded-xl border border-dashed border-[#3b3f46] bg-[linear-gradient(180deg,_#232428_0%,_#18191c_100%)] text-[#72767d]">
+        <ImageOff size={40} className="text-[#72767d]" />
       </div>
     );
 
@@ -1147,15 +1151,15 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         ) : filePath ? (
           // 파일은 있지만 썸네일이 없는 경우
           <div 
-            className={`w-[320px] h-[320px] bg-gray-900 flex items-center justify-center text-lg text-gray-500 border border-gray-700 rounded-xl transition-colors ${canOpenFile ? 'cursor-pointer hover:bg-gray-800' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
+            className={`w-[320px] h-[320px] flex items-center justify-center rounded-xl border border-dashed border-[#4f545c] bg-[radial-gradient(circle_at_top,_rgba(88,101,242,0.20),_transparent_58%),linear-gradient(180deg,_#2b2d31_0%,_#1e1f22_100%)] text-[#b5bac1] transition-colors ${canOpenFile ? 'cursor-pointer hover:border-[#6d73c9] hover:bg-[radial-gradient(circle_at_top,_rgba(88,101,242,0.30),_transparent_58%),linear-gradient(180deg,_#313338_0%,_#232428_100%)]' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
             onClick={() => canOpenFile && handleThumbnailClick(filePath)}
           >
-            {missingFile ? '파일 없음' : '썸네일 없음'}
+            {missingFile ? <HelpCircle size={40} className="text-[#dcddde]" /> : <ImageOff size={44} className="text-[#b9bbbe]" />}
           </div>
         ) : (
           // 파일이 없는 경우
-          <div className="w-[320px] h-[320px] bg-gray-950 flex items-center justify-center text-lg text-gray-600 border border-gray-800 rounded-xl">
-            파일 없음
+          <div className="w-[320px] h-[320px] flex items-center justify-center rounded-xl border border-dashed border-[#3b3f46] bg-[linear-gradient(180deg,_#232428_0%,_#18191c_100%)] text-[#72767d]">
+            <ImageOff size={40} className="text-[#72767d]" />
           </div>
         )}
         {/* 시간 입력/슬라이더 부분만 분기 */}

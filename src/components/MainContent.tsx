@@ -1,5 +1,5 @@
 ﻿import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, Upload, FileText, ChevronDown, ChevronUp, ArrowUpWideNarrow, ArrowDownWideNarrow, ArrowUp01, ArrowDown01, SortAsc, SortDesc, Check, RefreshCw, HelpCircle, ChevronsUpDown, LayoutGrid, TableProperties, Archive, Info } from 'lucide-react';
+import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, Upload, FileText, ChevronDown, ChevronUp, ArrowUpWideNarrow, ArrowDownWideNarrow, ArrowUp01, ArrowDown01, SortAsc, SortDesc, Check, RefreshCw, HelpCircle, ChevronsUpDown, LayoutGrid, TableProperties, Archive, Info, ImageOff } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { useLoadingStore } from '../hooks/useLoadingStore';
 import { DataRecord, FieldDefinition, Category } from '../types';
@@ -720,21 +720,21 @@ const ThumbnailCell: React.FC<{
         </>
       ) : filePath ? (
         <div 
-          className={`${sizeClassName} bg-gray-800 flex items-center justify-center text-gray-500 border border-gray-700 rounded transition-colors ${canOpen ? 'cursor-pointer hover:bg-gray-700' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
+          className={`${sizeClassName} flex items-center justify-center rounded border border-dashed border-[#4f545c] bg-[radial-gradient(circle_at_top,_rgba(88,101,242,0.20),_transparent_58%),linear-gradient(180deg,_#2b2d31_0%,_#1e1f22_100%)] text-[#b5bac1] transition-colors ${canOpen ? 'cursor-pointer hover:border-[#6d73c9] hover:bg-[radial-gradient(circle_at_top,_rgba(88,101,242,0.30),_transparent_58%),linear-gradient(180deg,_#313338_0%,_#232428_100%)]' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
           style={sizeStyle}
           onClick={() => canOpen && onThumbnailClick(filePath)}
         >
           {missingFile ? (
-            <span className="text-2xl">?</span>
+            <HelpCircle size={20} className="text-[#dcddde]" />
           ) : isArchiveFile ? (
-            <Archive size={28} className="text-yellow-400/80" />
+            <Archive size={24} className="text-[#f0b232]" />
           ) : (
-            <span className="text-2xl">🖼️</span>
+            <ImageOff size={22} className="text-[#b9bbbe]" />
           )}
         </div>
       ) : (
-        <div className={`${sizeClassName} bg-gray-900 flex items-center justify-center text-gray-600 border border-gray-800 rounded`} style={sizeStyle}>
-          <span className="text-2xl">-</span>
+        <div className={`${sizeClassName} flex items-center justify-center rounded border border-dashed border-[#3b3f46] bg-[linear-gradient(180deg,_#232428_0%,_#18191c_100%)] text-[#72767d]`} style={sizeStyle}>
+          <ImageOff size={20} className="text-[#72767d]" />
         </div>
       )}
       {filePath && !thumbnailOnly && (
@@ -2937,11 +2937,11 @@ export const MainContent: React.FC = () => {
                           <div className="flex h-full w-full items-center justify-center rounded-lg border border-dashed border-[#3b3f46] bg-[#18191c] text-center">
                             <div className="flex flex-col items-center">
                               {thumbnailPreview.missingFile ? (
-                                <div className="text-4xl leading-none">?</div>
+                                <HelpCircle size={40} className="text-[#dcddde]" />
                               ) : /\.(zip|7z)$/i.test(thumbnailPreview.filePath) ? (
-                                <Archive size={40} className="text-yellow-400/80" />
+                                <Archive size={40} className="text-[#f0b232]" />
                               ) : (
-                                <div className="text-4xl leading-none">🖼️</div>
+                                <ImageOff size={40} className="text-[#b9bbbe]" />
                               )}
                               <p className="mt-3 text-sm text-[#dcddde]">
                                 {thumbnailPreview.missingFile

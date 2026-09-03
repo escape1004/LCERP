@@ -20,6 +20,7 @@ import {
   Calendar,
   FileText,
   Folder,
+  ImageOff,
   Image,
   Link2Off,
   TimerReset,
@@ -205,22 +206,22 @@ const RecordThumbnail: React.FC<{ category: Category; record: DataRecord }> = ({
   }
 
   return (
-    <div className="w-14 h-14 shrink-0 rounded border border-gray-700 bg-black/40 flex items-center justify-center overflow-hidden">
+    <div className="w-14 h-14 shrink-0 rounded border border-dashed border-[#4f545c] bg-[radial-gradient(circle_at_top,_rgba(88,101,242,0.20),_transparent_58%),linear-gradient(180deg,_#2b2d31_0%,_#1e1f22_100%)] flex items-center justify-center overflow-hidden">
       {loading ? (
         <span className="text-[10px] text-discord-muted">로딩</span>
       ) : thumbnailDataUrl ? (
         <img src={thumbnailDataUrl} alt="썸네일" className="w-full h-full object-cover" />
       ) : filePath ? (
-        <div className="w-full h-full bg-gray-800 flex items-center justify-center text-gray-500">
+        <div className="w-full h-full flex items-center justify-center text-[#b5bac1]">
           {isArchiveFile ? (
-            <Archive size={18} className="text-yellow-400/80" />
+            <Archive size={18} className="text-[#f0b232]" />
           ) : (
-            <span className="text-lg">🖼️</span>
+            <ImageOff size={18} className="text-[#b9bbbe]" />
           )}
         </div>
       ) : (
-        <div className="w-full h-full bg-gray-900 flex items-center justify-center text-gray-600">
-          <span className="text-lg">-</span>
+        <div className="w-full h-full bg-[linear-gradient(180deg,_#232428_0%,_#18191c_100%)] flex items-center justify-center text-[#72767d]">
+          <ImageOff size={18} className="text-[#72767d]" />
         </div>
       )}
     </div>
