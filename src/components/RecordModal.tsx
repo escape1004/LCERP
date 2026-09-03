@@ -508,6 +508,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
       ? String(formData[translationFieldId])
       : '';
     const isTranslating = translatingFieldIds.has(field.id);
+    const isAutoTranslateAvailable = Boolean(config?.hasOpenAiApiKey);
 
     return (
       <div className="space-y-2 pt-1">
@@ -527,7 +528,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
             <Button
               type="button"
               onClick={() => void handleAutoTranslate(field)}
-              disabled={isTranslating}
+              disabled={!isAutoTranslateAvailable || isTranslating}
               className="absolute right-2 top-2 h-8 rounded-md bg-[#5865f2] px-3 text-xs font-medium text-white hover:bg-[#4752c4] disabled:bg-[#4e5d94] disabled:text-white/70"
             >
               {isTranslating ? '번역 중...' : '자동 번역'}
@@ -545,12 +546,17 @@ export const RecordModal: React.FC<RecordModalProps> = ({
             <Button
               type="button"
               onClick={() => void handleAutoTranslate(field)}
-              disabled={isTranslating}
+              disabled={!isAutoTranslateAvailable || isTranslating}
               className="h-10 shrink-0 rounded-md bg-[#5865f2] px-3 py-0 text-xs font-medium text-white hover:bg-[#4752c4] disabled:bg-[#4e5d94] disabled:text-white/70"
             >
               {isTranslating ? '번역 중...' : '자동 번역'}
             </Button>
           </div>
+        )}
+        {!isAutoTranslateAvailable && (
+          <p className="text-xs text-amber-300">
+            자동 번역을 사용하려면 환경설정 &gt; 번역에서 OpenAI API 키를 먼저 저장해주세요.
+          </p>
         )}
       </div>
     );

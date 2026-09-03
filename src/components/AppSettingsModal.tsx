@@ -836,6 +836,12 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
           키는 이 앱의 로컬 환경설정에 저장됩니다. 저장된 키가 있더라도 보안상 이 화면에는 다시 표시하지 않습니다.
         </p>
 
+        {!config?.hasOpenAiApiKey && (
+          <div className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            OpenAI API 키가 등록되지 않아 자동 번역을 사용할 수 없습니다. 아래 입력칸에 API 키를 저장한 뒤 자동 번역 버튼을 사용할 수 있습니다.
+          </div>
+        )}
+
         <div className="mt-3 text-xs text-discord-muted">
           저장 상태: {config?.hasOpenAiApiKey ? '저장됨' : '미설정'}
         </div>

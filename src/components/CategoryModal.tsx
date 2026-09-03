@@ -2,7 +2,7 @@
 import { X, GripVertical, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { useERPStore } from '../hooks/useERPStore';
-import { Category, FieldDefinition, NewCategory } from '../types';
+import { Category, Config, FieldDefinition, NewCategory } from '../types';
 import { isSeparatorCategory } from '../lib/category';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -61,6 +61,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   const [migratedAffixCount, setMigratedAffixCount] = useState(0);
   const [isDirty, setIsDirty] = useState(false);
   const [expandedTextDecorations, setExpandedTextDecorations] = useState<Record<string, boolean>>({});
+  const [config, setConfig] = useState<Config | null>(null);
   
   // 카테고리 이름 입력 필드 ref
   const categoryNameRef = useRef<HTMLInputElement>(null);
@@ -90,6 +91,25 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
         categoryNameRef.current?.focus();
       }, 100);
     }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let cancelled = false;
+    window.electronAPI.getConfig()
+      .then((nextConfig) => {
+        if (!cancelled) {
+          setConfig(nextConfig);
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to load config in CategoryModal:', error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen]);
 
   // 카테고리가 변경될 때마다 레코드 로드
@@ -631,7 +651,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                               </label>
                                             </div>
                                           )}
-                                          {(field.type === 'text' || field.type === 'longtext') && (
+                                          {config?.hasOpenAiApiKey && (field.type === 'text' || field.type === 'longtext') && (
                                             <div className="flex items-center gap-2">
                                               <Checkbox
                                                 id={`translation-${field.id}`}
