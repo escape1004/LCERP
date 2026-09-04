@@ -481,6 +481,18 @@ export const RecordModal: React.FC<RecordModalProps> = ({
       });
 
       if (!result.success || !result.translatedText) {
+        const isInsufficientQuota = [
+          'credit_balance_exhausted',
+          'organization_spend_limit_exceeded',
+          'project_spend_limit_exceeded',
+          'organization_usage_limit_exceeded',
+        ].includes(result.errorCode || '')
+          || result.errorType === 'insufficient_quota'
+          || (result.status === 429 && /quota|credit|billing/i.test(result.error || ''));
+        if (isInsufficientQuota) {
+          showAlert('OpenAI 크레딧 부족', 'OpenAI API 크레딧 또는 결제 한도를 확인한 뒤 다시 시도해주세요.', 'warning');
+          return;
+        }
         showAlert('자동 번역 실패', result.error || '자동 번역에 실패했습니다.', 'error');
         return;
       }

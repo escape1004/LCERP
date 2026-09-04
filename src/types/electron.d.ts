@@ -9,6 +9,9 @@ export interface TranslateTextResult {
   success: boolean;
   translatedText?: string;
   error?: string;
+  errorCode?: string;
+  errorType?: string;
+  status?: number;
 }
 
 export interface ElectronAPI {

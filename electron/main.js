@@ -273,7 +273,11 @@ async function translateTextWithOpenAi(text, targetLanguage) {
     const responseBody = await response.json().catch(() => ({}));
     if (!response.ok) {
       const apiError = responseBody?.error?.message || `OpenAI API 요청에 실패했습니다. (${response.status})`;
-      throw new Error(apiError);
+      const error = new Error(apiError);
+      error.status = response.status;
+      error.code = responseBody?.error?.code;
+      error.type = responseBody?.error?.type;
+      throw error;
     }
 
     const translatedText = extractResponseText(responseBody);
@@ -3477,7 +3481,13 @@ ipcMain.handle('translateText', async (_event, payload = {}) => {
     );
     return { success: true, translatedText };
   } catch (error) {
-    return { success: false, error: error.message || '자동 번역에 실패했습니다.' };
+    return {
+      success: false,
+      error: error.message || '자동 번역에 실패했습니다.',
+      errorCode: error.code,
+      errorType: error.type,
+      status: error.status,
+    };
   }
 });
 
