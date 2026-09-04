@@ -511,7 +511,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     const isAutoTranslateAvailable = Boolean(config?.hasOpenAiApiKey);
 
     return (
-      <div className="space-y-2 pt-1">
+      <div className="space-y-2 pt-3">
         <div className="flex items-center gap-2 text-sm font-medium text-discord-text">
           {field.name} 번역
           <Languages size={15} className="text-blue-300" />
@@ -541,13 +541,13 @@ export const RecordModal: React.FC<RecordModalProps> = ({
               value={translationValue}
               onChange={(e) => updateTranslationValue(field.id, e.target.value, false)}
               placeholder="번역문을 입력하세요"
-              className="bg-discord-sidebar border-gray-600 text-discord-text"
+              className="bg-discord-sidebar border-gray-600 text-discord-text flex-1"
             />
             <Button
               type="button"
               onClick={() => void handleAutoTranslate(field)}
               disabled={!isAutoTranslateAvailable || isTranslating}
-              className="h-10 shrink-0 rounded-md bg-[#5865f2] px-3 py-0 text-xs font-medium text-white hover:bg-[#4752c4] disabled:bg-[#4e5d94] disabled:text-white/70"
+              className="shrink-0 bg-[#5865f2] text-white hover:bg-[#4752c4] disabled:bg-[#4e5d94] disabled:text-white/70"
             >
               {isTranslating ? '번역 중...' : '자동 번역'}
             </Button>
