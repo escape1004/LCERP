@@ -45,14 +45,15 @@ export function Toaster() {
       {toasts.map(({ id, title, description, action, variant, ...props }) => {
         const meta = getToastMeta(variant)
         const Icon = meta.icon
+        const hasDescription = Boolean(description)
 
         return (
           <Toast key={id} variant={variant} {...props}>
-            <div className="flex min-w-0 flex-1 gap-3">
-              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#454a53] bg-[#202225] group-[.destructive]:border-[#7a3539] group-[.destructive]:bg-[#2b1719]">
+            <div className={`flex min-w-0 flex-1 gap-3 ${hasDescription ? "items-start" : "items-center"}`}>
+              <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#454a53] bg-[#202225] group-[.destructive]:border-[#7a3539] group-[.destructive]:bg-[#2b1719] ${hasDescription ? "mt-0.5" : ""}`}>
                 <Icon className={`h-4 w-4 ${meta.iconClassName}`} />
               </div>
-              <div className="grid min-w-0 flex-1 gap-1.5">
+              <div className={`min-w-0 flex-1 ${hasDescription ? "grid gap-1.5" : "flex min-h-9 items-center"}`}>
                 {title && <ToastTitle>{title}</ToastTitle>}
                 {description && (
                   <div className="flex min-w-0 items-center gap-1.5">
