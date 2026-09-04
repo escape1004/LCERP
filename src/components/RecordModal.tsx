@@ -321,6 +321,10 @@ export const RecordModal: React.FC<RecordModalProps> = ({
       showAlert('오류', '카테고리를 먼저 선택하세요.', 'error');
       return;
     }
+    if (translatingFieldIds.size > 0) {
+      showAlert('자동 번역 진행 중', '자동 번역이 완료된 뒤 저장할 수 있습니다.', 'warning');
+      return;
+    }
     const isValid = validateForm();
     if (!isValid) {
       showAlert('오류', '필수 입력 항목을 모두 입력해주세요.', 'error');
@@ -1340,7 +1344,8 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                           Object.keys(duplicateErrors).length > 0 || 
                           isValidating ||
                           isDuplicateChecking ||
-                          pendingDuplicateChecks.size > 0;
+                          pendingDuplicateChecks.size > 0 ||
+                          translatingFieldIds.size > 0;
 
   // 카테고리 경로 구하기 (ViewRecordModal 참고)
   const getParentPath = useCallback((currentCategory: Category): Category[] => {
