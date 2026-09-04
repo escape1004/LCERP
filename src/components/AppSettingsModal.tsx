@@ -87,6 +87,9 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [securityMessage, setSecurityMessage] = useState('');
+  const [passwordLockAttempts, setPasswordLockAttempts] = useState('5');
+  const [passwordLockMinutes, setPasswordLockMinutes] = useState('1');
+  const [passwordLockMessage, setPasswordLockMessage] = useState('');
   const [generalMessage, setGeneralMessage] = useState('');
   const [zoomPercentInput, setZoomPercentInput] = useState('100');
   const [viewerSeekSeconds, setViewerSeekSeconds] = useState('5');
@@ -171,6 +174,9 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
         setPassword('');
         setPasswordConfirm('');
         setSecurityMessage('');
+        setPasswordLockAttempts(String(nextConfig.passwordLockMaxAttempts ?? 5));
+        setPasswordLockMinutes(String(nextConfig.passwordLockDurationMinutes ?? 1));
+        setPasswordLockMessage('');
         setGeneralMessage('');
         setZoomPercentInput(String(nextConfig.zoomPercent ?? 100));
         setViewerSeekSeconds(String(nextConfig.videoSeekSeconds ?? 5));
@@ -527,6 +533,39 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
     }
 
     setSecurityMessage(result.error || '비밀번호 해제에 실패했습니다.');
+  };
+
+  const handleSavePasswordLockSettings = async () => {
+    const maxAttempts = Number(passwordLockAttempts);
+    const durationMinutes = Number(passwordLockMinutes);
+    if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 20) {
+      setPasswordLockMessage('실패 횟수는 1회에서 20회 사이의 정수로 설정해야 합니다.');
+      return;
+    }
+    if (!Number.isInteger(durationMinutes) || durationMinutes < 1 || durationMinutes > 1440) {
+      setPasswordLockMessage('잠금 시간은 1분에서 1,440분 사이의 정수로 설정해야 합니다.');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const result = await window.electronAPI.setPasswordLockSettings(maxAttempts, durationMinutes);
+      if (!result.success) {
+        setPasswordLockMessage(result.error || '로그인 잠금 설정 저장에 실패했습니다.');
+        return;
+      }
+
+      setConfig((prev) => prev ? {
+        ...prev,
+        passwordLockMaxAttempts: result.passwordLockMaxAttempts ?? maxAttempts,
+        passwordLockDurationMinutes: result.passwordLockDurationMinutes ?? durationMinutes,
+      } : prev);
+      setPasswordLockAttempts(String(result.passwordLockMaxAttempts ?? maxAttempts));
+      setPasswordLockMinutes(String(result.passwordLockDurationMinutes ?? durationMinutes));
+      setPasswordLockMessage('로그인 잠금 설정이 저장되었습니다.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const renderGeneralSection = () => (
@@ -1049,6 +1088,65 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
             )}
           </div>
         </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+        <div className="text-sm font-medium text-white">로그인 잠금</div>
+        <p className="text-sm text-discord-muted mt-2 leading-6">
+          비밀번호를 연속으로 틀리면 설정한 시간 동안 비밀번호 입력을 잠급니다. 앱을 다시 실행해도 잠금은 유지됩니다.
+        </p>
+
+        <div className="mt-5 grid max-w-md gap-3 sm:grid-cols-2">
+          <div className="space-y-2">
+            <label className="text-sm text-discord-text" htmlFor="password-lock-attempts">최대 실패 횟수</label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="password-lock-attempts"
+                type="number"
+                min="1"
+                max="20"
+                step="1"
+                value={passwordLockAttempts}
+                onChange={(e) => {
+                  setPasswordLockAttempts(e.target.value);
+                  setPasswordLockMessage('');
+                }}
+                className="bg-discord-bg border-gray-600 text-discord-text"
+              />
+              <span className="text-sm text-discord-muted">회</span>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm text-discord-text" htmlFor="password-lock-minutes">잠금 시간</label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="password-lock-minutes"
+                type="number"
+                min="1"
+                max="1440"
+                step="1"
+                value={passwordLockMinutes}
+                onChange={(e) => {
+                  setPasswordLockMinutes(e.target.value);
+                  setPasswordLockMessage('');
+                }}
+                className="bg-discord-bg border-gray-600 text-discord-text"
+              />
+              <span className="text-sm text-discord-muted">분</span>
+            </div>
+          </div>
+        </div>
+
+        {passwordLockMessage && <p className="mt-3 text-sm text-discord-muted">{passwordLockMessage}</p>}
+
+        <Button
+          type="button"
+          onClick={() => void handleSavePasswordLockSettings()}
+          className="mt-5 bg-discord-accent hover:bg-blue-600 text-white"
+          disabled={isSaving}
+        >
+          로그인 잠금 설정 저장
+        </Button>
       </div>
     </div>
   );

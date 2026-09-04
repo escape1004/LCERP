@@ -48,6 +48,10 @@ const defaultConfig = {
   muteAudioWhenBackgrounded: false,
   windowBounds: null,
   passwordHash: null,
+  passwordLockMaxAttempts: 5,
+  passwordLockDurationMinutes: 1,
+  passwordFailedAttempts: 0,
+  passwordLockUntil: null,
   openAiApiKey: '',
   translationTargetLanguage: 'ko',
   videoSeekSeconds: 5,
@@ -157,6 +161,36 @@ function normalizeTranslationTargetLanguage(value) {
 
 function getConfiguredTranslationTargetLanguage() {
   return normalizeTranslationTargetLanguage(appConfig.translationTargetLanguage);
+}
+
+function normalizePasswordLockMaxAttempts(value) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return null;
+  return Math.min(20, Math.max(1, Math.floor(numericValue)));
+}
+
+function normalizePasswordLockDurationMinutes(value) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return null;
+  return Math.min(1440, Math.max(1, Math.floor(numericValue)));
+}
+
+function getConfiguredPasswordLockMaxAttempts() {
+  return normalizePasswordLockMaxAttempts(appConfig.passwordLockMaxAttempts) ?? 5;
+}
+
+function getConfiguredPasswordLockDurationMinutes() {
+  return normalizePasswordLockDurationMinutes(appConfig.passwordLockDurationMinutes) ?? 1;
+}
+
+function getPasswordLockUntil() {
+  const lockUntil = Number(appConfig.passwordLockUntil);
+  return Number.isFinite(lockUntil) && lockUntil > Date.now() ? lockUntil : null;
+}
+
+function resetPasswordLockState() {
+  appConfig.passwordFailedAttempts = 0;
+  appConfig.passwordLockUntil = null;
 }
 
 function getTranslationLanguageLabel(language) {
@@ -3239,6 +3273,9 @@ ipcMain.handle('getConfig', () => {
     muteAudioWhenBackgrounded: appConfig.muteAudioWhenBackgrounded === true,
     zoomPercent: getConfiguredZoomPercent(),
     hasAppPassword: Boolean(appConfig.passwordHash),
+    passwordLockMaxAttempts: getConfiguredPasswordLockMaxAttempts(),
+    passwordLockDurationMinutes: getConfiguredPasswordLockDurationMinutes(),
+    passwordLockUntil: getPasswordLockUntil(),
     videoSeekSeconds: appConfig.videoSeekSeconds || 5,
     videoAutoPlay: appConfig.videoAutoPlay !== false,
     listThumbnailFit: appConfig.listThumbnailFit === 'contain' ? 'contain' : 'cover',
@@ -3384,12 +3421,14 @@ ipcMain.handle('setAppPassword', (_event, password) => {
   }
 
   appConfig.passwordHash = hashPassword(password);
+  resetPasswordLockState();
   saveAppConfig();
   return { success: true };
 });
 
 ipcMain.handle('clearAppPassword', () => {
   appConfig.passwordHash = null;
+  resetPasswordLockState();
   saveAppConfig();
   return { success: true };
 });
@@ -3399,10 +3438,71 @@ ipcMain.handle('verifyAppPassword', (_event, password) => {
     return { success: true };
   }
 
+  const lockUntil = getPasswordLockUntil();
+  if (lockUntil) {
+    return {
+      success: false,
+      locked: true,
+      lockUntil,
+      remainingMs: lockUntil - Date.now(),
+      error: 'Too many password attempts.'
+    };
+  }
+
+  if (appConfig.passwordLockUntil) {
+    resetPasswordLockState();
+    saveAppConfig();
+  }
+
   const isValid = hashPassword(password) === appConfig.passwordHash;
-  return isValid
-    ? { success: true }
-    : { success: false, error: 'Invalid password.' };
+  if (isValid) {
+    if (appConfig.passwordFailedAttempts || appConfig.passwordLockUntil) {
+      resetPasswordLockState();
+      saveAppConfig();
+    }
+    return { success: true };
+  }
+
+  const failedAttempts = Math.max(0, Number(appConfig.passwordFailedAttempts) || 0) + 1;
+  const maxAttempts = getConfiguredPasswordLockMaxAttempts();
+  if (failedAttempts >= maxAttempts) {
+    const nextLockUntil = Date.now() + getConfiguredPasswordLockDurationMinutes() * 60 * 1000;
+    appConfig.passwordFailedAttempts = 0;
+    appConfig.passwordLockUntil = nextLockUntil;
+    saveAppConfig();
+    return {
+      success: false,
+      locked: true,
+      lockUntil: nextLockUntil,
+      remainingMs: nextLockUntil - Date.now(),
+      error: 'Too many password attempts.'
+    };
+  }
+
+  appConfig.passwordFailedAttempts = failedAttempts;
+  saveAppConfig();
+  return {
+    success: false,
+    remainingAttempts: maxAttempts - failedAttempts,
+    error: 'Invalid password.'
+  };
+});
+
+ipcMain.handle('setPasswordLockSettings', (_event, maxAttempts, durationMinutes) => {
+  const normalizedMaxAttempts = normalizePasswordLockMaxAttempts(maxAttempts);
+  const normalizedDurationMinutes = normalizePasswordLockDurationMinutes(durationMinutes);
+  if (normalizedMaxAttempts === null || normalizedDurationMinutes === null) {
+    return { success: false, error: 'Invalid password lock settings.' };
+  }
+
+  appConfig.passwordLockMaxAttempts = normalizedMaxAttempts;
+  appConfig.passwordLockDurationMinutes = normalizedDurationMinutes;
+  saveAppConfig();
+  return {
+    success: true,
+    passwordLockMaxAttempts: normalizedMaxAttempts,
+    passwordLockDurationMinutes: normalizedDurationMinutes
+  };
 });
 
 ipcMain.handle('setVideoSeekSeconds', (_event, seconds) => {

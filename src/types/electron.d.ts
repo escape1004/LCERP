@@ -50,9 +50,10 @@ export interface ElectronAPI {
   setMuteAudioWhenBackgrounded: (enabled: boolean) => Promise<{ success: boolean }>;
   setZoomPercent: (percent: number) => Promise<{ success: boolean; error?: string }>;
   setAppPassword: (password: string) => Promise<{ success: boolean; error?: string }>;
+  setPasswordLockSettings: (maxAttempts: number, durationMinutes: number) => Promise<{ success: boolean; passwordLockMaxAttempts?: number; passwordLockDurationMinutes?: number; error?: string }>;
   setDateParseFormats: (formats: string[]) => Promise<{ success: boolean; dateParseFormats?: string[]; error?: string }>;
   clearAppPassword: () => Promise<{ success: boolean; error?: string }>;
-  verifyAppPassword: (password: string) => Promise<{ success: boolean; error?: string }>;
+  verifyAppPassword: (password: string) => Promise<{ success: boolean; locked?: boolean; lockUntil?: number; remainingMs?: number; remainingAttempts?: number; error?: string }>;
   setVideoSeekSeconds: (seconds: number) => Promise<{ success: boolean; error?: string }>;
   setVideoAutoPlay: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
   setListThumbnailFit: (fit: 'cover' | 'contain') => Promise<{ success: boolean; error?: string }>;

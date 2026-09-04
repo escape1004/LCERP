@@ -60,6 +60,9 @@ export interface Config {
   rememberWindowBounds?: boolean;
   muteAudioWhenBackgrounded?: boolean;
   hasAppPassword?: boolean;
+  passwordLockMaxAttempts?: number;
+  passwordLockDurationMinutes?: number;
+  passwordLockUntil?: number | null;
   hasOpenAiApiKey?: boolean;
   videoSeekSeconds?: number;
   videoAutoPlay?: boolean;

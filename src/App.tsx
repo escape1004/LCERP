@@ -116,6 +116,8 @@ const App = () => {
   const [requiresPassword, setRequiresPassword] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [passwordLockUntil, setPasswordLockUntil] = useState<number | null>(null);
+  const [passwordLockNow, setPasswordLockNow] = useState(Date.now());
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [profileError, setProfileError] = useState('');
   const [newProfileName, setNewProfileName] = useState('');
@@ -135,12 +137,34 @@ const App = () => {
     [newProfileName]
   );
   const isCustomColorSelected = !PROFILE_COLORS.includes(selectedProfileColor);
+  const isPasswordLocked = Boolean(passwordLockUntil && passwordLockUntil > passwordLockNow);
+  const passwordLockRemainingSeconds = passwordLockUntil
+    ? Math.max(0, Math.ceil((passwordLockUntil - passwordLockNow) / 1000))
+    : 0;
+  const passwordLockRemainingLabel = `${Math.floor(passwordLockRemainingSeconds / 60)}\uBD84 ${passwordLockRemainingSeconds % 60}\uCD08`;
 
   const keepPasswordInputFocus = () => {
     window.requestAnimationFrame(() => {
       passwordInputRef.current?.focus();
     });
   };
+
+  useEffect(() => {
+    if (!passwordLockUntil) return;
+
+    const updateLockClock = () => {
+      const now = Date.now();
+      setPasswordLockNow(now);
+      if (passwordLockUntil <= now) {
+        setPasswordLockUntil(null);
+        setPasswordError('');
+      }
+    };
+
+    updateLockClock();
+    const intervalId = window.setInterval(updateLockClock, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [passwordLockUntil]);
 
   useEffect(() => {
     const handleAuxClick = (e: MouseEvent) => {
@@ -195,12 +219,14 @@ const App = () => {
         if (cancelled) return;
 
         setRequiresPassword(Boolean(config?.hasAppPassword));
+        setPasswordLockUntil(typeof config?.passwordLockUntil === 'number' ? config.passwordLockUntil : null);
         setProfiles(nextProfiles as Profile[]);
         setCurrentProfile(null);
         resetForProfile();
       } catch {
         if (cancelled) return;
         setRequiresPassword(false);
+        setPasswordLockUntil(null);
         setProfiles([]);
         setCurrentProfile(null);
         resetForProfile();
@@ -219,15 +245,28 @@ const App = () => {
   }, [resetForProfile, setCurrentProfile]);
 
   const handleUnlock = async () => {
+    if (isPasswordLocked) return;
+
     const result = await window.electronAPI.verifyAppPassword(passwordInput);
     if (result.success) {
       setRequiresPassword(false);
       setPasswordInput('');
       setPasswordError('');
+      setPasswordLockUntil(null);
       return;
     }
 
-    setPasswordError('비밀번호가 올바르지 않습니다.');
+    if (result.locked && typeof result.lockUntil === 'number') {
+      setPasswordLockUntil(result.lockUntil);
+      setPasswordInput('');
+      setPasswordError('');
+      return;
+    }
+
+    const remainingAttempts = typeof result.remainingAttempts === 'number'
+      ? ` ${result.remainingAttempts}회 더 틀리면 로그인이 잠깁니다.`
+      : '';
+    setPasswordError(`비밀번호가 올바르지 않습니다.${remainingAttempts}`);
   };
 
   const handleSelectProfile = async (profile: Profile) => {
@@ -460,19 +499,25 @@ const App = () => {
                         }
                       }}
                       onBlur={() => {
-                        if (requiresPassword) {
+                        if (requiresPassword && !isPasswordLocked) {
                           keepPasswordInputFocus();
                         }
                       }}
                       className="bg-discord-bg border-gray-600 text-discord-text"
                       placeholder="비밀번호"
                       autoFocus
+                      disabled={isPasswordLocked}
                     />
+                    {isPasswordLocked && (
+                      <p className="text-sm text-amber-300">
+                        보안을 위해 비밀번호 입력이 {passwordLockRemainingLabel} 동안 잠겼습니다.
+                      </p>
+                    )}
                     {passwordError && <p className="text-sm text-red-400">{passwordError}</p>}
                     <Button
                       onClick={() => void handleUnlock()}
                       className="w-full bg-discord-accent hover:bg-blue-600 text-white"
-                      disabled={!passwordInput.trim()}
+                      disabled={isPasswordLocked || !passwordInput.trim()}
                     >
                       잠금 해제
                     </Button>
