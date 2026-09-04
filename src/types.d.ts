@@ -146,6 +146,7 @@ export interface Field {
   options?: string[];
   relationCategoryId?: string;
   displayFieldId?: string;
+  subDisplayFieldId?: string;
 }
 
 export interface DataRecord {

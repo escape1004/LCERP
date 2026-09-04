@@ -525,6 +525,9 @@ export const RecordModal: React.FC<RecordModalProps> = ({
       : '';
     const isTranslating = translatingFieldIds.has(field.id);
     const isAutoTranslateAvailable = Boolean(config?.hasOpenAiApiKey);
+    const autoTranslateTooltip = !isAutoTranslateAvailable
+      ? '환경 설정 > 번역에서 OpenAI API 키를 등록하면 자동 번역을 사용할 수 있습니다.'
+      : null;
 
     return (
       <div className="space-y-2 pt-3">
@@ -541,14 +544,27 @@ export const RecordModal: React.FC<RecordModalProps> = ({
               placeholder="번역문을 입력하세요"
               className="min-h-[100px] bg-discord-sidebar border-gray-600 pr-28 text-discord-text placeholder:text-gray-500"
             />
-            <Button
-              type="button"
-              onClick={() => void handleAutoTranslate(field)}
-              disabled={!isAutoTranslateAvailable || isTranslating}
-              className="absolute right-2 top-2 h-8 rounded-md bg-[#5865f2] px-3 text-xs font-medium text-white hover:bg-[#4752c4] disabled:bg-[#4e5d94] disabled:text-white/70"
-            >
-              {isTranslating ? '번역 중...' : '자동 번역'}
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="absolute right-2 top-2 inline-flex">
+                    <Button
+                      type="button"
+                      onClick={() => void handleAutoTranslate(field)}
+                      disabled={!isAutoTranslateAvailable || isTranslating}
+                      className="h-8 rounded-md bg-[#5865f2] px-3 text-xs font-medium text-white hover:bg-[#4752c4] disabled:bg-[#4e5d94] disabled:text-white/70"
+                    >
+                      {isTranslating ? '번역 중...' : '자동 번역'}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {autoTranslateTooltip && (
+                  <TooltipContent side="top" align="end">
+                    {autoTranslateTooltip}
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
           </div>
         ) : (
           <div className="flex items-center gap-2">
@@ -559,14 +575,27 @@ export const RecordModal: React.FC<RecordModalProps> = ({
               placeholder="번역문을 입력하세요"
               className="bg-discord-sidebar border-gray-600 text-discord-text flex-1"
             />
-            <Button
-              type="button"
-              onClick={() => void handleAutoTranslate(field)}
-              disabled={!isAutoTranslateAvailable || isTranslating}
-              className="shrink-0 bg-[#5865f2] text-white hover:bg-[#4752c4] disabled:bg-[#4e5d94] disabled:text-white/70"
-            >
-              {isTranslating ? '번역 중...' : '자동 번역'}
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex shrink-0">
+                    <Button
+                      type="button"
+                      onClick={() => void handleAutoTranslate(field)}
+                      disabled={!isAutoTranslateAvailable || isTranslating}
+                      className="bg-[#5865f2] text-white hover:bg-[#4752c4] disabled:bg-[#4e5d94] disabled:text-white/70"
+                    >
+                      {isTranslating ? '번역 중...' : '자동 번역'}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {autoTranslateTooltip && (
+                  <TooltipContent side="top">
+                    {autoTranslateTooltip}
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
           </div>
         )}
         {!isAutoTranslateAvailable && (

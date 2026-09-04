@@ -1,4 +1,5 @@
 import type { Category, DataRecord, FieldDefinition } from '../types';
+import { TRANSLATED_FIELD_SUFFIX, getTranslatedFieldId } from '../lib/translation';
 
 const hasMeaningfulValue = (value: unknown): value is string | number | boolean => (
   value !== undefined
@@ -6,6 +7,28 @@ const hasMeaningfulValue = (value: unknown): value is string | number | boolean 
   && value !== ''
   && value !== 'undefined'
   && value !== 'null'
+);
+
+const getFieldBySelectedId = (relatedCategory: Category, selectedFieldId?: string) => {
+  if (!selectedFieldId) {
+    return undefined;
+  }
+
+  return relatedCategory.fields.find((candidate) => (
+    candidate.id === selectedFieldId || getTranslatedFieldId(candidate.id) === selectedFieldId
+  ));
+};
+
+const getRecordValueBySelectedFieldId = (record: DataRecord, selectedFieldId?: string) => {
+  if (!selectedFieldId) {
+    return undefined;
+  }
+
+  return record.data[selectedFieldId];
+};
+
+const isTranslatedFieldSelection = (selectedFieldId?: string) => (
+  Boolean(selectedFieldId?.endsWith(TRANSLATED_FIELD_SUFFIX))
 );
 
 export const getRelationPrimaryLabel = (
@@ -17,10 +40,12 @@ export const getRelationPrimaryLabel = (
   if (!relatedCategory) return record.id;
 
   const displayField = field.displayFieldId
-    ? relatedCategory.fields.find((candidate) => candidate.id === field.displayFieldId)
+    ? getFieldBySelectedId(relatedCategory, field.displayFieldId)
     : relatedCategory.fields[0];
 
-  const mainLabel = displayField ? record.data[displayField.id] : record.id;
+  const mainLabel = displayField
+    ? getRecordValueBySelectedFieldId(record, field.displayFieldId ?? displayField.id)
+    : record.id;
   return hasMeaningfulValue(mainLabel) ? String(mainLabel) : record.id;
 };
 
@@ -35,20 +60,18 @@ export const getRelationDisplayLabel = (
   const relatedCategory = categories.find((category) => category.id === field.relationCategoryId);
   if (!relatedCategory) return mainLabel;
 
-  const subField = field.subDisplayFieldId
-    ? relatedCategory.fields.find((candidate) => candidate.id === field.subDisplayFieldId)
-    : undefined;
+  const subField = getFieldBySelectedId(relatedCategory, field.subDisplayFieldId);
 
   if (!subField) {
     return mainLabel;
   }
 
-  const subValue = record.data[subField.id];
+  const subValue = getRecordValueBySelectedFieldId(record, field.subDisplayFieldId);
   if (!hasMeaningfulValue(subValue)) {
     return mainLabel;
   }
 
-  if (subField.type === 'relation' && subField.relationCategoryId) {
+  if (!isTranslatedFieldSelection(field.subDisplayFieldId) && subField.type === 'relation' && subField.relationCategoryId) {
     const subRecords = getCategoryRecords(subField.relationCategoryId);
     const subRecord = subRecords.find((candidate) => candidate.id === subValue);
     if (!subRecord) {

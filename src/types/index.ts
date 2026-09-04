@@ -14,6 +14,7 @@ export interface FieldDefinition {
   selectOptions?: string[];
   relationCategoryId?: string;
   displayFieldId?: string;
+  subDisplayFieldId?: string;
   description?: string;
 }
 

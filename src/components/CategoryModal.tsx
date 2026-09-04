@@ -15,6 +15,7 @@ import { Switch } from './ui/switch';
 import { TagInput } from './ui/tag-input';
 import { AnimatedModal } from './ui/animated-modal';
 import { useLoadingStore } from '../hooks/useLoadingStore';
+import { getTranslatedFieldId, isTranslationEnabledField } from '../lib/translation';
 
 interface CategoryModalProps {
   isOpen: boolean;
@@ -39,6 +40,27 @@ const stripTextAffixes = (value: unknown, prefix?: string, suffix?: string) => {
   }
   return nextValue;
 };
+
+const getRelationSubLabelOptions = (relatedCategory: Category, displayFieldId?: string) => (
+  relatedCategory.fields
+    .filter((field) => field.type !== 'file')
+    .flatMap((field) => {
+      const options: { value: string; label: string }[] = [];
+
+      if (field.id !== displayFieldId) {
+        options.push({ value: field.id, label: field.name });
+      }
+
+      if (isTranslationEnabledField(field)) {
+        options.push({
+          value: getTranslatedFieldId(field.id),
+          label: `${field.name} 번역`,
+        });
+      }
+
+      return options;
+    })
+);
 
 export const CategoryModal: React.FC<CategoryModalProps> = ({
   isOpen,
@@ -919,10 +941,9 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                                     {(() => {
                                                       const relCat = categories.find(c => c.id === field.relationCategoryId);
                                                       if (!relCat) return null;
-                                                      return relCat.fields
-                                                        .filter(f => f.type !== 'file')
-                                                        .map(f => (
-                                                          <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                                                      return getRelationSubLabelOptions(relCat, field.displayFieldId)
+                                                        .map((option) => (
+                                                          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                                                         ));
                                                     })()}
                                                   </SelectContent>
