@@ -23,7 +23,9 @@ import {
   ImageOff,
   Image,
   Link2Off,
+  Eye,
   TimerReset,
+  Trophy,
   Video,
 } from 'lucide-react';
 import { Sidebar } from '../components/Sidebar';
@@ -55,9 +57,20 @@ interface RankedRecord {
   displayValue: string;
 }
 
+interface ViewedRecord {
+  record: DataRecord;
+  category: Category;
+  viewCount: number;
+  displayValue: string;
+}
+
 interface ChildCategoryDashboardSection {
   category: Category;
+  isRootCategory: boolean;
   recordRanking: RankedRecord[];
+  mostViewedRecords: ViewedRecord[];
+  leastViewedRecords: ViewedRecord[];
+  hasTrackableAttachments: boolean;
   recentRecords: Array<{
     record: DataRecord;
     category: Category;
@@ -68,6 +81,10 @@ const ALL_ROOT_CATEGORIES_VALUE = '__all__';
 const SUPPORTED_THUMBNAIL_EXTS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp4', '.avi', '.mkv', '.mov', '.zip', '.7z'];
 
 const formatNumber = (num: number): string => num.toLocaleString('ko-KR');
+const getRecordViewCountKey = (categoryId: string, recordId: string) => `${categoryId}:${recordId}`;
+const getTrackableFileField = (category: Category) => category.fields.find(
+  (field) => field.type === 'file' && !field.thumbnailOnly
+);
 
 const getFileTypeCounts = (category: Category, records: DataRecord[]) => {
   const fileField = category.fields.find((field) => field.type === 'file');
@@ -254,6 +271,7 @@ export default function Dashboard() {
   const [warningItems, setWarningItems] = useState<DashboardWarningItem[]>([]);
   const [warningTotalCount, setWarningTotalCount] = useState(0);
   const [warningCounts, setWarningCounts] = useState({ missingFiles: 0, brokenRelations: 0 });
+  const [recordViewCounts, setRecordViewCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const loadAllData = async () => {
@@ -273,11 +291,15 @@ export default function Dashboard() {
           setWarningItems([]);
           setWarningTotalCount(0);
           setWarningCounts({ missingFiles: 0, brokenRelations: 0 });
+          setRecordViewCounts({});
           return;
         }
 
         await Promise.all(allCategories.map((category) => loadRecords(category.id)));
-        const warningResult = await window.electronAPI.getDashboardWarnings(8);
+        const [warningResult, viewCounts] = await Promise.all([
+          window.electronAPI.getDashboardWarnings(8),
+          window.electronAPI.getRecordViewCounts(),
+        ]);
 
         const stats: CategoryStats[] = allCategories.map((category) => {
           const records = store.getCategoryRecords(category.id) || [];
@@ -300,6 +322,9 @@ export default function Dashboard() {
         setWarningItems(warningResult.items);
         setWarningTotalCount(warningResult.totalCount);
         setWarningCounts(warningResult.counts);
+        setRecordViewCounts(Object.fromEntries(
+          viewCounts.map((item) => [getRecordViewCountKey(item.categoryId, item.recordId), item.viewCount])
+        ));
       } finally {
         setLoading(false);
       }
@@ -307,6 +332,21 @@ export default function Dashboard() {
 
     void loadAllData();
   }, [loadCategories, loadRecords, currentProfile?.id]);
+
+  useEffect(() => {
+    const refreshRecordViewCounts = () => {
+      void window.electronAPI.getRecordViewCounts()
+        .then((viewCounts) => {
+          setRecordViewCounts(Object.fromEntries(
+            viewCounts.map((item) => [getRecordViewCountKey(item.categoryId, item.recordId), item.viewCount])
+          ));
+        })
+        .catch(() => {});
+    };
+
+    window.addEventListener('record:view-counted', refreshRecordViewCounts);
+    return () => window.removeEventListener('record:view-counted', refreshRecordViewCounts);
+  }, [currentProfile?.id]);
 
   const visibleCategories = useMemo(
     () => categories.filter((cat) => !isSeparatorCategory(cat)).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
@@ -613,7 +653,13 @@ export default function Dashboard() {
       return [];
     }
 
-    return childCategoryStats.map((childStat) => {
+    // Include the selected category itself so leaf categories can show their own rankings.
+    const dashboardCategories = [
+      { category: selectedRootCategory, isRootCategory: true },
+      ...childCategoryStats.map((stat) => ({ ...stat, isRootCategory: false })),
+    ];
+
+    return dashboardCategories.map((childStat) => {
       const categoryIds = new Set<string>();
       const stack = [childStat.category.id];
 
@@ -628,7 +674,9 @@ export default function Dashboard() {
         children.forEach((child) => stack.push(child.id));
       }
 
-      const subtreeStats = scopedCategoryStats.filter((stat) => categoryIds.has(stat.category.id));
+      const subtreeStats = childStat.isRootCategory
+        ? scopedCategoryStats.filter((stat) => stat.category.id === childStat.category.id)
+        : scopedCategoryStats.filter((stat) => categoryIds.has(stat.category.id));
       const recordRanking = subtreeStats
         .flatMap((stat) =>
           (getCategoryRecords(stat.category.id) || []).map((record) => ({
@@ -647,6 +695,31 @@ export default function Dashboard() {
         })
         .slice(0, 5);
 
+      const viewableRecords = subtreeStats
+        .flatMap((stat) => {
+          const fileField = getTrackableFileField(stat.category);
+          if (!fileField) return [];
+
+          return (getCategoryRecords(stat.category.id) || [])
+            .filter((record) => Boolean(record.data[fileField.id]))
+            .map((record) => ({
+              record,
+              category: stat.category,
+              viewCount: recordViewCounts[getRecordViewCountKey(stat.category.id, record.id)] || 0,
+              displayValue: getRecordDisplayValue(stat.category, record),
+            }));
+        });
+
+      const sortViewedRecords = (direction: 'asc' | 'desc') => [...viewableRecords]
+        .sort((a, b) => {
+          const countDifference = direction === 'desc'
+            ? b.viewCount - a.viewCount
+            : a.viewCount - b.viewCount;
+          if (countDifference !== 0) return countDifference;
+          return new Date(b.record.updatedAt).getTime() - new Date(a.record.updatedAt).getTime();
+        })
+        .slice(0, 5);
+
       const recentRecords = subtreeStats
         .flatMap((stat) => stat.recentRecords.map((record) => ({ record, category: stat.category })))
         .sort((a, b) => new Date(b.record.createdAt).getTime() - new Date(a.record.createdAt).getTime())
@@ -654,11 +727,20 @@ export default function Dashboard() {
 
       return {
         category: childStat.category,
+        isRootCategory: childStat.isRootCategory,
         recordRanking,
+        mostViewedRecords: sortViewedRecords('desc'),
+        leastViewedRecords: sortViewedRecords('asc'),
+        hasTrackableAttachments: viewableRecords.length > 0,
         recentRecords,
       };
     });
-  }, [childCategoryStats, childrenByParentId, getCategoryRecords, getRecordReferenceCount, scopedCategoryStats, selectedRootCategory]);
+  }, [childCategoryStats, childrenByParentId, getCategoryRecords, getRecordReferenceCount, recordViewCounts, scopedCategoryStats, selectedRootCategory]);
+
+  const rootCategoryViewRanking = useMemo(
+    () => childCategoryDashboardSections.find((section) => section.isRootCategory) || null,
+    [childCategoryDashboardSections]
+  );
 
   const hasAnyRecords = scopedCategoryStats.some((stat) => stat.recordCount > 0);
   const hasAnyAttachments = fileTypeData.length > 0;
@@ -982,9 +1064,109 @@ export default function Dashboard() {
               </div>
             )}
 
+            {selectedRootCategory && rootCategoryViewRanking?.hasTrackableAttachments && (
+              <section className="relative overflow-hidden rounded-xl border border-indigo-400/30 bg-discord-sidebar mb-6">
+                <div className="border-b border-indigo-300/15 bg-gradient-to-r from-indigo-500/20 via-discord-accent/10 to-cyan-400/10 px-5 py-5 sm:px-6 sm:py-6">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-amber-300/30 bg-amber-400/10 text-amber-300 shadow-[0_0_24px_rgba(251,191,36,0.12)]">
+                        <Trophy size={22} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-300">Record View Ranking</p>
+                        <h2 className="text-xl font-bold text-discord-text">조회수 랭킹</h2>
+                      </div>
+                    </div>
+                    <p className="text-sm text-discord-muted">최상위 카테고리 레코드 · 뷰어 열람 기준</p>
+                  </div>
+                </div>
+
+                <div className="p-5 sm:p-6">
+                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                    <div className="rounded-xl border border-indigo-400/20 bg-discord-bg/80 p-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <Eye size={17} className="text-indigo-300" />
+                          <h3 className="font-semibold text-discord-text">가장 많이 본 레코드</h3>
+                        </div>
+                        <span className="rounded-full bg-indigo-400/10 px-2.5 py-1 text-xs font-medium text-indigo-200">TOP 5</span>
+                      </div>
+                      <div className="space-y-2">
+                        {rootCategoryViewRanking.mostViewedRecords.map((item, index) => {
+                          const maxViewCount = rootCategoryViewRanking.mostViewedRecords[0]?.viewCount || 1;
+                          const progress = Math.max(8, (item.viewCount / maxViewCount) * 100);
+                          return (
+                            <button
+                              key={item.record.id}
+                              type="button"
+                              className="group relative w-full overflow-hidden rounded-lg border border-gray-700 bg-discord-sidebar px-3 py-2.5 text-left transition-colors hover:border-indigo-400/50 hover:bg-discord-hover"
+                              onClick={() => {
+                                setSelectedCategory(item.category);
+                                setSelectedRecord(item.record);
+                                setViewRecordModalOpen(true);
+                              }}
+                            >
+                              <div className="absolute inset-y-0 left-0 bg-indigo-400/10 transition-[width] duration-500" style={{ width: `${progress}%` }} />
+                              <div className="relative flex min-h-[52px] items-center gap-3">
+                                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-bold ${index === 0 ? 'bg-amber-400/20 text-amber-200' : index === 1 ? 'bg-slate-300/15 text-slate-200' : index === 2 ? 'bg-orange-400/15 text-orange-200' : 'bg-gray-700 text-discord-muted'}`}>
+                                  {index + 1}
+                                </span>
+                                <RecordThumbnail category={item.category} record={item.record} />
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-sm font-medium text-discord-text group-hover:text-white">{item.displayValue}</p>
+                                  <p className="truncate text-xs text-discord-muted">{item.category.name}</p>
+                                </div>
+                                <span className="shrink-0 text-sm font-semibold text-indigo-200">{formatNumber(item.viewCount)}회</span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-gray-700 bg-discord-bg/80 p-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <Eye size={17} className="text-discord-muted" />
+                          <h3 className="font-semibold text-discord-text">가장 적게 본 레코드</h3>
+                        </div>
+                        <span className="rounded-full bg-gray-700/80 px-2.5 py-1 text-xs font-medium text-discord-muted">LOW 5</span>
+                      </div>
+                      <div className="space-y-2">
+                        {rootCategoryViewRanking.leastViewedRecords.map((item, index) => (
+                          <button
+                            key={item.record.id}
+                            type="button"
+                            className="group w-full rounded-lg border border-gray-700 bg-discord-sidebar px-3 py-2.5 text-left transition-colors hover:border-gray-500 hover:bg-discord-hover"
+                            onClick={() => {
+                              setSelectedCategory(item.category);
+                              setSelectedRecord(item.record);
+                              setViewRecordModalOpen(true);
+                            }}
+                          >
+                            <div className="flex min-h-[52px] items-center gap-3">
+                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gray-700 text-xs font-bold text-discord-muted">{index + 1}</span>
+                              <RecordThumbnail category={item.category} record={item.record} />
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium text-discord-text group-hover:text-white">{item.displayValue}</p>
+                                <p className="truncate text-xs text-discord-muted">{item.category.name}</p>
+                              </div>
+                              <span className="shrink-0 text-sm font-semibold text-discord-muted">{formatNumber(item.viewCount)}회</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
+
             {selectedRootCategory && childCategoryDashboardSections.length > 0 && (
               <div className="space-y-6 mb-6">
-                {childCategoryDashboardSections.map((section) => (
+                {childCategoryDashboardSections
+                  .filter((section) => !section.isRootCategory)
+                  .map((section) => (
                   <div key={section.category.id} className="bg-discord-sidebar rounded-lg p-6 border border-gray-700">
                     <div className="flex items-center justify-between gap-3 mb-4">
                       <h2
@@ -1000,7 +1182,8 @@ export default function Dashboard() {
                     </div>
 
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                      <div className="bg-discord-bg rounded-lg p-6 border border-gray-700">
+                      {!section.isRootCategory && (
+                      <div className="order-3 bg-discord-bg rounded-lg p-6 border border-gray-700">
                         <div className="flex items-center gap-2 mb-4">
                           <TimerReset size={18} className="text-discord-accent" />
                           <h3 className="text-lg font-semibold text-discord-text">참조 랭킹</h3>
@@ -1035,8 +1218,78 @@ export default function Dashboard() {
                           <p className="text-sm text-discord-muted">참조된 레코드가 아직 없습니다.</p>
                         )}
                       </div>
+                      )}
 
-                      <div className="bg-discord-bg rounded-lg p-6 border border-gray-700">
+                      {section.hasTrackableAttachments && (
+                        <>
+                          <div className="order-1 bg-discord-bg rounded-lg p-6 border border-gray-700">
+                            <div className="flex items-center gap-2 mb-4">
+                              <Eye size={18} className="text-discord-accent" />
+                              <h3 className="text-lg font-semibold text-discord-text">많이 본 레코드</h3>
+                            </div>
+                            <div className="space-y-3">
+                              {section.mostViewedRecords.map((item, index) => (
+                                <button
+                                  key={item.record.id}
+                                  type="button"
+                                  className="w-full min-h-[88px] text-left bg-discord-sidebar rounded-lg border border-gray-700 px-4 py-3 hover:border-discord-accent hover:bg-discord-hover transition-colors"
+                                  onClick={() => {
+                                    setSelectedCategory(item.category);
+                                    setSelectedRecord(item.record);
+                                    setViewRecordModalOpen(true);
+                                  }}
+                                >
+                                  <div className="flex min-h-[64px] items-center justify-between gap-3">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <RecordThumbnail category={item.category} record={item.record} />
+                                      <div className="min-w-0">
+                                        <p className="text-sm text-discord-muted mb-1">#{index + 1}</p>
+                                        <p className="text-sm font-medium text-discord-text break-all">{item.displayValue}</p>
+                                      </div>
+                                    </div>
+                                    <span className="text-sm text-white">{formatNumber(item.viewCount)}회</span>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="order-2 bg-discord-bg rounded-lg p-6 border border-gray-700">
+                            <div className="flex items-center gap-2 mb-4">
+                              <Eye size={18} className="text-discord-muted" />
+                              <h3 className="text-lg font-semibold text-discord-text">적게 본 레코드</h3>
+                            </div>
+                            <div className="space-y-3">
+                              {section.leastViewedRecords.map((item, index) => (
+                                <button
+                                  key={item.record.id}
+                                  type="button"
+                                  className="w-full min-h-[88px] text-left bg-discord-sidebar rounded-lg border border-gray-700 px-4 py-3 hover:border-discord-accent hover:bg-discord-hover transition-colors"
+                                  onClick={() => {
+                                    setSelectedCategory(item.category);
+                                    setSelectedRecord(item.record);
+                                    setViewRecordModalOpen(true);
+                                  }}
+                                >
+                                  <div className="flex min-h-[64px] items-center justify-between gap-3">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <RecordThumbnail category={item.category} record={item.record} />
+                                      <div className="min-w-0">
+                                        <p className="text-sm text-discord-muted mb-1">#{index + 1}</p>
+                                        <p className="text-sm font-medium text-discord-text break-all">{item.displayValue}</p>
+                                      </div>
+                                    </div>
+                                    <span className="text-sm text-white">{formatNumber(item.viewCount)}회</span>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      {!section.isRootCategory && (
+                      <div className="order-4 bg-discord-bg rounded-lg p-6 border border-gray-700">
                         <div className="flex items-center gap-2 mb-4">
                           <Calendar size={18} className="text-discord-accent" />
                           <h3 className="text-lg font-semibold text-discord-text">최근 추가 항목</h3>
@@ -1068,6 +1321,7 @@ export default function Dashboard() {
                           <p className="text-sm text-discord-muted">최근 추가된 항목이 없습니다.</p>
                         )}
                       </div>
+                      )}
                     </div>
                   </div>
                 ))}

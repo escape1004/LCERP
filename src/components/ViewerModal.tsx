@@ -122,12 +122,39 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
 
   // 파일 없음 상태 추가
   const [fileNotFound, setFileNotFound] = useState(false);
+  const countedViewKeyRef = useRef<string | null>(null);
 
   const isVideoFileName = useCallback((name?: string) => {
     return Boolean(name && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(name));
   }, []);
 
   const getEffectiveFileType = useCallback(() => fileType || detectedFileType, [fileType, detectedFileType]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      countedViewKeyRef.current = null;
+      return;
+    }
+
+    if (!categoryId || !recordId) return;
+
+    const viewKey = `${categoryId}:${recordId}:${filePath}`;
+    if (countedViewKeyRef.current === viewKey) return;
+
+    countedViewKeyRef.current = viewKey;
+    void window.electronAPI.incrementRecordViewCount(categoryId, recordId)
+      .then((result) => {
+        if (result.success) {
+          window.dispatchEvent(new CustomEvent('record:view-counted'));
+          return;
+        }
+
+        countedViewKeyRef.current = null;
+      })
+      .catch(() => {
+        countedViewKeyRef.current = null;
+      });
+  }, [categoryId, filePath, isOpen, recordId]);
 
   const getActiveVideoElement = useCallback(() => {
     const effectiveType = getEffectiveFileType();

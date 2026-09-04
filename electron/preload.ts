@@ -57,6 +57,8 @@ const api: ElectronAPI = {
     return () => ipcRenderer.removeListener('shortcut:random-record', listener);
   },
   getDashboardWarnings: (previewLimit?: number) => ipcRenderer.invoke('dashboard:getWarnings', previewLimit),
+  incrementRecordViewCount: (categoryId: string, recordId: string) => ipcRenderer.invoke('record:incrementViewCount', categoryId, recordId),
+  getRecordViewCounts: () => ipcRenderer.invoke('dashboard:getRecordViewCounts'),
   getVideoDuration: (filePath: string) => ipcRenderer.invoke('getVideoDuration', filePath),
   getVideoCodecInfo: (filePath: string) => ipcRenderer.invoke('getVideoCodecInfo', filePath),
   getBookmarks: (categoryId: string, recordId: string) => ipcRenderer.invoke('getBookmarks', categoryId, recordId),

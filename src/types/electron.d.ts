@@ -97,6 +97,8 @@ export interface ElectronAPI {
       type: 'missing-file' | 'broken-relation';
     }>;
   }>;
+  incrementRecordViewCount: (categoryId: string, recordId: string) => Promise<{ success: boolean; error?: string }>;
+  getRecordViewCounts: () => Promise<Array<{ recordId: string; categoryId: string; viewCount: number }>>;
   
   // New method
   send: (channel: string, ...args: any[]) => void;

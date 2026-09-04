@@ -870,6 +870,18 @@ function initializeDatabase() {
       )
     `);
 
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS record_view_counts (
+        profileId TEXT NOT NULL,
+        recordId TEXT NOT NULL,
+        categoryId TEXT NOT NULL,
+        viewCount INTEGER NOT NULL DEFAULT 0,
+        updatedAt TEXT NOT NULL,
+        PRIMARY KEY (profileId, recordId)
+      )
+    `);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_record_view_counts_profile_category ON record_view_counts(profileId, categoryId)');
+
     // duration 필드가 없으면 추가 (마이그레이션)
     const categoryColumns = db.prepare("PRAGMA table_info(categories)").all();
     if (!categoryColumns.some(col => col.name === 'profileId')) {
@@ -4085,6 +4097,49 @@ ipcMain.handle('dashboard:getWarnings', async (_, previewLimit = 8) => {
       items: []
     };
   }
+});
+
+ipcMain.handle('record:incrementViewCount', (_event, categoryId, recordId) => {
+  const profileId = getCurrentProfileIdOrThrow();
+  const category = getCategoryOrThrow(categoryId, profileId);
+  const fileField = category.fields.find((field) => field.type === 'file' && !field.thumbnailOnly);
+  if (!fileField) {
+    return { success: false, error: 'This category does not have a trackable file field.' };
+  }
+
+  const record = db.prepare(`
+    SELECT data
+    FROM records
+    WHERE id = ? AND categoryId = ? AND profileId = ?
+  `).get(recordId, categoryId, profileId);
+  if (!record) {
+    return { success: false, error: 'Record not found.' };
+  }
+
+  const recordData = JSON.parse(record.data);
+  if (!recordData[fileField.id]) {
+    return { success: false, error: 'Record does not have an attached file.' };
+  }
+
+  db.prepare(`
+    INSERT INTO record_view_counts (profileId, recordId, categoryId, viewCount, updatedAt)
+    VALUES (?, ?, ?, 1, ?)
+    ON CONFLICT(profileId, recordId) DO UPDATE SET
+      viewCount = record_view_counts.viewCount + 1,
+      categoryId = excluded.categoryId,
+      updatedAt = excluded.updatedAt
+  `).run(profileId, recordId, categoryId, new Date().toISOString());
+
+  return { success: true };
+});
+
+ipcMain.handle('dashboard:getRecordViewCounts', () => {
+  const profileId = getCurrentProfileIdOrThrow();
+  return db.prepare(`
+    SELECT recordId, categoryId, viewCount
+    FROM record_view_counts
+    WHERE profileId = ?
+  `).all(profileId);
 });
 
 ipcMain.handle('getThumbnailDataUrl', async (_, filePath, context = {}) => {
