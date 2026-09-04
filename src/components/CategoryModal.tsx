@@ -651,7 +651,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                               </label>
                                             </div>
                                           )}
-                                          {config?.hasOpenAiApiKey && (field.type === 'text' || field.type === 'longtext') && (
+                                          {(field.type === 'text' || field.type === 'longtext') && (
                                             <div className="flex items-center gap-2">
                                               <Checkbox
                                                 id={`translation-${field.id}`}
@@ -659,7 +659,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                                 onCheckedChange={(checked) => updateField(index, { enableTranslation: checked as boolean })}
                                               />
                                               <label htmlFor={`translation-${field.id}`} className="text-sm text-gray-300">
-                                                번역 기능
+                                                번역
                                               </label>
                                             </div>
                                           )}
