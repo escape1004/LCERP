@@ -16,7 +16,7 @@ import { AlertDialog } from './ui/alert-dialog';
 import { DatePicker } from './ui/date-picker';
 import { AnimatedModal } from './ui/animated-modal';
 import { formatFieldDisplayValue, hasTextAffixes } from '../lib/fieldFormat';
-import { getRelationDisplayLabel, getRelationPrimaryLabel } from '../utils/relationDisplay';
+import { getRelationDisplayLabel, getRelationPrimaryLabel, getRelationSecondaryLabel } from '../utils/relationDisplay';
 import type { Config } from '../types';
 import { OPENAI_TRANSLATION_MODEL, getTranslatedFieldId, getTranslationMetaFieldId, isTranslationEnabledField } from '../lib/translation';
 import {
@@ -622,6 +622,28 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     return getRelationPrimaryLabel(record, field, categories);
   };
 
+  const getSecondaryLabel = (record: DataRecord, field: FieldDefinition): string => {
+    return getRelationSecondaryLabel(record, field, categories, getCategoryRecords);
+  };
+
+  const findMatchingRelationRecords = (records: DataRecord[], field: FieldDefinition, searchValue: string) => {
+    const normalizedSearchValue = searchValue.trim().toLowerCase();
+    if (!normalizedSearchValue) {
+      return [];
+    }
+
+    return records.filter((record) => {
+      const primaryLabel = getMainLabel(record, field).trim().toLowerCase();
+      const secondaryLabel = getSecondaryLabel(record, field).trim().toLowerCase();
+      const displayLabel = getRelationLabel(record, field).trim().toLowerCase();
+      return (
+        primaryLabel === normalizedSearchValue
+        || secondaryLabel === normalizedSearchValue
+        || displayLabel === normalizedSearchValue
+      );
+    });
+  };
+
   const renderField = (field: FieldDefinition, isFirstField: boolean = false) => {
     const value =
       field.type === 'select' && field.multiple
@@ -1108,9 +1130,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                         const invalidValues: string[] = [];
                         
                         pastedValues.forEach(v => {
-                          const matches = relatedRecords.filter(record =>
-                            getMainLabel(record, field).toLowerCase() === v.toLowerCase()
-                          );
+                          const matches = findMatchingRelationRecords(relatedRecords, field, v);
                           if (matches.length === 1) {
                             validRecords.push(matches[0]);
                           } else if (matches.length > 1) {
@@ -1243,9 +1263,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                         const pastedValue = pastedText.trim();
                         
                         // 기존 레코드에서 일치하는 값 찾기
-                        const matchingRecords = relatedRecords.filter(record => 
-                          getMainLabel(record, field).toLowerCase() === pastedValue.toLowerCase()
-                        );
+                        const matchingRecords = findMatchingRelationRecords(relatedRecords, field, pastedValue);
                         
                         if (matchingRecords.length === 1) {
                           // 단일 일치: 바로 선택

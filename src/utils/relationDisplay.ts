@@ -84,3 +84,35 @@ export const getRelationDisplayLabel = (
 
   return `${mainLabel}(${String(subValue)})`;
 };
+
+export const getRelationSecondaryLabel = (
+  record: DataRecord,
+  field: FieldDefinition,
+  categories: Category[],
+  getCategoryRecords: (categoryId: string) => DataRecord[]
+): string => {
+  const relatedCategory = categories.find((category) => category.id === field.relationCategoryId);
+  if (!relatedCategory) return '';
+
+  const subField = getFieldBySelectedId(relatedCategory, field.subDisplayFieldId);
+  if (!subField) {
+    return '';
+  }
+
+  const subValue = getRecordValueBySelectedFieldId(record, field.subDisplayFieldId);
+  if (!hasMeaningfulValue(subValue)) {
+    return '';
+  }
+
+  if (!isTranslatedFieldSelection(field.subDisplayFieldId) && subField.type === 'relation' && subField.relationCategoryId) {
+    const subRecords = getCategoryRecords(subField.relationCategoryId);
+    const subRecord = subRecords.find((candidate) => candidate.id === subValue);
+    if (!subRecord) {
+      return '';
+    }
+
+    return getRelationDisplayLabel(subRecord, subField, categories, getCategoryRecords);
+  }
+
+  return String(subValue);
+};
