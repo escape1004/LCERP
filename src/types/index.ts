@@ -58,6 +58,7 @@ export interface Config {
   backupDir: string;
   backupInterval: number;
   rememberWindowBounds?: boolean;
+  muteAudioWhenBackgrounded?: boolean;
   hasAppPassword?: boolean;
   hasOpenAiApiKey?: boolean;
   videoSeekSeconds?: number;

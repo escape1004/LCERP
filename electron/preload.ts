@@ -26,6 +26,7 @@ const api: ElectronAPI = {
   setBackupDir: () => ipcRenderer.invoke('setBackupDir'),
   setBackupInterval: (minutes: number) => ipcRenderer.invoke('setBackupInterval', minutes),
   setRememberWindowBounds: (enabled: boolean) => ipcRenderer.invoke('setRememberWindowBounds', enabled),
+  setMuteAudioWhenBackgrounded: (enabled: boolean) => ipcRenderer.invoke('setMuteAudioWhenBackgrounded', enabled),
   setZoomPercent: (percent: number) => ipcRenderer.invoke('setZoomPercent', percent),
   setThumbnailPreviewScale: (scale: number) => ipcRenderer.invoke('setThumbnailPreviewScale', scale),
   setDateParseFormats: (formats: string[]) => ipcRenderer.invoke('setDateParseFormats', formats),

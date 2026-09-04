@@ -287,6 +287,22 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
     }
   };
 
+  const handleMuteAudioWhenBackgroundedChange = async (checked: boolean) => {
+    const previousValue = Boolean(config?.muteAudioWhenBackgrounded);
+    setConfig((prev) => (prev ? { ...prev, muteAudioWhenBackgrounded: checked } : prev));
+    setGeneralMessage('');
+    setIsSaving(true);
+    try {
+      const result = await window.electronAPI.setMuteAudioWhenBackgrounded(checked);
+      if (!result.success) {
+        setConfig((prev) => (prev ? { ...prev, muteAudioWhenBackgrounded: previousValue } : prev));
+        setGeneralMessage('일반 설정 저장에 실패했습니다.');
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleListThumbnailFitChange = async (fit: 'cover' | 'contain') => {
     const previousFit = config?.listThumbnailFit === 'contain' ? 'contain' : 'cover';
     setConfig((prev) => (prev ? { ...prev, listThumbnailFit: fit } : prev));
@@ -526,6 +542,23 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
           <Switch
             checked={Boolean(config?.rememberWindowBounds)}
             onCheckedChange={handleRememberWindowBoundsChange}
+            disabled={!config || isSaving}
+            className="data-[state=checked]:bg-discord-accent data-[state=unchecked]:bg-gray-600"
+          />
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-sm font-medium text-white">백그라운드 음소거</div>
+            <p className="text-sm text-discord-muted mt-2 leading-6">
+              앱이 다른 창 뒤로 가거나 포커스를 잃으면 앱에서 재생 중인 오디오를 자동으로 음소거합니다.
+            </p>
+          </div>
+          <Switch
+            checked={Boolean(config?.muteAudioWhenBackgrounded)}
+            onCheckedChange={handleMuteAudioWhenBackgroundedChange}
             disabled={!config || isSaving}
             className="data-[state=checked]:bg-discord-accent data-[state=unchecked]:bg-gray-600"
           />

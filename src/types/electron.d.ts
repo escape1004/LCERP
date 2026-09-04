@@ -47,6 +47,7 @@ export interface ElectronAPI {
   setBackupDir: () => Promise<{ success: boolean; path?: string; error?: string }>;
   setBackupInterval: (minutes: number) => Promise<{ success: boolean; error?: string }>;
   setRememberWindowBounds: (enabled: boolean) => Promise<{ success: boolean }>;
+  setMuteAudioWhenBackgrounded: (enabled: boolean) => Promise<{ success: boolean }>;
   setZoomPercent: (percent: number) => Promise<{ success: boolean; error?: string }>;
   setAppPassword: (password: string) => Promise<{ success: boolean; error?: string }>;
   setDateParseFormats: (formats: string[]) => Promise<{ success: boolean; dateParseFormats?: string[]; error?: string }>;

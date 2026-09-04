@@ -120,6 +120,7 @@ export interface Config {
   backupDir: string;
   backupInterval: number;
   rememberWindowBounds?: boolean;
+  muteAudioWhenBackgrounded?: boolean;
   zoomPercent?: number;
   hasAppPassword?: boolean;
   hasOpenAiApiKey?: boolean;

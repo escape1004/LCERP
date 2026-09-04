@@ -45,6 +45,7 @@ const configPath = path.join(app.getPath('userData'), 'config.json');
 
 const defaultConfig = {
   rememberWindowBounds: false,
+  muteAudioWhenBackgrounded: false,
   windowBounds: null,
   passwordHash: null,
   openAiApiKey: '',
@@ -570,6 +571,10 @@ function createWindow() {
   });
 
   let saveBoundsTimer = null;
+  const syncWindowAudioMute = () => {
+    const shouldMute = Boolean(appConfig.muteAudioWhenBackgrounded) && !mainWindow.isFocused();
+    mainWindow.webContents.setAudioMuted(shouldMute);
+  };
   const saveWindowBounds = () => {
     if (!appConfig.rememberWindowBounds) return;
     if (mainWindow.isDestroyed() || mainWindow.isMinimized() || mainWindow.isMaximized() || mainWindow.isFullScreen()) return;
@@ -667,6 +672,10 @@ function createWindow() {
   mainWindow.on('move', queueSaveWindowBounds);
   mainWindow.on('resize', queueSaveWindowBounds);
   mainWindow.on('close', saveWindowBounds);
+  mainWindow.on('blur', syncWindowAudioMute);
+  mainWindow.on('focus', syncWindowAudioMute);
+  mainWindow.on('show', syncWindowAudioMute);
+  syncWindowAudioMute();
 
   // 창 제어 이벤트 처리
   ipcMain.on('window-control', (_, command) => {
@@ -694,6 +703,14 @@ function createWindow() {
     } else {
       saveAppConfig();
     }
+    return { success: true };
+  });
+
+  ipcMain.removeHandler?.('setMuteAudioWhenBackgrounded');
+  ipcMain.handle('setMuteAudioWhenBackgrounded', (_event, enabled) => {
+    appConfig.muteAudioWhenBackgrounded = enabled === true;
+    saveAppConfig();
+    syncWindowAudioMute();
     return { success: true };
   });
 }
@@ -3219,6 +3236,7 @@ ipcMain.handle('getConfig', () => {
     backupDir: backupDir,
     backupInterval: 60,
     rememberWindowBounds: appConfig.rememberWindowBounds,
+    muteAudioWhenBackgrounded: appConfig.muteAudioWhenBackgrounded === true,
     zoomPercent: getConfiguredZoomPercent(),
     hasAppPassword: Boolean(appConfig.passwordHash),
     videoSeekSeconds: appConfig.videoSeekSeconds || 5,
