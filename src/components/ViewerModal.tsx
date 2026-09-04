@@ -166,6 +166,19 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     return ratio * duration;
   }, [duration]);
 
+  const seekByFrame = useCallback((direction: 'backward' | 'forward') => {
+    const activeVideo = getActiveVideoElement();
+    if (!activeVideo) return;
+
+    const frameDuration = 1 / 30;
+    const nextTime = direction === 'backward'
+      ? Math.max(0, activeVideo.currentTime - frameDuration)
+      : Math.min(duration, activeVideo.currentTime + frameDuration);
+
+    activeVideo.currentTime = nextTime;
+    setCurrentTime(nextTime);
+  }, [duration, getActiveVideoElement]);
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -884,16 +897,22 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
           const newVolumeDown = Math.max(0, volume - 0.05);
           handleVolumeChange(newVolumeDown);
           break;
-        case '>':
         case '.':
+          e.preventDefault();
+          seekByFrame('forward');
+          break;
+        case ',':
+          e.preventDefault();
+          seekByFrame('backward');
+          break;
+        case ']':
           e.preventDefault();
           const speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
           const currentIndex = speeds.indexOf(playbackSpeed);
           const nextIndex = currentIndex < speeds.length - 1 ? currentIndex + 1 : 0;
           handleSpeedChange(speeds[nextIndex]);
           break;
-        case '<':
-        case ',':
+        case '[':
           e.preventDefault();
           const speeds2 = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
           const currentIndex2 = speeds2.indexOf(playbackSpeed);
@@ -938,16 +957,22 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
             const newVolumeDown = Math.max(0, volume - 0.05);
             handleVolumeChange(newVolumeDown);
             break;
-          case '>':
           case '.':
+            e.preventDefault();
+            seekByFrame('forward');
+            break;
+          case ',':
+            e.preventDefault();
+            seekByFrame('backward');
+            break;
+          case ']':
             e.preventDefault();
             const speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
             const currentIndex = speeds.indexOf(playbackSpeed);
             const nextIndex = currentIndex < speeds.length - 1 ? currentIndex + 1 : 0;
             handleSpeedChange(speeds[nextIndex]);
             break;
-          case '<':
-          case ',':
+          case '[':
             e.preventDefault();
             const speeds2 = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
             const currentIndex2 = speeds2.indexOf(playbackSpeed);
@@ -1747,7 +1772,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                   <Clock size={20} />
                                 </button>
                               </TooltipTrigger>
-                              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">{`재생 속도: ${playbackSpeed}x (>, < 키로 변경)`}</TooltipContent>
+                              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">{`재생 속도: ${playbackSpeed}x ([, ] 키로 변경)`}</TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
                           {showSpeedMenu && (
@@ -2174,7 +2199,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                             <Clock size={20} />
                                           </button>
                                         </TooltipTrigger>
-                                        <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">{`재생 속도: ${playbackSpeed}x (>, < 키로 변경)`}</TooltipContent>
+                                        <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">{`재생 속도: ${playbackSpeed}x ([, ] 키로 변경)`}</TooltipContent>
                                       </Tooltip>
                                     </TooltipProvider>
                                     {showSpeedMenu && (
