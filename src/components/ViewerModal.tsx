@@ -1944,18 +1944,15 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                   <div className="flex-1 flex flex-col h-full">
                     <div 
                       ref={imgContainerRef}
-                      className="flex-1 flex items-center justify-center relative"
-                      style={{ 
-                        overflow: currentFileExt !== 'txt' && (archiveImgScale > 1 || archiveVideoScale > 1) ? 'hidden' : 'auto'
-                      }}
+                      className="flex-1 flex items-center justify-center relative overflow-hidden"
                     >
                       {/* 좌/우 투명 클릭 영역 */}
-                      {currentFileExt !== 'txt' && !/\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile?.name || '') && archiveImgScale === 1 && archiveVideoScale === 1 && (
+                      {currentFile && currentFileExt !== 'txt' && archiveImgScale === 1 && archiveVideoScale === 1 && (
                         <>
                           {!isFirstArchiveFile && (
                             <button
                               type="button"
-                              className="group absolute top-0 left-0 h-full w-16 z-10 flex items-center justify-center bg-transparent"
+                              className="group absolute top-0 left-0 h-full w-16 z-[1] flex items-center justify-center bg-transparent"
                               onClick={handlePrevious}
                               aria-label="이전 파일"
                             >
@@ -1967,7 +1964,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                           {!isLastArchiveFile && (
                             <button
                               type="button"
-                              className="group absolute top-0 right-0 h-full w-16 z-10 flex items-center justify-center bg-transparent"
+                              className="group absolute top-0 right-0 h-full w-16 z-[1] flex items-center justify-center bg-transparent"
                               onClick={handleNext}
                               aria-label="다음 파일"
                             >
@@ -1978,29 +1975,39 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                           )}
                         </>
                       )}
-                      {currentFileExt !== 'txt' && !/\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile?.name || '') && (archiveImgScale > 1 || archiveVideoScale > 1) && (
-                        <>
-                          <div
-                            className="absolute top-0 left-0 h-full w-1/2 z-10"
-                            style={{ background: 'transparent', pointerEvents: 'none' }}
-                          />
-                          <div
-                            className="absolute top-0 right-0 h-full w-1/2 z-10"
-                            style={{ background: 'transparent', pointerEvents: 'none' }}
-                          />
-                        </>
-                      )}
                       {!currentFile ? (
                         <div className="text-discord-muted">지원되는 파일이 없습니다.</div>
                       ) : currentFileExt === 'txt' ? (
                         // 텍스트 파일 표시
-                        <div className="w-full h-full bg-discord-bg text-discord-text p-4 overflow-auto">
-                          {currentArchiveText ? (
-                            <pre className="select-text whitespace-pre-wrap font-noto text-sm leading-relaxed">
-                              {currentArchiveText}
-                            </pre>
-                          ) : (
-                            <div className="text-discord-muted">텍스트를 로드할 수 없습니다.</div>
+                        <div className="relative h-full w-full bg-discord-bg text-discord-text">
+                          {!isFirstArchiveFile && (
+                            <button
+                              type="button"
+                              className="absolute left-3 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-white/70 transition-all hover:scale-110 hover:bg-black/60 hover:text-white"
+                              onClick={handlePrevious}
+                              aria-label="이전 파일"
+                            >
+                              <ChevronLeft size={24} />
+                            </button>
+                          )}
+                          <div className="h-full w-full overflow-auto p-4">
+                            {currentArchiveText ? (
+                              <pre className="select-text whitespace-pre-wrap font-noto text-sm leading-relaxed">
+                                {currentArchiveText}
+                              </pre>
+                            ) : (
+                              <div className="text-discord-muted">텍스트를 로드할 수 없습니다.</div>
+                            )}
+                          </div>
+                          {!isLastArchiveFile && (
+                            <button
+                              type="button"
+                              className="absolute right-3 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-white/70 transition-all hover:scale-110 hover:bg-black/60 hover:text-white"
+                              onClick={handleNext}
+                              aria-label="다음 파일"
+                            >
+                              <ChevronRight size={24} />
+                            </button>
                           )}
                         </div>
                       ) : /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile?.name || '') ? (
@@ -2136,7 +2143,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                             )}
                             
                             {/* 커스텀 컨트롤 */}
-                            <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+                            <div className={`absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
                               {/* 재생바 */}
                               <div className="mb-4">
                                 <div style={{ position: 'relative', width: '100%' }}>
