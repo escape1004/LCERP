@@ -91,6 +91,7 @@ const api: ElectronAPI = {
   getVideoBlobUrl: (filePath: string) => ipcRenderer.invoke('getVideoBlobUrl', filePath),
   getVideoStream: (filePath: string) => ipcRenderer.invoke('getVideoStream', filePath),
   getArchiveFiles: (filePath: string) => ipcRenderer.invoke('getArchiveFiles', filePath),
+  openArchiveFile: (archivePath: string, fileName: string) => ipcRenderer.invoke('openArchiveFile', archivePath, fileName),
   getArchiveFileDataUrl: (filePath: string, fileName: string) => ipcRenderer.invoke('getArchiveFileDataUrl', filePath, fileName),
   getArchiveFileText: (filePath: string, fileName: string) => ipcRenderer.invoke('getArchiveFileText', filePath, fileName),
   getArchiveFileStreamInfo: (filePath: string, fileName: string) => ipcRenderer.invoke('getArchiveFileStreamInfo', filePath, fileName),

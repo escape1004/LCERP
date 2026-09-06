@@ -86,6 +86,7 @@ export interface ElectronAPI {
   getFileDataUrl: (filePath: string) => Promise<string | null>;
   getVideoStream: (filePath: string) => Promise<string | null>;
   getArchiveFiles: (filePath: string) => Promise<Array<{ name: string; size: number; isDirectory: boolean; comment: string }>>;
+  openArchiveFile: (archivePath: string, fileName: string) => Promise<{ success: boolean; error?: string }>;
   getArchiveFileDataUrl: (filePath: string, fileName: string) => Promise<string | null>;
   getArchiveFileStreamInfo: (filePath: string, fileName: string) => Promise<string | null>;
   getArchiveFileText: (filePath: string, fileName: string) => Promise<string | null>;

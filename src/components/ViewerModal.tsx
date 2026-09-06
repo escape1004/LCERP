@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { X, ChevronLeft, ChevronRight, Download, FileImage, FileVideo, Archive, FileText, Play, Pause, Volume2, VolumeX, RotateCcw, RotateCw, Maximize, Minimize, Bookmark, Clock } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Download, File, FileImage, FileVideo, Archive, FileText, Play, Pause, Volume2, VolumeX, RotateCcw, RotateCw, Maximize, Minimize, Bookmark, Clock } from 'lucide-react';
 import AdmZip from 'adm-zip';
 import { Button } from './ui/button';
 import { toast } from './ui/use-toast';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./ui/tooltip";
 import { AnimatedModal } from './ui/animated-modal';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from './ui/context-menu';
 
 interface ViewerModalProps {
   isOpen: boolean;
@@ -19,8 +20,11 @@ interface ArchiveFile {
   name: string;
   size: number;
   isDirectory: boolean;
+  isSupported?: boolean;
   data?: Buffer;
 }
+
+const SUPPORTED_ARCHIVE_FILE_PATTERN = /\.(jpg|jpeg|png|gif|webp|mp4|avi|mkv|mov|wmv|flv|webm|txt)$/i;
 
 export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, fileType, categoryId = '', recordId = '', onClose }) => {
   const [displayFilePath, setDisplayFilePath] = useState(filePath);
@@ -805,16 +809,24 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       setLoading(true);
       setFileNotFound(false);
       const files = await window.electronAPI.getArchiveFiles(filePath);
-      const supportedFiles = files.filter(file => 
-        !file.isDirectory && /\.(jpg|jpeg|png|gif|webp|mp4|avi|mkv|mov|wmv|flv|webm|txt)$/i.test(file.name)
-      ).sort((a, b) => a.name.localeCompare(b.name));
+      const archiveEntries = files
+        .filter(file => !file.isDirectory)
+        .map(file => ({
+          ...file,
+          isSupported: SUPPORTED_ARCHIVE_FILE_PATTERN.test(file.name),
+        }))
+        .sort((a, b) => {
+          if (a.isSupported !== b.isSupported) return a.isSupported ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        });
+      const supportedFileCount = archiveEntries.filter(file => file.isSupported).length;
       
-      if (supportedFiles.length === 0) {
+      if (archiveEntries.length === 0) {
         setFileNotFound(true);
         setArchiveFiles([]);
       } else {
-        setArchiveFiles(supportedFiles);
-        setCurrentArchiveIndex(0);
+        setArchiveFiles(archiveEntries);
+        setCurrentArchiveIndex(supportedFileCount > 0 ? 0 : -1);
       }
     } catch (error) {
       console.error('압축 파일 로드 실패:', error);
@@ -831,6 +843,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       setCurrentArchiveText(null);
       try {
         const currentFile = archiveFiles[currentArchiveIndex];
+        if (!currentFile.isSupported) return;
         const fileExt = currentFile.name.toLowerCase().split('.').pop();
         
         if (fileExt === 'txt') {
@@ -877,10 +890,26 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   };
 
   const handleNext = () => {
-    if (currentArchiveIndex < archiveFiles.length - 1) {
+    const supportedFileCount = archiveFiles.filter(file => file.isSupported).length;
+    if (currentArchiveIndex < supportedFileCount - 1) {
       setCurrentArchiveDataUrl(null);
       setCurrentArchiveText(null);
       setCurrentArchiveIndex(currentArchiveIndex + 1);
+    }
+  };
+
+  const handleOpenUnsupportedArchiveFile = async (file: ArchiveFile) => {
+    try {
+      const result = await window.electronAPI.openArchiveFile(filePath, file.name);
+      if (!result.success) {
+        throw new Error(result.error || '파일을 실행하지 못했습니다.');
+      }
+    } catch (error) {
+      toast({
+        title: '파일 실행 실패',
+        description: error instanceof Error ? error.message : '압축파일 내부 파일을 실행하지 못했습니다.',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -1363,10 +1392,11 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   if (!displayFilePath) return null;
 
   const currentFile = archiveFiles[currentArchiveIndex];
+  const supportedArchiveFileCount = archiveFiles.filter(file => file.isSupported).length;
   const fileName = displayFilePath.split(/[\\/]/).pop() || '';
   const currentFileExt = currentFile?.name.toLowerCase().split('.').pop();
   const isFirstArchiveFile = currentArchiveIndex <= 0;
-  const isLastArchiveFile = currentArchiveIndex >= archiveFiles.length - 1;
+  const isLastArchiveFile = currentArchiveIndex >= supportedArchiveFileCount - 1;
   
   // fileType이 null이면 로딩 중이므로 로딩 UI만 표시
   const isDetectingType = !displayFileType;
@@ -1395,7 +1425,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
             <span className="text-discord-text font-medium truncate max-w-md">{fileName}</span>
             {effectiveFileType === 'archive' && (
               <span className="text-discord-muted text-sm">
-                ({currentArchiveIndex + 1} / {archiveFiles.length})
+                ({Math.max(0, currentArchiveIndex + 1)} / {supportedArchiveFileCount})
               </span>
             )}
           </div>
@@ -1410,7 +1440,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
         {/* Content (Body) */}
         <div className="flex-1 min-h-0 flex items-center justify-center relative" style={{ overflow: 'hidden' }}>
           {/* 회전 버튼: 바디 영역 우측 상단에 fixed 배치 */}
-          {((effectiveFileType === 'image') || (effectiveFileType === 'video') || (effectiveFileType === 'archive' && (currentFileExt !== 'txt'))) && (
+          {((effectiveFileType === 'image') || (effectiveFileType === 'video') || (effectiveFileType === 'archive' && currentFile && (currentFileExt !== 'txt'))) && (
             <div className="absolute top-4 right-4 z-20 flex gap-2">
               <TooltipProvider>
                 <Tooltip>
@@ -1850,25 +1880,52 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                           const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name);
                           const isVideo = /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(file.name);
                           const isText = fileExt === 'txt';
-                          
+                          const isSupported = Boolean(file.isSupported);
+
+                          const fileListItem = (
+                            <li
+                              aria-disabled={!isSupported}
+                              title={!isSupported ? `${file.name} (미지원 파일)` : undefined}
+                              className={`flex items-center gap-2 px-2 py-1 rounded ${
+                                isSupported
+                                  ? `cursor-pointer hover:bg-discord-hover ${idx === currentArchiveIndex ? 'bg-discord-hover font-bold' : ''}`
+                                  : 'cursor-not-allowed text-discord-muted opacity-45'
+                              }`}
+                              onClick={() => {
+                                if (isSupported && idx !== currentArchiveIndex) {
+                                  setCurrentArchiveDataUrl(null);
+                                  setCurrentArchiveText(null);
+                                  setCurrentArchiveIndex(idx);
+                                }
+                              }}
+                            >
+                              {isImage && <FileImage size={14} className="text-blue-400 flex-shrink-0" />}
+                              {isVideo && <FileVideo size={14} className="text-green-400 flex-shrink-0" />}
+                              {isText && <FileText size={14} className="text-green-400 flex-shrink-0" />}
+                              {!isSupported && <File size={14} className="flex-shrink-0" />}
+                              <span className="truncate flex-1 min-w-0">{file.name}</span>
+                            </li>
+                          );
+
+                          if (!isSupported) {
+                            return (
+                              <ContextMenu key={`${file.name}-${idx}`}>
+                                <ContextMenuTrigger asChild>
+                                  {fileListItem}
+                                </ContextMenuTrigger>
+                                <ContextMenuContent>
+                                  <ContextMenuItem onClick={() => void handleOpenUnsupportedArchiveFile(file)}>
+                                    원본 파일 열기
+                                  </ContextMenuItem>
+                                </ContextMenuContent>
+                              </ContextMenu>
+                            );
+                          }
+
                           return (
-                            <Tooltip key={file.name}>
+                            <Tooltip key={`${file.name}-${idx}`}>
                               <TooltipTrigger asChild>
-                                <li
-                                  className={`flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-discord-hover rounded ${idx === currentArchiveIndex ? 'bg-discord-hover font-bold' : ''}`}
-                                  onClick={() => {
-                                    if (idx !== currentArchiveIndex) {
-                                      setCurrentArchiveDataUrl(null);
-                                      setCurrentArchiveText(null);
-                                      setCurrentArchiveIndex(idx);
-                                    }
-                                  }}
-                                >
-                                  {isImage && <FileImage size={14} className="text-blue-400 flex-shrink-0" />}
-                                  {isVideo && <FileVideo size={14} className="text-green-400 flex-shrink-0" />}
-                                  {isText && <FileText size={14} className="text-green-400 flex-shrink-0" />}
-                                  <span className="truncate flex-1 min-w-0">{file.name}</span>
-                                </li>
+                                {fileListItem}
                               </TooltipTrigger>
                               <TooltipContent
                                 side="right"
@@ -1933,7 +1990,9 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                           />
                         </>
                       )}
-                      {currentFileExt === 'txt' ? (
+                      {!currentFile ? (
+                        <div className="text-discord-muted">지원되는 파일이 없습니다.</div>
+                      ) : currentFileExt === 'txt' ? (
                         // 텍스트 파일 표시
                         <div className="w-full h-full bg-discord-bg text-discord-text p-4 overflow-auto">
                           {currentArchiveText ? (

@@ -4306,6 +4306,74 @@ ipcMain.handle('getArchiveFiles', async (_, filePath) => {
   }
 });
 
+ipcMain.handle('openArchiveFile', async (_, archivePath, fileName) => {
+  try {
+    if (!archivePath || !fileName || !fs.existsSync(archivePath)) {
+      return { success: false, error: '압축파일 또는 내부 파일을 찾을 수 없습니다.' };
+    }
+
+    const archiveExtension = path.extname(archivePath).toLowerCase();
+    if (archiveExtension === '.7z') {
+      return { success: false, error: '7z 압축파일은 현재 지원되지 않습니다.' };
+    }
+
+    const directory = await unzipper.Open.file(archivePath);
+    const entry = directory.files.find((candidate) => (
+      candidate.type !== 'Directory'
+      && !String(candidate.path || '').endsWith('/')
+      && isSameZipEntry(candidate.path, fileName)
+    ));
+
+    if (!entry) {
+      return { success: false, error: '압축파일 내부에서 파일을 찾을 수 없습니다.' };
+    }
+
+    const normalizedFileName = normalizeZipPath(fileName);
+    const originalBaseName = path.posix.basename(normalizedFileName) || 'archive-file';
+    const rawExtension = path.extname(originalBaseName);
+    const safeExtension = /^\.[a-z0-9]{1,10}$/i.test(rawExtension) ? rawExtension : '';
+    const sanitizedBaseName = originalBaseName
+      .replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
+      .replace(/[. ]+$/g, '')
+      .slice(0, 180);
+    const fallbackFileName = `archive-file${safeExtension}`;
+    const extractedFileName = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(sanitizedBaseName)
+      ? `_${sanitizedBaseName}`
+      : (sanitizedBaseName || fallbackFileName);
+    const archiveStat = fs.statSync(archivePath);
+    const cacheKey = crypto.createHash('sha1')
+      .update(`${path.resolve(archivePath)}|${archiveStat.mtimeMs}|${normalizedFileName}`)
+      .digest('hex');
+    const cacheDirectory = path.join(app.getPath('temp'), 'local-erp-archive-files', cacheKey);
+    const extractedPath = path.join(cacheDirectory, extractedFileName);
+    fs.mkdirSync(cacheDirectory, { recursive: true });
+
+    const expectedSize = Number(entry.uncompressedSize) || 0;
+    const cachedFileIsValid = fs.existsSync(extractedPath)
+      && (expectedSize <= 0 || fs.statSync(extractedPath).size === expectedSize);
+
+    if (!cachedFileIsValid) {
+      if (fs.existsSync(extractedPath)) fs.unlinkSync(extractedPath);
+      await new Promise((resolve, reject) => {
+        entry.stream()
+          .on('error', reject)
+          .pipe(fs.createWriteStream(extractedPath))
+          .on('error', reject)
+          .on('finish', resolve);
+      });
+    }
+
+    const openError = await shell.openPath(extractedPath);
+    if (openError) {
+      return { success: false, error: openError };
+    }
+    return { success: true };
+  } catch (error) {
+    log('Error opening archive file:', error);
+    return { success: false, error: error.message || '압축파일 내부 파일을 실행하지 못했습니다.' };
+  }
+});
+
 // getArchiveFileDataUrl 핸들러
 ipcMain.handle('getArchiveFileDataUrl', async (_, filePath, fileName) => {
   try {
