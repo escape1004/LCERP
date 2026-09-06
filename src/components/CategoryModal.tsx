@@ -339,6 +339,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     } catch (error) {
       toast({
         title: '카테고리 저장 중 오류가 발생했습니다.',
+        description: error instanceof Error ? error.message : '카테고리 정보를 확인한 뒤 다시 시도해 주세요.',
         variant: 'destructive',
       });
     } finally {

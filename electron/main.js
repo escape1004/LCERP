@@ -4667,13 +4667,52 @@ ipcMain.handle('db:updateCategory', (event, id, updates) => {
   const profileId = getCurrentProfileIdOrThrow();
   const existingCategory = ensureCategoryBelongsToCurrentProfile(id);
   const subtreeIds = getCategorySubtreeIds(id, profileId);
-  const thumbnailEntries = collectThumbnailMigrationEntries(subtreeIds, profileId);
-  const previousCategoryDirs = getStructuredThumbnailDirsForCategoryIds(subtreeIds, profileId);
-  const nextOrder = updates.order_num ?? updates.order ?? existingCategory.order_num ?? 0;
   const nextItemType = updates.itemType === 'separator' || existingCategory.itemType === 'separator'
     ? 'separator'
     : (updates.itemType || existingCategory.itemType || 'category');
   const nextParentId = nextItemType === 'separator' ? null : (updates.parentId || null);
+
+  if (nextParentId) {
+    if (nextParentId === id || subtreeIds.includes(nextParentId)) {
+      throw new Error('자기 자신 또는 자신의 하위 카테고리를 상위 카테고리로 지정할 수 없습니다.');
+    }
+
+    const parentCategory = db.prepare(`
+      SELECT id, parentId, itemType
+      FROM categories
+      WHERE id = ? AND profileId = ?
+    `).get(nextParentId, profileId);
+    if (!parentCategory || parentCategory.itemType === 'separator') {
+      throw new Error('선택한 상위 카테고리를 찾을 수 없습니다.');
+    }
+    if (parentCategory.parentId) {
+      throw new Error('최상위 카테고리만 상위 카테고리로 지정할 수 있습니다.');
+    }
+  }
+
+  const thumbnailEntries = collectThumbnailMigrationEntries(subtreeIds, profileId);
+  const previousCategoryDirs = getStructuredThumbnailDirsForCategoryIds(subtreeIds, profileId);
+  const previousParentId = existingCategory.parentId || null;
+  const parentChanged = previousParentId !== nextParentId;
+  const hasExplicitOrder = updates.order_num !== undefined || updates.order !== undefined;
+  let nextOrder = updates.order_num ?? updates.order ?? existingCategory.order_num ?? 0;
+
+  if (parentChanged && !hasExplicitOrder) {
+    const maxOrderRow = nextParentId
+      ? db.prepare(`
+          SELECT COALESCE(MAX(order_num), -1) AS maxOrder
+          FROM categories
+          WHERE profileId = ? AND parentId = ? AND id != ?
+        `).get(profileId, nextParentId, id)
+      : db.prepare(`
+          SELECT COALESCE(MAX(order_num), -1) AS maxOrder
+          FROM categories
+          WHERE profileId = ? AND parentId IS NULL AND id != ?
+        `).get(profileId, id);
+    const maxOrder = Number(maxOrderRow?.maxOrder);
+    nextOrder = (Number.isFinite(maxOrder) ? maxOrder : -1) + 1;
+  }
+
   const nextFields = nextItemType === 'separator' ? [] : (updates.fields ?? JSON.parse(existingCategory.fields || '[]'));
   const nextMemo = nextItemType === 'separator'
     ? ''
