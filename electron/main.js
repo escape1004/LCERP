@@ -44,6 +44,8 @@ const backupDir = path.join(path.join(os.homedir(), 'AppData', 'Local'), 'backup
 const configPath = path.join(app.getPath('userData'), 'config.json');
 
 const defaultConfig = {
+  backupDir,
+  backupInterval: 60,
   rememberWindowBounds: false,
   muteAudioWhenBackgrounded: false,
   windowBounds: null,
@@ -161,6 +163,21 @@ function normalizeTranslationTargetLanguage(value) {
 
 function getConfiguredTranslationTargetLanguage() {
   return normalizeTranslationTargetLanguage(appConfig.translationTargetLanguage);
+}
+
+function normalizeBackupInterval(value) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return null;
+  return Math.min(10080, Math.max(1, Math.floor(numericValue)));
+}
+
+function getConfiguredBackupInterval() {
+  return normalizeBackupInterval(appConfig.backupInterval) ?? 60;
+}
+
+function getConfiguredBackupDir() {
+  const configuredPath = String(appConfig.backupDir || '').trim();
+  return configuredPath ? path.resolve(configuredPath) : backupDir;
 }
 
 function normalizePasswordLockMaxAttempts(value) {
@@ -826,6 +843,80 @@ db.exec('PRAGMA encoding = "UTF-8"');
 db.exec('PRAGMA foreign_keys = ON');
 db.exec('PRAGMA journal_mode = WAL');
 
+const MAX_AUTOMATIC_BACKUPS = 10;
+let automaticBackupTimer = null;
+let automaticBackupInProgress = false;
+
+function createBackupTimestamp() {
+  return new Date().toISOString().replace(/[:.]/g, '-');
+}
+
+function cleanupOldAutomaticBackups(directoryPath) {
+  try {
+    const automaticBackups = fs.readdirSync(directoryPath)
+      .filter(fileName => /^auto-backup-.*\.db$/i.test(fileName))
+      .map(fileName => {
+        const filePath = path.join(directoryPath, fileName);
+        return { filePath, modifiedAt: fs.statSync(filePath).mtimeMs };
+      })
+      .sort((a, b) => b.modifiedAt - a.modifiedAt);
+
+    automaticBackups.slice(MAX_AUTOMATIC_BACKUPS).forEach(({ filePath }) => {
+      fs.unlinkSync(filePath);
+    });
+  } catch (error) {
+    log('Automatic backup cleanup failed:', error);
+  }
+}
+
+async function createDatabaseBackup({ automatic = false } = {}) {
+  const destinationDirectory = getConfiguredBackupDir();
+  fs.mkdirSync(destinationDirectory, { recursive: true });
+  const prefix = automatic ? 'auto-backup' : 'backup';
+  const destinationPath = path.join(destinationDirectory, `${prefix}-${createBackupTimestamp()}.db`);
+
+  await db.backup(destinationPath);
+  if (automatic) cleanupOldAutomaticBackups(destinationDirectory);
+  log(automatic ? 'Automatic backup completed:' : 'Manual backup completed:', destinationPath);
+  return destinationPath;
+}
+
+async function runAutomaticBackup() {
+  if (automaticBackupInProgress) {
+    log('Automatic backup skipped: previous backup is still running');
+    return;
+  }
+
+  automaticBackupInProgress = true;
+  try {
+    await createDatabaseBackup({ automatic: true });
+  } catch (error) {
+    log('Automatic backup failed:', error);
+  } finally {
+    automaticBackupInProgress = false;
+  }
+}
+
+function startAutomaticBackup({ runImmediately = false } = {}) {
+  if (automaticBackupTimer) {
+    clearInterval(automaticBackupTimer);
+  }
+
+  const intervalMinutes = getConfiguredBackupInterval();
+  automaticBackupTimer = setInterval(() => {
+    void runAutomaticBackup();
+  }, intervalMinutes * 60 * 1000);
+  automaticBackupTimer.unref?.();
+  log('Automatic backup scheduled:', {
+    intervalMinutes,
+    backupDir: getConfiguredBackupDir()
+  });
+
+  if (runImmediately) {
+    void runAutomaticBackup();
+  }
+}
+
 // 데이터베이스 테이블 생성
 function initializeDatabase() {
   try {
@@ -1164,6 +1255,7 @@ function startVideoHttpServer() {
 app.whenReady().then(() => {
   registerProtocol();
   initializeDatabase();
+  startAutomaticBackup({ runImmediately: true });
   createWindow();
   startVideoHttpServer();
 
@@ -1215,6 +1307,10 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
+    if (automaticBackupTimer) {
+      clearInterval(automaticBackupTimer);
+      automaticBackupTimer = null;
+    }
     db.close();
     app.quit();
   }
@@ -3289,8 +3385,8 @@ ipcMain.handle('db:deleteRecord', async (_, id) => {
 ipcMain.handle('getConfig', () => {
   return {
     dbPath: dbPath,
-    backupDir: backupDir,
-    backupInterval: 60,
+    backupDir: getConfiguredBackupDir(),
+    backupInterval: getConfiguredBackupInterval(),
     rememberWindowBounds: appConfig.rememberWindowBounds,
     muteAudioWhenBackgrounded: appConfig.muteAudioWhenBackgrounded === true,
     zoomPercent: getConfiguredZoomPercent(),
@@ -3425,16 +3521,35 @@ ipcMain.handle('setDbPath', async () => {
 
 ipcMain.handle('setBackupDir', async () => {
   const { filePaths } = await dialog.showOpenDialog({
-    properties: ['openDirectory']
+    properties: ['openDirectory'],
+    defaultPath: getConfiguredBackupDir()
   });
   if (filePaths && filePaths.length > 0) {
-    return { success: true, path: filePaths[0] };
+    const selectedPath = path.resolve(filePaths[0]);
+    try {
+      fs.mkdirSync(selectedPath, { recursive: true });
+      fs.accessSync(selectedPath, fs.constants.W_OK);
+      appConfig.backupDir = selectedPath;
+      saveAppConfig();
+      startAutomaticBackup();
+      return { success: true, path: selectedPath };
+    } catch (error) {
+      return { success: false, error: error.message || '백업 폴더를 사용할 수 없습니다.' };
+    }
   }
-  return { success: false };
+  return { success: false, canceled: true };
 });
 
-ipcMain.handle('setBackupInterval', (event, minutes) => {
-  return { success: true };
+ipcMain.handle('setBackupInterval', (_event, minutes) => {
+  const normalizedInterval = normalizeBackupInterval(minutes);
+  if (normalizedInterval === null || Number(minutes) < 1 || Number(minutes) > 10080) {
+    return { success: false, error: '백업 주기는 1분에서 10,080분 사이여야 합니다.' };
+  }
+
+  appConfig.backupInterval = normalizedInterval;
+  saveAppConfig();
+  startAutomaticBackup();
+  return { success: true, backupInterval: normalizedInterval };
 });
 
 ipcMain.handle('setAppPassword', (_event, password) => {
@@ -3631,17 +3746,9 @@ ipcMain.handle('translateText', async (_event, payload = {}) => {
   }
 });
 
-ipcMain.handle('backupDatabase', () => {
+ipcMain.handle('backupDatabase', async () => {
   try {
-    const backupDir = path.join(path.join(os.homedir(), 'AppData', 'Local'), 'backups');
-    if (!fs.existsSync(backupDir)) {
-      fs.mkdirSync(backupDir, { recursive: true });
-    }
-    
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupPath = path.join(backupDir, `backup-${timestamp}.db`);
-    
-    fs.copyFileSync(dbPath, backupPath);
+    const backupPath = await createDatabaseBackup();
     return { success: true, path: backupPath };
   } catch (error) {
     log('Backup failed:', error);
@@ -3932,13 +4039,13 @@ ipcMain.handle('category:importRecords', async (_, categoryId, format = 'csv') =
 
 ipcMain.handle('resetDatabase', () => {
   try {
-    const backupDir = path.join(path.join(os.homedir(), 'AppData', 'Local'), 'backups');
-    if (!fs.existsSync(backupDir)) {
-      fs.mkdirSync(backupDir, { recursive: true });
+    const configuredBackupDir = getConfiguredBackupDir();
+    if (!fs.existsSync(configuredBackupDir)) {
+      fs.mkdirSync(configuredBackupDir, { recursive: true });
     }
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupPath = path.join(backupDir, `backup-before-reset-${timestamp}.db`);
+    const backupPath = path.join(configuredBackupDir, `backup-before-reset-${timestamp}.db`);
     if (fs.existsSync(dbPath)) {
       fs.copyFileSync(dbPath, backupPath);
     }
@@ -3959,9 +4066,13 @@ ipcMain.handle('resetDatabase', () => {
 });
 
 ipcMain.handle('openBackupLocation', () => {
-  const backupDir = path.join(path.join(os.homedir(), 'AppData', 'Local'), 'backups');
-  shell.openPath(backupDir);
-  return { success: true };
+  const configuredBackupDir = getConfiguredBackupDir();
+  fs.mkdirSync(configuredBackupDir, { recursive: true });
+  return shell.openPath(configuredBackupDir).then((openError) => (
+    openError
+      ? { success: false, error: openError }
+      : { success: true }
+  ));
 });
 
 ipcMain.handle('db:checkDuplicate', async (_, categoryId, fieldId, value, recordId = null) => {

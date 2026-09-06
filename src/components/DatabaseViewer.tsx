@@ -245,6 +245,8 @@ export const DatabaseViewer: React.FC = () => {
       if (result.success && result.path) {
         await loadConfig();
         showSuccessToast('백업 폴더가 변경되었습니다.');
+      } else if (result.error) {
+        throw new Error(result.error);
       }
     } catch (error) {
       handleApiError(error, '백업 폴더 변경에 실패했습니다.');
@@ -264,6 +266,7 @@ export const DatabaseViewer: React.FC = () => {
         throw new Error(result.error);
       }
 
+      await loadConfig();
       showSuccessToast('백업 주기가 변경되었습니다.');
       setIsSettingsOpen(false);
     } catch (error) {
@@ -696,6 +699,7 @@ export const DatabaseViewer: React.FC = () => {
                           {...field}
                           type="number"
                           min="1"
+                          max="10080"
                           placeholder="예: 60"
                           className="flex-1 bg-discord-sidebar border-gray-600 text-discord-text"
                         />
