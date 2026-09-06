@@ -319,7 +319,7 @@ export const Sidebar: React.FC = () => {
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <div
-            className="flex items-center px-3 py-2 mb-1 rounded cursor-grab hover:bg-discord-hover/60"
+            className="flex items-center px-3 py-2 mb-1 rounded cursor-grab"
             style={{ paddingLeft: `${12 + level * 12}px` }}
             onClick={(event) => event.preventDefault()}
             {...dragHandleProps}

@@ -156,7 +156,7 @@ const StatCard: React.FC<{ title: string; value: string | number; icon: React.Re
   icon,
   color = 'bg-discord-accent',
 }) => (
-  <div className="bg-discord-sidebar rounded-lg p-4 border border-gray-700">
+  <div className="bg-discord-sidebar rounded-xl p-4 border border-gray-700">
     <div className="flex items-center justify-between">
       <div>
         <p className="text-sm text-discord-muted mb-1">{title}</p>
@@ -801,7 +801,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between gap-4 mb-6">
               <h1 className="text-2xl font-bold text-discord-text">대시보드</h1>
             </div>
-            <div className="bg-discord-sidebar rounded-lg p-8 border border-gray-700 text-center flex flex-col items-center">
+            <div className="bg-discord-sidebar rounded-xl p-8 border border-gray-700 text-center flex flex-col items-center">
               <div className="order-last mt-6 flex justify-center">
                 <Button
                   onClick={() => setIsCategoryModalOpen(true)}
@@ -856,7 +856,7 @@ export default function Dashboard() {
             </div>
 
             {selectedWarningTotalCount > 0 && (
-              <div className="bg-discord-sidebar rounded-lg p-6 border border-gray-700 mb-6">
+              <div className="bg-discord-sidebar rounded-xl p-6 border border-gray-700 mb-6">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-amber-500/15 text-amber-300">
@@ -922,7 +922,7 @@ export default function Dashboard() {
                 }`}
               >
                 {!selectedRootCategory && categoryRecordData.length > 0 && (
-                  <div className="bg-discord-sidebar rounded-lg p-6 border border-gray-700">
+                  <div className="bg-discord-sidebar rounded-xl p-6 border border-gray-700">
                     <h2 className="text-lg font-semibold text-discord-text mb-4">카테고리별 항목 수 (상위 10개)</h2>
                     <ResponsiveContainer width="100%" height={300}>
                       <BarChart
@@ -982,7 +982,7 @@ export default function Dashboard() {
                 )}
 
                 {selectedRootCategory && childCategoryRecordData.length > 0 && (
-                  <div className="bg-discord-sidebar rounded-lg p-6 border border-gray-700">
+                  <div className="bg-discord-sidebar rounded-xl p-6 border border-gray-700">
                     <h2 className="text-lg font-semibold text-discord-text mb-4">하위 카테고리별 항목 수</h2>
                     <ResponsiveContainer width="100%" height={300}>
                       <BarChart
@@ -1008,7 +1008,7 @@ export default function Dashboard() {
                 )}
 
                 {hasAnyAttachments && (
-                  <div className="bg-discord-sidebar rounded-lg p-6 border border-gray-700">
+                  <div className="bg-discord-sidebar rounded-xl p-6 border border-gray-700">
                     <h2 className="text-lg font-semibold text-discord-text mb-4">첨부파일 유형 분포</h2>
                     <ResponsiveContainer width="100%" height={300}>
                       <PieChart>
@@ -1038,7 +1038,7 @@ export default function Dashboard() {
             )}
 
             {!selectedRootCategory && hasAnyRecords && hasTrendData && (
-              <div className="bg-discord-sidebar rounded-lg p-6 border border-gray-700 mb-6">
+              <div className="bg-discord-sidebar rounded-xl p-6 border border-gray-700 mb-6">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold text-discord-text">최근 항목 추가 추이</h2>
                   <Select value={dateUnit} onValueChange={(value: 'day' | 'month' | 'year') => setDateUnit(value)}>
@@ -1167,7 +1167,7 @@ export default function Dashboard() {
                 {childCategoryDashboardSections
                   .filter((section) => !section.isRootCategory)
                   .map((section) => (
-                  <div key={section.category.id} className="bg-discord-sidebar rounded-lg p-6 border border-gray-700">
+                  <div key={section.category.id} className="bg-discord-sidebar rounded-xl p-6 border border-gray-700">
                     <div className="flex items-center justify-between gap-3 mb-4">
                       <h2
                         className="text-lg font-semibold text-discord-text cursor-pointer hover:text-discord-accent transition-colors"
@@ -1329,7 +1329,7 @@ export default function Dashboard() {
             )}
 
             {!selectedRootCategory && populatedCategoryStats.length > 0 && (
-              <div className="bg-discord-sidebar rounded-lg p-6 border border-gray-700">
+              <div className="bg-discord-sidebar rounded-xl p-6 border border-gray-700">
                 <h2 className="text-lg font-semibold text-discord-text mb-4">카테고리별 상세 통계</h2>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {populatedCategoryStats.map((stat) => {
