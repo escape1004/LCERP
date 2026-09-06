@@ -1427,7 +1427,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
 
   return (
     <>
-      <AnimatedModal isOpen={isOpen} contentClassName="bg-discord-bg rounded-lg w-full max-w-2xl flex flex-col max-h-[90vh]">
+      <AnimatedModal isOpen={isOpen} contentClassName="bg-discord-bg rounded-xl w-full max-w-2xl flex flex-col max-h-[90vh]">
         <div className="flex-shrink-0 flex items-center justify-between p-6 border-b border-gray-700">
           <div className="flex items-end">
             <h2 className="text-xl font-bold text-discord-text">
@@ -1521,7 +1521,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
 
       {/* 중복 항목 선택 모달 */}
       {ambiguousDialogOpen && (
-        <AnimatedModal isOpen={ambiguousDialogOpen} contentClassName="bg-discord-bg rounded-lg w-full max-w-2xl flex flex-col max-h-[90vh]">
+        <AnimatedModal isOpen={ambiguousDialogOpen} contentClassName="bg-discord-bg rounded-xl w-full max-w-2xl flex flex-col max-h-[90vh]">
             <div className="flex-shrink-0 flex items-center justify-between p-6 border-b border-gray-700">
               <div>
                 <h2 className="text-xl font-bold text-discord-text">

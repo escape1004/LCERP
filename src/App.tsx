@@ -736,7 +736,7 @@ const App = () => {
           </Dialog>
           {showDeleteConfirm && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-              <div className="bg-discord-bg rounded-lg p-6 w-full max-w-md border border-gray-700 flex flex-col items-center">
+              <div className="bg-discord-bg rounded-xl p-6 w-full max-w-md border border-gray-700 flex flex-col items-center overflow-hidden">
                 <div className="mb-6 text-center text-discord-text">
                   <div className="text-base font-medium mb-2">
                     {deleteTargetProfile

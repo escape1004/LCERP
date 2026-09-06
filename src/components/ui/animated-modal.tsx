@@ -48,7 +48,7 @@ export function AnimatedModal({
     >
       <div
         className={cn(
-          'duration-200',
+          'overflow-hidden rounded-xl duration-200',
           isVisible
             ? 'animate-in fade-in-0 zoom-in-95'
             : 'animate-out fade-out-0 zoom-out-95',

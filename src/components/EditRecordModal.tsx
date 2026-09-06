@@ -56,7 +56,7 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-discord-bg rounded-lg w-full max-w-2xl">
+      <div className="bg-discord-bg rounded-xl w-full max-w-2xl overflow-hidden">
         <div className="p-6 border-b border-gray-700">
           <h2 className="text-xl font-bold text-discord-text">
             항목 수정

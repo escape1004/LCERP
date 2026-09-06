@@ -448,7 +448,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   };
 
   return (
-    <AnimatedModal isOpen={isOpen} contentClassName="bg-discord-bg rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden">
+    <AnimatedModal isOpen={isOpen} contentClassName="bg-discord-bg rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-700">
           <h2 className="text-xl font-bold text-discord-text">

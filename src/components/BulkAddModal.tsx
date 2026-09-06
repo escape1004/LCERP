@@ -235,7 +235,7 @@ export const BulkAddModal: React.FC<BulkAddModalProps> = ({
   };
 
   return (
-    <AnimatedModal isOpen={isOpen} contentClassName="bg-discord-bg rounded-lg w-full max-w-2xl flex flex-col max-h-[90vh]">
+    <AnimatedModal isOpen={isOpen} contentClassName="bg-discord-bg rounded-xl w-full max-w-2xl flex flex-col max-h-[90vh]">
         <div className="flex-shrink-0 flex items-center justify-between p-6 border-b border-gray-700">
           <h2 className="text-xl font-bold text-discord-text">
             항목 다중 추가

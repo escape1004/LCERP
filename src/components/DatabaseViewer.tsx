@@ -444,7 +444,7 @@ export const DatabaseViewer: React.FC = () => {
                       value={pageSize}
                       onChange={(event) => handlePageSizeChange(Number(event.target.value))}
                       disabled={isTableLoading}
-                      className="h-8 rounded border border-gray-600 bg-discord-sidebar px-2 text-sm text-discord-text outline-none focus:border-discord-accent"
+                      className="h-8 appearance-none rounded border border-gray-600 bg-discord-sidebar px-2 text-sm text-discord-text outline-none focus:border-discord-accent"
                     >
                       <option value={50}>50</option>
                       <option value={100}>100</option>
@@ -513,7 +513,7 @@ export const DatabaseViewer: React.FC = () => {
 
       {showResetConfirm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60">
-          <div className="bg-discord-bg rounded-lg p-6 w-full max-w-md border border-gray-700 flex flex-col items-center">
+          <div className="bg-discord-bg rounded-xl p-6 w-full max-w-md border border-gray-700 flex flex-col items-center overflow-hidden">
             <div className="mb-6 text-center text-discord-text">
               <div className="text-base font-medium mb-2">
                 정말로 데이터베이스를 초기화하시겠습니까?

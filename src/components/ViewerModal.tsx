@@ -1407,11 +1407,11 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     <AnimatedModal
       isOpen={isOpen}
       className="bg-black/95"
-      contentClassName="relative bg-discord-bg rounded-lg shadow-2xl w-[95vw] h-[95vh] flex flex-col"
+      contentClassName="relative bg-discord-bg rounded-xl shadow-2xl w-[95vw] h-[95vh] flex flex-col"
     >
       <div
         ref={modalContainerRef}
-        className="relative bg-discord-bg rounded-lg shadow-2xl w-[95vw] h-[95vh] flex flex-col"
+        className="relative bg-discord-bg rounded-xl shadow-2xl w-[95vw] h-[95vh] flex flex-col"
         onKeyDown={handleKeyDown}
         tabIndex={0}
         data-modal-container
