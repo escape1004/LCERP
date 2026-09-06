@@ -2109,7 +2109,7 @@ export const MainContent: React.FC = () => {
   }
 
   return (
-    <div className="flex-1 h-full flex flex-col bg-discord-bg">
+    <div className="flex-1 min-w-0 h-full flex flex-col bg-discord-bg">
       {showDbViewer ? (
         <div className="flex-1 flex flex-col min-h-0">
           <DatabaseViewer />

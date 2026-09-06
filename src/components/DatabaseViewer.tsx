@@ -1,18 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Settings2, Link2, X } from 'lucide-react';
-import { useForm } from 'react-hook-form';
+import { Link2, Trash2 } from 'lucide-react';
 
 import { useERPStore } from '../hooks/useERPStore';
-import { AnimatedModal } from './ui/animated-modal';
 import { Button } from './ui/button';
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-} from './ui/form';
 import { Input } from './ui/input';
 import { useToast } from './ui/use-toast';
 
@@ -33,10 +23,6 @@ interface TableData {
   pageSize: number;
 }
 
-interface FormValues {
-  dbPath: string;
-}
-
 export const DatabaseViewer: React.FC = () => {
   const DEFAULT_COLUMN_WIDTH = 150;
   const [tables, setTables] = useState<TableInfo[]>([]);
@@ -52,7 +38,6 @@ export const DatabaseViewer: React.FC = () => {
   const [resizeStartX, setResizeStartX] = useState(0);
   const [resizeStartWidth, setResizeStartWidth] = useState(0);
   const [dbPath, setDbPath] = useState('');
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetInput, setResetInput] = useState('');
   const [isResetting, setIsResetting] = useState(false);
@@ -61,12 +46,6 @@ export const DatabaseViewer: React.FC = () => {
   const { selectCategory } = useERPStore();
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const tableRequestIdRef = useRef(0);
-
-  const form = useForm<FormValues>({
-    defaultValues: {
-      dbPath: '',
-    },
-  });
 
   const showSuccessToast = (message: string) => {
     toast({
@@ -172,9 +151,6 @@ export const DatabaseViewer: React.FC = () => {
     try {
       const nextConfig = await window.electronAPI.getConfig();
       setDbPath(nextConfig.dbPath);
-      form.reset({
-        dbPath: nextConfig.dbPath,
-      });
       await loadFileSize(nextConfig.dbPath);
     } catch (error) {
       handleApiError(error, '설정을 불러오지 못했습니다.');
@@ -186,19 +162,6 @@ export const DatabaseViewer: React.FC = () => {
       await window.electronAPI.openDbFile();
     } catch (error) {
       handleApiError(error, 'DB 파일을 열지 못했습니다.');
-    }
-  };
-
-  const handleSetDbPath = async () => {
-    try {
-      const result = await window.electronAPI.setDbPath();
-      if (result.success && result.path) {
-        await loadConfig();
-        await loadTables();
-        showSuccessToast('DB 경로가 변경되었습니다.');
-      }
-    } catch (error) {
-      handleApiError(error, 'DB 경로 변경에 실패했습니다.');
     }
   };
 
@@ -317,7 +280,7 @@ export const DatabaseViewer: React.FC = () => {
   };
 
   return (
-    <div className="h-full w-full flex flex-col bg-discord-bg">
+    <div className="h-full min-w-0 w-full flex flex-col bg-discord-bg">
       <div className="shrink-0 p-6 space-y-4 border-b border-gray-700">
         <div className="flex items-center justify-between">
           <div className="flex items-end">
@@ -330,12 +293,12 @@ export const DatabaseViewer: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             <Button
-              variant="outline"
-              onClick={() => setIsSettingsOpen(true)}
-              className="border-gray-600 hover:bg-discord-hover"
+              variant="destructive"
+              onClick={() => setShowResetConfirm(true)}
+              className="bg-discord-danger hover:bg-red-900"
             >
-              <Settings2 size={16} className="mr-2" />
-              설정
+              <Trash2 size={16} className="mr-2" />
+              데이터베이스 초기화
             </Button>
           </div>
         </div>
@@ -518,84 +481,6 @@ export const DatabaseViewer: React.FC = () => {
           </div>
         )}
       </div>
-
-      <AnimatedModal isOpen={isSettingsOpen} contentClassName="bg-discord-bg rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden">
-        <div className="flex items-center justify-between p-6 border-b border-gray-700">
-          <h2 className="text-xl font-bold text-discord-text">데이터베이스 설정</h2>
-          <button
-            onClick={() => setIsSettingsOpen(false)}
-            className="text-discord-muted hover:text-discord-text"
-          >
-            <X size={24} />
-          </button>
-        </div>
-
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-160px)] discord-scrollbar">
-          <Form {...form}>
-            <div className="space-y-6">
-              <FormField
-                control={form.control}
-                name="dbPath"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-discord-text font-medium">DB 파일 위치</FormLabel>
-                    <div className="flex gap-2 mt-2">
-                      <FormControl>
-                        <Input
-                          {...field}
-                          readOnly
-                          className="flex-1 bg-discord-sidebar border-gray-600 text-discord-text"
-                        />
-                      </FormControl>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleSetDbPath}
-                        className="border-gray-600 hover:bg-discord-hover text-discord-text"
-                      >
-                        변경
-                      </Button>
-                    </div>
-                    <FormDescription className="text-sm text-discord-muted mt-1">
-                      데이터베이스 파일이 저장될 경로입니다.
-                    </FormDescription>
-                  </FormItem>
-                )}
-              />
-
-              <div className="border border-red-800/60 bg-[#2a1f1f] rounded-lg p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <div className="text-sm font-medium text-red-300">데이터베이스 초기화</div>
-                    <div className="text-xs text-red-200/80 mt-1">
-                      모든 카테고리와 레코드가 삭제됩니다. 이 작업은 되돌릴 수 없습니다.
-                    </div>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    className="bg-discord-danger hover:bg-red-900"
-                    onClick={() => setShowResetConfirm(true)}
-                  >
-                    초기화
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </Form>
-        </div>
-
-        <div className="flex items-center justify-end p-6 border-t border-gray-700">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => setIsSettingsOpen(false)}
-            className="text-discord-text hover:bg-discord-hover"
-          >
-            닫기
-          </Button>
-        </div>
-      </AnimatedModal>
 
       {showResetConfirm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60">

@@ -572,7 +572,7 @@ export const Sidebar: React.FC = () => {
   }
 
   return (
-    <div className="w-64 h-full flex flex-col bg-discord-sidebar">
+    <div className="w-64 shrink-0 h-full flex flex-col bg-discord-sidebar">
       {/* Header */}
       <div className="shrink-0 p-3 border-b border-gray-800 flex items-center justify-between">
         <DropdownMenu>
