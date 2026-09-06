@@ -121,6 +121,7 @@ export interface Config {
   dbPath: string;
   backupDir: string;
   backupInterval: number;
+  backupEnabled?: boolean;
   rememberWindowBounds?: boolean;
   muteAudioWhenBackgrounded?: boolean;
   zoomPercent?: number;

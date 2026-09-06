@@ -12,6 +12,7 @@ interface Config {
   dbPath: string;
   backupDir: string;
   backupInterval: number;
+  backupEnabled?: boolean;
 }
 
 export {};
@@ -38,6 +39,7 @@ const api: ElectronAPI = {
   setDbPath: () => ipcRenderer.invoke('setDbPath'),
   setBackupDir: () => ipcRenderer.invoke('setBackupDir'),
   setBackupInterval: (minutes: number) => ipcRenderer.invoke('setBackupInterval', minutes),
+  setBackupEnabled: (enabled: boolean) => ipcRenderer.invoke('setBackupEnabled', enabled),
   setThumbnailPreviewScale: (scale: number) => ipcRenderer.invoke('setThumbnailPreviewScale', scale),
   getProfiles: () => ipcRenderer.invoke('profiles:getAll'),
   getCurrentProfile: () => ipcRenderer.invoke('profiles:getCurrent'),

@@ -46,6 +46,7 @@ const configPath = path.join(app.getPath('userData'), 'config.json');
 const defaultConfig = {
   backupDir,
   backupInterval: 60,
+  backupEnabled: true,
   rememberWindowBounds: false,
   muteAudioWhenBackgrounded: false,
   windowBounds: null,
@@ -900,6 +901,12 @@ async function runAutomaticBackup() {
 function startAutomaticBackup({ runImmediately = false } = {}) {
   if (automaticBackupTimer) {
     clearInterval(automaticBackupTimer);
+    automaticBackupTimer = null;
+  }
+
+  if (appConfig.backupEnabled === false) {
+    log('Automatic backup disabled');
+    return;
   }
 
   const intervalMinutes = getConfiguredBackupInterval();
@@ -3387,6 +3394,7 @@ ipcMain.handle('getConfig', () => {
     dbPath: dbPath,
     backupDir: getConfiguredBackupDir(),
     backupInterval: getConfiguredBackupInterval(),
+    backupEnabled: appConfig.backupEnabled !== false,
     rememberWindowBounds: appConfig.rememberWindowBounds,
     muteAudioWhenBackgrounded: appConfig.muteAudioWhenBackgrounded === true,
     zoomPercent: getConfiguredZoomPercent(),
@@ -3550,6 +3558,13 @@ ipcMain.handle('setBackupInterval', (_event, minutes) => {
   saveAppConfig();
   startAutomaticBackup();
   return { success: true, backupInterval: normalizedInterval };
+});
+
+ipcMain.handle('setBackupEnabled', (_event, enabled) => {
+  appConfig.backupEnabled = enabled === true;
+  saveAppConfig();
+  startAutomaticBackup();
+  return { success: true, backupEnabled: appConfig.backupEnabled };
 });
 
 ipcMain.handle('setAppPassword', (_event, password) => {

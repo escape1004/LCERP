@@ -279,6 +279,34 @@ export const DatabaseViewer: React.FC = () => {
     return text.length > 500 ? `${text.slice(0, 500)}…` : text;
   };
 
+  const handleCellCopy = async (
+    event: React.MouseEvent<HTMLTableCellElement>,
+    value: unknown
+  ) => {
+    if (!event.ctrlKey || value === null || value === undefined) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    let text: string;
+    if (typeof value === 'object') {
+      try {
+        text = JSON.stringify(value);
+      } catch {
+        text = String(value);
+      }
+    } else {
+      text = String(value);
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      showSuccessToast('셀 값이 클립보드에 복사되었습니다.');
+    } catch (error) {
+      handleApiError(error, '셀 값을 복사하지 못했습니다.');
+    }
+  };
+
   return (
     <div className="h-full min-w-0 w-full flex flex-col bg-discord-bg">
       <div className="shrink-0 p-6 space-y-4 border-b border-gray-700">
@@ -379,6 +407,7 @@ export const DatabaseViewer: React.FC = () => {
                       {visibleColumns.map((column, columnIndex) => (
                         <td
                           key={`${rowIndex}-${column.name}`}
+                          onClick={(event) => void handleCellCopy(event, row[column.name])}
                           className={`p-2 text-xs text-discord-text border-b border-gray-700 truncate whitespace-nowrap ${
                             columnIndex === 0 ? 'pl-2' : ''
                           }`}

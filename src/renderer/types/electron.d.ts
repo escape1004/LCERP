@@ -4,6 +4,7 @@ interface Config {
   dbPath: string;
   backupDir: string;
   backupInterval: number;
+  backupEnabled?: boolean;
 }
 
 declare global {
@@ -30,6 +31,7 @@ declare global {
       setDbPath: () => Promise<{ success: boolean; path?: string; error?: string }>;
       setBackupDir: () => Promise<{ success: boolean; path?: string; error?: string }>;
       setBackupInterval: (minutes: number) => Promise<{ success: boolean; error?: string }>;
+      setBackupEnabled: (enabled: boolean) => Promise<{ success: boolean; backupEnabled?: boolean; error?: string }>;
       openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
       resetDatabase: () => Promise<{ success: boolean; backupPath?: string; error?: string }>;
       getFileSize: (filePath: string) => Promise<{ success: boolean; size?: string; error?: string }>;

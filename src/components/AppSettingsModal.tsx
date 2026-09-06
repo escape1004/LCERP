@@ -24,7 +24,6 @@ type SettingsSection = {
 
 const sections: SettingsSection[] = [
   { id: 'general', label: '일반', description: '기본 동작과 창 옵션', icon: Settings },
-  { id: 'backup', label: '백업', description: '데이터베이스 백업 관리', icon: Save },
   { id: 'list', label: '리스트', description: '레코드 리스트 표시 방식', icon: List },
   { id: 'viewer', label: '뷰어', description: '이미지와 동영상 보기 환경', icon: Monitor },
   { id: 'security', label: '보안', description: '프로그램 비밀번호 관리', icon: Shield },
@@ -117,23 +116,31 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
       description: '자동 번역과 OpenAI 설정',
       icon: Languages,
     };
+    const dataSection = {
+      id: 'data',
+      label: '데이터',
+      description: '데이터베이스와 백업 관리',
+      icon: Save,
+    };
     const securityIndex = sections.findIndex((section) => section.id === 'security');
     const alreadyExists =
       sections.some((section) => section.id === shortcutsSection.id) ||
-      sections.some((section) => section.id === translationSection.id);
+      sections.some((section) => section.id === translationSection.id) ||
+      sections.some((section) => section.id === dataSection.id);
 
     if (alreadyExists) {
       return sections;
     }
 
     if (securityIndex < 0) {
-      return [...sections, shortcutsSection, translationSection];
+      return [...sections, shortcutsSection, translationSection, dataSection];
     }
 
     return [
       ...sections.slice(0, securityIndex),
       shortcutsSection,
       translationSection,
+      dataSection,
       ...sections.slice(securityIndex),
     ];
   }, []);
@@ -340,6 +347,29 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
       }
     } catch (error) {
       setBackupMessage(error instanceof Error ? error.message : '백업 폴더 변경에 실패했습니다.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleBackupEnabledChange = async (enabled: boolean) => {
+    const previousValue = config?.backupEnabled !== false;
+    setConfig((prev) => (prev ? { ...prev, backupEnabled: enabled } : prev));
+    setBackupMessage('');
+    setIsSaving(true);
+    try {
+      const result = await window.electronAPI.setBackupEnabled(enabled);
+      if (result.success) {
+        const savedValue = result.backupEnabled ?? enabled;
+        setConfig((prev) => (prev ? { ...prev, backupEnabled: savedValue } : prev));
+        setBackupMessage(savedValue ? '자동 백업이 켜졌습니다.' : '자동 백업이 꺼졌습니다.');
+      } else {
+        setConfig((prev) => (prev ? { ...prev, backupEnabled: previousValue } : prev));
+        setBackupMessage(result.error || '자동 백업 설정 변경에 실패했습니다.');
+      }
+    } catch (error) {
+      setConfig((prev) => (prev ? { ...prev, backupEnabled: previousValue } : prev));
+      setBackupMessage(error instanceof Error ? error.message : '자동 백업 설정 변경에 실패했습니다.');
     } finally {
       setIsSaving(false);
     }
@@ -784,11 +814,16 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
         {dateFormatMessage && <p className="text-sm text-discord-muted mt-2">{dateFormatMessage}</p>}
       </div>
 
+    </div>
+  );
+
+  const renderDataSection = () => (
+    <div className="space-y-4">
       <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-sm font-medium text-white">데이터베이스 보기</div>
-            <p className="text-sm text-discord-muted mt-2 leading-6">
+            <p className="mt-2 text-sm leading-6 text-discord-muted">
               프로필과 무관한 전체 데이터베이스 정보를 확인합니다.
             </p>
           </div>
@@ -796,17 +831,13 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
             type="button"
             variant="outline"
             onClick={onOpenDatabaseViewer}
-            className="border-gray-600 hover:bg-discord-hover text-discord-text"
+            className="border-gray-600 text-discord-text hover:bg-discord-hover"
           >
             열기
           </Button>
         </div>
       </div>
-    </div>
-  );
 
-  const renderBackupSection = () => (
-    <div className="space-y-4">
       <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -861,10 +892,20 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
       </div>
 
       <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
-        <div className="text-sm font-medium text-white">백업 주기</div>
-        <p className="mt-2 text-sm leading-6 text-discord-muted">
-          자동 백업 실행 간격을 분 단위로 설정합니다.
-        </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-sm font-medium text-white">자동 백업</div>
+            <p className="mt-2 text-sm leading-6 text-discord-muted">
+              자동 백업을 켜고 실행 간격을 분 단위로 설정합니다.
+            </p>
+          </div>
+          <Switch
+            checked={config?.backupEnabled !== false}
+            onCheckedChange={(checked) => void handleBackupEnabledChange(checked)}
+            disabled={!config || isSaving}
+            className="data-[state=checked]:bg-discord-accent data-[state=unchecked]:bg-gray-600"
+          />
+        </div>
         <div className="mt-5 flex max-w-md items-end gap-3">
           <div className="flex-1">
             <div className="mb-2 text-xs text-discord-muted">실행 간격</div>
@@ -878,7 +919,7 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
                 setBackupIntervalInput(event.target.value);
                 setBackupMessage('');
               }}
-              disabled={!config || isSaving}
+              disabled={!config || isSaving || config.backupEnabled === false}
               className="border-gray-600 bg-discord-bg text-discord-text"
             />
           </div>
@@ -886,7 +927,7 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
           <Button
             type="button"
             onClick={() => void handleSetBackupInterval()}
-            disabled={!config || isSaving}
+            disabled={!config || isSaving || config.backupEnabled === false}
             className="bg-discord-accent text-white hover:bg-blue-600"
           >
             저장
@@ -1381,8 +1422,8 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
             <div className="flex-1 min-h-0 overflow-y-auto p-6 bg-discord-bg">
               {currentSection.id === 'general'
                 ? renderGeneralSection()
-                : currentSection.id === 'backup'
-                  ? renderBackupSection()
+                : currentSection.id === 'data'
+                  ? renderDataSection()
                 : currentSection.id === 'translation'
                   ? renderTranslationSection()
                   : currentSection.id === 'list'
