@@ -5598,6 +5598,180 @@ ipcMain.handle('migrateThumbnailPaths', async () => {
   }
 });
 
+ipcMain.handle('cleanupOrphanThumbnails', () => {
+  const thumbnailRoot = path.resolve(getThumbnailRootDir());
+  const normalizePath = (filePath) => {
+    const resolvedPath = path.resolve(filePath);
+    return process.platform === 'win32' ? resolvedPath.toLowerCase() : resolvedPath;
+  };
+  const normalizedThumbnailRoot = normalizePath(thumbnailRoot);
+  const isInsideThumbnailRoot = (filePath) => {
+    const relative = path.relative(normalizedThumbnailRoot, normalizePath(filePath));
+    return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  };
+
+  try {
+    log('=== 미참조 썸네일 정리 시작 ===');
+    if (!fs.existsSync(thumbnailRoot)) {
+      return {
+        success: true,
+        scannedFiles: 0,
+        deletedFiles: 0,
+        preservedFiles: 0,
+        skippedRecentFiles: 0,
+        skippedSymbolicLinks: 0,
+        reclaimedBytes: 0,
+        errors: []
+      };
+    }
+
+    const referencedPaths = new Set();
+    const addReferencedPath = (filePath) => {
+      if (!filePath || typeof filePath !== 'string') return;
+      const resolvedPath = path.isAbsolute(filePath) ? filePath : path.join(appDataDir, filePath);
+      if (isInsideThumbnailRoot(resolvedPath)) {
+        referencedPaths.add(normalizePath(resolvedPath));
+      }
+    };
+
+    const profiles = db.prepare('SELECT id, name FROM profiles').all();
+    const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
+    const categories = db.prepare('SELECT id, name, parentId, profileId, fields FROM categories').all();
+    const categoryById = new Map(categories.map((category) => [category.id, category]));
+    const fileFieldIdByCategoryId = new Map();
+    const categorySegmentsById = new Map();
+
+    categories.forEach((category) => {
+      const fields = JSON.parse(category.fields || '[]');
+      const fileField = fields.find((field) => field.type === 'file');
+      if (fileField?.id) {
+        fileFieldIdByCategoryId.set(category.id, fileField.id);
+      }
+    });
+
+    const getCachedCategorySegments = (categoryId) => {
+      if (categorySegmentsById.has(categoryId)) {
+        return categorySegmentsById.get(categoryId);
+      }
+
+      const segments = [];
+      const seen = new Set();
+      let current = categoryById.get(categoryId);
+      while (current && !seen.has(current.id)) {
+        seen.add(current.id);
+        segments.unshift(sanitizeThumbnailPathSegment(current.name, current.id));
+        current = current.parentId ? categoryById.get(current.parentId) : null;
+      }
+
+      const resolvedSegments = segments.length > 0 ? segments : ['uncategorized'];
+      categorySegmentsById.set(categoryId, resolvedSegments);
+      return resolvedSegments;
+    };
+
+    const records = db.prepare(`
+      SELECT id, categoryId, profileId, data, thumbnailPath
+      FROM records
+    `).all();
+
+    records.forEach((record) => {
+      addReferencedPath(record.thumbnailPath);
+
+      const fileFieldId = fileFieldIdByCategoryId.get(record.categoryId);
+      if (!fileFieldId) return;
+
+      const data = JSON.parse(record.data || '{}');
+      const filePath = data[fileFieldId];
+      if (!filePath || typeof filePath !== 'string' || filePath === '-') return;
+
+      const normalizedSourcePath = path.isAbsolute(filePath) ? filePath : path.join(appDataDir, filePath);
+      const category = categoryById.get(record.categoryId);
+      const profileId = record.profileId || category?.profileId;
+      const profile = profileById.get(profileId);
+      const profileSegment = sanitizeThumbnailPathSegment(profile?.name || profileId, 'profile');
+      const categorySegments = getCachedCategorySegments(record.categoryId);
+      const expectedPath = path.join(
+        thumbnailRoot,
+        profileSegment,
+        ...categorySegments,
+        `thumb_${getThumbnailHash(normalizedSourcePath)}.jpg`
+      );
+
+      addReferencedPath(expectedPath);
+      addReferencedPath(getLegacyThumbnailPath(normalizedSourcePath));
+    });
+
+    const result = {
+      success: true,
+      scannedFiles: 0,
+      deletedFiles: 0,
+      preservedFiles: 0,
+      skippedRecentFiles: 0,
+      skippedSymbolicLinks: 0,
+      reclaimedBytes: 0,
+      errors: []
+    };
+    const recentFileCutoff = Date.now() - (5 * 60 * 1000);
+
+    const cleanDirectory = (directoryPath) => {
+      const entries = fs.readdirSync(directoryPath, { withFileTypes: true });
+      entries.forEach((entry) => {
+        const entryPath = path.join(directoryPath, entry.name);
+        try {
+          if (entry.isSymbolicLink()) {
+            result.skippedSymbolicLinks++;
+            return;
+          }
+          if (entry.isDirectory()) {
+            cleanDirectory(entryPath);
+            if (fs.readdirSync(entryPath).length === 0) {
+              fs.rmdirSync(entryPath);
+            }
+            return;
+          }
+          if (!entry.isFile()) return;
+
+          result.scannedFiles++;
+          if (referencedPaths.has(normalizePath(entryPath))) {
+            result.preservedFiles++;
+            return;
+          }
+
+          const stats = fs.statSync(entryPath);
+          if (stats.mtimeMs >= recentFileCutoff) {
+            result.skippedRecentFiles++;
+            return;
+          }
+
+          fs.unlinkSync(entryPath);
+          result.deletedFiles++;
+          result.reclaimedBytes += stats.size;
+        } catch (error) {
+          if (result.errors.length < 20) {
+            result.errors.push({ path: entryPath, error: error.message });
+          }
+        }
+      });
+    };
+
+    cleanDirectory(thumbnailRoot);
+    log('=== 미참조 썸네일 정리 완료 ===', result);
+    return result;
+  } catch (error) {
+    log('미참조 썸네일 정리 실패:', error);
+    return {
+      success: false,
+      scannedFiles: 0,
+      deletedFiles: 0,
+      preservedFiles: 0,
+      skippedRecentFiles: 0,
+      skippedSymbolicLinks: 0,
+      reclaimedBytes: 0,
+      errors: [],
+      error: error.message
+    };
+  }
+});
+
 // 썸네일 동기화 점검/정리 핸들러
 ipcMain.handle('checkThumbnailSync', async () => {
   try {

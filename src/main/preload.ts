@@ -146,6 +146,7 @@ const api: ElectronAPI = {
   migrateThumbnailPaths: () => ipcRenderer.invoke('migrateThumbnailPaths'),
   checkThumbnailSync: () => ipcRenderer.invoke('checkThumbnailSync'),
   cleanupThumbnailSync: (options) => ipcRenderer.invoke('cleanupThumbnailSync', options),
+  cleanupOrphanThumbnails: () => ipcRenderer.invoke('cleanupOrphanThumbnails'),
   onRandomRecordShortcut: (callback: () => void) => {
     const listener = () => callback();
     ipcRenderer.on('shortcut:random-record', listener);

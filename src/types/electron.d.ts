@@ -117,6 +117,17 @@ export interface ElectronAPI {
   addBookmark: (categoryId: string, recordId: string, time: number) => Promise<{ success: boolean; bookmark?: { time: number; createdAt: string }; error?: string }>;
   removeBookmark: (categoryId: string, recordId: string, time: number) => Promise<{ success: boolean; error?: string }>;
   removeAllBookmarks: (categoryId: string, recordId: string) => Promise<{ success: boolean; error?: string }>;
+  cleanupOrphanThumbnails: () => Promise<{
+    success: boolean;
+    scannedFiles: number;
+    deletedFiles: number;
+    preservedFiles: number;
+    skippedRecentFiles: number;
+    skippedSymbolicLinks: number;
+    reclaimedBytes: number;
+    errors: Array<{ path: string; error: string }>;
+    error?: string;
+  }>;
 }
 
 declare global {

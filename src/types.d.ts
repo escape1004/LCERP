@@ -113,6 +113,17 @@ export interface ElectronAPI {
   migrateThumbnailPaths: () => Promise<{ success: boolean; totalProcessed?: number; totalUpdated?: number; error?: string }>;
   checkThumbnailSync: () => Promise<any>;
   cleanupThumbnailSync: (options?: any) => Promise<any>;
+  cleanupOrphanThumbnails: () => Promise<{
+    success: boolean;
+    scannedFiles: number;
+    deletedFiles: number;
+    preservedFiles: number;
+    skippedRecentFiles: number;
+    skippedSymbolicLinks: number;
+    reclaimedBytes: number;
+    errors: Array<{ path: string; error: string }>;
+    error?: string;
+  }>;
 }
 
 declare global {

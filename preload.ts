@@ -81,6 +81,7 @@ const api: ElectronAPI = {
   migrateThumbnailPaths: () => ipcRenderer.invoke('migrateThumbnailPaths'),
   checkThumbnailSync: () => ipcRenderer.invoke('checkThumbnailSync'),
   cleanupThumbnailSync: (options?: any) => ipcRenderer.invoke('cleanupThumbnailSync', options),
+  cleanupOrphanThumbnails: () => ipcRenderer.invoke('cleanupOrphanThumbnails'),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api); 

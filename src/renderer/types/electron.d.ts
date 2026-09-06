@@ -32,6 +32,17 @@ declare global {
       setBackupDir: () => Promise<{ success: boolean; path?: string; error?: string }>;
       setBackupInterval: (minutes: number) => Promise<{ success: boolean; error?: string }>;
       setBackupEnabled: (enabled: boolean) => Promise<{ success: boolean; backupEnabled?: boolean; error?: string }>;
+      cleanupOrphanThumbnails: () => Promise<{
+        success: boolean;
+        scannedFiles: number;
+        deletedFiles: number;
+        preservedFiles: number;
+        skippedRecentFiles: number;
+        skippedSymbolicLinks: number;
+        reclaimedBytes: number;
+        errors: Array<{ path: string; error: string }>;
+        error?: string;
+      }>;
       openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
       resetDatabase: () => Promise<{ success: boolean; backupPath?: string; error?: string }>;
       getFileSize: (filePath: string) => Promise<{ success: boolean; size?: string; error?: string }>;

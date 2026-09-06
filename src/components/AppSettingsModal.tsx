@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import type { Config } from '../types';
 import { DEFAULT_DATE_PARSE_FORMATS } from './ui/date-picker';
+import { useLoadingStore } from '../hooks/useLoadingStore';
 
 interface AppSettingsModalProps {
   open: boolean;
@@ -81,6 +82,7 @@ const getEffectiveDateParseFormats = (config: Config | null) => (
 );
 
 export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: AppSettingsModalProps) {
+  const { setLoading: setGlobalLoading, hideLoading } = useLoadingStore();
   const [activeSection, setActiveSection] = useState('general');
   const [config, setConfig] = useState<Config | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -94,6 +96,8 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
   const [zoomPercentInput, setZoomPercentInput] = useState('100');
   const [backupIntervalInput, setBackupIntervalInput] = useState('60');
   const [backupMessage, setBackupMessage] = useState('');
+  const [thumbnailCleanupMessage, setThumbnailCleanupMessage] = useState('');
+  const [thumbnailCleanupConfirmVisible, setThumbnailCleanupConfirmVisible] = useState(false);
   const [viewerSeekSeconds, setViewerSeekSeconds] = useState('5');
   const [viewerMessage, setViewerMessage] = useState('');
   const [viewerAutoPlayMessage, setViewerAutoPlayMessage] = useState('');
@@ -191,6 +195,8 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
         setZoomPercentInput(String(nextConfig.zoomPercent ?? 100));
         setBackupIntervalInput(String(Math.max(1, nextConfig.backupInterval ?? 60)));
         setBackupMessage('');
+        setThumbnailCleanupMessage('');
+        setThumbnailCleanupConfirmVisible(false);
         setViewerSeekSeconds(String(nextConfig.videoSeekSeconds ?? 5));
         setViewerMessage('');
         setViewerAutoPlayMessage('');
@@ -396,6 +402,43 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
     } catch (error) {
       setBackupMessage(error instanceof Error ? error.message : '백업 주기 변경에 실패했습니다.');
     } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCleanupOrphanThumbnails = async () => {
+    setThumbnailCleanupConfirmVisible(false);
+    setThumbnailCleanupMessage('');
+    setIsSaving(true);
+    hideLoading();
+    setGlobalLoading(true, '연결되지 않은 썸네일 파일을 정리하는 중...');
+
+    try {
+      const result = await window.electronAPI.cleanupOrphanThumbnails();
+      if (!result.success) {
+        setThumbnailCleanupMessage(result.error || '썸네일 파일 정리에 실패했습니다.');
+        return;
+      }
+
+      const reclaimedSize = result.reclaimedBytes >= 1024 * 1024
+        ? `${(result.reclaimedBytes / (1024 * 1024)).toFixed(1)} MB`
+        : `${(result.reclaimedBytes / 1024).toFixed(1)} KB`;
+      const notes = [];
+      if (result.skippedRecentFiles > 0) {
+        notes.push(`최근 생성된 파일 ${result.skippedRecentFiles}개는 안전을 위해 제외했습니다.`);
+      }
+      if (result.errors.length > 0) {
+        notes.push(`처리하지 못한 파일이 ${result.errors.length}개 있습니다.`);
+      }
+
+      setThumbnailCleanupMessage(
+        `미참조 썸네일 ${result.deletedFiles}개를 삭제하여 ${reclaimedSize}를 확보했습니다.` +
+        (notes.length > 0 ? ` ${notes.join(' ')}` : '')
+      );
+    } catch (error) {
+      setThumbnailCleanupMessage(error instanceof Error ? error.message : '썸네일 파일 정리에 실패했습니다.');
+    } finally {
+      hideLoading();
       setIsSaving(false);
     }
   };
@@ -933,6 +976,56 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
             저장
           </Button>
         </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-sm font-medium text-white">썸네일 파일 정리</div>
+            <p className="mt-2 text-sm leading-6 text-discord-muted">
+              모든 프로필의 레코드가 참조하지 않는 썸네일 파일을 삭제하고 빈 폴더를 정리합니다.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setThumbnailCleanupConfirmVisible(true)}
+            disabled={isSaving}
+            className="shrink-0 border-gray-600 text-discord-text hover:bg-discord-hover"
+          >
+            <Trash2 size={16} className="mr-2" />
+            정리하기
+          </Button>
+        </div>
+
+        {thumbnailCleanupConfirmVisible && (
+          <div className="mt-4 rounded-lg border border-yellow-700/60 bg-yellow-950/30 p-4">
+            <p className="text-sm leading-6 text-yellow-100">
+              연결되지 않은 썸네일 파일은 복구할 수 없습니다. 정리를 시작할까요?
+            </p>
+            <div className="mt-3 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setThumbnailCleanupConfirmVisible(false)}
+                className="text-discord-text hover:bg-discord-hover"
+              >
+                취소
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void handleCleanupOrphanThumbnails()}
+                className="bg-yellow-600 text-white hover:bg-yellow-700"
+              >
+                정리 시작
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {thumbnailCleanupMessage && (
+          <p className="mt-4 text-sm leading-6 text-discord-muted">{thumbnailCleanupMessage}</p>
+        )}
       </div>
 
       {backupMessage && <p className="text-sm text-discord-muted">{backupMessage}</p>}
