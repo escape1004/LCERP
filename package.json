@@ -31,6 +31,14 @@
     "directories": {
       "output": "dist-electron"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "escape1004",
+        "repo": "local-erp",
+        "releaseType": "release"
+      }
+    ],
     "files": [
       "dist/**/*",
       "electron/**/*",
@@ -126,6 +134,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^3.6.0",
+    "electron-updater": "^6.8.9",
     "embla-carousel-react": "^8.3.0",
     "ffmpeg-static": "^5.2.0",
     "ffprobe-static": "^3.1.0",

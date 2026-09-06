@@ -1,4 +1,4 @@
-import type { Category, NewCategory, CategoryUpdate, DataRecord, NewRecord, TableData, Config, Profile } from './index';
+import type { Category, NewCategory, CategoryUpdate, DataRecord, NewRecord, TableData, Config, Profile, AppUpdateState } from './index';
 
 export interface TranslateTextPayload {
   text: string;
@@ -16,6 +16,11 @@ export interface TranslateTextResult {
 }
 
 export interface ElectronAPI {
+  getAppUpdateState: () => Promise<AppUpdateState>;
+  checkForAppUpdates: () => Promise<AppUpdateState>;
+  downloadAppUpdate: () => Promise<AppUpdateState>;
+  installAppUpdate: () => Promise<{ success: boolean; error?: string }>;
+  onAppUpdateState: (callback: (state: AppUpdateState) => void) => () => void;
   // Database viewer methods
   getTables: () => Promise<{ name: string }[]>;
   getTableData: (tableName: string, options?: { page?: number; pageSize?: number }) => Promise<TableData>;

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings } from 'lucide-react';
+import { AlertTriangle, Settings } from 'lucide-react';
 import type { ElectronAPI } from '../types';
 
 interface CSSPropertiesWithWebkit extends React.CSSProperties {
@@ -8,10 +8,17 @@ interface CSSPropertiesWithWebkit extends React.CSSProperties {
 
 interface TitleBarProps {
   onOpenSettings: () => void;
+  onOpenUpdate: () => void;
+  updateAvailable?: boolean;
   settingsDisabled?: boolean;
 }
 
-export function TitleBar({ onOpenSettings, settingsDisabled = false }: TitleBarProps) {
+export function TitleBar({
+  onOpenSettings,
+  onOpenUpdate,
+  updateAvailable = false,
+  settingsDisabled = false,
+}: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false);
   const electronAPI = window.electronAPI as ElectronAPI;
 
@@ -63,6 +70,16 @@ export function TitleBar({ onOpenSettings, settingsDisabled = false }: TitleBarP
         className="flex h-full"
         style={{ WebkitAppRegion: 'no-drag' } as CSSPropertiesWithWebkit}
       >
+        {updateAvailable && (
+          <button
+            onClick={onOpenUpdate}
+            className="flex h-full w-12 items-center justify-center text-yellow-400 transition-colors hover:bg-yellow-500/15 hover:text-yellow-300"
+            aria-label="새 버전 업데이트"
+            title="새 버전을 사용할 수 있습니다"
+          >
+            <AlertTriangle className="h-4 w-4" />
+          </button>
+        )}
         <button
           onClick={onOpenSettings}
           disabled={settingsDisabled}

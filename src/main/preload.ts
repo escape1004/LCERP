@@ -58,6 +58,15 @@ if (document.readyState === 'loading') {
 
 // API 정의
 const api: ElectronAPI = {
+  getAppUpdateState: () => ipcRenderer.invoke('app-update:get-state'),
+  checkForAppUpdates: () => ipcRenderer.invoke('app-update:check'),
+  downloadAppUpdate: () => ipcRenderer.invoke('app-update:download'),
+  installAppUpdate: () => ipcRenderer.invoke('app-update:install'),
+  onAppUpdateState: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: Parameters<typeof callback>[0]) => callback(state);
+    ipcRenderer.on('app-update:state', listener);
+    return () => ipcRenderer.removeListener('app-update:state', listener);
+  },
   getTables: () => ipcRenderer.invoke('db:getTables'),
   getTableData: (tableName: string, options?: { page?: number; pageSize?: number }) => ipcRenderer.invoke('db:getTableData', tableName, options),
   getDbPath: () => ipcRenderer.invoke('db:getPath'),

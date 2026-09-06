@@ -1,12 +1,12 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
-import { FolderOpen, HelpCircle, Keyboard, Languages, List, Monitor, Plus, Save, Settings, Shield, Trash2, X } from 'lucide-react';
+import { FolderOpen, HelpCircle, Keyboard, Languages, List, Loader2, Monitor, Plus, RefreshCw, Save, Settings, Shield, Trash2, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
 import { Switch } from './ui/switch';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import type { Config } from '../types';
+import type { AppUpdateState, Config } from '../types';
 import { DEFAULT_DATE_PARSE_FORMATS } from './ui/date-picker';
 import { useLoadingStore } from '../hooks/useLoadingStore';
 import { OPENAI_TRANSLATION_MODEL, OPENAI_TRANSLATION_MODELS } from '../lib/translation';
@@ -15,6 +15,9 @@ interface AppSettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onOpenDatabaseViewer: () => void;
+  updateState: AppUpdateState;
+  onOpenUpdate: () => void;
+  onCheckForUpdates: () => void;
 }
 
 type SettingsSection = {
@@ -82,7 +85,14 @@ const getEffectiveDateParseFormats = (config: Config | null) => (
     : [...DEFAULT_DATE_PARSE_FORMATS]
 );
 
-export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: AppSettingsModalProps) {
+export function AppSettingsModal({
+  open,
+  onOpenChange,
+  onOpenDatabaseViewer,
+  updateState,
+  onOpenUpdate,
+  onCheckForUpdates,
+}: AppSettingsModalProps) {
   const { setLoading: setGlobalLoading, hideLoading } = useLoadingStore();
   const [activeSection, setActiveSection] = useState('general');
   const [config, setConfig] = useState<Config | null>(null);
@@ -883,6 +893,55 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
         </div>
 
         {dateFormatMessage && <p className="text-sm text-discord-muted mt-2">{dateFormatMessage}</p>}
+      </div>
+
+      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-sm font-medium text-white">버전 업데이트</div>
+            <p className="mt-2 text-sm leading-6 text-discord-muted">
+              새로운 Local ERP 버전을 확인하고 설치합니다.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant={updateState.updateAvailable ? 'default' : 'outline'}
+            onClick={updateState.updateAvailable ? onOpenUpdate : onCheckForUpdates}
+            disabled={updateState.status === 'checking' || updateState.status === 'disabled'}
+            className={updateState.updateAvailable
+              ? 'shrink-0 bg-yellow-600 text-white hover:bg-yellow-700'
+              : 'shrink-0 border-gray-600 text-discord-text hover:bg-discord-hover'}
+          >
+            {updateState.status === 'checking'
+              ? <Loader2 size={16} className="mr-2 animate-spin" />
+              : <RefreshCw size={16} className="mr-2" />}
+            {updateState.updateAvailable ? '업데이트' : '업데이트 확인'}
+          </Button>
+        </div>
+
+        <div className="mt-5 grid max-w-xl grid-cols-2 gap-3">
+          <div className="rounded-lg border border-gray-700 bg-discord-bg/80 px-4 py-3">
+            <div className="text-xs text-discord-muted">현재 버전</div>
+            <div className="mt-1 text-sm font-medium text-white">v{updateState.currentVersion}</div>
+          </div>
+          <div className="rounded-lg border border-gray-700 bg-discord-bg/80 px-4 py-3">
+            <div className="text-xs text-discord-muted">신규 버전</div>
+            <div className={`mt-1 text-sm font-medium ${updateState.updateAvailable ? 'text-yellow-400' : 'text-white'}`}>
+              {updateState.updateAvailable && updateState.latestVersion
+                ? `v${updateState.latestVersion}`
+                : '없음'}
+            </div>
+          </div>
+        </div>
+
+        {updateState.status === 'disabled' && (
+          <p className="mt-3 text-xs text-discord-muted">
+            자동 업데이트 확인은 설치된 앱에서 사용할 수 있습니다.
+          </p>
+        )}
+        {updateState.error && (
+          <p className="mt-3 text-sm text-red-400">{updateState.error}</p>
+        )}
       </div>
 
     </div>

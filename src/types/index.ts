@@ -77,4 +77,26 @@ export interface Config {
   translationModel?: string;
 }
 
+export type AppUpdateStatus =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'not-available'
+  | 'downloading'
+  | 'downloaded'
+  | 'error'
+  | 'disabled';
+
+export interface AppUpdateState {
+  status: AppUpdateStatus;
+  currentVersion: string;
+  latestVersion: string | null;
+  updateAvailable: boolean;
+  progress: number;
+  transferred: number;
+  total: number;
+  bytesPerSecond: number;
+  error: string | null;
+}
+
 export {}; 

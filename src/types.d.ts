@@ -5,6 +5,18 @@ export interface ThumbnailContext {
   thumbnailPath?: string;
 }
 
+export interface AppUpdateState {
+  status: 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error' | 'disabled';
+  currentVersion: string;
+  latestVersion: string | null;
+  updateAvailable: boolean;
+  progress: number;
+  transferred: number;
+  total: number;
+  bytesPerSecond: number;
+  error: string | null;
+}
+
 export interface DashboardWarningItem {
   id: string;
   categoryId: string;
@@ -24,6 +36,11 @@ export interface DashboardWarningsResult {
 }
 
 export interface ElectronAPI {
+  getAppUpdateState: () => Promise<AppUpdateState>;
+  checkForAppUpdates: () => Promise<AppUpdateState>;
+  downloadAppUpdate: () => Promise<AppUpdateState>;
+  installAppUpdate: () => Promise<{ success: boolean; error?: string }>;
+  onAppUpdateState: (callback: (state: AppUpdateState) => void) => () => void;
   getTables: () => Promise<{ name: string }[]>;
   getTableData: (tableName: string, options?: { page?: number; pageSize?: number }) => Promise<TableData>;
   getDbPath: () => Promise<string>;

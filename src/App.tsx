@@ -26,12 +26,24 @@ import {
 } from './components/ui/context-menu';
 import { useERPStore } from './hooks/useERPStore';
 import { useLoadingStore } from './hooks/useLoadingStore';
-import type { Profile } from './types';
+import { AppUpdateModal } from './components/AppUpdateModal';
+import type { AppUpdateState, Profile } from './types';
 
 const queryClient = new QueryClient();
 const PROFILE_COLORS = ['#5865F2', '#3BA55D', '#F97316', '#EC4899', '#0EA5E9', '#EAB308'];
 const RAINBOW_PROFILE_COLOR = 'rainbow';
 const DEFAULT_PROFILE_NAME = '기본 프로필';
+const INITIAL_UPDATE_STATE: AppUpdateState = {
+  status: 'idle',
+  currentVersion: '...',
+  latestVersion: null,
+  updateAvailable: false,
+  progress: 0,
+  transferred: 0,
+  total: 0,
+  bytesPerSecond: 0,
+  error: null,
+};
 
 function normalizeProfileColor(value: string) {
   if (value === RAINBOW_PROFILE_COLOR) return value;
@@ -112,6 +124,8 @@ const App = () => {
   const { currentProfile, setCurrentProfile, resetForProfile, setShowDbViewer, selectCategory } = useERPStore();
   const { showLoading, hideLoading } = useLoadingStore();
   const [isAppSettingsOpen, setIsAppSettingsOpen] = useState(false);
+  const [isAppUpdateOpen, setIsAppUpdateOpen] = useState(false);
+  const [appUpdateState, setAppUpdateState] = useState<AppUpdateState>(INITIAL_UPDATE_STATE);
   const [isCheckingPassword, setIsCheckingPassword] = useState(true);
   const [requiresPassword, setRequiresPassword] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
@@ -142,6 +156,44 @@ const App = () => {
     ? Math.max(0, Math.ceil((passwordLockUntil - passwordLockNow) / 1000))
     : 0;
   const passwordLockRemainingLabel = `${Math.floor(passwordLockRemainingSeconds / 60)}\uBD84 ${passwordLockRemainingSeconds % 60}\uCD08`;
+
+  useEffect(() => {
+    let active = true;
+    const unsubscribe = window.electronAPI.onAppUpdateState((state) => {
+      if (active) setAppUpdateState(state);
+    });
+
+    void window.electronAPI.getAppUpdateState().then((state) => {
+      if (active) setAppUpdateState(state);
+      return window.electronAPI.checkForAppUpdates();
+    }).then((state) => {
+      if (active) setAppUpdateState(state);
+    }).catch((error) => {
+      if (!active) return;
+      setAppUpdateState((previous) => ({
+        ...previous,
+        status: 'error',
+        error: error instanceof Error ? error.message : '업데이트 정보를 확인하지 못했습니다.',
+      }));
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
+
+  const handleCheckForUpdates = () => {
+    void window.electronAPI.checkForAppUpdates().then(setAppUpdateState);
+  };
+
+  const handleDownloadUpdate = () => {
+    void window.electronAPI.downloadAppUpdate().then(setAppUpdateState);
+  };
+
+  const handleInstallUpdate = () => {
+    void window.electronAPI.installAppUpdate();
+  };
 
   const keepPasswordInputFocus = () => {
     window.requestAnimationFrame(() => {
@@ -467,6 +519,8 @@ const App = () => {
         <div className="h-screen w-screen flex flex-col bg-discord-bg font-noto">
           <TitleBar
             onOpenSettings={() => currentProfile && !requiresPassword && setIsAppSettingsOpen(true)}
+            onOpenUpdate={() => setIsAppUpdateOpen(true)}
+            updateAvailable={appUpdateState.updateAvailable}
             settingsDisabled={isCheckingPassword || requiresPassword || !currentProfile}
           />
           <div className="flex-1 min-h-0">
@@ -619,6 +673,20 @@ const App = () => {
             open={isAppSettingsOpen}
             onOpenChange={setIsAppSettingsOpen}
             onOpenDatabaseViewer={handleOpenDatabaseViewer}
+            updateState={appUpdateState}
+            onOpenUpdate={() => {
+              setIsAppSettingsOpen(false);
+              setIsAppUpdateOpen(true);
+            }}
+            onCheckForUpdates={handleCheckForUpdates}
+          />
+          <AppUpdateModal
+            open={isAppUpdateOpen}
+            onOpenChange={setIsAppUpdateOpen}
+            updateState={appUpdateState}
+            onCheck={handleCheckForUpdates}
+            onDownload={handleDownloadUpdate}
+            onInstall={handleInstallUpdate}
           />
           <Dialog
             open={isCreateProfileOpen}
