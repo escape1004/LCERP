@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Save, Settings2, Link2, X } from 'lucide-react';
+import { Settings2, Link2, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 
 import { useERPStore } from '../hooks/useERPStore';
@@ -33,16 +33,8 @@ interface TableData {
   pageSize: number;
 }
 
-interface Config {
-  dbPath: string;
-  backupDir: string;
-  backupInterval: number;
-}
-
 interface FormValues {
   dbPath: string;
-  backupDir: string;
-  backupInterval: string;
 }
 
 export const DatabaseViewer: React.FC = () => {
@@ -60,7 +52,6 @@ export const DatabaseViewer: React.FC = () => {
   const [resizeStartX, setResizeStartX] = useState(0);
   const [resizeStartWidth, setResizeStartWidth] = useState(0);
   const [dbPath, setDbPath] = useState('');
-  const [config, setConfig] = useState<Config | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetInput, setResetInput] = useState('');
@@ -74,8 +65,6 @@ export const DatabaseViewer: React.FC = () => {
   const form = useForm<FormValues>({
     defaultValues: {
       dbPath: '',
-      backupDir: '',
-      backupInterval: '60',
     },
   });
 
@@ -182,12 +171,9 @@ export const DatabaseViewer: React.FC = () => {
   const loadConfig = async () => {
     try {
       const nextConfig = await window.electronAPI.getConfig();
-      setConfig(nextConfig);
       setDbPath(nextConfig.dbPath);
       form.reset({
         dbPath: nextConfig.dbPath,
-        backupDir: nextConfig.backupDir,
-        backupInterval: String(Math.max(1, nextConfig.backupInterval)),
       });
       await loadFileSize(nextConfig.dbPath);
     } catch (error) {
@@ -203,29 +189,6 @@ export const DatabaseViewer: React.FC = () => {
     }
   };
 
-  const handleBackup = async () => {
-    try {
-      const result = await window.electronAPI.backupDatabase();
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      showSuccessToast('데이터베이스 백업이 완료되었습니다.');
-    } catch (error) {
-      handleApiError(error, '데이터베이스 백업에 실패했습니다.');
-    }
-  };
-
-  const handleOpenBackup = async () => {
-    try {
-      const result = await window.electronAPI.openBackupLocation();
-      if (!result.success) {
-        throw new Error('백업 폴더를 열 수 없습니다.');
-      }
-    } catch (error) {
-      handleApiError(error, '백업 폴더를 열지 못했습니다.');
-    }
-  };
-
   const handleSetDbPath = async () => {
     try {
       const result = await window.electronAPI.setDbPath();
@@ -236,41 +199,6 @@ export const DatabaseViewer: React.FC = () => {
       }
     } catch (error) {
       handleApiError(error, 'DB 경로 변경에 실패했습니다.');
-    }
-  };
-
-  const handleSetBackupDir = async () => {
-    try {
-      const result = await window.electronAPI.setBackupDir();
-      if (result.success && result.path) {
-        await loadConfig();
-        showSuccessToast('백업 폴더가 변경되었습니다.');
-      } else if (result.error) {
-        throw new Error(result.error);
-      }
-    } catch (error) {
-      handleApiError(error, '백업 폴더 변경에 실패했습니다.');
-    }
-  };
-
-  const handleSetBackupInterval = async () => {
-    try {
-      const minutes = parseInt(form.getValues('backupInterval'), 10);
-      if (Number.isNaN(minutes) || minutes < 1) {
-        showErrorToast('유효한 백업 주기를 입력해 주세요.');
-        return;
-      }
-
-      const result = await window.electronAPI.setBackupInterval(minutes);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-
-      await loadConfig();
-      showSuccessToast('백업 주기가 변경되었습니다.');
-      setIsSettingsOpen(false);
-    } catch (error) {
-      handleApiError(error, '백업 주기 변경에 실패했습니다.');
     }
   };
 
@@ -403,14 +331,6 @@ export const DatabaseViewer: React.FC = () => {
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
-              onClick={handleBackup}
-              className="border-gray-600 hover:bg-discord-hover"
-            >
-              <Save size={16} className="mr-2" />
-              백업하기
-            </Button>
-            <Button
-              variant="outline"
               onClick={() => setIsSettingsOpen(true)}
               className="border-gray-600 hover:bg-discord-hover"
             >
@@ -429,20 +349,6 @@ export const DatabaseViewer: React.FC = () => {
                 variant="ghost"
                 size="sm"
                 onClick={handleOpenFile}
-                className="h-6 px-2 text-blue-400 hover:text-blue-300 transition-colors"
-              >
-                <Link2 size={14} />
-              </Button>
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span>백업 폴더:</span>
-            <span className="text-discord-text font-medium flex items-center gap-2">
-              {config?.backupDir}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleOpenBackup}
                 className="h-6 px-2 text-blue-400 hover:text-blue-300 transition-colors"
               >
                 <Link2 size={14} />
@@ -657,61 +563,6 @@ export const DatabaseViewer: React.FC = () => {
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="backupDir"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-discord-text font-medium">백업 폴더 위치</FormLabel>
-                    <div className="flex gap-2 mt-2">
-                      <FormControl>
-                        <Input
-                          {...field}
-                          readOnly
-                          className="flex-1 bg-discord-sidebar border-gray-600 text-discord-text"
-                        />
-                      </FormControl>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleSetBackupDir}
-                        className="border-gray-600 hover:bg-discord-hover text-discord-text"
-                      >
-                        변경
-                      </Button>
-                    </div>
-                    <FormDescription className="text-sm text-discord-muted mt-1">
-                      데이터베이스 백업 파일이 저장될 폴더입니다.
-                    </FormDescription>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="backupInterval"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-discord-text font-medium">백업 주기</FormLabel>
-                    <div className="flex gap-2 mt-2">
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type="number"
-                          min="1"
-                          max="10080"
-                          placeholder="예: 60"
-                          className="flex-1 bg-discord-sidebar border-gray-600 text-discord-text"
-                        />
-                      </FormControl>
-                    </div>
-                    <FormDescription className="text-sm text-discord-muted mt-1">
-                      자동 백업 실행 간격을 분 단위로 설정합니다.
-                    </FormDescription>
-                  </FormItem>
-                )}
-              />
-
               <div className="border border-red-800/60 bg-[#2a1f1f] rounded-lg p-4">
                 <div className="flex items-center justify-between gap-4">
                   <div>
@@ -734,21 +585,14 @@ export const DatabaseViewer: React.FC = () => {
           </Form>
         </div>
 
-        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-700">
+        <div className="flex items-center justify-end p-6 border-t border-gray-700">
           <Button
             type="button"
             variant="ghost"
             onClick={() => setIsSettingsOpen(false)}
             className="text-discord-text hover:bg-discord-hover"
           >
-            취소
-          </Button>
-          <Button
-            type="button"
-            onClick={handleSetBackupInterval}
-            className="bg-discord-accent hover:bg-discord-accent/80 text-white"
-          >
-            저장
+            닫기
           </Button>
         </div>
       </AnimatedModal>
