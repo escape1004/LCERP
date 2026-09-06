@@ -249,6 +249,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const {
     categories,
+    records: recordsByCategory,
     loadCategories,
     loadRecords,
     getCategoryRecords,
@@ -257,7 +258,6 @@ export default function Dashboard() {
     currentProfile,
     setPendingRecordFocus,
     setShowDbViewer,
-    getRecordReferenceCount,
   } = useERPStore();
   const [loading, setLoading] = useState(true);
   const [categoryStats, setCategoryStats] = useState<CategoryStats[]>([]);
@@ -269,6 +269,30 @@ export default function Dashboard() {
   const [selectedRootCategoryId, setSelectedRootCategoryId] = useState<string>(ALL_ROOT_CATEGORIES_VALUE);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [warningItems, setWarningItems] = useState<DashboardWarningItem[]>([]);
+  const referenceCountsByCategory = useMemo(() => {
+    const counts = new Map<string, Map<string, number>>();
+
+    categories.forEach((category) => {
+      const categoryRecords = recordsByCategory[category.id] ?? [];
+      category.fields.forEach((field) => {
+        if (field.type !== 'relation' || !field.relationCategoryId) return;
+
+        const targetCounts = counts.get(field.relationCategoryId) ?? new Map<string, number>();
+        categoryRecords.forEach((record) => {
+          const value = record.data[field.id];
+          const relatedIds = field.multiple && Array.isArray(value) ? value : [value];
+          relatedIds.forEach((recordId) => {
+            if (typeof recordId === 'string') {
+              targetCounts.set(recordId, (targetCounts.get(recordId) ?? 0) + 1);
+            }
+          });
+        });
+        counts.set(field.relationCategoryId, targetCounts);
+      });
+    });
+
+    return counts;
+  }, [categories, recordsByCategory]);
   const [warningTotalCount, setWarningTotalCount] = useState(0);
   const [warningCounts, setWarningCounts] = useState({ missingFiles: 0, brokenRelations: 0 });
   const [recordViewCounts, setRecordViewCounts] = useState<Record<string, number>>({});
@@ -735,7 +759,7 @@ export default function Dashboard() {
           (getCategoryRecords(stat.category.id) || []).map((record) => ({
             record,
             category: stat.category,
-            referenceCount: getRecordReferenceCount(record.id, stat.category.id),
+            referenceCount: referenceCountsByCategory.get(stat.category.id)?.get(record.id) ?? 0,
             displayValue: getRecordDisplayValue(stat.category, record),
           }))
         )
@@ -788,7 +812,7 @@ export default function Dashboard() {
         recentRecords,
       };
     });
-  }, [childCategoryStats, childrenByParentId, getCategoryRecords, getRecordReferenceCount, recordViewCounts, scopedCategoryStats, selectedRootCategory]);
+  }, [childCategoryStats, childrenByParentId, getCategoryRecords, recordViewCounts, referenceCountsByCategory, scopedCategoryStats, selectedRootCategory]);
 
   const rootCategoryViewRanking = useMemo(
     () => childCategoryDashboardSections.find((section) => section.isRootCategory) || null,

@@ -26,7 +26,6 @@ import {
   TooltipTrigger,
 } from "./ui/tooltip";
 
-// 전역 이벤트 타입 정의
 declare global {
   interface WindowEventMap {
     'thumbnail:regenerated': CustomEvent<{ filePath: string }>;
@@ -132,46 +131,12 @@ export const RecordModal: React.FC<RecordModalProps> = ({
   const [config, setConfig] = useState<Config | null>(null);
   const [translatingFieldIds, setTranslatingFieldIds] = useState<Set<string>>(new Set());
 
-  // 첫 번째 필드에 포커스하기 위한 ref
   const firstFieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement>(null);
 
-  // formData의 초기값을 useMemo로 계산
-  const initialFormData = React.useMemo(() => {
-    if (record && category) {
-      const nextData = { ...record.data };
-      category.fields.forEach((field) => {
-        if (field.type === 'percentage') {
-          nextData[field.id] = normalizePercentageValue(nextData[field.id]);
-        }
-      });
-      return nextData;
-    } else if (category) {
-      const initialData: Record<string, unknown> = {};
-      category.fields.forEach(field => {
-        initialData[field.id] = field.type === 'checkbox'
-          ? false
-          : field.type === 'percentage'
-            ? { value: 0, max: 0 }
-            : '';
-      });
-      return initialData;
-    }
-    return {};
-  }, [record, category]);
-
-  // isOpen이 true일 때만 formData를 초기화
-  useEffect(() => {
-    if (isOpen) {
-      setFormData(initialFormData);
-    }
-  }, [isOpen, initialFormData]);
-
-  // Reset form data when modal opens/closes or record changes
   useEffect(() => {
     if (isOpen && record && category) {
       setFormData({ ...record.data });
     } else if (isOpen && category) {
-      // 새 레코드 추가 시, 모든 필드의 기본값 세팅
       const initialData: Record<string, unknown> = {};
       category.fields.forEach(field => {
         initialData[field.id] = field.type === 'checkbox'
@@ -206,9 +171,6 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     };
   }, [isOpen]);
 
-  // 모달이 닫힐 때 formData를 초기화하여 이전 모달 상태가 남지 않도록 함
-
-  // ESC 키로 모달 닫기
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
@@ -225,34 +187,15 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     };
   }, [isOpen, onClose]);
 
-  // 모달이 열릴 때 첫 번째 필드에 포커스
   useEffect(() => {
-    if (isOpen && category?.fields?.length > 0) {
-      // 약간의 지연을 두어 모달이 완전히 렌더링된 후 포커스
-      setTimeout(() => {
-        if (firstFieldRef.current) {
-          firstFieldRef.current.focus();
-        }
-      }, 200);
-    }
+    if (!isOpen || !category?.fields?.length) return;
+
+    const timeoutId = window.setTimeout(() => {
+      firstFieldRef.current?.focus();
+    }, 200);
+
+    return () => window.clearTimeout(timeoutId);
   }, [isOpen, category]);
-
-  // 썸네일 재생성 이벤트 처리
-  useEffect(() => {
-    const handleThumbnailRegenerated = (event: CustomEvent<{ filePath: string }>) => {
-      // 파일 필드가 있는지 확인
-      const fileField = category?.fields?.find(f => f.type === 'file');
-      if (fileField && formData[fileField.id] === event.detail.filePath) {
-        // 현재 모달에서 표시 중인 파일의 썸네일이 재생성되었으므로 UI 갱신 필요
-        // 필요한 경우 여기에 추가 로직 구현
-      }
-    };
-
-    window.addEventListener('thumbnail:regenerated', handleThumbnailRegenerated as EventListener);
-    return () => {
-      window.removeEventListener('thumbnail:regenerated', handleThumbnailRegenerated as EventListener);
-    };
-  }, [category, formData]);
 
   const validateForm = useCallback(() => {
     const newErrors: Record<string, string> = {};

@@ -218,32 +218,6 @@ const App = () => {
     return () => window.clearInterval(intervalId);
   }, [passwordLockUntil]);
 
-  useEffect(() => {
-    const handleAuxClick = (e: MouseEvent) => {
-      if (e.button === 3) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-      }
-    };
-
-    const handleMouseDown = (e: MouseEvent) => {
-      if (e.button === 3) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-      }
-    };
-
-    document.addEventListener('auxclick', handleAuxClick, true);
-    document.addEventListener('mousedown', handleMouseDown, true);
-
-    return () => {
-      document.removeEventListener('auxclick', handleAuxClick, true);
-      document.removeEventListener('mousedown', handleMouseDown, true);
-    };
-  }, []);
-
   const refreshProfiles = async () => {
     const nextProfiles = await window.electronAPI.getProfiles();
     setProfiles(nextProfiles);

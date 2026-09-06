@@ -93,7 +93,6 @@ const copyOnCtrlClick = async (
   }
 };
 
-// 전역 이벤트 타입 정의
 declare global {
   interface WindowEventMap {
     'thumbnail:regenerated': CustomEvent<{ filePath: string }>;
@@ -286,11 +285,9 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
       const result = await window.electronAPI.openExternal(url);
       if (!result.success) {
         console.error('Failed to open URL:', result.error);
-        // TODO: Add toast notification here
       }
     } catch (error) {
       console.error('Error opening URL:', error);
-      // TODO: Add toast notification here
     }
   };
 
@@ -1571,22 +1568,19 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         {/* Footer */}
         <div className="flex-shrink-0 flex items-center justify-end p-6 border-t border-gray-700">
           {canOpenFile && (
-            <>
-              <Button
-                variant="outline"
-                className="mr-2 hover:bg-discord-hover cursor-pointer"
-                onClick={async () => {
-                  try {
-                    await window.electronAPI.openFile(filePath);
-                  } catch (e) {
-                    // TODO: 에러 안내
-                  }
-                }}
-                disabled={!canOpenFile}
-              >
-                원본 파일 열기
-              </Button>
-            </>
+            <Button
+              variant="outline"
+              className="mr-2 hover:bg-discord-hover cursor-pointer"
+              onClick={async () => {
+                try {
+                  await window.electronAPI.openFile(filePath);
+                } catch (error) {
+                  console.error('Failed to open file:', error);
+                }
+              }}
+            >
+              원본 파일 열기
+            </Button>
           )}
           <Button onClick={onClose} className="bg-discord-accent hover:bg-blue-600">
             닫기

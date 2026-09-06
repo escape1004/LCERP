@@ -220,5 +220,3 @@ if (!gotTheLock) {
     }
   });
 }
-
-// ... 이하 기존 app.whenReady() 등 모든 초기화 코드 ... 

@@ -57,19 +57,15 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const [showControls, setShowControls] = useState(true);
   const controlsTimeoutRef = useRef<NodeJS.Timeout>();
   
-  // 재생바 관련 상태 추가
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [loopRange, setLoopRange] = useState<{ start: number; end: number } | null>(null);
   const [loopDraft, setLoopDraft] = useState<{ start: number; end: number } | null>(null);
   const loopSelectionRef = useRef<{ input: HTMLInputElement; anchorTime: number } | null>(null);
   
-  // 동영상 에러 상태 추가
   const [videoError, setVideoError] = useState<string | null>(null);
-  // 동영상 코덱 정보 상태 추가
   const [codecInfo, setCodecInfo] = useState<any>(null);
 
-  // 배속 관련 상태 추가
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [videoScale, setVideoScale] = useState(1);
@@ -102,15 +98,12 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const archiveVideoRef = useRef<HTMLVideoElement>(null);
   const archiveVideoScaleRef = useRef(1);
 
-  // 이미지 컨테이너 ref
   const imgContainerRef = useRef<HTMLDivElement>(null);
 
-  // 상태 추가 (useState)
-  const [imgRotation, setImgRotation] = useState(0); // 이미지 회전 각도
-  const [videoRotation, setVideoRotation] = useState(0); // 동영상 회전 각도
-  const [archiveImgRotation, setArchiveImgRotation] = useState(0); // 압축 이미지 회전 각도
+  const [imgRotation, setImgRotation] = useState(0);
+  const [videoRotation, setVideoRotation] = useState(0);
+  const [archiveImgRotation, setArchiveImgRotation] = useState(0);
   
-  // 볼륨 오버레이 상태 추가
   const [showVolumeOverlay, setShowVolumeOverlay] = useState(false);
   const volumeOverlayTimeoutRef = useRef<NodeJS.Timeout>();
   const [showPlaybackOverlay, setShowPlaybackOverlay] = useState(false);
@@ -121,10 +114,8 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const [videoSeekSeconds, setVideoSeekSeconds] = useState(5);
   const [videoAutoPlay, setVideoAutoPlay] = useState(true);
 
-  // 1. 북마크 상태 및 불러오기
   const [bookmarks, setBookmarks] = useState<{ time: number; createdAt: string }[]>([]);
 
-  // 파일 없음 상태 추가
   const [fileNotFound, setFileNotFound] = useState(false);
   const countedViewKeyRef = useRef<string | null>(null);
 
@@ -1347,7 +1338,6 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     };
   }, [volume, isMuted, handleVolumeChange]);
 
-  // 2. 북마크 추가/삭제 함수 (일반 동영상에서만 작동)
   const handleAddBookmark = () => {
     const effectiveType = fileType || detectedFileType;
     if (effectiveType !== 'video') return; // 일반 동영상에서만 북마크 추가 가능
@@ -1355,7 +1345,6 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       if (res.success) {
         setBookmarks(prev => [...prev, res.bookmark].sort((a, b) => a.time - b.time));
       } else {
-        // 에러 처리
         console.error('북마크 추가 실패:', res.error);
       }
     });
@@ -1367,7 +1356,6 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       if (res.success) {
         setBookmarks(prev => prev.filter(b => Math.abs(b.time - time) >= 1));
       } else {
-        // 에러 처리
         console.error('북마크 삭제 실패:', res.error);
       }
     });

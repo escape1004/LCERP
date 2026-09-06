@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Plus, Menu, ChevronLeft, LayoutDashboard, Settings, Check } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -119,10 +119,27 @@ export const Sidebar: React.FC = () => {
     await loadCategories();
   };
 
-  const rootCategories = categories.filter(cat => !cat.parentId).sort((a, b) => a.order - b.order);
-  
-  const getSubCategories = (parentId: string) => 
-    categories.filter(cat => cat.parentId === parentId).sort((a, b) => a.order - b.order);
+  const { rootCategories, subCategoriesByParentId } = useMemo(() => {
+    const roots: Category[] = [];
+    const children = new Map<string, Category[]>();
+
+    categories.forEach((category) => {
+      if (!category.parentId) {
+        roots.push(category);
+        return;
+      }
+
+      const siblings = children.get(category.parentId) ?? [];
+      siblings.push(category);
+      children.set(category.parentId, siblings);
+    });
+
+    roots.sort((a, b) => a.order - b.order);
+    children.forEach((siblings) => siblings.sort((a, b) => a.order - b.order));
+    return { rootCategories: roots, subCategoriesByParentId: children };
+  }, [categories]);
+
+  const getSubCategories = (parentId: string) => subCategoriesByParentId.get(parentId) ?? [];
 
   // Check if category should be expanded (selected or has selected subcategory)
   const shouldShowSubCategories = (categoryId: string) => {
@@ -136,7 +153,7 @@ export const Sidebar: React.FC = () => {
     const { source, destination } = result;
     if (source.droppableId !== 'root-categories' || destination.droppableId !== 'root-categories') return;
 
-    const siblings = categories.filter(cat => !cat.parentId).sort((a, b) => a.order - b.order);
+    const siblings = [...rootCategories];
     const [reorderedItem] = siblings.splice(source.index, 1);
     siblings.splice(destination.index, 0, reorderedItem);
 

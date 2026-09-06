@@ -2,19 +2,6 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { NewCategory, CategoryUpdate, NewRecord } from './src/types';
 import { ElectronAPI } from './src/types.d';
 
-interface TableData {
-  columns: string[];
-  rows: any[];
-  total: number;
-}
-
-interface Config {
-  dbPath: string;
-  backupDir: string;
-  backupInterval: number;
-  backupEnabled?: boolean;
-}
-
 export {};
 
 const api: ElectronAPI = {

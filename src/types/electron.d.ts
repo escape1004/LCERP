@@ -107,15 +107,10 @@ export interface ElectronAPI {
   }>;
   incrementRecordViewCount: (categoryId: string, recordId: string) => Promise<{ success: boolean; error?: string }>;
   getRecordViewCounts: () => Promise<Array<{ recordId: string; categoryId: string; viewCount: number }>>;
-  
-  // New method
+
   send: (channel: string, ...args: any[]) => void;
   onRandomRecordShortcut: (callback: () => void) => () => void;
-
-  // New method
   getVideoDuration: (filePath: string) => Promise<number | null>;
-
-  // New method
   getVideoCodecInfo: (filePath: string) => Promise<{ video?: { codec?: string; profile?: string; pix_fmt?: string }; audio?: { codec?: string; sample_rate?: string; channels?: number }; hasEmbeddedCover?: boolean; error?: string }>;
   removeCustomThumbnail: (filePath: string) => Promise<boolean>;
 

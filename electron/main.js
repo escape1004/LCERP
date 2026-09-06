@@ -2046,41 +2046,60 @@ const cleanupRelationReferences = (categoryId) => {
     const targetCategory = db.prepare('SELECT profileId FROM categories WHERE id = ?').get(categoryId);
     if (!targetCategory) return 0;
 
-    const allCategories = db.prepare('SELECT id, fields FROM categories WHERE profileId = ?').all(targetCategory.profileId);
+    const relatedCategories = db
+      .prepare('SELECT id, fields FROM categories WHERE profileId = ?')
+      .all(targetCategory.profileId)
+      .map((category) => ({
+        id: category.id,
+        relationFields: JSON.parse(category.fields).filter(
+          (field) => field.type === 'relation' && field.relationCategoryId === categoryId
+        )
+      }))
+      .filter((category) => category.relationFields.length > 0);
+
+    if (relatedCategories.length === 0) return 0;
+
+    const relatedCategoryIds = relatedCategories.map((category) => category.id);
+    const records = db.prepare(`
+      SELECT id, categoryId, data
+      FROM records
+      WHERE profileId = ? AND categoryId IN (${getSqlPlaceholders(relatedCategoryIds.length)})
+    `).all(targetCategory.profileId, ...relatedCategoryIds);
+    const recordsByCategoryId = new Map();
+    records.forEach((record) => {
+      const categoryRecords = recordsByCategoryId.get(record.categoryId) || [];
+      categoryRecords.push(record);
+      recordsByCategoryId.set(record.categoryId, categoryRecords);
+    });
+
+    const updateRecord = db.prepare('UPDATE records SET data = ? WHERE id = ?');
     let updatedCount = 0;
-    
-    allCategories.forEach(cat => {
-      const fields = JSON.parse(cat.fields);
-      const relationFields = fields.filter(f => f.type === 'relation' && f.relationCategoryId === categoryId);
-      
-      if (relationFields.length > 0) {
-        const records = db.prepare('SELECT id, data FROM records WHERE categoryId = ? AND profileId = ?').all(cat.id, targetCategory.profileId);
-        
-        records.forEach(record => {
-          const data = JSON.parse(record.data);
-          let hasChanges = false;
-          
-          relationFields.forEach(field => {
-            const value = data[field.id];
-            
-            if (field.multiple && Array.isArray(value)) {
-              const filteredValue = value.filter(id => id !== categoryId);
-              if (filteredValue.length !== value.length) {
-                data[field.id] = filteredValue;
-                hasChanges = true;
-              }
-            } else if (value === categoryId) {
-              data[field.id] = null;
+
+    relatedCategories.forEach((category) => {
+      (recordsByCategoryId.get(category.id) || []).forEach((record) => {
+        const data = JSON.parse(record.data);
+        let hasChanges = false;
+
+        category.relationFields.forEach(field => {
+          const value = data[field.id];
+
+          if (field.multiple && Array.isArray(value)) {
+            const filteredValue = value.filter(id => id !== categoryId);
+            if (filteredValue.length !== value.length) {
+              data[field.id] = filteredValue;
               hasChanges = true;
             }
-          });
-          
-          if (hasChanges) {
-            db.prepare('UPDATE records SET data = ? WHERE id = ?').run(JSON.stringify(data), record.id);
-            updatedCount++;
+          } else if (value === categoryId) {
+            data[field.id] = null;
+            hasChanges = true;
           }
         });
-      }
+
+        if (hasChanges) {
+          updateRecord.run(JSON.stringify(data), record.id);
+          updatedCount++;
+        }
+      });
     });
     
     return updatedCount;
@@ -4498,7 +4517,6 @@ ipcMain.handle('getAppRoot', () => {
   return app.getAppPath();
 });
 
-// db:getFileType 핸들러 추가
 ipcMain.handle('db:getFileType', async (_, filePath) => {
   try {
     const { getFileType } = require('../dist/lib/fileHandler');
@@ -4509,7 +4527,6 @@ ipcMain.handle('db:getFileType', async (_, filePath) => {
   }
 });
 
-// getFileDataUrl 핸들러
 ipcMain.handle('getFileDataUrl', async (_, filePath) => {
   try {
     if (!fs.existsSync(filePath)) return null;

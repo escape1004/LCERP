@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import type { CSSProperties } from 'react';
 import { AlertTriangle, Settings } from 'lucide-react';
 import type { ElectronAPI } from '../types';
 
-interface CSSPropertiesWithWebkit extends React.CSSProperties {
+interface CSSPropertiesWithWebkit extends CSSProperties {
   WebkitAppRegion?: 'drag' | 'no-drag';
 }
 
@@ -19,19 +19,8 @@ export function TitleBar({
   updateAvailable = false,
   settingsDisabled = false,
 }: TitleBarProps) {
-  const [isMaximized, setIsMaximized] = useState(false);
   const electronAPI = window.electronAPI as ElectronAPI;
 
-  useEffect(() => {
-    // 창 상태 변경 감지 (임시로 비활성화)
-    // if (window.electronAPI && typeof window.electronAPI.on === 'function') {
-    //   window.electronAPI.on('window-state-change', (state: { maximized: boolean }) => {
-    //     setIsMaximized(state.maximized);
-    //   });
-    // }
-  }, []);
-
-  // 창 제어 함수들 (복구)
   const handleMinimize = () => {
     if (electronAPI && typeof electronAPI.send === 'function') {
       electronAPI.send('window-control', 'minimize');
@@ -40,7 +29,7 @@ export function TitleBar({
 
   const handleMaximize = () => {
     if (electronAPI && typeof electronAPI.send === 'function') {
-      electronAPI.send('window-control', isMaximized ? 'restore' : 'maximize');
+      electronAPI.send('window-control', 'maximize');
     }
   };
 
@@ -100,17 +89,11 @@ export function TitleBar({
         <button
           onClick={handleMaximize}
           className="w-12 h-full hover:bg-[#404249] hover:text-white transition-colors flex items-center justify-center"
-          aria-label={isMaximized ? "창 크기 복원" : "최대화"}
+          aria-label="최대화"
         >
-          {isMaximized ? (
-            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M3 3v10h10V3H3zm9 9H4V4h8v8z" />
-            </svg>
-          ) : (
-            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M3 3h10v10H3V3z" />
-            </svg>
-          )}
+          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M3 3h10v10H3V3z" />
+          </svg>
         </button>
         <button
           onClick={handleClose}

@@ -1,5 +1,5 @@
 ﻿import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Search, Plus, Download, Eye, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, Upload, FileText, ChevronDown, ChevronUp, ArrowUpWideNarrow, ArrowDownWideNarrow, ArrowUp01, ArrowDown01, SortAsc, SortDesc, Check, RefreshCw, HelpCircle, ChevronsUpDown, LayoutGrid, TableProperties, Archive, Info, ImageOff, Languages } from 'lucide-react';
+import { Search, Plus, Download, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, FileText, ChevronDown, ChevronUp, ArrowUpWideNarrow, ArrowDownWideNarrow, SortAsc, SortDesc, Check, RefreshCw, HelpCircle, ChevronsUpDown, LayoutGrid, TableProperties, Archive, Info, ImageOff, Languages } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { useLoadingStore } from '../hooks/useLoadingStore';
 import { DataRecord, FieldDefinition, Category } from '../types';
@@ -11,7 +11,6 @@ import { ViewerModal } from './ViewerModal';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from './ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
-import { CategoryContent } from './CategoryContent';
 import { DatabaseViewer } from './DatabaseViewer';
 import { toast } from './ui/use-toast';
 import {
@@ -55,24 +54,36 @@ const isPercentageValue = (value: unknown): value is PercentageValue => (
   && 'max' in value
 );
 
-// 해시태그 파싱 유틸리티 함수
+const getFileTypeFromPath = (filePath: string): 'image' | 'video' | 'archive' | 'other' => {
+  if (!filePath || typeof filePath !== 'string') return 'other';
+  const extension = filePath.slice(filePath.lastIndexOf('.')).toLowerCase();
+  if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(extension)) return 'image';
+  if (['.mp4', '.avi', '.mkv', '.mov'].includes(extension)) return 'video';
+  if (['.zip', '.7z'].includes(extension)) return 'archive';
+  return 'other';
+};
+
+const isEmptyValue = (value: unknown) => {
+  if (value === null || value === undefined) return true;
+  if (typeof value === 'string' && value.trim() === '') return true;
+  if (Array.isArray(value) && value.length === 0) return true;
+  return typeof value === 'object' && Object.keys(value).length === 0;
+};
+
 const parseHashtags = (text: string): { hashtags: string[]; plainText: string } => {
   const hashtagRegex = /#(\S+)/g;
   const hashtags: string[] = [];
   let match;
   
-  // 해시태그 추출
   while ((match = hashtagRegex.exec(text)) !== null) {
     hashtags.push(match[1]);
   }
   
-  // 해시태그를 제거한 일반 텍스트
   const plainText = text.replace(hashtagRegex, '').trim();
   
   return { hashtags, plainText };
 };
 
-// 해시태그를 태그로 변환하는 함수
 const renderTextWithHashtags = (text: string) => {
   const hashtagRegex = /#(\S+)/g;
   const parts = [];
@@ -80,12 +91,10 @@ const renderTextWithHashtags = (text: string) => {
   let match;
   
   while ((match = hashtagRegex.exec(text)) !== null) {
-    // 해시태그 이전 텍스트
     if (match.index > lastIndex) {
       parts.push(text.slice(lastIndex, match.index));
     }
     
-    // 해시태그를 태그로 변환
     parts.push(
       <span
         key={match.index}
@@ -98,7 +107,6 @@ const renderTextWithHashtags = (text: string) => {
     lastIndex = match.index + match[0].length;
   }
   
-  // 마지막 해시태그 이후 텍스트
   if (lastIndex < text.length) {
     parts.push(text.slice(lastIndex));
   }
@@ -403,6 +411,7 @@ const formatFieldValue = (
               {visibleItems.map((relatedId) => {
                 const relatedRecord = relatedRecords.find(r => r.id === relatedId);
                 if (!relatedRecord) return null;
+                const label = getRelationDisplayLabel(relatedRecord, field, categories, getCategoryRecords);
                 return (
                   <TooltipProvider key={relatedId}>
                     <Tooltip>
@@ -410,7 +419,6 @@ const formatFieldValue = (
                         <span
                           className="px-2 py-1 text-xs rounded bg-green-600/20 text-green-500 cursor-pointer hover:bg-green-600/30"
                           onClick={async (e) => {
-                            const label = getRelationDisplayLabel(relatedRecord, field, categories, getCategoryRecords);
                             if (e.ctrlKey) {
                               await copyOnCtrlClick(e, label, '관계형 필드 값이 클립보드에 복사되었습니다.', onSelectRow);
                               return;
@@ -423,7 +431,7 @@ const formatFieldValue = (
                             }
                           }}
                         >
-                          {getRelationDisplayLabel(relatedRecord, field, categories, getCategoryRecords)}
+                          {label}
                         </span>
                       </TooltipTrigger>
                       <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
@@ -460,6 +468,9 @@ const formatFieldValue = (
         return <MultiSelectRelationField />;
       }
       const relatedRecord = relatedRecords.find(r => r.id === value);
+      const label = relatedRecord
+        ? getRelationDisplayLabel(relatedRecord, field, categories, getCategoryRecords)
+        : '';
       return relatedRecord 
         ? (
           <TooltipProvider>
@@ -468,7 +479,6 @@ const formatFieldValue = (
                 <span
                   className="text-green-500 hover:underline cursor-pointer truncate block"
                   onClick={async (e) => {
-                    const label = getRelationDisplayLabel(relatedRecord, field, categories, getCategoryRecords);
                     if (e.ctrlKey) {
                       await copyOnCtrlClick(e, label, '관계형 필드 값이 클립보드에 복사되었습니다.', onSelectRow);
                       return;
@@ -481,7 +491,7 @@ const formatFieldValue = (
                     }
                   }}
                 >
-                  {getRelationDisplayLabel(relatedRecord, field, categories, getCategoryRecords)}
+                  {label}
                 </span>
               </TooltipTrigger>
               <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
@@ -592,7 +602,6 @@ const formatFieldValue = (
   }
 };
 
-// 전역 이벤트 타입 정의
 declare global {
   interface WindowEventMap {
     'erp:categoryChange': CustomEvent<{ categoryId: string }>;
@@ -804,6 +813,7 @@ const ThumbnailCell: React.FC<{
 export const MainContent: React.FC = () => {
   const {
     categories,
+    records: recordsByCategory,
     selectedCategoryId,
     currentPage,
     setCurrentPage,
@@ -844,15 +854,23 @@ export const MainContent: React.FC = () => {
   const [inlinePercentageOverrides, setInlinePercentageOverrides] = useState<Record<string, { value: number; max: number }>>({});
   const inlinePercentageRequestRef = useRef<Record<string, number>>({});
 
-  // categories, selectedCategory, currentRecords에 기본값 보장
   const categoriesSafe = useMemo(() => categories ?? [], [categories]);
-  const selectedCategorySafe = useMemo(
-    () => categoriesSafe.find((cat) => cat.id === selectedCategoryId) ?? null,
-    [categoriesSafe, selectedCategoryId]
+  const categoryById = useMemo(
+    () => new Map(categoriesSafe.map((category) => [category.id, category])),
+    [categoriesSafe]
   );
-  const currentRecordsSafe = selectedCategoryId
-    ? getCategoryRecords(selectedCategoryId) ?? []
-    : [];
+  const recordsByIdByCategory = useMemo(() => {
+    const result = new Map<string, Map<string, DataRecord>>();
+    Object.entries(recordsByCategory).forEach(([categoryId, categoryRecords]) => {
+      result.set(categoryId, new Map(categoryRecords.map((record) => [record.id, record])));
+    });
+    return result;
+  }, [recordsByCategory]);
+  const selectedCategorySafe = useMemo(
+    () => (selectedCategoryId ? categoryById.get(selectedCategoryId) ?? null : null),
+    [categoryById, selectedCategoryId]
+  );
+  const currentRecordsSafe = selectedCategoryId ? recordsByCategory[selectedCategoryId] ?? [] : [];
   const getInlinePercentageKey = useCallback((recordId: string, fieldId: string) => `${recordId}:${fieldId}`, []);
 
   useEffect(() => {
@@ -918,34 +936,43 @@ export const MainContent: React.FC = () => {
     }
   }, [getInlinePercentageKey, getRecordFieldValue]);
 
-  const getRecordReferenceCount = useCallback((recordId: string, categoryId: string): number => {
-    let count = 0;
-    const currentCategory = categoriesSafe.find(cat => cat.id === categoryId);
-    if (!currentCategory || !currentCategory.parentId) return 0;
+  const recordReferenceCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    const currentCategory = selectedCategoryId ? categoryById.get(selectedCategoryId) : null;
+    if (!currentCategory?.parentId) return counts;
 
-    const parentCategory = categoriesSafe.find(cat => cat.id === currentCategory.parentId);
-    if (!parentCategory) return 0;
+    const parentCategory = categoryById.get(currentCategory.parentId);
+    if (!parentCategory) return counts;
 
     const relationFields = parentCategory.fields.filter(
-      field => field.type === 'relation' && field.relationCategoryId === categoryId
+      (field) => field.type === 'relation' && field.relationCategoryId === currentCategory.id
     );
+    if (relationFields.length === 0) return counts;
 
-    if (relationFields.length > 0) {
-      const records = getCategoryRecords(parentCategory.id);
-      records.forEach(record => {
-        relationFields.forEach(field => {
-          const value = record.data[field.id];
-          if (field.multiple && Array.isArray(value)) {
-            count += value.filter(id => id === recordId).length;
-          } else if (value === recordId) {
-            count += 1;
-          }
-        });
+    (recordsByCategory[parentCategory.id] ?? []).forEach((record) => {
+      relationFields.forEach((field) => {
+        const value = record.data[field.id];
+        if (field.multiple && Array.isArray(value)) {
+          value.forEach((recordId) => {
+            if (typeof recordId === 'string') {
+              counts.set(recordId, (counts.get(recordId) ?? 0) + 1);
+            }
+          });
+        } else if (typeof value === 'string') {
+          counts.set(value, (counts.get(value) ?? 0) + 1);
+        }
       });
-    }
+    });
 
-    return count;
-  }, [categoriesSafe, getCategoryRecords]);
+    return counts;
+  }, [categoryById, recordsByCategory, selectedCategoryId]);
+
+  const getRecordReferenceCount = useCallback(
+    (recordId: string, categoryId: string) => (
+      categoryId === selectedCategoryId ? recordReferenceCounts.get(recordId) ?? 0 : 0
+    ),
+    [recordReferenceCounts, selectedCategoryId]
+  );
   
   // 카테고리별 컬럼 너비 불러오기
   useEffect(() => {
@@ -996,7 +1023,7 @@ export const MainContent: React.FC = () => {
   // Load related records when category changes
   useEffect(() => {
     if (selectedCategoryId) {
-      const category = categoriesSafe.find(cat => cat.id === selectedCategoryId);
+      const category = categoryById.get(selectedCategoryId);
       if (category) {
         const relationFields = category.fields.filter(field => field.type === 'relation');
         const loadedCategories = new Set();
@@ -1023,7 +1050,7 @@ export const MainContent: React.FC = () => {
         }
       }
     }
-  }, [selectedCategoryId, categoriesSafe, loadRecords, getCategoryRecords]);
+  }, [selectedCategoryId, categoryById, loadRecords, getCategoryRecords]);
 
   const visibleFields = useMemo(
     () => selectedCategorySafe?.fields.filter((field) => !field.hidden) ?? [],
@@ -1048,7 +1075,7 @@ export const MainContent: React.FC = () => {
       return [];
     }
 
-    const relatedCategory = categoriesSafe.find((cat) => cat.id === selectedSearchField.relationCategoryId);
+    const relatedCategory = categoryById.get(selectedSearchField.relationCategoryId);
     if (!relatedCategory) {
       return [];
     }
@@ -1065,7 +1092,7 @@ export const MainContent: React.FC = () => {
           .filter(Boolean)
       )
     ).sort((a, b) => a.localeCompare(b, 'ko'));
-  }, [selectedSearchField, categoriesSafe, getCategoryRecords]);
+  }, [selectedSearchField, categoryById, getCategoryRecords]);
   const normalizedMultiSearchTerms = useMemo(
     () => multiSearchTerms.map((term) => term.trim().toLowerCase()).filter(Boolean),
     [multiSearchTerms]
@@ -1273,17 +1300,6 @@ export const MainContent: React.FC = () => {
     return String(value || '').toLowerCase().includes(normalizedSearchTerm);
   }, [normalizedSearchTerm, normalizedMultiSearchTerms, searchTerm, effectiveSearchField, isMultiValueSearchField]);
 
-  // 파일 확장자로 타입 확인 함수
-  const getFileTypeFromPath = (filePath: string): 'image' | 'video' | 'archive' | 'other' => {
-    if (!filePath || typeof filePath !== 'string') return 'other';
-    const ext = filePath.slice(filePath.lastIndexOf('.')).toLowerCase();
-    if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)) return 'image';
-    if (['.mp4', '.avi', '.mkv', '.mov'].includes(ext)) return 'video';
-    if (['.zip', '.7z'].includes(ext)) return 'archive';
-    return 'other';
-  };
-
-  // Custom filtered records based on field-specific search and file type filter
   const customFilteredRecords = useMemo(() => {
     if (!selectedCategoryId) return [];
     
@@ -1308,22 +1324,22 @@ export const MainContent: React.FC = () => {
 
           // 관계형 필드 처리
           if (field.type === 'relation' && field.relationCategoryId) {
-            const relatedCategory = categoriesSafe.find(cat => cat.id === field.relationCategoryId);
+            const relatedCategory = categoryById.get(field.relationCategoryId);
             if (!relatedCategory) return false;
-            const relatedRecords = getCategoryRecords(field.relationCategoryId);
+            const relatedRecordMap = recordsByIdByCategory.get(field.relationCategoryId);
             const displayField = field.displayFieldId
               ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
               : relatedCategory.fields[0];
 
             if (isFieldMultiple(field) && Array.isArray(value)) {
               return value.some((relatedId) => {
-                const relatedRecord = relatedRecords.find(r => r.id === relatedId);
+                const relatedRecord = relatedRecordMap?.get(String(relatedId));
                 if (!relatedRecord) return false;
                 const displayValue = relatedRecord.data[displayField?.id];
                 return String(displayValue || '').toLowerCase().includes(normalizedSearchTerm);
               });
             } else {
-              const relatedRecord = relatedRecords.find(r => r.id === value);
+              const relatedRecord = relatedRecordMap?.get(String(value));
               if (!relatedRecord) return false;
               const displayValue = relatedRecord.data[displayField?.id];
               return String(displayValue || '').toLowerCase().includes(normalizedSearchTerm);
@@ -1339,16 +1355,16 @@ export const MainContent: React.FC = () => {
         const value = getRecordFieldValue(record, field.id);
 
         if (field.type === 'relation' && field.relationCategoryId) {
-          const relatedCategory = categoriesSafe.find(cat => cat.id === field.relationCategoryId);
+          const relatedCategory = categoryById.get(field.relationCategoryId);
           if (!relatedCategory) return false;
-          const relatedRecords = getCategoryRecords(field.relationCategoryId);
+          const relatedRecordMap = recordsByIdByCategory.get(field.relationCategoryId);
           const displayField = field.displayFieldId
             ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
             : relatedCategory.fields[0];
 
           if (isFieldMultiple(field) && Array.isArray(value)) {
             return value.some((relatedId) => {
-              const relatedRecord = relatedRecords.find(r => r.id === relatedId);
+              const relatedRecord = relatedRecordMap?.get(String(relatedId));
               if (!relatedRecord) return false;
               const displayValue = relatedRecord.data[displayField?.id];
               if (
@@ -1361,7 +1377,7 @@ export const MainContent: React.FC = () => {
               return String(displayValue || '').toLowerCase().includes(normalizedSearchTerm);
             });
           } else {
-            const relatedRecord = relatedRecords.find(r => r.id === value);
+            const relatedRecord = relatedRecordMap?.get(String(value));
             if (!relatedRecord) return false;
             const displayValue = relatedRecord.data[displayField?.id];
             return String(displayValue || '').toLowerCase().includes(normalizedSearchTerm);
@@ -1371,11 +1387,24 @@ export const MainContent: React.FC = () => {
         return matchesSearchValue(field, value, record.data as Record<string, unknown>);
       }
     });
-  }, [selectedCategoryId, effectiveSearchField, fileTypeFilter, currentRecordsSafe, categoriesSafe, getCategoryRecords, fileField, getRecordFieldValue, matchesSearchValue, normalizedSearchTerm, hasActiveSearch, isMultiValueSearchField, normalizedMultiSearchTerms, visibleFields, selectedCategoryFieldMap]);
+  }, [selectedCategoryId, effectiveSearchField, fileTypeFilter, currentRecordsSafe, categoryById, recordsByIdByCategory, fileField, getRecordFieldValue, matchesSearchValue, normalizedSearchTerm, hasActiveSearch, isMultiValueSearchField, normalizedMultiSearchTerms, visibleFields, selectedCategoryFieldMap]);
 
   // Sorting
   const sortedRecords = useMemo(() => {
     if (!sortField) return customFilteredRecords;
+
+    const sortFieldDef = selectedCategoryFieldMap.get(sortField);
+    const relatedCategory = sortFieldDef?.type === 'relation' && sortFieldDef.relationCategoryId
+      ? categoryById.get(sortFieldDef.relationCategoryId)
+      : null;
+    const relatedRecordMap = sortFieldDef?.type === 'relation' && sortFieldDef.relationCategoryId
+      ? recordsByIdByCategory.get(sortFieldDef.relationCategoryId)
+      : null;
+    const displayField = relatedCategory
+      ? sortFieldDef?.displayFieldId
+        ? relatedCategory.fields.find((field) => field.id === sortFieldDef.displayFieldId)
+        : relatedCategory.fields[0]
+      : null;
 
     return [...customFilteredRecords].sort((a, b) => {
       if (sortField === '__refCount') {
@@ -1419,28 +1448,18 @@ export const MainContent: React.FC = () => {
       let aValue = getRecordFieldValue(a, sortField);
       let bValue = getRecordFieldValue(b, sortField);
 
-      // 관계형 필드인 경우 실제 데이터 값으로 정렬
-      const sortFieldDef = selectedCategoryFieldMap.get(sortField);
-      if (sortFieldDef?.type === 'relation') {
-        const relatedCategory = categoriesSafe.find(cat => cat.id === sortFieldDef.relationCategoryId);
-        if (relatedCategory) {
-          const relatedRecords = getCategoryRecords(sortFieldDef.relationCategoryId!);
-          const displayField = sortFieldDef.displayFieldId
-            ? relatedCategory.fields.find(f => f.id === sortFieldDef.displayFieldId)
-            : relatedCategory.fields[0];
-          
+      if (sortFieldDef?.type === 'relation' && relatedCategory) {
           if (sortFieldDef.multiple && Array.isArray(aValue) && Array.isArray(bValue)) {
-            // 다중 선택 관계형 필드 정렬
             const aDisplayValues = aValue
               .map((id: string) => {
-                const rec = relatedRecords.find(r => r.id === id);
+                const rec = relatedRecordMap?.get(id);
                 return rec ? String(rec.data[displayField?.id] || '') : '';
               })
               .filter(Boolean)
               .sort();
             const bDisplayValues = bValue
               .map((id: string) => {
-                const rec = relatedRecords.find(r => r.id === id);
+                const rec = relatedRecordMap?.get(id);
                 return rec ? String(rec.data[displayField?.id] || '') : '';
               })
               .filter(Boolean)
@@ -1449,28 +1468,16 @@ export const MainContent: React.FC = () => {
             aValue = aDisplayValues.join(',');
             bValue = bDisplayValues.join(',');
           } else if (sortFieldDef.multiple) {
-            // 다중 선택 필드이지만 배열이 아닌 경우 (잘못된 데이터)
             aValue = '';
             bValue = '';
           } else {
-            // 단일 선택 관계형 필드 정렬
-            const aRelatedRecord = relatedRecords.find(r => r.id === aValue);
-            const bRelatedRecord = relatedRecords.find(r => r.id === bValue);
+            const aRelatedRecord = relatedRecordMap?.get(String(aValue));
+            const bRelatedRecord = relatedRecordMap?.get(String(bValue));
             
             aValue = aRelatedRecord ? String(aRelatedRecord.data[displayField?.id] || '') : '';
             bValue = bRelatedRecord ? String(bRelatedRecord.data[displayField?.id] || '') : '';
           }
-        }
       }
-
-      // 빈 값 처리 (모든 필드 타입에 적용)
-      const isEmptyValue = (val: unknown): boolean => {
-        if (val === null || val === undefined) return true;
-        if (typeof val === 'string' && val.trim() === '') return true;
-        if (Array.isArray(val) && val.length === 0) return true;
-        if (typeof val === 'object' && Object.keys(val).length === 0) return true;
-        return false;
-      };
 
       const aIsEmpty = isEmptyValue(aValue);
       const bIsEmpty = isEmptyValue(bValue);
@@ -1502,14 +1509,13 @@ export const MainContent: React.FC = () => {
       if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [customFilteredRecords, sortField, sortDirection, selectedCategorySafe?.id, getRecordReferenceCount, fileField, getRecordFieldValue, categoriesSafe, getCategoryRecords, selectedCategoryFieldMap]);
+  }, [customFilteredRecords, sortField, sortDirection, selectedCategorySafe?.id, getRecordReferenceCount, fileField, getRecordFieldValue, selectedCategoryFieldMap, categoryById, recordsByIdByCategory]);
 
   // Pagination
   const totalPages = Math.ceil(sortedRecords.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedRecords = sortedRecords.slice(startIndex, startIndex + itemsPerPage);
 
-  // 테이블 컨테이너 ref 선언
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
   const scrollTableToTop = () => {
     if (tableContainerRef.current) {
@@ -1949,12 +1955,12 @@ export const MainContent: React.FC = () => {
     }
 
     if (field.type === 'relation' && field.relationCategoryId) {
-      const relatedCategory = categoriesSafe.find((category) => category.id === field.relationCategoryId);
+      const relatedCategory = categoryById.get(field.relationCategoryId);
       if (!relatedCategory) {
         return String(value);
       }
 
-      const relatedRecords = getCategoryRecords(field.relationCategoryId);
+      const relatedRecordMap = recordsByIdByCategory.get(field.relationCategoryId);
       const displayField = field.displayFieldId
         ? relatedCategory.fields.find((relatedField) => relatedField.id === field.displayFieldId)
         : relatedCategory.fields[0];
@@ -1962,7 +1968,7 @@ export const MainContent: React.FC = () => {
       if (Array.isArray(value)) {
         const labels = value
           .map((relatedId) => {
-            const relatedRecord = relatedRecords.find((item) => item.id === relatedId);
+            const relatedRecord = relatedRecordMap?.get(String(relatedId));
             return relatedRecord ? String(relatedRecord.data[displayField?.id] || relatedId) : String(relatedId);
           })
           .filter(Boolean);
@@ -1970,7 +1976,7 @@ export const MainContent: React.FC = () => {
         return labels.length > 0 ? labels.join(', ') : '-';
       }
 
-      const relatedRecord = relatedRecords.find((item) => item.id === value);
+      const relatedRecord = relatedRecordMap?.get(String(value));
       return relatedRecord ? String(relatedRecord.data[displayField?.id] || value) : String(value);
     }
 
@@ -1979,7 +1985,7 @@ export const MainContent: React.FC = () => {
     }
 
     return String(value);
-  }, [categoriesSafe, getCategoryRecords, getRecordFieldValue]);
+  }, [categoryById, recordsByIdByCategory, getRecordFieldValue]);
 
   const confirmDelete = () => {
     if (recordToDelete) {
@@ -3078,7 +3084,7 @@ export const MainContent: React.FC = () => {
             />
           )}
 
-          {(categoriesSafe.find(cat => cat.id === viewingCategory) || selectedCategorySafe) && (
+          {((viewingCategory ? categoryById.get(viewingCategory) : null) || selectedCategorySafe) && (
             <ViewRecordModal
               isOpen={isViewModalOpen}
               onClose={() => {
@@ -3088,7 +3094,7 @@ export const MainContent: React.FC = () => {
                   setViewingCategory('');
                 }, 200);
               }}
-              category={categoriesSafe.find(cat => cat.id === viewingCategory) || selectedCategorySafe}
+              category={(viewingCategory ? categoryById.get(viewingCategory) : null) || selectedCategorySafe}
               record={viewingRecord}
               onViewRecord={handleViewRelatedRecord}
             />

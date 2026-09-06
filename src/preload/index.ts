@@ -1,6 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
-// API 정의
 const api = {
   getTables: () => ipcRenderer.invoke('db:getTables'),
   getTableData: (tableName: string, options?: { page?: number; pageSize?: number }) => ipcRenderer.invoke('db:getTableData', tableName, options),
@@ -21,5 +20,4 @@ const api = {
   removeAllBookmarks: (categoryId: string, recordId: string) => ipcRenderer.invoke('removeAllBookmarks', categoryId, recordId),
 };
 
-// API를 window 객체에 노출
 contextBridge.exposeInMainWorld('electronAPI', api);

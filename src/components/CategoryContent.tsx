@@ -26,6 +26,15 @@ interface CategoryContentProps {
   categoryId: string | null;
 }
 
+const isEmpty = (value: unknown): boolean => {
+  if (value === null || value === undefined) return true;
+  if (typeof value === 'string') return value.trim() === '';
+  if (Array.isArray(value)) return value.length === 0 || value.every(isEmpty);
+  if (typeof value === 'object') return Object.keys(value).length === 0;
+  if (typeof value === 'number') return Number.isNaN(value);
+  return false;
+};
+
 export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) => {
   const {
     categories,
@@ -64,7 +73,6 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
   const [isBulkAddModalOpen, setIsBulkAddModalOpen] = useState(false);
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
 
-  // 테이블 컨테이너 ref 선언
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
   const scrollTableToTop = () => {
     if (tableContainerRef.current) {
@@ -72,43 +80,9 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
     }
   };
 
-  const isEmpty = (v: any): boolean => {
-    // null, undefined 체크
-    if (v === null || v === undefined) return true;
-    
-    // 문자열 체크
-    if (typeof v === 'string') {
-      return v.trim() === '';
-    }
-    
-    // 배열 체크
-    if (Array.isArray(v)) {
-      return v.length === 0 || v.every(item => isEmpty(item));
-    }
-    
-    // 객체 체크 (빈 객체도 빈 값으로 처리)
-    if (typeof v === 'object') {
-      return Object.keys(v).length === 0;
-    }
-    
-    // 숫자 체크 (0은 유효한 값)
-    if (typeof v === 'number') {
-      return isNaN(v);
-    }
-    
-    // boolean 체크 (false도 유효한 값)
-    if (typeof v === 'boolean') {
-      return false;
-    }
-    
-    // 나머지는 빈 값이 아님
-    return false;
-  };
-
-  // Reset pagination and scroll when category changes
   useEffect(() => {
     setCurrentPage(1);
-    scrollTableToTop(); // Reset scroll position when category changes
+    scrollTableToTop();
   }, [categoryId, setCurrentPage]);
 
   // 키보드 단축키 핸들러
