@@ -8,6 +8,7 @@ export interface TranslateTextPayload {
 export interface TranslateTextResult {
   success: boolean;
   translatedText?: string;
+  model?: string;
   error?: string;
   errorCode?: string;
   errorType?: string;
@@ -61,6 +62,7 @@ export interface ElectronAPI {
   setThumbnailPreviewScale: (scale: number) => Promise<{ success: boolean; error?: string }>;
   setDefaultGalleryZoom: (scale: number) => Promise<{ success: boolean; defaultGalleryZoom?: number; error?: string }>;
   setTranslationTargetLanguage: (language: string) => Promise<{ success: boolean; translationTargetLanguage?: string; error?: string }>;
+  setTranslationModel: (model: string) => Promise<{ success: boolean; translationModel?: string; error?: string }>;
   setOpenAiApiKey: (apiKey: string) => Promise<{ success: boolean; hasOpenAiApiKey?: boolean; error?: string }>;
   clearOpenAiApiKey: () => Promise<{ success: boolean; hasOpenAiApiKey?: boolean; error?: string }>;
   translateText: (payload: TranslateTextPayload) => Promise<TranslateTextResult>;

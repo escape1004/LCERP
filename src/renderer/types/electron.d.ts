@@ -5,6 +5,7 @@ interface Config {
   backupDir: string;
   backupInterval: number;
   backupEnabled?: boolean;
+  translationModel?: string;
 }
 
 declare global {
@@ -32,6 +33,7 @@ declare global {
       setBackupDir: () => Promise<{ success: boolean; path?: string; error?: string }>;
       setBackupInterval: (minutes: number) => Promise<{ success: boolean; error?: string }>;
       setBackupEnabled: (enabled: boolean) => Promise<{ success: boolean; backupEnabled?: boolean; error?: string }>;
+      setTranslationModel: (model: string) => Promise<{ success: boolean; translationModel?: string; error?: string }>;
       cleanupOrphanThumbnails: () => Promise<{
         success: boolean;
         scannedFiles: number;

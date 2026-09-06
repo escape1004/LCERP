@@ -74,6 +74,7 @@ export interface Config {
   defaultGalleryZoom?: number;
   dateParseFormats?: string[];
   translationTargetLanguage?: string;
+  translationModel?: string;
 }
 
 export {}; 

@@ -70,6 +70,7 @@ export interface ElectronAPI {
   setThumbnailPreviewScale: (scale: number) => Promise<{ success: boolean; error?: string }>;
   setDefaultGalleryZoom: (scale: number) => Promise<{ success: boolean; defaultGalleryZoom?: number; error?: string }>;
   setTranslationTargetLanguage: (language: string) => Promise<{ success: boolean; translationTargetLanguage?: string; error?: string }>;
+  setTranslationModel: (model: string) => Promise<{ success: boolean; translationModel?: string; error?: string }>;
   setOpenAiApiKey: (apiKey: string) => Promise<{ success: boolean; hasOpenAiApiKey?: boolean; error?: string }>;
   clearOpenAiApiKey: () => Promise<{ success: boolean; hasOpenAiApiKey?: boolean; error?: string }>;
   openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
@@ -109,7 +110,7 @@ export interface ElectronAPI {
   getBookmarks: (categoryId: string, recordId: string) => Promise<{ success: boolean; bookmarks: { time: number; createdAt: string }[]; error?: string }>;
   addBookmark: (categoryId: string, recordId: string, time: number) => Promise<{ success: boolean; bookmark?: { time: number; createdAt: string }; error?: string }>;
   removeBookmark: (categoryId: string, recordId: string, time: number) => Promise<{ success: boolean; error?: string }>;
-  translateText: (payload: { text: string; targetLanguage: string }) => Promise<{ success: boolean; translatedText?: string; error?: string; errorCode?: string; errorType?: string; status?: number }>;
+  translateText: (payload: { text: string; targetLanguage: string }) => Promise<{ success: boolean; translatedText?: string; model?: string; error?: string; errorCode?: string; errorType?: string; status?: number }>;
   migrateThumbnailPaths: () => Promise<{ success: boolean; totalProcessed?: number; totalUpdated?: number; error?: string }>;
   checkThumbnailSync: () => Promise<any>;
   cleanupThumbnailSync: (options?: any) => Promise<any>;

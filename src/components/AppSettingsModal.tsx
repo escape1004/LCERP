@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/t
 import type { Config } from '../types';
 import { DEFAULT_DATE_PARSE_FORMATS } from './ui/date-picker';
 import { useLoadingStore } from '../hooks/useLoadingStore';
+import { OPENAI_TRANSLATION_MODEL, OPENAI_TRANSLATION_MODELS } from '../lib/translation';
 
 interface AppSettingsModalProps {
   open: boolean;
@@ -604,6 +605,33 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
     }
   };
 
+  const handleTranslationModelChange = async (model: string) => {
+    if (!config) return;
+
+    const previousModel = config.translationModel || OPENAI_TRANSLATION_MODEL;
+    setConfig((prev) => (prev ? { ...prev, translationModel: model } : prev));
+    setTranslationMessage('');
+    setIsSaving(true);
+
+    try {
+      const result = await window.electronAPI.setTranslationModel(model);
+      if (result.success) {
+        const savedModel = result.translationModel || model;
+        setConfig((prev) => (prev ? { ...prev, translationModel: savedModel } : prev));
+        setTranslationMessage('번역 모델이 변경되었습니다.');
+        return;
+      }
+
+      setConfig((prev) => (prev ? { ...prev, translationModel: previousModel } : prev));
+      setTranslationMessage(result.error || '번역 모델 저장에 실패했습니다.');
+    } catch (error) {
+      setConfig((prev) => (prev ? { ...prev, translationModel: previousModel } : prev));
+      setTranslationMessage(error instanceof Error ? error.message : '번역 모델 저장에 실패했습니다.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleSaveOpenAiApiKey = async () => {
     const normalizedApiKey = translationApiKeyInput.trim();
     if (!normalizedApiKey) {
@@ -1168,10 +1196,32 @@ export function AppSettingsModal({ open, onOpenChange, onOpenDatabaseViewer }: A
       <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
         <div className="text-sm font-medium text-white">자동 번역 엔진</div>
         <p className="text-sm text-discord-muted mt-2 leading-6">
-          현재 자동 번역은 OpenAI `GPT-5.6 Luna` 모델을 사용합니다. 번역문은 사람이 직접 수정할 수 있고, 자동 번역 버튼을 눌렀을 때만 API가 호출됩니다.
+          번역 품질과 처리 비용에 맞는 OpenAI 모델을 선택합니다. 자동 번역 버튼을 눌렀을 때만 API가 호출됩니다.
         </p>
-        <div className="mt-4 rounded-lg border border-gray-700 bg-discord-bg/80 px-4 py-3 text-sm text-discord-text">
-          모델: GPT-5.6 Luna
+
+        <div className="mt-5 max-w-md">
+          <div className="text-xs text-discord-muted mb-2">사용 모델</div>
+          <Select
+            value={config?.translationModel || OPENAI_TRANSLATION_MODEL}
+            onValueChange={(value) => void handleTranslationModelChange(value)}
+            disabled={!config || isSaving}
+          >
+            <SelectTrigger className="border-gray-600 bg-discord-bg text-discord-text">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="border-gray-700 bg-discord-sidebar text-discord-text">
+              {OPENAI_TRANSLATION_MODELS.map((model) => (
+                <SelectItem key={model.value} value={model.value}>
+                  {model.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="mt-3 text-xs leading-5 text-discord-muted">
+            {OPENAI_TRANSLATION_MODELS.find(
+              (model) => model.value === (config?.translationModel || OPENAI_TRANSLATION_MODEL)
+            )?.description}
+          </p>
         </div>
       </div>
 

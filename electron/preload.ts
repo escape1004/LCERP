@@ -32,6 +32,7 @@ const api: ElectronAPI = {
   setThumbnailPreviewScale: (scale: number) => ipcRenderer.invoke('setThumbnailPreviewScale', scale),
   setDateParseFormats: (formats: string[]) => ipcRenderer.invoke('setDateParseFormats', formats),
   setTranslationTargetLanguage: (language: string) => ipcRenderer.invoke('setTranslationTargetLanguage', language),
+  setTranslationModel: (model: string) => ipcRenderer.invoke('setTranslationModel', model),
   setOpenAiApiKey: (apiKey: string) => ipcRenderer.invoke('setOpenAiApiKey', apiKey),
   clearOpenAiApiKey: () => ipcRenderer.invoke('clearOpenAiApiKey'),
   translateText: (payload: { text: string; targetLanguage: string }) => ipcRenderer.invoke('translateText', payload),

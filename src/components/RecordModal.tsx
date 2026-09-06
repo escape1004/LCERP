@@ -443,14 +443,19 @@ export const RecordModal: React.FC<RecordModalProps> = ({
     return normalizedValue;
   };
 
-  const updateTranslationValue = (fieldId: string, value: string, autoTranslated: boolean) => {
+  const updateTranslationValue = (
+    fieldId: string,
+    value: string,
+    autoTranslated: boolean,
+    model = config?.translationModel || OPENAI_TRANSLATION_MODEL
+  ) => {
     setFormData((prev) => ({
       ...prev,
       [getTranslatedFieldId(fieldId)]: value,
       [getTranslationMetaFieldId(fieldId)]: value.trim()
         ? {
             provider: 'openai',
-            model: OPENAI_TRANSLATION_MODEL,
+            model,
             autoTranslated,
             targetLanguage: config?.translationTargetLanguage || 'ko',
             translatedAt: new Date().toISOString(),
@@ -497,7 +502,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
         return;
       }
 
-      updateTranslationValue(field.id, result.translatedText, true);
+      updateTranslationValue(field.id, result.translatedText, true, result.model);
       toast({
         title: '자동 번역 완료',
         description: `${field.name} 번역문을 입력했습니다.`,

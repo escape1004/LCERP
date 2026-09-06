@@ -42,6 +42,13 @@ const appDataDir = path.join(projectRoot, isDev ? 'save' : 'Local ERP');
 const dbPath = path.join(appDataDir, 'erp.db');
 const backupDir = path.join(path.join(os.homedir(), 'AppData', 'Local'), 'backups');
 const configPath = path.join(app.getPath('userData'), 'config.json');
+const DEFAULT_TRANSLATION_MODEL = 'gpt-5.6-luna';
+const SUPPORTED_TRANSLATION_MODELS = new Set([
+  DEFAULT_TRANSLATION_MODEL,
+  'gpt-5-mini',
+  'gpt-5-nano',
+  'gpt-4.1-mini'
+]);
 
 const defaultConfig = {
   backupDir,
@@ -57,6 +64,7 @@ const defaultConfig = {
   passwordLockUntil: null,
   openAiApiKey: '',
   translationTargetLanguage: 'ko',
+  translationModel: DEFAULT_TRANSLATION_MODEL,
   videoSeekSeconds: 5,
   videoAutoPlay: true,
   listThumbnailFit: 'cover',
@@ -164,6 +172,17 @@ function normalizeTranslationTargetLanguage(value) {
 
 function getConfiguredTranslationTargetLanguage() {
   return normalizeTranslationTargetLanguage(appConfig.translationTargetLanguage);
+}
+
+function normalizeTranslationModel(value) {
+  const normalizedValue = String(value || '').trim();
+  return SUPPORTED_TRANSLATION_MODELS.has(normalizedValue)
+    ? normalizedValue
+    : DEFAULT_TRANSLATION_MODEL;
+}
+
+function getConfiguredTranslationModel() {
+  return normalizeTranslationModel(appConfig.translationModel);
 }
 
 function normalizeBackupInterval(value) {
@@ -293,7 +312,7 @@ function extractResponseText(responseBody) {
   return '';
 }
 
-async function translateTextWithOpenAi(text, targetLanguage) {
+async function translateTextWithOpenAi(text, targetLanguage, model) {
   const apiKey = String(appConfig.openAiApiKey || '').trim();
   if (!apiKey) {
     throw new Error('OpenAI API 키가 설정되지 않았습니다.');
@@ -316,7 +335,7 @@ async function translateTextWithOpenAi(text, targetLanguage) {
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'gpt-5.6-luna',
+        model: normalizeTranslationModel(model),
         store: false,
         input: `Detect the source language automatically and translate the text into ${languageLabel}.\nReturn only the translated text.\nDo not add explanations, labels, notes, or quotation marks.\nIf the input is already in ${languageLabel}, return it unchanged.\n\nText:\n${normalizedText}`
       }),
@@ -3409,7 +3428,8 @@ ipcMain.handle('getConfig', () => {
     defaultGalleryZoom: getConfiguredDefaultGalleryZoom(),
     dateParseFormats: normalizeDateParseFormats(appConfig.dateParseFormats),
     hasOpenAiApiKey: Boolean(String(appConfig.openAiApiKey || '').trim()),
-    translationTargetLanguage: getConfiguredTranslationTargetLanguage()
+    translationTargetLanguage: getConfiguredTranslationTargetLanguage(),
+    translationModel: getConfiguredTranslationModel()
   };
 });
 
@@ -3726,6 +3746,17 @@ ipcMain.handle('setTranslationTargetLanguage', (_event, language) => {
   };
 });
 
+ipcMain.handle('setTranslationModel', (_event, model) => {
+  const normalizedModel = normalizeTranslationModel(model);
+  if (normalizedModel !== model) {
+    return { success: false, error: '지원하지 않는 번역 모델입니다.' };
+  }
+
+  appConfig.translationModel = normalizedModel;
+  saveAppConfig();
+  return { success: true, translationModel: normalizedModel };
+});
+
 ipcMain.handle('setOpenAiApiKey', (_event, apiKey) => {
   const normalizedApiKey = String(apiKey || '').trim();
   if (!normalizedApiKey) {
@@ -3745,11 +3776,13 @@ ipcMain.handle('clearOpenAiApiKey', () => {
 
 ipcMain.handle('translateText', async (_event, payload = {}) => {
   try {
+    const model = getConfiguredTranslationModel();
     const translatedText = await translateTextWithOpenAi(
       payload.text,
-      payload.targetLanguage || getConfiguredTranslationTargetLanguage()
+      payload.targetLanguage || getConfiguredTranslationTargetLanguage(),
+      model
     );
-    return { success: true, translatedText };
+    return { success: true, translatedText, model };
   } catch (error) {
     return {
       success: false,
