@@ -533,17 +533,36 @@ export default function Dashboard() {
   }, [selectedRootCategory, totalStats]);
 
   const categoryRecordData = useMemo(() => {
-    return scopedCategoryStats
-      .filter((stat) => stat.recordCount > 0)
-      .sort((a, b) => b.recordCount - a.recordCount)
+    const statsByCategoryId = new Map(
+      categoryStats.map((stat) => [stat.category.id, stat])
+    );
+
+    return rootCategories
+      .map((rootCategory) => {
+        let recordCount = 0;
+        const visitedCategoryIds = new Set<string>();
+        const stack = [rootCategory.id];
+
+        while (stack.length > 0) {
+          const categoryId = stack.pop();
+          if (!categoryId || visitedCategoryIds.has(categoryId)) continue;
+
+          visitedCategoryIds.add(categoryId);
+          recordCount += statsByCategoryId.get(categoryId)?.recordCount ?? 0;
+          (childrenByParentId.get(categoryId) || []).forEach((child) => stack.push(child.id));
+        }
+
+        return {
+          name: rootCategory.name,
+          fullName: rootCategory.name,
+          records: recordCount,
+          categoryId: rootCategory.id,
+        };
+      })
+      .filter((item) => item.records > 0)
+      .sort((a, b) => b.records - a.records)
       .slice(0, 10)
-      .map((stat) => ({
-        name: stat.category.name,
-        fullName: stat.category.name,
-        records: stat.recordCount,
-        categoryId: stat.category.id,
-      }));
-  }, [scopedCategoryStats]);
+  }, [categoryStats, childrenByParentId, rootCategories]);
 
   const childCategoryRecordData = useMemo(() => {
     return descendantCategoryStats
@@ -643,10 +662,44 @@ export default function Dashboard() {
   }, [dateUnit, getCategoryRecords, scopedCategoryStats]);
 
   const populatedCategoryStats = useMemo(() => {
-    return scopedCategoryStats
+    const statsByCategoryId = new Map(
+      categoryStats.map((stat) => [stat.category.id, stat])
+    );
+
+    return rootCategories
+      .map((rootCategory) => {
+        const subtreeStats: CategoryStats[] = [];
+        const visitedCategoryIds = new Set<string>();
+        const stack = [rootCategory.id];
+
+        while (stack.length > 0) {
+          const categoryId = stack.pop();
+          if (!categoryId || visitedCategoryIds.has(categoryId)) continue;
+
+          visitedCategoryIds.add(categoryId);
+          const stat = statsByCategoryId.get(categoryId);
+          if (stat) subtreeStats.push(stat);
+          (childrenByParentId.get(categoryId) || []).forEach((child) => stack.push(child.id));
+        }
+
+        return {
+          category: rootCategory,
+          recordCount: subtreeStats.reduce((sum, stat) => sum + stat.recordCount, 0),
+          imageCount: subtreeStats.reduce((sum, stat) => sum + stat.imageCount, 0),
+          videoCount: subtreeStats.reduce((sum, stat) => sum + stat.videoCount, 0),
+          archiveCount: subtreeStats.reduce((sum, stat) => sum + stat.archiveCount, 0),
+          recentRecords: subtreeStats
+            .flatMap((stat) => stat.recentRecords.map((record) => ({
+              record,
+              category: stat.category,
+            })))
+            .sort((a, b) => new Date(b.record.createdAt).getTime() - new Date(a.record.createdAt).getTime())
+            .slice(0, 5),
+        };
+      })
       .filter((stat) => stat.recordCount > 0)
       .sort((a, b) => (a.category.order ?? 0) - (b.category.order ?? 0));
-  }, [scopedCategoryStats]);
+  }, [categoryStats, childrenByParentId, rootCategories]);
 
   const childCategoryDashboardSections = useMemo<ChildCategoryDashboardSection[]>(() => {
     if (!selectedRootCategory) {
@@ -1375,18 +1428,18 @@ export default function Dashboard() {
                           <div className="mt-3 pt-3 border-t border-gray-700">
                             <p className="text-xs text-discord-muted mb-2">최근 추가된 항목:</p>
                             <div className="space-y-1">
-                              {stat.recentRecords.map((record) => {
-                                const displayValue = getRecordDisplayValue(stat.category, record);
+                              {stat.recentRecords.map(({ record, category }) => {
+                                const displayValue = getRecordDisplayValue(category, record);
                                 const dateStr = new Date(record.createdAt).toLocaleDateString('ko-KR');
 
                                 return (
-                                  <div key={record.id} className="text-xs text-discord-text flex items-center gap-2">
+                                  <div key={`${category.id}-${record.id}`} className="text-xs text-discord-text flex items-center gap-2">
                                     <Calendar size={12} className="text-discord-muted" />
                                     <span
                                       className="cursor-pointer hover:text-discord-accent transition-colors"
                                       onClick={() => {
                                         setSelectedRecord(record);
-                                        setSelectedCategory(stat.category);
+                                        setSelectedCategory(category);
                                         setViewRecordModalOpen(true);
                                       }}
                                     >
