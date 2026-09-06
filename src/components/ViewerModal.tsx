@@ -1937,7 +1937,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                         // 텍스트 파일 표시
                         <div className="w-full h-full bg-discord-bg text-discord-text p-4 overflow-auto">
                           {currentArchiveText ? (
-                            <pre className="select-text whitespace-pre-wrap font-mono text-sm leading-relaxed">
+                            <pre className="select-text whitespace-pre-wrap font-noto text-sm leading-relaxed">
                               {currentArchiveText}
                             </pre>
                           ) : (
