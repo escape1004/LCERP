@@ -477,8 +477,78 @@ function applyWindowZoom(targetWindow) {
   targetWindow.webContents.setZoomFactor(zoomFactor);
 }
 
-function hashPassword(password) {
+const PASSWORD_SCRYPT_PREFIX = 'scrypt$v1';
+const PASSWORD_SCRYPT_KEY_LENGTH = 64;
+const PASSWORD_SCRYPT_OPTIONS = {
+  N: 16384,
+  r: 8,
+  p: 1,
+  maxmem: 32 * 1024 * 1024
+};
+
+function hashLegacyPassword(password) {
   return crypto.createHash('sha256').update(String(password)).digest('hex');
+}
+
+function derivePasswordKey(password, salt) {
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(
+      String(password),
+      salt,
+      PASSWORD_SCRYPT_KEY_LENGTH,
+      PASSWORD_SCRYPT_OPTIONS,
+      (error, derivedKey) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(derivedKey);
+      }
+    );
+  });
+}
+
+async function createPasswordHash(password) {
+  const salt = crypto.randomBytes(16);
+  const derivedKey = await derivePasswordKey(password, salt);
+  return `${PASSWORD_SCRYPT_PREFIX}$${salt.toString('hex')}$${derivedKey.toString('hex')}`;
+}
+
+function timingSafeBufferEqual(actual, expected) {
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+}
+
+async function verifyStoredPassword(password, storedHash) {
+  const normalizedHash = String(storedHash || '');
+  if (normalizedHash.startsWith(`${PASSWORD_SCRYPT_PREFIX}$`)) {
+    const parts = normalizedHash.split('$');
+    if (
+      parts.length !== 4
+      || !/^[a-f0-9]{32}$/i.test(parts[2])
+      || !/^[a-f0-9]{128}$/i.test(parts[3])
+    ) {
+      return { valid: false, needsUpgrade: false };
+    }
+
+    const salt = Buffer.from(parts[2], 'hex');
+    const expectedKey = Buffer.from(parts[3], 'hex');
+    const actualKey = await derivePasswordKey(password, salt);
+    return {
+      valid: timingSafeBufferEqual(actualKey, expectedKey),
+      needsUpgrade: false
+    };
+  }
+
+  if (/^[a-f0-9]{64}$/i.test(normalizedHash)) {
+    const actualHash = Buffer.from(hashLegacyPassword(password), 'hex');
+    const expectedHash = Buffer.from(normalizedHash, 'hex');
+    return {
+      valid: timingSafeBufferEqual(actualHash, expectedHash),
+      needsUpgrade: true
+    };
+  }
+
+  return { valid: false, needsUpgrade: false };
 }
 
 function getCurrentProfileIdOrThrow() {
@@ -3756,15 +3826,20 @@ ipcMain.handle('setBackupEnabled', (_event, enabled) => {
   return { success: true, backupEnabled: appConfig.backupEnabled };
 });
 
-ipcMain.handle('setAppPassword', (_event, password) => {
+ipcMain.handle('setAppPassword', async (_event, password) => {
   if (!password || String(password).trim().length < 4) {
     return { success: false, error: 'Password must be at least 4 characters.' };
   }
 
-  appConfig.passwordHash = hashPassword(password);
-  resetPasswordLockState();
-  saveAppConfig();
-  return { success: true };
+  try {
+    appConfig.passwordHash = await createPasswordHash(password);
+    resetPasswordLockState();
+    saveAppConfig();
+    return { success: true };
+  } catch (error) {
+    log('비밀번호 해시 생성 실패:', error);
+    return { success: false, error: '비밀번호를 안전하게 저장하지 못했습니다.' };
+  }
 });
 
 ipcMain.handle('clearAppPassword', () => {
@@ -3774,7 +3849,7 @@ ipcMain.handle('clearAppPassword', () => {
   return { success: true };
 });
 
-ipcMain.handle('verifyAppPassword', (_event, password) => {
+ipcMain.handle('verifyAppPassword', async (_event, password) => {
   if (!appConfig.passwordHash) {
     return { success: true };
   }
@@ -3795,9 +3870,24 @@ ipcMain.handle('verifyAppPassword', (_event, password) => {
     saveAppConfig();
   }
 
-  const isValid = hashPassword(password) === appConfig.passwordHash;
-  if (isValid) {
-    if (appConfig.passwordFailedAttempts || appConfig.passwordLockUntil) {
+  let verification;
+  try {
+    verification = await verifyStoredPassword(password, appConfig.passwordHash);
+  } catch (error) {
+    log('비밀번호 검증 실패:', error);
+    return { success: false, error: '비밀번호를 확인하지 못했습니다.' };
+  }
+
+  if (verification.valid) {
+    if (verification.needsUpgrade) {
+      try {
+        appConfig.passwordHash = await createPasswordHash(password);
+      } catch (error) {
+        log('기존 비밀번호 해시 마이그레이션 실패:', error);
+      }
+    }
+
+    if (verification.needsUpgrade || appConfig.passwordFailedAttempts || appConfig.passwordLockUntil) {
       resetPasswordLockState();
       saveAppConfig();
     }
