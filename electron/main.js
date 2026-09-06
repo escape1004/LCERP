@@ -4915,6 +4915,7 @@ const regenerateImageOrArchiveThumbnail = async (filePath, context = {}) => {
 
 // 사용자가 직접 선택한 이미지 파일로 썸네일을 교체하는 함수
 const setCustomThumbnailFromImage = async (targetFilePath, imagePath, context = {}) => {
+  let temporaryThumbnailPath = null;
   try {
     const sharp = require('sharp');
     const path = require('path');
@@ -4943,25 +4944,48 @@ const setCustomThumbnailFromImage = async (targetFilePath, imagePath, context = 
     }
 
     const { thumbnailPath } = ensureThumbnailDirForContext(normalizedTargetPath, context);
+    temporaryThumbnailPath = `${thumbnailPath}.custom-tmp-${process.pid}-${Date.now()}.jpg`;
 
     log('커스텀 썸네일 생성 시작:', { targetFilePath: normalizedTargetPath, imagePath, thumbnailPath });
 
-    await sharp(imagePath)
+    const sourceImageBuffer = await fs.promises.readFile(imagePath);
+    await sharp(sourceImageBuffer)
       .resize(400, 400, { fit: 'inside' })
-      .toFile(thumbnailPath);
-
-    log('커스텀 썸네일 생성 완료:', thumbnailPath);
+      .jpeg({ quality: 90 })
+      .toFile(temporaryThumbnailPath);
 
     const targetExt = path.extname(normalizedTargetPath).toLowerCase();
     const isVideoTarget = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v'].includes(targetExt);
     if (isVideoTarget) {
-      await persistCustomThumbnailToVideoMetadata(normalizedTargetPath, thumbnailPath);
+      const metadataSupported = ['.mp4', '.m4v', '.mov', '.mkv'].includes(targetExt);
+      if (metadataSupported) {
+        const persisted = await persistCustomThumbnailToVideoMetadata(normalizedTargetPath, temporaryThumbnailPath);
+        if (!persisted) {
+          log('커스텀 썸네일 메타데이터 저장 실패:', normalizedTargetPath);
+          return null;
+        }
+      }
     }
 
+    fs.copyFileSync(temporaryThumbnailPath, thumbnailPath);
+    if (context?.recordId) {
+      db.prepare('UPDATE records SET thumbnailPath = ? WHERE id = ?').run(thumbnailPath, context.recordId);
+    }
+
+    log('커스텀 썸네일 생성 완료:', thumbnailPath);
     return thumbnailPath;
   } catch (e) {
     log('커스텀 썸네일 생성 에러:', e);
     return null;
+  } finally {
+    if (temporaryThumbnailPath) {
+      await removeFileWithRetry(temporaryThumbnailPath).catch((cleanupError) => {
+        log('커스텀 썸네일 임시 이미지 정리 실패:', {
+          temporaryThumbnailPath,
+          error: cleanupError.message
+        });
+      });
+    }
   }
 };
 
@@ -5098,6 +5122,37 @@ const getFfmpegToolPaths = () => {
   };
 };
 
+const renameFileWithRetry = async (sourcePath, destinationPath, maxAttempts = 6) => {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await fs.promises.rename(sourcePath, destinationPath);
+      return;
+    } catch (error) {
+      const isRetryable = ['EBUSY', 'EPERM', 'EACCES'].includes(error?.code);
+      if (!isRetryable || attempt === maxAttempts) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, attempt * 150));
+    }
+  }
+};
+
+const removeFileWithRetry = async (filePath, maxAttempts = 6) => {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await fs.promises.unlink(filePath);
+      return;
+    } catch (error) {
+      if (error?.code === 'ENOENT') return;
+      const isRetryable = ['EBUSY', 'EPERM', 'EACCES'].includes(error?.code);
+      if (!isRetryable || attempt === maxAttempts) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, attempt * 150));
+    }
+  }
+};
+
 const hasEmbeddedVideoCover = async (filePath) => {
   try {
     const ffmpeg = require('fluent-ffmpeg');
@@ -5166,6 +5221,8 @@ const extractEmbeddedVideoCover = async (filePath, outputPath) => {
 };
 
 const persistCustomThumbnailToVideoMetadata = async (targetFilePath, imagePath) => {
+  let tempOutputPath = null;
+  let backupPath = null;
   try {
     const ext = path.extname(targetFilePath).toLowerCase();
     const supportedFormats = ['.mp4', '.m4v', '.mov', '.mkv'];
@@ -5182,7 +5239,36 @@ const persistCustomThumbnailToVideoMetadata = async (targetFilePath, imagePath) 
     ffmpeg.setFfmpegPath(ffmpegPath);
     ffmpeg.setFfprobePath(ffprobePath);
 
-    const tempOutputPath = `${targetFilePath}.cover-tmp${ext}`;
+    const metadata = await new Promise((resolve, reject) => {
+      ffmpeg.ffprobe(targetFilePath, (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      });
+    });
+    const attachedPicStreamIndexes = (metadata?.streams || [])
+      .filter((stream) => stream?.disposition?.attached_pic === 1)
+      .map((stream) => stream.index)
+      .filter((index) => index !== null && index !== undefined);
+    const retainedVideoStreamCount = (metadata?.streams || [])
+      .filter((stream) => (
+        stream?.codec_type === 'video' &&
+        stream?.disposition?.attached_pic !== 1
+      ))
+      .length;
+
+    const uniqueSuffix = `${process.pid}-${Date.now()}`;
+    tempOutputPath = `${targetFilePath}.cover-tmp-${uniqueSuffix}${ext}`;
+    backupPath = `${targetFilePath}.cover-backup-${uniqueSuffix}`;
+
+    const legacyTempOutputPath = `${targetFilePath}.cover-tmp${ext}`;
+    if (fs.existsSync(legacyTempOutputPath)) {
+      await removeFileWithRetry(legacyTempOutputPath).catch((cleanupError) => {
+        log('기존 커버 임시 파일 정리 실패:', {
+          legacyTempOutputPath,
+          error: cleanupError.message
+        });
+      });
+    }
 
     await new Promise((resolve, reject) => {
       ffmpeg()
@@ -5190,10 +5276,12 @@ const persistCustomThumbnailToVideoMetadata = async (targetFilePath, imagePath) 
         .input(imagePath)
         .outputOptions([
           '-map 0',
-          '-map 1',
+          ...attachedPicStreamIndexes.map((index) => `-map -0:${index}`),
+          '-map 1:v:0',
           '-c copy',
-          '-c:v:1 mjpeg',
-          '-disposition:v:1 attached_pic'
+          `-c:v:${retainedVideoStreamCount} mjpeg`,
+          `-disposition:v:${retainedVideoStreamCount} attached_pic`,
+          '-y'
         ])
         .save(tempOutputPath)
         .on('end', resolve)
@@ -5204,28 +5292,41 @@ const persistCustomThumbnailToVideoMetadata = async (targetFilePath, imagePath) 
       return false;
     }
 
-    const backupPath = `${targetFilePath}.cover-backup`;
+    if (!await hasEmbeddedVideoCover(tempOutputPath)) {
+      throw new Error('생성된 영상에서 커스텀 썸네일 스트림을 확인하지 못했습니다.');
+    }
+
+    await renameFileWithRetry(targetFilePath, backupPath);
     try {
-      if (fs.existsSync(backupPath)) {
-        fs.unlinkSync(backupPath);
-      }
-      fs.renameSync(targetFilePath, backupPath);
-      fs.renameSync(tempOutputPath, targetFilePath);
-      fs.unlinkSync(backupPath);
+      await renameFileWithRetry(tempOutputPath, targetFilePath);
     } catch (swapError) {
-      if (fs.existsSync(tempOutputPath)) {
-        fs.unlinkSync(tempOutputPath);
-      }
-      if (fs.existsSync(backupPath) && !fs.existsSync(targetFilePath)) {
-        fs.renameSync(backupPath, targetFilePath);
-      }
+      await renameFileWithRetry(backupPath, targetFilePath);
       throw swapError;
     }
 
+    await removeFileWithRetry(backupPath);
     return true;
   } catch (error) {
     log('비디오 메타데이터 커버 저장 실패:', { targetFilePath, imagePath, error: error.message });
     return false;
+  } finally {
+    if (tempOutputPath) {
+      await removeFileWithRetry(tempOutputPath).catch((cleanupError) => {
+        log('커버 임시 파일 정리 실패:', { tempOutputPath, error: cleanupError.message });
+      });
+    }
+
+    if (backupPath && fs.existsSync(backupPath)) {
+      if (!fs.existsSync(targetFilePath)) {
+        await renameFileWithRetry(backupPath, targetFilePath).catch((restoreError) => {
+          log('원본 영상 복구 실패:', { backupPath, targetFilePath, error: restoreError.message });
+        });
+      } else {
+        await removeFileWithRetry(backupPath).catch((cleanupError) => {
+          log('커버 백업 파일 정리 실패:', { backupPath, error: cleanupError.message });
+        });
+      }
+    }
   }
 };
 
