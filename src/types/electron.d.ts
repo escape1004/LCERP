@@ -17,7 +17,7 @@ export interface TranslateTextResult {
 export interface ElectronAPI {
   // Database viewer methods
   getTables: () => Promise<{ name: string }[]>;
-  getTableData: (tableName: string) => Promise<TableData>;
+  getTableData: (tableName: string, options?: { page?: number; pageSize?: number }) => Promise<TableData>;
   getDbPath: () => Promise<string>;
   openDbFile: () => Promise<void>;
   

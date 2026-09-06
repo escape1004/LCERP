@@ -48,9 +48,11 @@ export interface DataRecord {
 export interface NewRecord extends Omit<DataRecord, 'id' | 'createdAt' | 'updatedAt'> {}
 
 export interface TableData {
-  columns: string[];
+  columns: Array<{ name: string; hidden: boolean }>;
   rows: any[];
   total: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface Config {

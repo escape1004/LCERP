@@ -18,7 +18,7 @@ export {};
 
 const api: ElectronAPI = {
   getTables: () => ipcRenderer.invoke('db:getTables'),
-  getTableData: (tableName: string) => ipcRenderer.invoke('db:getTableData', tableName),
+  getTableData: (tableName: string, options?: { page?: number; pageSize?: number }) => ipcRenderer.invoke('db:getTableData', tableName, options),
   getDbPath: () => ipcRenderer.invoke('db:getPath'),
   openDbFile: () => ipcRenderer.invoke('db:openFile'),
   addCategory: (category: NewCategory) => ipcRenderer.invoke('db:addCategory', category),

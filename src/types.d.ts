@@ -25,7 +25,7 @@ export interface DashboardWarningsResult {
 
 export interface ElectronAPI {
   getTables: () => Promise<{ name: string }[]>;
-  getTableData: (tableName: string) => Promise<TableData>;
+  getTableData: (tableName: string, options?: { page?: number; pageSize?: number }) => Promise<TableData>;
   getDbPath: () => Promise<string>;
   openDbFile: () => Promise<void>;
   addCategory: (category: NewCategory) => Promise<string>;
@@ -120,8 +120,11 @@ declare global {
 }
 
 export interface TableData {
-  columns: string[];
+  columns: Array<{ name: string; hidden: boolean }>;
   rows: any[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface Category {

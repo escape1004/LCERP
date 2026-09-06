@@ -2821,16 +2821,26 @@ ipcMain.handle('db:getTables', () => {
   return db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
 });
 
-ipcMain.handle('db:getTableData', (event, tableName) => {
+ipcMain.handle('db:getTableData', (event, tableName, options = {}) => {
   const validTables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
   if (!validTables.some(t => t.name === tableName)) {
     throw new Error('Invalid table name');
   }
-  const stmt = db.prepare(`SELECT * FROM ${tableName} LIMIT 1000`);
-  const rows = stmt.all();
-  const columnNames = rows.length > 0 ? Object.keys(rows[0]) : [];
+
+  const requestedPage = Number(options.page);
+  const requestedPageSize = Number(options.pageSize);
+  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const pageSize = Number.isInteger(requestedPageSize)
+    ? Math.min(500, Math.max(10, requestedPageSize))
+    : 100;
+  const offset = (page - 1) * pageSize;
+  const quotedTableName = `"${tableName.replace(/"/g, '""')}"`;
+
+  const total = db.prepare(`SELECT COUNT(*) AS count FROM ${quotedTableName}`).get().count;
+  const rows = db.prepare(`SELECT * FROM ${quotedTableName} LIMIT ? OFFSET ?`).all(pageSize, offset);
+  const columnNames = db.prepare(`PRAGMA table_info(${quotedTableName})`).all().map(column => column.name);
   const columns = columnNames.map(name => ({ name, hidden: false }));
-  return { columns, rows, total: rows.length };
+  return { columns, rows, total, page, pageSize };
 });
 
 ipcMain.handle('db:getPath', () => dbPath);

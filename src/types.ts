@@ -78,9 +78,11 @@ export interface NewRecord {
 
 // DB 뷰어 관련 타입
 export interface TableData {
-  columns: string[];
+  columns: Array<{ name: string; hidden: boolean }>;
   rows: any[];
   total: number;
+  page: number;
+  pageSize: number;
 }
 
 // 썸네일 동기화 관련 타입

@@ -3,7 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 // API 정의
 const api = {
   getTables: () => ipcRenderer.invoke('db:getTables'),
-  getTableData: (tableName: string) => ipcRenderer.invoke('db:getTableData', tableName),
+  getTableData: (tableName: string, options?: { page?: number; pageSize?: number }) => ipcRenderer.invoke('db:getTableData', tableName, options),
   getDbPath: () => ipcRenderer.invoke('db:getPath'),
   setDbPath: () => ipcRenderer.invoke('db:setDbPath'),
   openDbFile: () => ipcRenderer.invoke('db:openFile'),
@@ -22,4 +22,4 @@ const api = {
 };
 
 // API를 window 객체에 노출
-contextBridge.exposeInMainWorld('electronAPI', api); 
+contextBridge.exposeInMainWorld('electronAPI', api);
