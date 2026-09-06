@@ -956,7 +956,7 @@ export default function Dashboard() {
                       <ContextMenuTrigger asChild>
                         <button
                           type="button"
-                          className="text-left bg-discord-bg rounded-lg border border-gray-700 px-4 py-3 hover:border-discord-accent hover:bg-discord-hover transition-colors"
+                          className="text-left bg-discord-bg rounded-lg border border-gray-700 px-4 py-3 hover:bg-discord-hover transition-colors"
                           onClick={() => openWarningRecordView(item)}
                         >
                           <div className="flex items-center gap-2 mb-1">
@@ -1176,7 +1176,7 @@ export default function Dashboard() {
                             <button
                               key={item.record.id}
                               type="button"
-                              className="group relative w-full overflow-hidden rounded-lg border border-gray-700 bg-discord-sidebar px-3 py-2.5 text-left transition-colors hover:border-indigo-400/50 hover:bg-discord-hover"
+                              className="group relative w-full overflow-hidden rounded-lg border border-gray-700 bg-discord-sidebar px-3 py-2.5 text-left transition-colors hover:bg-discord-hover"
                               onClick={() => {
                                 setSelectedCategory(item.category);
                                 setSelectedRecord(item.record);
@@ -1214,7 +1214,7 @@ export default function Dashboard() {
                           <button
                             key={item.record.id}
                             type="button"
-                            className="group w-full rounded-lg border border-gray-700 bg-discord-sidebar px-3 py-2.5 text-left transition-colors hover:border-gray-500 hover:bg-discord-hover"
+                            className="group w-full rounded-lg border border-gray-700 bg-discord-sidebar px-3 py-2.5 text-left transition-colors hover:bg-discord-hover"
                             onClick={() => {
                               setSelectedCategory(item.category);
                               setSelectedRecord(item.record);
@@ -1258,27 +1258,27 @@ export default function Dashboard() {
                       <span className="text-sm text-discord-muted">직속 하위 카테고리 대시보드</span>
                     </div>
 
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                       {!section.isRootCategory && (
-                      <div className="order-3 bg-discord-bg rounded-lg p-6 border border-gray-700">
+                      <div className="order-3 rounded-xl border border-gray-700 bg-discord-bg/80 p-4">
                         <div className="flex items-center gap-2 mb-4">
-                          <TimerReset size={18} className="text-discord-accent" />
-                          <h3 className="text-lg font-semibold text-discord-text">참조 랭킹</h3>
+                          <TimerReset size={17} className="text-discord-accent" />
+                          <h3 className="font-semibold text-discord-text">참조 랭킹</h3>
                         </div>
                         {section.recordRanking.length > 0 ? (
-                          <div className="space-y-3">
+                          <div className="space-y-2">
                             {section.recordRanking.map((item, index) => (
                               <button
                                 key={item.record.id}
                                 type="button"
-                                className="w-full min-h-[88px] text-left bg-discord-sidebar rounded-lg border border-gray-700 px-4 py-3 hover:border-discord-accent hover:bg-discord-hover transition-colors"
+                                className="w-full rounded-lg border border-gray-700 bg-discord-sidebar px-3 py-2.5 text-left transition-colors hover:bg-discord-hover"
                                 onClick={() => {
                                   setSelectedCategory(item.category);
                                   setSelectedRecord(item.record);
                                   setViewRecordModalOpen(true);
                                 }}
                               >
-                                <div className="flex min-h-[64px] items-center justify-between gap-3">
+                                <div className="flex min-h-[52px] items-center justify-between gap-3">
                                   <div className="flex items-center gap-3 min-w-0">
                                     <RecordThumbnail category={item.category} record={item.record} />
                                     <div className="min-w-0">
@@ -1299,24 +1299,24 @@ export default function Dashboard() {
 
                       {section.hasTrackableAttachments && (
                         <>
-                          <div className="order-1 bg-discord-bg rounded-lg p-6 border border-gray-700">
+                          <div className="order-1 rounded-xl border border-gray-700 bg-discord-bg/80 p-4">
                             <div className="flex items-center gap-2 mb-4">
-                              <Eye size={18} className="text-discord-accent" />
-                              <h3 className="text-lg font-semibold text-discord-text">많이 본 레코드</h3>
+                              <Eye size={17} className="text-discord-accent" />
+                              <h3 className="font-semibold text-discord-text">많이 본 레코드</h3>
                             </div>
-                            <div className="space-y-3">
+                            <div className="space-y-2">
                               {section.mostViewedRecords.map((item, index) => (
                                 <button
                                   key={item.record.id}
                                   type="button"
-                                  className="w-full min-h-[88px] text-left bg-discord-sidebar rounded-lg border border-gray-700 px-4 py-3 hover:border-discord-accent hover:bg-discord-hover transition-colors"
+                                  className="w-full rounded-lg border border-gray-700 bg-discord-sidebar px-3 py-2.5 text-left transition-colors hover:bg-discord-hover"
                                   onClick={() => {
                                     setSelectedCategory(item.category);
                                     setSelectedRecord(item.record);
                                     setViewRecordModalOpen(true);
                                   }}
                                 >
-                                  <div className="flex min-h-[64px] items-center justify-between gap-3">
+                                  <div className="flex min-h-[52px] items-center justify-between gap-3">
                                     <div className="flex items-center gap-3 min-w-0">
                                       <RecordThumbnail category={item.category} record={item.record} />
                                       <div className="min-w-0">
@@ -1331,24 +1331,24 @@ export default function Dashboard() {
                             </div>
                           </div>
 
-                          <div className="order-2 bg-discord-bg rounded-lg p-6 border border-gray-700">
+                          <div className="order-2 rounded-xl border border-gray-700 bg-discord-bg/80 p-4">
                             <div className="flex items-center gap-2 mb-4">
-                              <Eye size={18} className="text-discord-muted" />
-                              <h3 className="text-lg font-semibold text-discord-text">적게 본 레코드</h3>
+                              <Eye size={17} className="text-discord-muted" />
+                              <h3 className="font-semibold text-discord-text">적게 본 레코드</h3>
                             </div>
-                            <div className="space-y-3">
+                            <div className="space-y-2">
                               {section.leastViewedRecords.map((item, index) => (
                                 <button
                                   key={item.record.id}
                                   type="button"
-                                  className="w-full min-h-[88px] text-left bg-discord-sidebar rounded-lg border border-gray-700 px-4 py-3 hover:border-discord-accent hover:bg-discord-hover transition-colors"
+                                  className="w-full rounded-lg border border-gray-700 bg-discord-sidebar px-3 py-2.5 text-left transition-colors hover:bg-discord-hover"
                                   onClick={() => {
                                     setSelectedCategory(item.category);
                                     setSelectedRecord(item.record);
                                     setViewRecordModalOpen(true);
                                   }}
                                 >
-                                  <div className="flex min-h-[64px] items-center justify-between gap-3">
+                                  <div className="flex min-h-[52px] items-center justify-between gap-3">
                                     <div className="flex items-center gap-3 min-w-0">
                                       <RecordThumbnail category={item.category} record={item.record} />
                                       <div className="min-w-0">
@@ -1366,25 +1366,25 @@ export default function Dashboard() {
                       )}
 
                       {!section.isRootCategory && (
-                      <div className="order-4 bg-discord-bg rounded-lg p-6 border border-gray-700">
+                      <div className="order-4 rounded-xl border border-gray-700 bg-discord-bg/80 p-4">
                         <div className="flex items-center gap-2 mb-4">
-                          <Calendar size={18} className="text-discord-accent" />
-                          <h3 className="text-lg font-semibold text-discord-text">최근 추가 항목</h3>
+                          <Calendar size={17} className="text-discord-accent" />
+                          <h3 className="font-semibold text-discord-text">최근 추가 항목</h3>
                         </div>
                         {section.recentRecords.length > 0 ? (
-                          <div className="space-y-3">
+                          <div className="space-y-2">
                             {section.recentRecords.map(({ record, category }) => (
                               <button
                                 key={record.id}
                                 type="button"
-                                className="w-full min-h-[88px] text-left bg-discord-sidebar rounded-lg border border-gray-700 px-4 py-3 hover:border-discord-accent hover:bg-discord-hover transition-colors"
+                                className="w-full rounded-lg border border-gray-700 bg-discord-sidebar px-3 py-2.5 text-left transition-colors hover:bg-discord-hover"
                                 onClick={() => {
                                   setSelectedCategory(category);
                                   setSelectedRecord(record);
                                   setViewRecordModalOpen(true);
                                 }}
                               >
-                                <div className="flex min-h-[64px] items-center gap-3 min-w-0">
+                                <div className="flex min-h-[52px] items-center gap-3 min-w-0">
                                   <RecordThumbnail category={category} record={record} />
                                   <div className="min-w-0">
                                     <p className="text-sm font-medium text-discord-text break-all">{getRecordDisplayValue(category, record)}</p>
