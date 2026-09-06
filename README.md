@@ -4,6 +4,14 @@ Local ERP는 컴퓨터에 보관한 파일과 관련 정보를 한곳에서 정�
 
 폴더만으로 구분하기 어려운 이미지, 동영상, 문서, 압축파일 등의 정보를 원하는 항목으로 기록하고, 검색하거나 미리 볼 수 있습니다. 데이터는 사용자의 PC에 저장됩니다.
 
+## 다운로드 및 설치
+
+[**Local ERP v1.1.17 Windows 설치 파일 다운로드**](https://github.com/escape1004/LCERP/releases/download/v1.1.17/Local-ERP-Setup-1.1.17.exe)
+
+다운로드한 `Local-ERP-Setup-1.1.17.exe` 파일을 실행하고 안내에 따라 설치하면 됩니다. 이전 버전이 설치되어 있다면 기존 데이터와 설정을 유지한 상태로 업데이트됩니다.
+
+다른 버전과 전체 배포 파일은 [GitHub Releases](https://github.com/escape1004/LCERP/releases)에서 확인할 수 있습니다.
+
 ## 이런 자료를 관리할 때 유용합니다
 
 - 이미지와 동영상처럼 파일 수가 많은 개인 자료
