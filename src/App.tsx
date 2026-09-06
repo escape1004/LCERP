@@ -27,6 +27,7 @@ import {
 import { useERPStore } from './hooks/useERPStore';
 import { useLoadingStore } from './hooks/useLoadingStore';
 import { AppUpdateModal } from './components/AppUpdateModal';
+import { toast } from './components/ui/use-toast';
 import type { AppUpdateState, Profile } from './types';
 
 const queryClient = new QueryClient();
@@ -183,8 +184,40 @@ const App = () => {
     };
   }, []);
 
-  const handleCheckForUpdates = () => {
-    void window.electronAPI.checkForAppUpdates().then(setAppUpdateState);
+  const handleCheckForUpdates = async () => {
+    try {
+      const state = await window.electronAPI.checkForAppUpdates();
+      setAppUpdateState(state);
+
+      if (state.updateAvailable && state.latestVersion) {
+        toast({
+          title: '새 버전을 사용할 수 있습니다.',
+          description: `v${state.latestVersion} 업데이트를 설치할 수 있습니다.`,
+        });
+      } else if (state.status === 'not-available') {
+        toast({
+          title: '현재 최신 버전입니다.',
+          description: `Local ERP v${state.currentVersion}`,
+        });
+      } else if (state.status === 'disabled') {
+        toast({
+          title: '업데이트 확인을 사용할 수 없습니다.',
+          description: '자동 업데이트 확인은 설치된 앱에서 사용할 수 있습니다.',
+        });
+      } else if (state.status === 'error') {
+        toast({
+          title: '업데이트 확인 실패',
+          description: state.error || '업데이트 정보를 확인하지 못했습니다.',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: '업데이트 확인 실패',
+        description: error instanceof Error ? error.message : '업데이트 정보를 확인하지 못했습니다.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleDownloadUpdate = () => {
