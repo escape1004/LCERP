@@ -161,6 +161,31 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     () => navigableArchiveFiles.findIndex(({ originalIndex }) => originalIndex === currentArchiveIndex),
     [currentArchiveIndex, navigableArchiveFiles]
   );
+  const exitPictureInPicture = useCallback(async () => {
+    const pictureInPictureVideo = document.pictureInPictureElement;
+    if (pictureInPictureVideo instanceof HTMLVideoElement) {
+      pictureInPictureVideo.pause();
+    }
+
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      }
+    } catch (error) {
+      if (document.pictureInPictureElement) {
+        console.error('PIP 종료 실패:', error);
+      }
+    }
+
+    try {
+      await window.electronAPI.setPictureInPictureActive(false);
+    } catch (error) {
+      console.error('PIP 오디오 상태 초기화 실패:', error);
+    }
+  }, []);
+  const handleClose = useCallback(() => {
+    void exitPictureInPicture().finally(onClose);
+  }, [exitPictureInPicture, onClose]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -191,6 +216,22 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   useEffect(() => {
     setArchiveSearchQuery('');
   }, [displayFilePath, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      void exitPictureInPicture();
+    }
+  }, [exitPictureInPicture, isOpen]);
+
+  useEffect(() => {
+    void exitPictureInPicture();
+  }, [displayFilePath, exitPictureInPicture]);
+
+  useEffect(() => {
+    return () => {
+      void exitPictureInPicture();
+    };
+  }, [exitPictureInPicture]);
 
   const getActiveVideoElement = useCallback(() => {
     const effectiveType = getEffectiveFileType();
@@ -249,7 +290,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       if (e.button !== 3) return;
       e.preventDefault();
       e.stopPropagation();
-      onClose();
+      handleClose();
     };
 
     window.addEventListener('mousedown', handleMouseBack, true);
@@ -257,7 +298,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     return () => {
       window.removeEventListener('mousedown', handleMouseBack, true);
     };
-  }, [isOpen, onClose]);
+  }, [handleClose, isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -983,28 +1024,34 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     }
   };
 
-  const handlePrevious = () => {
-    const targetPosition = currentArchiveNavigationIndex < 0
-      ? navigableArchiveFiles.length - 1
-      : currentArchiveNavigationIndex - 1;
-    const targetIndex = navigableArchiveFiles[targetPosition]?.originalIndex;
-    if (targetIndex === undefined) return;
+  const selectArchiveFile = async (targetIndex: number) => {
+    if (document.pictureInPictureElement) {
+      await exitPictureInPicture();
+    }
 
     setCurrentArchiveDataUrl(null);
     setCurrentArchiveText(null);
     setCurrentArchiveIndex(targetIndex);
   };
 
-  const handleNext = () => {
+  const handlePrevious = async () => {
+    const targetPosition = currentArchiveNavigationIndex < 0
+      ? navigableArchiveFiles.length - 1
+      : currentArchiveNavigationIndex - 1;
+    const targetIndex = navigableArchiveFiles[targetPosition]?.originalIndex;
+    if (targetIndex === undefined) return;
+
+    await selectArchiveFile(targetIndex);
+  };
+
+  const handleNext = async () => {
     const targetPosition = currentArchiveNavigationIndex < 0
       ? 0
       : currentArchiveNavigationIndex + 1;
     const targetIndex = navigableArchiveFiles[targetPosition]?.originalIndex;
     if (targetIndex === undefined) return;
 
-    setCurrentArchiveDataUrl(null);
-    setCurrentArchiveText(null);
-    setCurrentArchiveIndex(targetIndex);
+    await selectArchiveFile(targetIndex);
   };
 
   const handleOpenUnsupportedArchiveFile = async (file: ArchiveFile) => {
@@ -1024,7 +1071,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
-      onClose();
+      handleClose();
       return;
     }
 
@@ -1546,7 +1593,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
             )}
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-discord-muted hover:text-white transition-colors"
           >
             <X size={24} />
@@ -2083,9 +2130,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                 }`}
                                 onClick={() => {
                                   if (isSupported && idx !== currentArchiveIndex) {
-                                    setCurrentArchiveDataUrl(null);
-                                    setCurrentArchiveText(null);
-                                    setCurrentArchiveIndex(idx);
+                                  void selectArchiveFile(idx);
                                   }
                                 }}
                               >
