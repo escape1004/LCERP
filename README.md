@@ -6,9 +6,9 @@ Local ERP는 컴퓨터에 보관한 파일과 관련 정보를 한곳에서 정�
 
 ## 다운로드 및 설치
 
-[**Local ERP v1.1.18 Windows 설치 파일 다운로드**](https://github.com/escape1004/LCERP/releases/download/v1.1.18/Local-ERP-Setup-1.1.18.exe)
+[**Local ERP v1.1.19 Windows 설치 파일 다운로드**](https://github.com/escape1004/LCERP/releases/download/v1.1.19/Local-ERP-Setup-1.1.19.exe)
 
-다운로드한 `Local-ERP-Setup-1.1.18.exe` 파일을 실행하고 안내에 따라 설치하면 됩니다. 이전 버전이 설치되어 있다면 기존 데이터와 설정을 유지한 상태로 업데이트됩니다.
+다운로드한 `Local-ERP-Setup-1.1.19.exe` 파일을 실행하고 안내에 따라 설치하면 됩니다. 이전 버전이 설치되어 있다면 기존 데이터와 설정을 유지한 상태로 업데이트됩니다.
 
 다른 버전과 전체 배포 파일은 [GitHub Releases](https://github.com/escape1004/LCERP/releases)에서 확인할 수 있습니다.
 
@@ -124,7 +124,16 @@ Local ERP는 컴퓨터에 보관한 파일과 관련 정보를 한곳에서 정�
 
 ## 현재 버전
 
-`1.1.18`
+`1.1.19`
+
+### 1.1.19 업데이트
+
+- 동영상 옆에 있는 자막 파일을 자동으로 찾아 화면에 표시
+- ASS 자막 스타일을 실제 영상 영역에 맞춰 렌더링
+- 파일명 규칙으로 레코드 필드를 자동 채우기 (관계형 필드 포함)
+- 자리 비움 시 자동 잠금 옵션 추가
+- 카테고리의 관계형 대상 카테고리를 검색해서 선택
+- 잠금 화면에서 비밀번호 보기/숨기기 지원
 
 ### 1.1.18 업데이트
 
