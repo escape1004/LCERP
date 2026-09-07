@@ -128,6 +128,7 @@ export interface Config {
   muteAudioWhenBackgrounded?: boolean;
   zoomPercent?: number;
   hasAppPassword?: boolean;
+  idleLockMinutes?: number;
   hasOpenAiApiKey?: boolean;
   videoSeekSeconds?: number;
   videoAutoPlay?: boolean;

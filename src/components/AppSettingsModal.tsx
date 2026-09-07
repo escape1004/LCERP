@@ -103,6 +103,8 @@ export function AppSettingsModal({
   const [passwordLockAttempts, setPasswordLockAttempts] = useState('5');
   const [passwordLockMinutes, setPasswordLockMinutes] = useState('1');
   const [passwordLockMessage, setPasswordLockMessage] = useState('');
+  const [idleLockMinutesInput, setIdleLockMinutesInput] = useState('5');
+  const [idleLockMessage, setIdleLockMessage] = useState('');
   const [generalMessage, setGeneralMessage] = useState('');
   const [zoomPercentInput, setZoomPercentInput] = useState('100');
   const [backupIntervalInput, setBackupIntervalInput] = useState('60');
@@ -202,6 +204,8 @@ export function AppSettingsModal({
         setPasswordLockAttempts(String(nextConfig.passwordLockMaxAttempts ?? 5));
         setPasswordLockMinutes(String(nextConfig.passwordLockDurationMinutes ?? 1));
         setPasswordLockMessage('');
+        setIdleLockMinutesInput(String(nextConfig.idleLockMinutes && nextConfig.idleLockMinutes > 0 ? nextConfig.idleLockMinutes : 5));
+        setIdleLockMessage('');
         setGeneralMessage('');
         setZoomPercentInput(String(nextConfig.zoomPercent ?? 100));
         setBackupIntervalInput(String(Math.max(1, nextConfig.backupInterval ?? 60)));
@@ -723,6 +727,7 @@ export function AppSettingsModal({
       setPassword('');
       setPasswordConfirm('');
       setSecurityMessage('비밀번호가 설정되었습니다.');
+      window.dispatchEvent(new CustomEvent('config:updated', { detail: { hasAppPassword: true } }));
       return;
     }
 
@@ -739,6 +744,7 @@ export function AppSettingsModal({
       setPassword('');
       setPasswordConfirm('');
       setSecurityMessage('비밀번호가 해제되었습니다.');
+      window.dispatchEvent(new CustomEvent('config:updated', { detail: { hasAppPassword: false } }));
       return;
     }
 
@@ -776,6 +782,61 @@ export function AppSettingsModal({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const persistIdleLockMinutes = async (minutes: number) => {
+    setIsSaving(true);
+    try {
+      const result = await window.electronAPI.setIdleLockMinutes(minutes);
+      if (!result.success) {
+        setIdleLockMessage(result.error || '자리 비움 잠금 설정 저장에 실패했습니다.');
+        return;
+      }
+
+      const savedMinutes = result.idleLockMinutes ?? minutes;
+      setConfig((prev) => (prev ? { ...prev, idleLockMinutes: savedMinutes } : prev));
+      if (savedMinutes > 0) {
+        setIdleLockMinutesInput(String(savedMinutes));
+      }
+      window.dispatchEvent(new CustomEvent('config:updated', { detail: { idleLockMinutes: savedMinutes } }));
+      setIdleLockMessage(savedMinutes > 0
+        ? `${savedMinutes}분 동안 입력이 없으면 앱을 잠급니다.`
+        : '자리 비움 시 자동 잠금이 꺼졌습니다.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleIdleLockEnabledChange = async (enabled: boolean) => {
+    if (enabled && !config?.hasAppPassword) {
+      setIdleLockMessage('자리 비움 잠금을 쓰려면 먼저 프로그램 비밀번호를 설정하세요.');
+      return;
+    }
+
+    if (!enabled) {
+      await persistIdleLockMinutes(0);
+      return;
+    }
+
+    const minutes = Number(idleLockMinutesInput);
+    const nextMinutes = Number.isInteger(minutes) && minutes >= 1 && minutes <= 1440 ? minutes : 5;
+    setIdleLockMinutesInput(String(nextMinutes));
+    await persistIdleLockMinutes(nextMinutes);
+  };
+
+  const handleSaveIdleLockMinutes = async () => {
+    if (!config?.hasAppPassword) {
+      setIdleLockMessage('자리 비움 잠금을 쓰려면 먼저 프로그램 비밀번호를 설정하세요.');
+      return;
+    }
+
+    const minutes = Number(idleLockMinutesInput);
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) {
+      setIdleLockMessage('자리 비움 시간은 1분에서 1,440분 사이의 정수로 설정해야 합니다.');
+      return;
+    }
+
+    await persistIdleLockMinutes(minutes);
   };
 
   const renderGeneralSection = () => (
@@ -1598,6 +1659,55 @@ export function AppSettingsModal({
           disabled={isSaving}
         >
           로그인 잠금 설정 저장
+        </Button>
+      </div>
+
+      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-sm font-medium text-white">자리 비움 시 자동 잠금</div>
+            <p className="mt-2 text-sm leading-6 text-discord-muted">
+              마우스나 키보드 입력이 없으면 잠금 화면으로 돌아갑니다. 창이 활성화된 채로 영상을 보고 있으면 잠기지 않습니다.
+            </p>
+          </div>
+          <Switch
+            checked={(config?.idleLockMinutes ?? 0) > 0 && Boolean(config?.hasAppPassword)}
+            onCheckedChange={(checked) => void handleIdleLockEnabledChange(checked)}
+            disabled={!config || isSaving}
+            className="data-[state=checked]:bg-discord-accent data-[state=unchecked]:bg-gray-600"
+          />
+        </div>
+
+        <div className="mt-5 max-w-md space-y-2">
+          <label className="text-sm text-discord-text" htmlFor="idle-lock-minutes">자리 비움 시간</label>
+          <div className="flex items-center gap-2">
+            <Input
+              id="idle-lock-minutes"
+              type="number"
+              min="1"
+              max="1440"
+              step="1"
+              value={idleLockMinutesInput}
+              onChange={(e) => {
+                setIdleLockMinutesInput(e.target.value);
+                setIdleLockMessage('');
+              }}
+              disabled={!config || isSaving || (config?.idleLockMinutes ?? 0) <= 0}
+              className="bg-discord-bg border-gray-600 text-discord-text"
+            />
+            <span className="text-sm text-discord-muted">분</span>
+          </div>
+        </div>
+
+        {idleLockMessage && <p className="mt-3 text-sm text-discord-muted">{idleLockMessage}</p>}
+
+        <Button
+          type="button"
+          onClick={() => void handleSaveIdleLockMinutes()}
+          className="mt-5 bg-discord-accent hover:bg-blue-600 text-white"
+          disabled={isSaving || (config?.idleLockMinutes ?? 0) <= 0}
+        >
+          자리 비움 시간 저장
         </Button>
       </div>
     </div>

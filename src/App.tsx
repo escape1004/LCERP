@@ -121,6 +121,35 @@ function GateCard({ title, description, children, className = 'max-w-5xl' }: Gat
   );
 }
 
+function hasFocusedMediaPlayback() {
+  if (!document.hasFocus()) return false;
+
+  return Array.from(document.querySelectorAll('video, audio')).some((element) => {
+    const media = element as HTMLMediaElement;
+    return !media.paused && !media.ended;
+  });
+}
+
+async function silenceAppForLock() {
+  document.querySelectorAll('video, audio').forEach((element) => {
+    (element as HTMLMediaElement).pause();
+  });
+
+  if (document.pictureInPictureElement) {
+    try {
+      await document.exitPictureInPicture();
+    } catch {
+      // Picture-in-picture may already have been closed.
+    }
+  }
+
+  try {
+    await window.electronAPI.setPictureInPictureActive(false);
+  } catch {
+    // Ignore IPC failures while locking.
+  }
+}
+
 const App = () => {
   const { currentProfile, setCurrentProfile, resetForProfile, setShowDbViewer, selectCategory } = useERPStore();
   const { showLoading, hideLoading } = useLoadingStore();
@@ -134,6 +163,8 @@ const App = () => {
   const [passwordError, setPasswordError] = useState('');
   const [passwordLockUntil, setPasswordLockUntil] = useState<number | null>(null);
   const [passwordLockNow, setPasswordLockNow] = useState(Date.now());
+  const [hasAppPassword, setHasAppPassword] = useState(false);
+  const [idleLockMinutes, setIdleLockMinutes] = useState(0);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [profileError, setProfileError] = useState('');
   const [newProfileName, setNewProfileName] = useState('');
@@ -147,6 +178,7 @@ const App = () => {
   const [deleteInput, setDeleteInput] = useState('');
   const customColorInputRef = useRef<HTMLInputElement | null>(null);
   const passwordInputRef = useRef<HTMLInputElement | null>(null);
+  const lastActivityAtRef = useRef(Date.now());
 
   const selectedProfileInitial = useMemo(
     () => (newProfileName.trim().charAt(0) || 'P').toUpperCase(),
@@ -252,6 +284,65 @@ const App = () => {
     return () => window.clearInterval(intervalId);
   }, [passwordLockUntil]);
 
+  useEffect(() => {
+    const handleConfigUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ hasAppPassword?: boolean; idleLockMinutes?: number }>).detail;
+      if (typeof detail?.hasAppPassword === 'boolean') {
+        setHasAppPassword(detail.hasAppPassword);
+      }
+      if (typeof detail?.idleLockMinutes === 'number') {
+        setIdleLockMinutes(detail.idleLockMinutes);
+      }
+    };
+
+    window.addEventListener('config:updated', handleConfigUpdated);
+    return () => window.removeEventListener('config:updated', handleConfigUpdated);
+  }, []);
+
+  useEffect(() => {
+    if (requiresPassword || !hasAppPassword || idleLockMinutes <= 0 || isCheckingPassword) {
+      return;
+    }
+
+    lastActivityAtRef.current = Date.now();
+
+    const markActivity = () => {
+      lastActivityAtRef.current = Date.now();
+    };
+    const activityEvents: Array<keyof WindowEventMap> = ['pointerdown', 'keydown', 'wheel', 'touchstart', 'mousemove'];
+    activityEvents.forEach((eventName) => {
+      window.addEventListener(eventName, markActivity, { capture: true, passive: true });
+    });
+
+    const intervalId = window.setInterval(() => {
+      if (hasFocusedMediaPlayback()) {
+        lastActivityAtRef.current = Date.now();
+        return;
+      }
+
+      if (Date.now() - lastActivityAtRef.current < idleLockMinutes * 60 * 1000) {
+        return;
+      }
+
+      setIsAppSettingsOpen(false);
+      setIsAppUpdateOpen(false);
+      setIsCreateProfileOpen(false);
+      setShowDeleteConfirm(false);
+      setShowPassword(false);
+      setPasswordInput('');
+      setPasswordError('');
+      setRequiresPassword(true);
+      void silenceAppForLock();
+    }, 1000);
+
+    return () => {
+      activityEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, markActivity, true);
+      });
+      window.clearInterval(intervalId);
+    };
+  }, [hasAppPassword, idleLockMinutes, isCheckingPassword, requiresPassword]);
+
   const refreshProfiles = async () => {
     const nextProfiles = await window.electronAPI.getProfiles();
     setProfiles(nextProfiles);
@@ -279,6 +370,8 @@ const App = () => {
         if (cancelled) return;
 
         setRequiresPassword(Boolean(config?.hasAppPassword));
+        setHasAppPassword(Boolean(config?.hasAppPassword));
+        setIdleLockMinutes(typeof config?.idleLockMinutes === 'number' ? config.idleLockMinutes : 0);
         setPasswordLockUntil(typeof config?.passwordLockUntil === 'number' ? config.passwordLockUntil : null);
         setProfiles(nextProfiles as Profile[]);
         setCurrentProfile(null);
@@ -286,6 +379,8 @@ const App = () => {
       } catch {
         if (cancelled) return;
         setRequiresPassword(false);
+        setHasAppPassword(false);
+        setIdleLockMinutes(0);
         setPasswordLockUntil(null);
         setProfiles([]);
         setCurrentProfile(null);
@@ -313,6 +408,7 @@ const App = () => {
       setPasswordInput('');
       setPasswordError('');
       setPasswordLockUntil(null);
+      lastActivityAtRef.current = Date.now();
       return;
     }
 
@@ -531,81 +627,23 @@ const App = () => {
             updateAvailable={appUpdateState.updateAvailable}
             settingsDisabled={isCheckingPassword || requiresPassword || !currentProfile}
           />
-          <div className="flex-1 min-h-0">
-            {isCheckingPassword ? null : requiresPassword ? (
-              <div
-                className="h-full flex items-center justify-center bg-discord-bg p-6"
-                onMouseDownCapture={(e) => {
-                  if (e.target === passwordInputRef.current) return;
-                  if ((e.target as HTMLElement).closest('[data-password-toggle]')) return;
-                  e.preventDefault();
-                  keepPasswordInputFocus();
-                }}
-              >
-                <GateCard
-                  title="앱 잠금 해제"
-                  description="비밀번호를 입력한 뒤 프로필을 선택할 수 있습니다."
-                  className="max-w-md"
-                >
-                  <div className="max-w-md space-y-3">
-                    <div className="relative">
-                      <Input
-                        ref={passwordInputRef}
-                        type={showPassword ? 'text' : 'password'}
-                        value={passwordInput}
-                        onChange={(e) => {
-                          setPasswordInput(e.target.value);
-                          setPasswordError('');
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            void handleUnlock();
-                          }
-                        }}
-                        onBlur={() => {
-                          if (requiresPassword && !isPasswordLocked) {
-                            keepPasswordInputFocus();
-                          }
-                        }}
-                        className="bg-discord-bg border-gray-600 pr-10 text-discord-text"
-                        placeholder="비밀번호"
-                        autoFocus
-                        disabled={isPasswordLocked}
-                      />
-                      <button
-                        type="button"
-                        data-password-toggle
-                        className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-discord-muted hover:text-discord-text disabled:cursor-not-allowed disabled:opacity-50"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => setShowPassword((visible) => !visible)}
-                        disabled={isPasswordLocked}
-                        aria-label={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'}
-                      >
-                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                    </div>
-                    {isPasswordLocked && (
-                      <p className="text-sm text-amber-300">
-                        보안을 위해 비밀번호 입력이 {passwordLockRemainingLabel} 동안 잠겼습니다.
-                      </p>
-                    )}
-                    {passwordError && <p className="text-sm text-red-400">{passwordError}</p>}
-                    <Button
-                      onClick={() => void handleUnlock()}
-                      className="w-full bg-discord-accent hover:bg-blue-600 text-white"
-                      disabled={isPasswordLocked || !passwordInput.trim()}
-                    >
-                      잠금 해제
-                    </Button>
+          <div className="flex-1 min-h-0 relative">
+            {isCheckingPassword ? null : (
+              <>
+                {currentProfile ? (
+                  <div className={`h-full ${requiresPassword ? 'pointer-events-none invisible' : ''}`} aria-hidden={requiresPassword}>
+                    <HashRouter>
+                      <RouterContent />
+                    </HashRouter>
+                    <Toaster />
+                    <Sonner />
                   </div>
-                </GateCard>
-              </div>
-            ) : !currentProfile ? (
-              <div className="h-full flex items-center justify-center bg-discord-bg p-6">
-                <GateCard
-                  title="프로필 선택"
-                  description="프로필마다 카테고리와 대시보드 통계가 분리됩니다."
-                >
+                ) : requiresPassword ? null : (
+                  <div className="h-full flex items-center justify-center bg-discord-bg p-6">
+                    <GateCard
+                      title="프로필 선택"
+                      description="프로필마다 카테고리와 대시보드 통계가 분리됩니다."
+                    >
                   <div className="flex justify-center">
                     <div className="w-fit max-w-full">
                       <div className="flex flex-wrap justify-center gap-x-8 gap-y-10">
@@ -681,13 +719,78 @@ const App = () => {
                   </div>
                 </GateCard>
               </div>
-            ) : (
-              <>
-                <HashRouter>
-                  <RouterContent />
-                </HashRouter>
-                <Toaster />
-                <Sonner />
+                )}
+                {requiresPassword && (
+                  <div
+                    className={`${currentProfile ? 'absolute inset-0 z-50' : 'h-full'} flex items-center justify-center bg-discord-bg p-6`}
+                    onMouseDownCapture={(e) => {
+                      if (e.target === passwordInputRef.current) return;
+                      if ((e.target as HTMLElement).closest('[data-password-toggle]')) return;
+                      e.preventDefault();
+                      keepPasswordInputFocus();
+                    }}
+                  >
+                    <GateCard
+                      title="앱 잠금 해제"
+                      description={currentProfile
+                        ? '자리를 비운 동안 앱이 잠겼습니다. 비밀번호를 입력하면 이어서 사용할 수 있습니다.'
+                        : '비밀번호를 입력한 뒤 프로필을 선택할 수 있습니다.'}
+                      className="max-w-md"
+                    >
+                      <div className="max-w-md space-y-3">
+                        <div className="relative">
+                          <Input
+                            ref={passwordInputRef}
+                            type={showPassword ? 'text' : 'password'}
+                            value={passwordInput}
+                            onChange={(e) => {
+                              setPasswordInput(e.target.value);
+                              setPasswordError('');
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                void handleUnlock();
+                              }
+                            }}
+                            onBlur={() => {
+                              if (requiresPassword && !isPasswordLocked) {
+                                keepPasswordInputFocus();
+                              }
+                            }}
+                            className="bg-discord-bg border-gray-600 pr-10 text-discord-text"
+                            placeholder="비밀번호"
+                            autoFocus
+                            disabled={isPasswordLocked}
+                          />
+                          <button
+                            type="button"
+                            data-password-toggle
+                            className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-discord-muted hover:text-discord-text disabled:cursor-not-allowed disabled:opacity-50"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => setShowPassword((visible) => !visible)}
+                            disabled={isPasswordLocked}
+                            aria-label={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'}
+                          >
+                            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                        {isPasswordLocked && (
+                          <p className="text-sm text-amber-300">
+                            보안을 위해 비밀번호 입력이 {passwordLockRemainingLabel} 동안 잠겼습니다.
+                          </p>
+                        )}
+                        {passwordError && <p className="text-sm text-red-400">{passwordError}</p>}
+                        <Button
+                          onClick={() => void handleUnlock()}
+                          className="w-full bg-discord-accent hover:bg-blue-600 text-white"
+                          disabled={isPasswordLocked || !passwordInput.trim()}
+                        >
+                          잠금 해제
+                        </Button>
+                      </div>
+                    </GateCard>
+                  </div>
+                )}
               </>
             )}
           </div>

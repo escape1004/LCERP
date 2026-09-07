@@ -73,7 +73,8 @@ const defaultConfig = {
   zoomPercent: 100,
   thumbnailPreviewScale: 100,
   defaultGalleryZoom: 100,
-  dateParseFormats: null
+  dateParseFormats: null,
+  idleLockMinutes: 0
 };
 
 let appConfig = { ...defaultConfig };
@@ -220,6 +221,18 @@ function getConfiguredPasswordLockMaxAttempts() {
 
 function getConfiguredPasswordLockDurationMinutes() {
   return normalizePasswordLockDurationMinutes(appConfig.passwordLockDurationMinutes) ?? 1;
+}
+
+function normalizeIdleLockMinutes(value) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return null;
+  const rounded = Math.floor(numericValue);
+  if (rounded <= 0) return 0;
+  return Math.min(1440, rounded);
+}
+
+function getConfiguredIdleLockMinutes() {
+  return normalizeIdleLockMinutes(appConfig.idleLockMinutes) ?? 0;
 }
 
 function getPasswordLockUntil() {
@@ -3725,6 +3738,7 @@ ipcMain.handle('getConfig', () => {
     passwordLockMaxAttempts: getConfiguredPasswordLockMaxAttempts(),
     passwordLockDurationMinutes: getConfiguredPasswordLockDurationMinutes(),
     passwordLockUntil: getPasswordLockUntil(),
+    idleLockMinutes: getConfiguredIdleLockMinutes(),
     videoSeekSeconds: appConfig.videoSeekSeconds || 5,
     videoAutoPlay: appConfig.videoAutoPlay !== false,
     listThumbnailFit: appConfig.listThumbnailFit === 'contain' ? 'contain' : 'cover',
@@ -3983,6 +3997,17 @@ ipcMain.handle('verifyAppPassword', async (_event, password) => {
     remainingAttempts: maxAttempts - failedAttempts,
     error: 'Invalid password.'
   };
+});
+
+ipcMain.handle('setIdleLockMinutes', (_event, minutes) => {
+  const normalizedMinutes = normalizeIdleLockMinutes(minutes);
+  if (normalizedMinutes === null) {
+    return { success: false, error: 'Invalid idle lock minutes.' };
+  }
+
+  appConfig.idleLockMinutes = normalizedMinutes;
+  saveAppConfig();
+  return { success: true, idleLockMinutes: normalizedMinutes };
 });
 
 ipcMain.handle('setPasswordLockSettings', (_event, maxAttempts, durationMinutes) => {

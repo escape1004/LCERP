@@ -73,6 +73,7 @@ export interface ElectronAPI {
   setDateParseFormats: (formats: string[]) => Promise<{ success: boolean; dateParseFormats?: string[]; error?: string }>;
   setAppPassword: (password: string) => Promise<{ success: boolean; error?: string }>;
   setPasswordLockSettings: (maxAttempts: number, durationMinutes: number) => Promise<{ success: boolean; passwordLockMaxAttempts?: number; passwordLockDurationMinutes?: number; error?: string }>;
+  setIdleLockMinutes: (minutes: number) => Promise<{ success: boolean; idleLockMinutes?: number; error?: string }>;
   clearAppPassword: () => Promise<{ success: boolean; error?: string }>;
   verifyAppPassword: (password: string) => Promise<{ success: boolean; locked?: boolean; lockUntil?: number; remainingMs?: number; remainingAttempts?: number; error?: string }>;
   getProfiles: () => Promise<Profile[]>;

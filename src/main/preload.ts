@@ -94,6 +94,7 @@ const api: ElectronAPI = {
   translateText: (payload: { text: string; targetLanguage: string }) => ipcRenderer.invoke('translateText', payload),
   setAppPassword: (password: string) => ipcRenderer.invoke('setAppPassword', password),
   setPasswordLockSettings: (maxAttempts: number, durationMinutes: number) => ipcRenderer.invoke('setPasswordLockSettings', maxAttempts, durationMinutes),
+  setIdleLockMinutes: (minutes: number) => ipcRenderer.invoke('setIdleLockMinutes', minutes),
   clearAppPassword: () => ipcRenderer.invoke('clearAppPassword'),
   verifyAppPassword: (password: string) => ipcRenderer.invoke('verifyAppPassword', password),
   getProfiles: () => ipcRenderer.invoke('profiles:getAll'),

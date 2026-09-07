@@ -68,6 +68,7 @@ export interface Config {
   passwordLockMaxAttempts?: number;
   passwordLockDurationMinutes?: number;
   passwordLockUntil?: number | null;
+  idleLockMinutes?: number;
   hasOpenAiApiKey?: boolean;
   videoSeekSeconds?: number;
   videoAutoPlay?: boolean;
