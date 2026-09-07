@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
-import { X, GripVertical, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, GripVertical, Plus, Trash2, ChevronDown, ChevronUp, Check, ChevronsUpDown } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { useERPStore } from '../hooks/useERPStore';
 import { Category, Config, FieldDefinition, NewCategory } from '../types';
@@ -9,6 +9,9 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from './ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { cn } from '../lib/utils';
 import { Checkbox } from './ui/checkbox';
 import { toast } from './ui/use-toast';
 import { Switch } from './ui/switch';
@@ -83,6 +86,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   const [migratedAffixCount, setMigratedAffixCount] = useState(0);
   const [isDirty, setIsDirty] = useState(false);
   const [expandedTextDecorations, setExpandedTextDecorations] = useState<Record<string, boolean>>({});
+  const [openRelationCategoryId, setOpenRelationCategoryId] = useState<string | null>(null);
   const [config, setConfig] = useState<Config | null>(null);
   
   // 카테고리 이름 입력 필드 ref
@@ -167,6 +171,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     setIsMigratingAffixes(false);
     setMigratedAffixCount(0);
     setExpandedTextDecorations({});
+    setOpenRelationCategoryId(null);
   }, [category, isOpen]);
 
   // formData가 변경될 때마다 isDirty 상태 업데이트
@@ -852,40 +857,81 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                     {field.type === 'relation' && (
                                       <div className="space-y-2">
                                         <Label className="text-sm text-gray-400">관련 카테고리</Label>
-                                        <Select
-                                          value={field.relationCategoryId}
-                                          onValueChange={(value) => {
-                                            updateField(index, { relationCategoryId: value });
-                                            if (errors[`field_${index}_relation`]) {
-                                              setErrors(prev => {
-                                                const newErrors = { ...prev };
-                                                delete newErrors[`field_${index}_relation`];
-                                                return newErrors;
-                                              });
-                                            }
-                                          }}
-                                        >
-                                          <SelectTrigger className="w-full bg-[#2b2d31] border-gray-600 text-gray-200">
-                                            <SelectValue placeholder="관계 카테고리 선택" />
-                                          </SelectTrigger>
-                                          <SelectContent className="bg-[#2b2d31] border-gray-600">
-                                            {(() => {
-                                              const selectableCategories = categories.filter(c => c.id !== category?.id && !isSeparatorCategory(c));
-                                              if (selectableCategories.length === 0) {
-                                                return (
-                                                  <div className="px-4 py-2 text-sm text-center text-gray-500">
-                                                    선택할 카테고리가 없습니다.
-                                                  </div>
-                                                );
-                                              }
-                                              return selectableCategories.map((cat) => (
-                                                <SelectItem key={cat.id} value={cat.id}>
-                                                  {getCategoryPath(cat).join(' > ')}
-                                                </SelectItem>
-                                              ));
-                                            })()}
-                                          </SelectContent>
-                                        </Select>
+                                        {(() => {
+                                          const selectableCategories = categories.filter(c => c.id !== category?.id && !isSeparatorCategory(c));
+                                          const selectedCategory = selectableCategories.find(c => c.id === field.relationCategoryId);
+                                          const selectedLabel = selectedCategory
+                                            ? getCategoryPath(selectedCategory).join(' > ')
+                                            : '';
+
+                                          return (
+                                            <Popover
+                                              open={openRelationCategoryId === field.id}
+                                              onOpenChange={(open) => setOpenRelationCategoryId(open ? field.id : null)}
+                                            >
+                                              <PopoverTrigger asChild>
+                                                <Button
+                                                  type="button"
+                                                  variant="outline"
+                                                  role="combobox"
+                                                  aria-expanded={openRelationCategoryId === field.id}
+                                                  className="h-10 w-full justify-between bg-[#2b2d31] border-gray-600 text-gray-200 hover:bg-[#2b2d31] hover:text-gray-200"
+                                                >
+                                                  <span className="truncate">
+                                                    {selectedLabel || '관계 카테고리 선택'}
+                                                  </span>
+                                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                </Button>
+                                              </PopoverTrigger>
+                                              <PopoverContent className="w-[--radix-popover-trigger-width] p-0 bg-[#2b2d31] border-gray-600">
+                                                <Command className="bg-[#2b2d31] border-none">
+                                                  <CommandInput
+                                                    placeholder="관련 카테고리 검색..."
+                                                    className="h-9 bg-[#2b2d31] text-gray-200 border-b border-gray-600"
+                                                  />
+                                                  <CommandList className="max-h-[200px] overflow-y-auto text-gray-200">
+                                                    <CommandEmpty className="py-2 pl-3 text-sm text-gray-500">
+                                                      {selectableCategories.length === 0
+                                                        ? '선택할 카테고리가 없습니다.'
+                                                        : '항목을 찾을 수 없습니다.'}
+                                                    </CommandEmpty>
+                                                    <CommandGroup>
+                                                      {selectableCategories.map((cat) => {
+                                                        const label = getCategoryPath(cat).join(' > ');
+                                                        return (
+                                                          <CommandItem
+                                                            key={cat.id}
+                                                            value={`${label} ${cat.id}`}
+                                                            onSelect={() => {
+                                                              updateField(index, { relationCategoryId: cat.id });
+                                                              setOpenRelationCategoryId(null);
+                                                              if (errors[`field_${index}_relation`]) {
+                                                                setErrors(prev => {
+                                                                  const newErrors = { ...prev };
+                                                                  delete newErrors[`field_${index}_relation`];
+                                                                  return newErrors;
+                                                                });
+                                                              }
+                                                            }}
+                                                            className="text-gray-200 hover:bg-discord-hover"
+                                                          >
+                                                            <Check
+                                                              className={cn(
+                                                                'mr-2 h-4 w-4',
+                                                                field.relationCategoryId === cat.id ? 'opacity-100' : 'opacity-0'
+                                                              )}
+                                                            />
+                                                            {label}
+                                                          </CommandItem>
+                                                        );
+                                                      })}
+                                                    </CommandGroup>
+                                                  </CommandList>
+                                                </Command>
+                                              </PopoverContent>
+                                            </Popover>
+                                          );
+                                        })()}
                                         {errors[`field_${index}_relation`] && (
                                           <p className="text-red-500 text-sm mt-1">
                                             {errors[`field_${index}_relation`]}
