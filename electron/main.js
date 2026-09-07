@@ -1312,13 +1312,44 @@ function getArchiveVideoCachePath(archivePath, fileName) {
 }
 
 const archiveVideoExtractPromises = new Map();
+const ARCHIVE_TEXT_MAX_BYTES = 10 * 1024 * 1024;
+const ARCHIVE_DATA_URL_MAX_BYTES = 40 * 1024 * 1024;
+let archiveIoQueue = Promise.resolve();
+
+function enqueueArchiveIo(task) {
+  const run = archiveIoQueue.then(task, task);
+  archiveIoQueue = run.then(() => undefined, () => undefined);
+  return run;
+}
+
+async function findArchiveEntry(archivePath, fileName) {
+  const directory = await unzipper.Open.file(archivePath);
+  return directory.files.find((candidate) => (
+    candidate.type !== 'Directory'
+    && !String(candidate.path || '').endsWith('/')
+    && isSameZipEntry(candidate.path, fileName)
+  )) || null;
+}
+
+async function readArchiveEntryBuffer(archivePath, fileName, maxBytes) {
+  const entry = await findArchiveEntry(archivePath, fileName);
+  if (!entry) return null;
+
+  const size = Number(entry.uncompressedSize) || 0;
+  if (maxBytes && size > maxBytes) {
+    log('Archive entry skipped because it is too large:', { fileName, size });
+    return null;
+  }
+
+  return entry.buffer();
+}
 
 async function ensureArchiveVideoExtracted(archivePath, fileName) {
   const cachePath = getArchiveVideoCachePath(archivePath, fileName);
   const inflight = archiveVideoExtractPromises.get(cachePath);
   if (inflight) return inflight;
 
-  const extractPromise = (async () => {
+  const extractPromise = enqueueArchiveIo(async () => {
     const directory = await unzipper.Open.file(archivePath);
     const file = directory.files.find((entry) => (
       entry.type !== 'Directory'
@@ -1349,7 +1380,7 @@ async function ensureArchiveVideoExtracted(archivePath, fileName) {
     });
 
     return cachePath;
-  })();
+  });
 
   archiveVideoExtractPromises.set(cachePath, extractPromise);
   try {
@@ -4658,6 +4689,50 @@ ipcMain.handle('db:getFileType', async (_, filePath) => {
   }
 });
 
+function decodeSubtitleBuffer(buffer) {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+  } catch {
+    return new TextDecoder('euc-kr').decode(buffer);
+  }
+}
+
+ipcMain.handle('getVideoSubtitles', async (_, videoPath) => {
+  try {
+    if (!videoPath || !fs.existsSync(videoPath)) return [];
+
+    const parsedVideoPath = path.parse(videoPath);
+    const normalizedVideoBase = parsedVideoPath.name.toLocaleLowerCase();
+    const subtitlePattern = /\.(srt|vtt|ass)$/i;
+
+    return fs.readdirSync(parsedVideoPath.dir, { withFileTypes: true })
+      .filter(entry => {
+        if (!entry.isFile() || !subtitlePattern.test(entry.name)) return false;
+        const subtitleBase = path.parse(entry.name).name.toLocaleLowerCase();
+        return subtitleBase === normalizedVideoBase || subtitleBase.startsWith(`${normalizedVideoBase}.`);
+      })
+      .map(entry => {
+        const subtitlePath = path.join(parsedVideoPath.dir, entry.name);
+        if (fs.statSync(subtitlePath).size > 10 * 1024 * 1024) return null;
+        return {
+          id: subtitlePath,
+          name: entry.name,
+          content: decodeSubtitleBuffer(fs.readFileSync(subtitlePath)),
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => {
+        const aExact = path.parse(a.name).name.toLocaleLowerCase() === normalizedVideoBase;
+        const bExact = path.parse(b.name).name.toLocaleLowerCase() === normalizedVideoBase;
+        if (aExact !== bExact) return aExact ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+  } catch (error) {
+    log('Error loading video subtitles:', error);
+    return [];
+  }
+});
+
 ipcMain.handle('getFileDataUrl', async (_, filePath) => {
   try {
     if (!fs.existsSync(filePath)) return null;
@@ -4837,61 +4912,29 @@ ipcMain.handle('getArchiveFileDataUrl', async (_, filePath, fileName) => {
     if (!fs.existsSync(filePath)) return null;
     const ext = path.extname(filePath).toLowerCase();
     if (ext === '.7z') return null;
-    
-    // 대용량 파일을 위해 unzipper 스트리밍 방식 사용
-    return new Promise((resolve, reject) => {
-      fs.createReadStream(filePath)
-        .pipe(unzipper.Parse())
-        .on('entry', function (entry) {
-          if (isSameZipEntry(entry.path, fileName) && entry.type === 'File') {
-            const chunks = [];
-            entry.on('data', chunk => chunks.push(chunk));
-            entry.on('end', () => {
-              try {
-                const buffer = Buffer.concat(chunks);
-                const fileExt = path.extname(fileName).toLowerCase();
-                let mimeType = 'application/octet-stream';
-                if (['.jpg', '.jpeg'].includes(fileExt)) mimeType = 'image/jpeg';
-                else if (fileExt === '.png') mimeType = 'image/png';
-                else if (fileExt === '.gif') mimeType = 'image/gif';
-                else if (fileExt === '.webp') mimeType = 'image/webp';
-                else if (fileExt === '.txt') mimeType = 'text/plain';
-                else if (['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'].includes(fileExt)) {
-                  const videoMimeTypes = {
-                    '.mp4': 'video/mp4',
-                    '.webm': 'video/webm',
-                    '.ogg': 'video/ogg',
-                    '.avi': 'video/x-msvideo',
-                    '.mkv': 'video/x-matroska',
-                    '.mov': 'video/quicktime',
-                    '.wmv': 'video/x-ms-wmv',
-                    '.flv': 'video/x-flv',
-                    '.m4v': 'video/x-m4v',
-                    '.3gp': 'video/3gpp',
-                    '.ts': 'video/mp2t'
-                  };
-                  mimeType = videoMimeTypes[fileExt] || 'video/mp4';
-                }
-                resolve(`data:${mimeType};base64,${buffer.toString('base64')}`);
-              } catch (err) {
-                reject(err);
-              }
-            });
-            entry.on('error', reject);
-          } else {
-            entry.autodrain();
-          }
-        })
-        .on('close', () => resolve(null))
-        .on('error', reject);
-    });
+    const requestedFileExt = path.extname(fileName).toLowerCase();
+    const isVideo = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'].includes(requestedFileExt);
+    if (isVideo) return null;
+
+    const buffer = await enqueueArchiveIo(() => (
+      readArchiveEntryBuffer(filePath, fileName, ARCHIVE_DATA_URL_MAX_BYTES)
+    ));
+    if (!buffer) return null;
+
+    let mimeType = 'application/octet-stream';
+    if (['.jpg', '.jpeg'].includes(requestedFileExt)) mimeType = 'image/jpeg';
+    else if (requestedFileExt === '.png') mimeType = 'image/png';
+    else if (requestedFileExt === '.gif') mimeType = 'image/gif';
+    else if (requestedFileExt === '.webp') mimeType = 'image/webp';
+    else if (requestedFileExt === '.txt') mimeType = 'text/plain';
+    return `data:${mimeType};base64,${buffer.toString('base64')}`;
   } catch (e) {
     log('Error in getArchiveFileDataUrl:', e);
     return null;
   }
 });
 
-// getArchiveFileStreamInfo 핸들러 (압축파일 내 동영상 스트리밍 여부 결정)
+// 압축 동영상은 크기와 무관하게 스트리밍한다.
 ipcMain.handle('getArchiveFileStreamInfo', async (_, filePath, fileName) => {
   try {
     if (!fs.existsSync(filePath)) return null;
@@ -4902,34 +4945,8 @@ ipcMain.handle('getArchiveFileStreamInfo', async (_, filePath, fileName) => {
     const isVideo = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'].includes(fileExt);
     
     if (!isVideo) return null;
-    
-    // 압축파일 내 동영상 파일 크기 확인
-    return new Promise((resolve, reject) => {
-      fs.createReadStream(filePath)
-        .pipe(unzipper.Parse())
-        .on('entry', function (entry) {
-          if (isSameZipEntry(entry.path, fileName) && entry.type === 'File') {
-            const fileSizeInMB = entry.vars.uncompressedSize / (1024 * 1024);
-            
-            // 50MB 이상인 경우 스트리밍 방식 사용
-            if (fileSizeInMB > 50) {
-              log('압축파일 내 대용량 동영상 감지, 스트리밍 방식 사용:', { 
-                archivePath: filePath, 
-                fileName, 
-                sizeMB: fileSizeInMB 
-              });
-              resolve('stream'); // 스트리밍 방식 사용을 나타내는 특별한 값
-            } else {
-              resolve(null); // 일반 방식 사용
-            }
-            entry.autodrain();
-          } else {
-            entry.autodrain();
-          }
-        })
-        .on('close', () => resolve(null))
-        .on('error', reject);
-    });
+
+    return 'stream';
   } catch (e) {
     log('Error in getArchiveFileStreamInfo:', e);
     return null;
@@ -4949,45 +4966,23 @@ ipcMain.handle('getArchiveFileText', async (_, filePath, fileName) => {
       log('[7z 파일은 현재 지원되지 않습니다]', filePath);
       return null;
     }
-    
-    // 대용량 파일을 위해 unzipper 스트리밍 방식 사용
-    return new Promise((resolve, reject) => {
-      fs.createReadStream(filePath)
-        .pipe(unzipper.Parse())
-        .on('entry', function (entry) {
-          if (isSameZipEntry(entry.path, fileName) && entry.type === 'File') {
-            const fileExt = path.extname(fileName).toLowerCase();
-            
-            // 텍스트 파일만 처리
-            if (fileExt === '.txt') {
-              const chunks = [];
-              entry.on('data', chunk => chunks.push(chunk));
-              entry.on('end', () => {
-                try {
-                  const buffer = Buffer.concat(chunks);
-                  const text = buffer.toString('utf8');
-                  log('[압축 파일 텍스트 읽기]', fileName);
-                  resolve(text);
-                } catch (err) {
-                  reject(err);
-                }
-              });
-              entry.on('error', reject);
-            } else {
-              log('[텍스트 파일이 아님]', fileName);
-              entry.autodrain();
-              resolve(null);
-            }
-          } else {
-            entry.autodrain();
-          }
-        })
-        .on('close', () => resolve(null))
-        .on('error', (err) => {
-          log('[압축 파일 텍스트 읽기 에러]', err);
-          reject(err);
-        });
-    });
+
+    const fileExt = path.extname(fileName).toLowerCase();
+    if (!['.txt', '.srt', '.vtt', '.ass'].includes(fileExt)) {
+      log('[텍스트 파일이 아님]', fileName);
+      return null;
+    }
+
+    const buffer = await enqueueArchiveIo(() => (
+      readArchiveEntryBuffer(filePath, fileName, ARCHIVE_TEXT_MAX_BYTES)
+    ));
+    if (!buffer) return null;
+
+    const text = fileExt === '.txt'
+      ? buffer.toString('utf8')
+      : decodeSubtitleBuffer(buffer);
+    log('[압축 파일 텍스트 읽기]', fileName);
+    return text;
   } catch (e) {
     log('[압축 파일 텍스트 읽기 에러]', e);
     return null;

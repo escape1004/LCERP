@@ -7,7 +7,19 @@ import { toast } from './ui/use-toast';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./ui/tooltip";
 import { AnimatedModal } from './ui/animated-modal';
 import { AnimatedGif } from './AnimatedGif';
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from './ui/context-menu';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuRadioGroup,
+  ContextMenuRadioItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from './ui/context-menu';
+import { parseSubtitle, SubtitleCue } from '../lib/subtitle';
 
 interface ViewerModalProps {
   isOpen: boolean;
@@ -26,23 +38,143 @@ interface ArchiveFile {
   data?: Buffer;
 }
 
+interface SubtitleSource {
+  id: string;
+  name: string;
+  cues: SubtitleCue[];
+}
+
+type SubtitleSize = 'small' | 'medium' | 'large';
+type SubtitleColor = 'white' | 'yellow';
+type SubtitleBackground = 'none' | 'translucent' | 'dark';
+
 const PictureInPictureContextMenu: React.FC<{
   children: React.ReactElement;
   onPlayInPictureInPicture: () => void;
-}> = ({ children, onPlayInPictureInPicture }) => (
+  subtitles: SubtitleSource[];
+  activeSubtitleId: string | null;
+  subtitleSize: SubtitleSize;
+  subtitleColor: SubtitleColor;
+  subtitleBackground: SubtitleBackground;
+  subtitleOffset: number;
+  onSubtitleChange: (id: string | null) => void;
+  onSubtitleSizeChange: (size: SubtitleSize) => void;
+  onSubtitleColorChange: (color: SubtitleColor) => void;
+  onSubtitleBackgroundChange: (background: SubtitleBackground) => void;
+  onSubtitleOffsetChange: (offset: number) => void;
+}> = ({
+  children,
+  onPlayInPictureInPicture,
+  subtitles,
+  activeSubtitleId,
+  subtitleSize,
+  subtitleColor,
+  subtitleBackground,
+  subtitleOffset,
+  onSubtitleChange,
+  onSubtitleSizeChange,
+  onSubtitleColorChange,
+  onSubtitleBackgroundChange,
+  onSubtitleOffsetChange,
+}) => (
   <ContextMenu>
     <ContextMenuTrigger asChild>
       {children}
     </ContextMenuTrigger>
-    <ContextMenuContent>
+    <ContextMenuContent className="min-w-[180px]">
       <ContextMenuItem onSelect={onPlayInPictureInPicture}>
         PIP 재생
       </ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuSub>
+        <ContextMenuSubTrigger>자막</ContextMenuSubTrigger>
+        <ContextMenuSubContent className="min-w-[220px]">
+          <ContextMenuRadioGroup value={activeSubtitleId || 'off'} onValueChange={value => onSubtitleChange(value === 'off' ? null : value)}>
+            <ContextMenuRadioItem value="off">끄기</ContextMenuRadioItem>
+            {subtitles.map(subtitle => (
+              <ContextMenuRadioItem key={subtitle.id} value={subtitle.id}>
+                <span className="max-w-[260px] truncate">{subtitle.name}</span>
+              </ContextMenuRadioItem>
+            ))}
+          </ContextMenuRadioGroup>
+          {subtitles.length === 0 && (
+            <ContextMenuItem disabled>일치하는 자막 없음</ContextMenuItem>
+          )}
+        </ContextMenuSubContent>
+      </ContextMenuSub>
+      <ContextMenuSub>
+        <ContextMenuSubTrigger>자막 크기</ContextMenuSubTrigger>
+        <ContextMenuSubContent>
+          <ContextMenuRadioGroup value={subtitleSize} onValueChange={value => onSubtitleSizeChange(value as SubtitleSize)}>
+            <ContextMenuRadioItem value="small">작게</ContextMenuRadioItem>
+            <ContextMenuRadioItem value="medium">보통</ContextMenuRadioItem>
+            <ContextMenuRadioItem value="large">크게</ContextMenuRadioItem>
+          </ContextMenuRadioGroup>
+        </ContextMenuSubContent>
+      </ContextMenuSub>
+      <ContextMenuSub>
+        <ContextMenuSubTrigger>자막 색상</ContextMenuSubTrigger>
+        <ContextMenuSubContent>
+          <ContextMenuRadioGroup value={subtitleColor} onValueChange={value => onSubtitleColorChange(value as SubtitleColor)}>
+            <ContextMenuRadioItem value="white">흰색</ContextMenuRadioItem>
+            <ContextMenuRadioItem value="yellow">노란색</ContextMenuRadioItem>
+          </ContextMenuRadioGroup>
+        </ContextMenuSubContent>
+      </ContextMenuSub>
+      <ContextMenuSub>
+        <ContextMenuSubTrigger>자막 배경</ContextMenuSubTrigger>
+        <ContextMenuSubContent>
+          <ContextMenuRadioGroup value={subtitleBackground} onValueChange={value => onSubtitleBackgroundChange(value as SubtitleBackground)}>
+            <ContextMenuRadioItem value="none">없음</ContextMenuRadioItem>
+            <ContextMenuRadioItem value="translucent">반투명</ContextMenuRadioItem>
+            <ContextMenuRadioItem value="dark">진하게</ContextMenuRadioItem>
+          </ContextMenuRadioGroup>
+        </ContextMenuSubContent>
+      </ContextMenuSub>
+      <ContextMenuSub>
+        <ContextMenuSubTrigger>
+          자막 싱크
+          <span className="ml-auto pl-3 text-xs text-discord-muted">
+            {subtitleOffset > 0 ? '+' : ''}{subtitleOffset.toFixed(1)}초
+          </span>
+        </ContextMenuSubTrigger>
+        <ContextMenuSubContent>
+          <ContextMenuItem onSelect={() => onSubtitleOffsetChange(Math.max(-10, subtitleOffset - 0.5))}>
+            0.5초 빠르게
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={() => onSubtitleOffsetChange(0)}>초기화</ContextMenuItem>
+          <ContextMenuItem onSelect={() => onSubtitleOffsetChange(Math.min(10, subtitleOffset + 0.5))}>
+            0.5초 느리게
+          </ContextMenuItem>
+        </ContextMenuSubContent>
+      </ContextMenuSub>
     </ContextMenuContent>
   </ContextMenu>
 );
 
 const SUPPORTED_ARCHIVE_FILE_PATTERN = /\.(jpg|jpeg|png|gif|webp|mp4|avi|mkv|mov|wmv|flv|webm|txt)$/i;
+const SUBTITLE_FILE_PATTERN = /\.(srt|vtt|ass)$/i;
+
+const findArchiveSubtitles = (files: ArchiveFile[], videoName: string) => {
+  const normalizedVideoName = videoName.replace(/\\/g, '/');
+  const lastSlashIndex = normalizedVideoName.lastIndexOf('/');
+  const videoDirectory = normalizedVideoName.slice(0, Math.max(0, lastSlashIndex + 1)).toLocaleLowerCase();
+  const videoFileName = normalizedVideoName.slice(lastSlashIndex + 1);
+  const videoBase = videoFileName.replace(/\.[^.]+$/, '').toLocaleLowerCase();
+
+  return files.filter(file => {
+    const normalizedName = file.name.replace(/\\/g, '/');
+    const subtitleSlashIndex = normalizedName.lastIndexOf('/');
+    const subtitleDirectory = normalizedName.slice(0, Math.max(0, subtitleSlashIndex + 1)).toLocaleLowerCase();
+    const subtitleFileName = normalizedName.slice(subtitleSlashIndex + 1);
+    const subtitleBase = subtitleFileName.replace(/\.[^.]+$/, '').toLocaleLowerCase();
+
+    return !file.isDirectory
+      && SUBTITLE_FILE_PATTERN.test(subtitleFileName)
+      && subtitleDirectory === videoDirectory
+      && (subtitleBase === videoBase || subtitleBase.startsWith(`${videoBase}.`));
+  });
+};
 
 export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, fileType, categoryId = '', recordId = '', onClose }) => {
   const [displayFilePath, setDisplayFilePath] = useState(filePath);
@@ -139,6 +271,20 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const [isArchiveGifPaused, setIsArchiveGifPaused] = useState(false);
   const [videoSeekSeconds, setVideoSeekSeconds] = useState(5);
   const [videoAutoPlay, setVideoAutoPlay] = useState(true);
+  const [subtitles, setSubtitles] = useState<SubtitleSource[]>([]);
+  const [activeSubtitleId, setActiveSubtitleId] = useState<string | null>(null);
+  const [subtitleOffset, setSubtitleOffset] = useState(0);
+  const [subtitleSize, setSubtitleSize] = useState<SubtitleSize>(() => {
+    const saved = localStorage.getItem('subtitleSize');
+    return saved === 'small' || saved === 'large' ? saved : 'medium';
+  });
+  const [subtitleColor, setSubtitleColor] = useState<SubtitleColor>(() => (
+    localStorage.getItem('subtitleColor') === 'yellow' ? 'yellow' : 'white'
+  ));
+  const [subtitleBackground, setSubtitleBackground] = useState<SubtitleBackground>(() => {
+    const saved = localStorage.getItem('subtitleBackground');
+    return saved === 'none' || saved === 'dark' ? saved : 'translucent';
+  });
 
   const [bookmarks, setBookmarks] = useState<{ time: number; createdAt: string }[]>([]);
 
@@ -148,6 +294,16 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const isVideoFileName = useCallback((name?: string) => {
     return Boolean(name && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(name));
   }, []);
+  const activeSubtitleText = useMemo(() => {
+    const activeSubtitle = subtitles.find(subtitle => subtitle.id === activeSubtitleId);
+    if (!activeSubtitle) return null;
+
+    const cue = activeSubtitle.cues.find(subtitleCue => (
+      currentTime >= subtitleCue.start + subtitleOffset
+      && currentTime <= subtitleCue.end + subtitleOffset
+    ));
+    return cue?.text || null;
+  }, [activeSubtitleId, currentTime, subtitleOffset, subtitles]);
 
   const getEffectiveFileType = useCallback(() => fileType || detectedFileType, [fileType, detectedFileType]);
   const filteredArchiveFiles = useMemo(() => {
@@ -324,6 +480,86 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       cancelled = true;
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    localStorage.setItem('subtitleSize', subtitleSize);
+  }, [subtitleSize]);
+
+  useEffect(() => {
+    localStorage.setItem('subtitleColor', subtitleColor);
+  }, [subtitleColor]);
+
+  useEffect(() => {
+    localStorage.setItem('subtitleBackground', subtitleBackground);
+  }, [subtitleBackground]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSubtitles([]);
+      setActiveSubtitleId(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadSubtitles = async () => {
+      const effectiveType = displayFileType || detectedFileType;
+      let loadedSubtitles: SubtitleSource[] = [];
+
+      try {
+        if (effectiveType === 'video' && displayFilePath) {
+          const sources = await window.electronAPI.getVideoSubtitles(displayFilePath);
+          loadedSubtitles = sources
+            .map(source => ({
+              id: source.id,
+              name: source.name,
+              cues: parseSubtitle(source.content, source.name),
+            }))
+            .filter(source => source.cues.length > 0);
+        } else if (effectiveType === 'archive' && currentArchiveIndex >= 0) {
+          const currentFile = archiveFiles[currentArchiveIndex];
+          if (currentFile && isVideoFileName(currentFile.name)) {
+            const matches = findArchiveSubtitles(archiveFiles, currentFile.name);
+            const sources = await Promise.all(matches.map(async subtitle => ({
+              id: `archive:${subtitle.name}`,
+              name: subtitle.name.replace(/\\/g, '/').split('/').pop() || subtitle.name,
+              content: await window.electronAPI.getArchiveFileText(displayFilePath, subtitle.name),
+            })));
+
+            loadedSubtitles = sources
+              .filter((source): source is typeof source & { content: string } => typeof source.content === 'string')
+              .map(source => ({
+                id: source.id,
+                name: source.name,
+                cues: parseSubtitle(source.content, source.name),
+              }))
+              .filter(source => source.cues.length > 0);
+          }
+        }
+      } catch (error) {
+        console.error('자막 로드 실패:', error);
+      }
+
+      if (!cancelled) {
+        setSubtitles(loadedSubtitles);
+        setActiveSubtitleId(loadedSubtitles[0]?.id ?? null);
+        setSubtitleOffset(0);
+      }
+    };
+
+    void loadSubtitles();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    archiveFiles,
+    currentArchiveIndex,
+    detectedFileType,
+    displayFilePath,
+    displayFileType,
+    isOpen,
+    isVideoFileName,
+  ]);
 
   useEffect(() => {
     if (filePath) {
@@ -1037,21 +1273,10 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
           setCurrentArchiveText(text);
           setCurrentArchiveDataUrl(null);
         } else if (['mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'webm'].includes(fileExt || '')) {
-          // 동영상 파일인 경우 - 스트리밍 방식 확인
-          const streamInfo = await window.electronAPI.getArchiveFileStreamInfo(filePath, currentFile.name);
-          
-          if (streamInfo === 'stream') {
-            // 스트리밍 방식 사용
-            const port = (window as any).videoServerPort || 17345;
-            const streamUrl = `http://localhost:${port}/archive-video?archive=${encodeURIComponent(filePath)}&file=${encodeURIComponent(currentFile.name)}`;
-            setCurrentArchiveDataUrl(streamUrl);
-            setCurrentArchiveText(null);
-          } else {
-            // 일반 방식 사용
-            const dataUrl = await window.electronAPI.getArchiveFileDataUrl(filePath, currentFile.name);
-            setCurrentArchiveDataUrl(dataUrl);
-            setCurrentArchiveText(null);
-          }
+          const port = (window as any).videoServerPort || 17345;
+          const streamUrl = `http://localhost:${port}/archive-video?archive=${encodeURIComponent(filePath)}&file=${encodeURIComponent(currentFile.name)}`;
+          setCurrentArchiveDataUrl(streamUrl);
+          setCurrentArchiveText(null);
         } else {
           // 이미지 파일인 경우
           const dataUrl = await window.electronAPI.getArchiveFileDataUrl(filePath, currentFile.name);
@@ -1607,6 +1832,44 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const effectiveFileType = displayFileType || detectedFileType;
   const isImageGif = effectiveFileType === 'image' && /\.gif$/i.test(displayFilePath);
   const isArchiveGif = effectiveFileType === 'archive' && /\.gif$/i.test(currentFile?.name || '');
+  const subtitleContextMenuProps = {
+    subtitles,
+    activeSubtitleId,
+    subtitleSize,
+    subtitleColor,
+    subtitleBackground,
+    subtitleOffset,
+    onSubtitleChange: setActiveSubtitleId,
+    onSubtitleSizeChange: setSubtitleSize,
+    onSubtitleColorChange: setSubtitleColor,
+    onSubtitleBackgroundChange: setSubtitleBackground,
+    onSubtitleOffsetChange: setSubtitleOffset,
+  };
+  const renderSubtitle = () => {
+    if (!activeSubtitleText) return null;
+
+    const sizeClass = subtitleSize === 'small'
+      ? 'text-lg'
+      : subtitleSize === 'large'
+        ? 'text-3xl'
+        : 'text-2xl';
+    const colorClass = subtitleColor === 'yellow' ? 'text-yellow-300' : 'text-white';
+    const backgroundClass = subtitleBackground === 'none'
+      ? 'bg-transparent'
+      : subtitleBackground === 'dark'
+        ? 'bg-black/90'
+        : 'bg-black/[0.65]';
+
+    return (
+      <div className={`pointer-events-none absolute left-8 right-8 z-10 flex justify-center text-center font-semibold transition-[bottom] duration-200 ${
+        showControls ? 'bottom-24' : 'bottom-10'
+      }`}>
+        <span className={`${sizeClass} ${colorClass} ${backgroundClass} max-w-[90%] whitespace-pre-line rounded px-2 py-1 leading-snug shadow-black [text-shadow:0_1px_3px_rgba(0,0,0,0.95)]`}>
+          {activeSubtitleText}
+        </span>
+      </div>
+    );
+  };
   const timelinePreviewSource = effectiveFileType === 'video'
     ? dataUrl
     : effectiveFileType === 'archive' && isVideoFileName(currentFile?.name)
@@ -1890,7 +2153,10 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                           </button>
                         </div>
                       ) : (
-                        <PictureInPictureContextMenu onPlayInPictureInPicture={() => void handlePictureInPicture()}>
+                        <PictureInPictureContextMenu
+                          onPlayInPictureInPicture={() => void handlePictureInPicture()}
+                          {...subtitleContextMenuProps}
+                        >
                           <video
                             ref={videoRef}
                             src={dataUrl}
@@ -1944,6 +2210,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                       )}
                     </div>
                   </div>
+                  {renderSubtitle()}
                   
                   {/* 볼륨 오버레이 */}
                   {showVolumeOverlay && (
@@ -2393,7 +2660,10 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                   </button>
                                 </div>
                               ) : (
-                                <PictureInPictureContextMenu onPlayInPictureInPicture={() => void handlePictureInPicture()}>
+                                <PictureInPictureContextMenu
+                                  onPlayInPictureInPicture={() => void handlePictureInPicture()}
+                                  {...subtitleContextMenuProps}
+                                >
                                   <video
                                     src={currentArchiveDataUrl}
                                     className="max-w-full max-h-[80vh] object-contain bg-black rounded shadow-lg"
@@ -2447,6 +2717,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                 </PictureInPictureContextMenu>
                               )}
                             </div>
+                            {renderSubtitle()}
                             
                             {/* 볼륨 오버레이 */}
                             {showVolumeOverlay && (

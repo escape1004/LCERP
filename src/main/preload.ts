@@ -64,6 +64,7 @@ const api: ElectronAPI = {
   generateThumbnail: (filePath: string) => ipcRenderer.invoke('generateThumbnail', filePath),
   getThumbnailDataUrl: (filePath: string) => ipcRenderer.invoke('getThumbnailDataUrl', filePath),
   getFileDataUrl: (filePath: string) => ipcRenderer.invoke('getFileDataUrl', filePath),
+  getVideoSubtitles: (filePath: string) => ipcRenderer.invoke('getVideoSubtitles', filePath),
   getVideoBlobUrl: (filePath: string) => ipcRenderer.invoke('getVideoBlobUrl', filePath),
   getVideoStream: (filePath: string) => ipcRenderer.invoke('getVideoStream', filePath),
   getArchiveFiles: (filePath: string) => ipcRenderer.invoke('getArchiveFiles', filePath),

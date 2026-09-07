@@ -112,6 +112,7 @@ export interface ElectronAPI {
 
   send: (channel: string, ...args: any[]) => void;
   onRandomRecordShortcut: (callback: () => void) => () => void;
+  getVideoSubtitles: (filePath: string) => Promise<Array<{ id: string; name: string; content: string }>>;
   getVideoDuration: (filePath: string) => Promise<number | null>;
   getVideoCodecInfo: (filePath: string) => Promise<{ video?: { codec?: string; profile?: string; pix_fmt?: string }; audio?: { codec?: string; sample_rate?: string; channels?: number }; hasEmbeddedCover?: boolean; error?: string }>;
   removeCustomThumbnail: (filePath: string) => Promise<boolean>;

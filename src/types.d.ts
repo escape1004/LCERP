@@ -105,6 +105,7 @@ export interface ElectronAPI {
   getThumbnailDataUrl: (filePath: string) => Promise<string | null>;
   getThumbnailDataUrlHybrid: (record: any, filePath: string) => Promise<string | null>;
   getFileDataUrl: (filePath: string) => Promise<string | null>;
+  getVideoSubtitles: (filePath: string) => Promise<Array<{ id: string; name: string; content: string }>>;
   getVideoStream: (filePath: string) => Promise<string | null>;
   getArchiveFiles: (filePath: string) => Promise<Array<{ name: string; size: number; isDirectory: boolean; comment: string }>>;
   openArchiveFile: (archivePath: string, fileName: string) => Promise<{ success: boolean; error?: string }>;
