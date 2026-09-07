@@ -608,11 +608,61 @@ declare global {
     'thumbnail:regenerated': CustomEvent<{ filePath: string }>;
     'config:updated': CustomEvent<{
       listThumbnailFit?: 'cover' | 'contain';
+      videoHoverPreviewEnabled?: boolean;
       thumbnailPreviewScale?: number;
       defaultGalleryZoom?: number;
     }>;
   }
 }
+
+const VIDEO_HOVER_PREVIEW_PATTERN = /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i;
+
+const HoverVideoPreview: React.FC<{
+  filePath: string;
+  className: string;
+  delayMs?: number;
+}> = ({ filePath, className, delayMs = 500 }) => {
+  const [videoSrc, setVideoSrc] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const timeoutId = window.setTimeout(() => {
+      void window.electronAPI.getFileDataUrl(filePath)
+        .then((result) => {
+          if (cancelled || !result || result === 'error') return;
+          if (result === 'stream') {
+            const port = (window as any).videoServerPort || 17345;
+            setVideoSrc(`http://localhost:${port}/video?path=${encodeURIComponent(filePath)}`);
+            return;
+          }
+          setVideoSrc(result);
+        })
+        .catch(() => {
+          if (!cancelled) setVideoSrc(null);
+        });
+    }, delayMs);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [delayMs, filePath]);
+
+  if (!videoSrc) return null;
+
+  return (
+    <video
+      src={videoSrc}
+      className={className}
+      autoPlay
+      muted
+      loop
+      playsInline
+      preload="metadata"
+      disablePictureInPicture
+    />
+  );
+};
 
 // 썸네일 렌더링 유틸
 const ThumbnailCell: React.FC<{ 
@@ -623,13 +673,27 @@ const ThumbnailCell: React.FC<{
   thumbnailOnly?: boolean;
   sizeClassName?: string;
   sizeStyle?: React.CSSProperties;
+  videoHoverPreviewEnabled?: boolean;
+  inlineVideoPreview?: boolean;
   onPreviewChange?: (preview: {
     dataUrl: string | null;
     filePath: string;
     missingFile: boolean;
     thumbnailFit: 'cover' | 'contain';
+    isVideo: boolean;
   } | null) => void;
-}> = ({ filePath, record, onThumbnailClick, thumbnailFit, thumbnailOnly = false, sizeClassName = 'w-24 h-24', sizeStyle, onPreviewChange }) => {
+}> = ({
+  filePath,
+  record,
+  onThumbnailClick,
+  thumbnailFit,
+  thumbnailOnly = false,
+  sizeClassName = 'w-24 h-24',
+  sizeStyle,
+  videoHoverPreviewEnabled = true,
+  inlineVideoPreview = false,
+  onPreviewChange
+}) => {
   const [dataUrl, setDataUrl] = React.useState<string | null>(null);
   const [fileExists, setFileExists] = React.useState<boolean | null>(null);
   const [isHovered, setIsHovered] = React.useState(false);
@@ -721,6 +785,12 @@ const ThumbnailCell: React.FC<{
   const missingFile = !thumbnailOnly && !!filePath && fileExists === false;
   const canOpen = !!filePath && fileExists !== false && !thumbnailOnly;
   const isArchiveFile = !!filePath && /\.(zip|7z)$/i.test(filePath);
+  const isVideoFile = !!filePath && VIDEO_HOVER_PREVIEW_PATTERN.test(filePath);
+  const showInlineVideoPreview = videoHoverPreviewEnabled
+    && inlineVideoPreview
+    && isHovered
+    && isVideoFile
+    && canOpen;
 
   React.useEffect(() => {
     if (!onPreviewChange) return;
@@ -733,9 +803,10 @@ const ThumbnailCell: React.FC<{
       dataUrl,
       filePath,
       missingFile,
-      thumbnailFit
+      thumbnailFit,
+      isVideo: videoHoverPreviewEnabled && isVideoFile && canOpen
     });
-  }, [onPreviewChange, isHovered, filePath, dataUrl, missingFile, thumbnailFit]);
+  }, [onPreviewChange, isHovered, filePath, dataUrl, missingFile, thumbnailFit, videoHoverPreviewEnabled, isVideoFile, canOpen]);
 
   const thumbnailBody = (
     <div
@@ -783,6 +854,14 @@ const ThumbnailCell: React.FC<{
         <div className={`${sizeClassName} flex items-center justify-center rounded border border-dashed border-[#3b3f46] bg-[linear-gradient(180deg,_#232428_0%,_#18191c_100%)] text-[#72767d]`} style={sizeStyle}>
           <ImageOff size={20} className="text-[#72767d]" />
         </div>
+      )}
+      {showInlineVideoPreview && filePath && (
+        <HoverVideoPreview
+          filePath={filePath}
+          className={`pointer-events-none absolute inset-0 h-full w-full rounded border border-gray-700 ${
+            thumbnailFit === 'contain' ? 'object-contain bg-black' : 'object-cover'
+          }`}
+        />
       )}
       {filePath && !thumbnailOnly && (
         <div className="absolute bottom-1 right-1 bg-black bg-opacity-70 text-white text-xs px-1 py-0.5 rounded">
@@ -1603,6 +1682,7 @@ export const MainContent: React.FC = () => {
     filePath: string;
     missingFile: boolean;
     thumbnailFit: 'cover' | 'contain';
+    isVideo: boolean;
   } | null>(null);
   const [thumbnailPreviewScale, setThumbnailPreviewScale] = useState(100);
   const [galleryZoom, setGalleryZoom] = useState(100);
@@ -1618,6 +1698,7 @@ export const MainContent: React.FC = () => {
   const [viewerRecordId, setViewerRecordId] = useState<string>('');
   const [isBulkAddModalOpen, setIsBulkAddModalOpen] = useState(false);
   const [listThumbnailFit, setListThumbnailFit] = useState<'cover' | 'contain'>('cover');
+  const [videoHoverPreviewEnabled, setVideoHoverPreviewEnabled] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -1625,12 +1706,14 @@ export const MainContent: React.FC = () => {
     window.electronAPI.getConfig().then((config) => {
       if (!cancelled) {
         setListThumbnailFit(config?.listThumbnailFit === 'contain' ? 'contain' : 'cover');
+        setVideoHoverPreviewEnabled(config?.videoHoverPreviewEnabled !== false);
         setThumbnailPreviewScale(Math.min(200, Math.max(75, Number(config?.thumbnailPreviewScale ?? 100))));
         setDefaultGalleryZoom(Math.min(200, Math.max(50, Number(config?.defaultGalleryZoom ?? 100))));
       }
     }).catch(() => {
       if (!cancelled) {
         setListThumbnailFit('cover');
+        setVideoHoverPreviewEnabled(true);
         setThumbnailPreviewScale(100);
         setDefaultGalleryZoom(100);
       }
@@ -1638,11 +1721,15 @@ export const MainContent: React.FC = () => {
 
     const handleConfigUpdated = (event: CustomEvent<{
       listThumbnailFit?: 'cover' | 'contain';
+      videoHoverPreviewEnabled?: boolean;
       thumbnailPreviewScale?: number;
       defaultGalleryZoom?: number;
     }>) => {
       if (event.detail.listThumbnailFit) {
         setListThumbnailFit(event.detail.listThumbnailFit);
+      }
+      if (typeof event.detail.videoHoverPreviewEnabled === 'boolean') {
+        setVideoHoverPreviewEnabled(event.detail.videoHoverPreviewEnabled);
       }
       if (event.detail.thumbnailPreviewScale) {
         setThumbnailPreviewScale(Math.min(200, Math.max(75, Number(event.detail.thumbnailPreviewScale))));
@@ -2654,6 +2741,8 @@ export const MainContent: React.FC = () => {
                                     thumbnailOnly={fileField?.thumbnailOnly}
                                     sizeClassName="w-full"
                                     sizeStyle={{ height: `${galleryThumbnailHeight}px` }}
+                                    videoHoverPreviewEnabled={videoHoverPreviewEnabled}
+                                    inlineVideoPreview
                                     onPreviewChange={undefined}
                                     onThumbnailClick={(filePath) => {
                                       setViewerFilePath(filePath);
@@ -2852,6 +2941,7 @@ export const MainContent: React.FC = () => {
                                       record={record}
                                       thumbnailFit={listThumbnailFit}
                                       thumbnailOnly={fileField.thumbnailOnly}
+                                      videoHoverPreviewEnabled={videoHoverPreviewEnabled}
                                       onPreviewChange={setThumbnailPreview}
                                       onThumbnailClick={(filePath) => {
                                         setViewerFilePath(filePath);
@@ -2970,7 +3060,7 @@ export const MainContent: React.FC = () => {
                     >
                       <div className="flex items-center justify-between border-b border-[#2b2d31] bg-[#1e1f22]/95 px-4 py-2">
                         <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#b5bac1]">
-                          썸네일 미리보기
+                          {thumbnailPreview.isVideo && videoHoverPreviewEnabled ? '동영상 미리보기' : '썸네일 미리보기'}
                         </span>
                       </div>
                       <div
@@ -2978,15 +3068,26 @@ export const MainContent: React.FC = () => {
                         style={{ height: `${previewHeight}px` }}
                       >
                         {thumbnailPreview.dataUrl ? (
-                          <img
-                            src={thumbnailPreview.dataUrl}
-                            alt="썸네일 미리보기"
-                            className={`h-full w-full rounded-lg border border-[#2b2d31] shadow-[0_12px_24px_rgba(0,0,0,0.35)] ${
-                              thumbnailPreview.thumbnailFit === 'contain' ? 'object-contain bg-black' : 'object-cover'
-                            }`}
-                          />
+                          <div className="relative h-full w-full">
+                            <img
+                              src={thumbnailPreview.dataUrl}
+                              alt="썸네일 미리보기"
+                              className={`h-full w-full rounded-lg border border-[#2b2d31] shadow-[0_12px_24px_rgba(0,0,0,0.35)] ${
+                                thumbnailPreview.thumbnailFit === 'contain' ? 'object-contain bg-black' : 'object-cover'
+                              }`}
+                            />
+                            {thumbnailPreview.isVideo && videoHoverPreviewEnabled && (
+                              <HoverVideoPreview
+                                filePath={thumbnailPreview.filePath}
+                                delayMs={0}
+                                className={`absolute inset-0 h-full w-full rounded-lg border border-[#2b2d31] shadow-[0_12px_24px_rgba(0,0,0,0.35)] ${
+                                  thumbnailPreview.thumbnailFit === 'contain' ? 'object-contain bg-black' : 'object-cover'
+                                }`}
+                              />
+                            )}
+                          </div>
                         ) : (
-                          <div className="flex h-full w-full items-center justify-center rounded-lg border border-dashed border-[#3b3f46] bg-[#18191c] text-center">
+                          <div className="relative flex h-full w-full items-center justify-center rounded-lg border border-dashed border-[#3b3f46] bg-[#18191c] text-center">
                             <div className="flex flex-col items-center">
                               {thumbnailPreview.missingFile ? (
                                 <HelpCircle size={40} className="text-[#dcddde]" />
@@ -3003,6 +3104,15 @@ export const MainContent: React.FC = () => {
                                     : '썸네일을 불러오는 중입니다'}
                               </p>
                             </div>
+                            {thumbnailPreview.isVideo && videoHoverPreviewEnabled && (
+                              <HoverVideoPreview
+                                filePath={thumbnailPreview.filePath}
+                                delayMs={0}
+                                className={`absolute inset-0 h-full w-full rounded-lg ${
+                                  thumbnailPreview.thumbnailFit === 'contain' ? 'object-contain bg-black' : 'object-cover'
+                                }`}
+                              />
+                            )}
                           </div>
                         )}
                       </div>

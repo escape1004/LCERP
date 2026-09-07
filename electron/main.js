@@ -69,6 +69,7 @@ const defaultConfig = {
   videoSeekSeconds: 5,
   videoAutoPlay: true,
   listThumbnailFit: 'cover',
+  videoHoverPreviewEnabled: true,
   zoomPercent: 100,
   thumbnailPreviewScale: 100,
   defaultGalleryZoom: 100,
@@ -3696,6 +3697,7 @@ ipcMain.handle('getConfig', () => {
     videoSeekSeconds: appConfig.videoSeekSeconds || 5,
     videoAutoPlay: appConfig.videoAutoPlay !== false,
     listThumbnailFit: appConfig.listThumbnailFit === 'contain' ? 'contain' : 'cover',
+    videoHoverPreviewEnabled: appConfig.videoHoverPreviewEnabled !== false,
     thumbnailPreviewScale: getConfiguredThumbnailPreviewScale(),
     defaultGalleryZoom: getConfiguredDefaultGalleryZoom(),
     dateParseFormats: normalizeDateParseFormats(appConfig.dateParseFormats),
@@ -4010,6 +4012,12 @@ ipcMain.handle('setListThumbnailFit', (_event, fit) => {
   appConfig.listThumbnailFit = fit;
   saveAppConfig();
   return { success: true };
+});
+
+ipcMain.handle('setVideoHoverPreviewEnabled', (_event, enabled) => {
+  appConfig.videoHoverPreviewEnabled = enabled === true;
+  saveAppConfig();
+  return { success: true, videoHoverPreviewEnabled: appConfig.videoHoverPreviewEnabled };
 });
 
 ipcMain.handle('setDefaultGalleryZoom', (_event, scale) => {

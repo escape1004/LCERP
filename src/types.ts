@@ -130,6 +130,7 @@ export interface Config {
   videoSeekSeconds?: number;
   videoAutoPlay?: boolean;
   listThumbnailFit?: 'cover' | 'contain';
+  videoHoverPreviewEnabled?: boolean;
   thumbnailPreviewScale?: number;
   defaultGalleryZoom?: number;
   dateParseFormats?: string[];

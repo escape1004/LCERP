@@ -490,6 +490,28 @@ export function AppSettingsModal({
     }
   };
 
+  const handleVideoHoverPreviewEnabledChange = async (enabled: boolean) => {
+    const previousValue = config?.videoHoverPreviewEnabled !== false;
+    setConfig((prev) => (prev ? { ...prev, videoHoverPreviewEnabled: enabled } : prev));
+    setListMessage('');
+    setIsSaving(true);
+
+    try {
+      const result = await window.electronAPI.setVideoHoverPreviewEnabled(enabled);
+      if (result.success) {
+        window.dispatchEvent(new CustomEvent('config:updated', {
+          detail: { videoHoverPreviewEnabled: enabled }
+        }));
+        return;
+      }
+
+      setConfig((prev) => (prev ? { ...prev, videoHoverPreviewEnabled: previousValue } : prev));
+      setListMessage(result.error || '동영상 미리보기 설정 저장에 실패했습니다.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleThumbnailPreviewScaleChange = async (scale: number) => {
     const previousScale = Math.min(200, Math.max(75, Number(config?.thumbnailPreviewScale ?? 100)));
     setConfig((prev) => (prev ? { ...prev, thumbnailPreviewScale: scale } : prev));
@@ -1199,6 +1221,23 @@ export function AppSettingsModal({
               ))}
             </SelectContent>
           </Select>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-sm font-medium text-white">동영상 미리보기</div>
+            <p className="text-sm text-discord-muted mt-2 leading-6">
+              동영상 썸네일에 커서를 올리면 테이블에서는 우측 하단, 갤러리에서는 썸네일 영역에서 무음으로 재생합니다.
+            </p>
+          </div>
+          <Switch
+            checked={config?.videoHoverPreviewEnabled !== false}
+            onCheckedChange={(checked) => void handleVideoHoverPreviewEnabledChange(checked)}
+            disabled={!config || isSaving}
+            className="shrink-0 data-[state=checked]:bg-discord-accent data-[state=unchecked]:bg-gray-600"
+          />
         </div>
       </div>
 
