@@ -20,6 +20,7 @@ import {
   ContextMenuTrigger,
 } from './ui/context-menu';
 import { parseSubtitle, SubtitleCue } from '../lib/subtitle';
+import { SubtitleOverlay } from './SubtitleOverlay';
 
 interface ViewerModalProps {
   isOpen: boolean;
@@ -294,16 +295,10 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const isVideoFileName = useCallback((name?: string) => {
     return Boolean(name && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(name));
   }, []);
-  const activeSubtitleText = useMemo(() => {
+  const activeSubtitleCues = useMemo(() => {
     const activeSubtitle = subtitles.find(subtitle => subtitle.id === activeSubtitleId);
-    if (!activeSubtitle) return null;
-
-    const cue = activeSubtitle.cues.find(subtitleCue => (
-      currentTime >= subtitleCue.start + subtitleOffset
-      && currentTime <= subtitleCue.end + subtitleOffset
-    ));
-    return cue?.text || null;
-  }, [activeSubtitleId, currentTime, subtitleOffset, subtitles]);
+    return activeSubtitle?.cues || [];
+  }, [activeSubtitleId, subtitles]);
 
   const getEffectiveFileType = useCallback(() => fileType || detectedFileType, [fileType, detectedFileType]);
   const filteredArchiveFiles = useMemo(() => {
@@ -1845,31 +1840,18 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     onSubtitleBackgroundChange: setSubtitleBackground,
     onSubtitleOffsetChange: setSubtitleOffset,
   };
-  const renderSubtitle = () => {
-    if (!activeSubtitleText) return null;
-
-    const sizeClass = subtitleSize === 'small'
-      ? 'text-lg'
-      : subtitleSize === 'large'
-        ? 'text-3xl'
-        : 'text-2xl';
-    const colorClass = subtitleColor === 'yellow' ? 'text-yellow-300' : 'text-white';
-    const backgroundClass = subtitleBackground === 'none'
-      ? 'bg-transparent'
-      : subtitleBackground === 'dark'
-        ? 'bg-black/90'
-        : 'bg-black/[0.65]';
-
-    return (
-      <div className={`pointer-events-none absolute left-8 right-8 z-10 flex justify-center text-center font-semibold transition-[bottom] duration-200 ${
-        showControls ? 'bottom-24' : 'bottom-10'
-      }`}>
-        <span className={`${sizeClass} ${colorClass} ${backgroundClass} max-w-[90%] whitespace-pre-line rounded px-2 py-1 leading-snug shadow-black [text-shadow:0_1px_3px_rgba(0,0,0,0.95)]`}>
-          {activeSubtitleText}
-        </span>
-      </div>
-    );
-  };
+  const renderSubtitle = (targetVideoRef: React.RefObject<HTMLVideoElement>, sourceKey?: string | null) => (
+    <SubtitleOverlay
+      videoRef={targetVideoRef}
+      sourceKey={sourceKey}
+      cues={activeSubtitleCues}
+      currentTime={currentTime}
+      offsetSeconds={subtitleOffset}
+      size={subtitleSize}
+      color={subtitleColor}
+      background={subtitleBackground}
+    />
+  );
   const timelinePreviewSource = effectiveFileType === 'video'
     ? dataUrl
     : effectiveFileType === 'archive' && isVideoFileName(currentFile?.name)
@@ -2153,6 +2135,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                           </button>
                         </div>
                       ) : (
+                        <div className="relative inline-block max-w-full">
                         <PictureInPictureContextMenu
                           onPlayInPictureInPicture={() => void handlePictureInPicture()}
                           {...subtitleContextMenuProps}
@@ -2207,10 +2190,11 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                             }}
                           />
                         </PictureInPictureContextMenu>
+                        {renderSubtitle(videoRef, dataUrl)}
+                        </div>
                       )}
                     </div>
                   </div>
-                  {renderSubtitle()}
                   
                   {/* 볼륨 오버레이 */}
                   {showVolumeOverlay && (
@@ -2660,6 +2644,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                   </button>
                                 </div>
                               ) : (
+                                <div className="relative inline-block max-w-full">
                                 <PictureInPictureContextMenu
                                   onPlayInPictureInPicture={() => void handlePictureInPicture()}
                                   {...subtitleContextMenuProps}
@@ -2715,9 +2700,10 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                     }}
                                   />
                                 </PictureInPictureContextMenu>
+                                {renderSubtitle(archiveVideoRef, currentArchiveDataUrl)}
+                                </div>
                               )}
                             </div>
-                            {renderSubtitle()}
                             
                             {/* 볼륨 오버레이 */}
                             {showVolumeOverlay && (
