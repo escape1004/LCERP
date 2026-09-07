@@ -6,6 +6,7 @@ import { Input } from './ui/input';
 import { toast } from './ui/use-toast';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./ui/tooltip";
 import { AnimatedModal } from './ui/animated-modal';
+import { AnimatedGif } from './AnimatedGif';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from './ui/context-menu';
 
 interface ViewerModalProps {
@@ -90,6 +91,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const [archiveIsPanning, setArchiveIsPanning] = useState(false);
   const archivePanStart = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
   const archiveImgRef = useRef<HTMLImageElement>(null);
+  const archiveGifCanvasRef = useRef<HTMLCanvasElement>(null);
   const archiveImgScaleRef = useRef(1);
 
   // 압축 동영상 상태 및 핸들러
@@ -101,6 +103,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const archiveVideoScaleRef = useRef(1);
 
   const imgContainerRef = useRef<HTMLDivElement>(null);
+  const imageGifCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const [imgRotation, setImgRotation] = useState(0);
   const [videoRotation, setVideoRotation] = useState(0);
@@ -113,6 +116,8 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const playbackOverlayTimeoutRef = useRef<NodeJS.Timeout>();
   const playbackOverlayFadeTimeoutRef = useRef<NodeJS.Timeout>();
   const [playbackOverlayVisible, setPlaybackOverlayVisible] = useState(false);
+  const [isImageGifPaused, setIsImageGifPaused] = useState(false);
+  const [isArchiveGifPaused, setIsArchiveGifPaused] = useState(false);
   const [videoSeekSeconds, setVideoSeekSeconds] = useState(5);
   const [videoAutoPlay, setVideoAutoPlay] = useState(true);
 
@@ -287,6 +292,14 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   useEffect(() => {
     clearLoopSelection();
   }, [clearLoopSelection, displayFilePath, displayFileType, currentArchiveIndex, isOpen]);
+
+  useEffect(() => {
+    setIsImageGifPaused(false);
+  }, [dataUrl, displayFilePath]);
+
+  useEffect(() => {
+    setIsArchiveGifPaused(false);
+  }, [currentArchiveDataUrl, currentArchiveIndex]);
 
   useEffect(() => {
     const handleMouseMove = (event: MouseEvent) => {
@@ -545,6 +558,25 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     };
   }, [showSpeedMenu]);
 
+  const showPlaybackFeedback = (action: 'play' | 'pause') => {
+    setPlaybackOverlayState(action);
+    setShowPlaybackOverlay(true);
+    setPlaybackOverlayVisible(true);
+    if (playbackOverlayFadeTimeoutRef.current) {
+      clearTimeout(playbackOverlayFadeTimeoutRef.current);
+    }
+    if (playbackOverlayTimeoutRef.current) {
+      clearTimeout(playbackOverlayTimeoutRef.current);
+    }
+    playbackOverlayFadeTimeoutRef.current = setTimeout(() => {
+      setPlaybackOverlayVisible(false);
+    }, 420);
+    playbackOverlayTimeoutRef.current = setTimeout(() => {
+      setShowPlaybackOverlay(false);
+      setPlaybackOverlayVisible(false);
+    }, 700);
+  };
+
   // 동영상 플레이어 포커스 설정
   // 비디오 이벤트 핸들러
   const handlePlayPause = () => {
@@ -569,22 +601,23 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       }
     }
 
-    setPlaybackOverlayState(nextAction);
-    setShowPlaybackOverlay(true);
-    setPlaybackOverlayVisible(true);
-    if (playbackOverlayFadeTimeoutRef.current) {
-      clearTimeout(playbackOverlayFadeTimeoutRef.current);
-    }
-    if (playbackOverlayTimeoutRef.current) {
-      clearTimeout(playbackOverlayTimeoutRef.current);
-    }
-    playbackOverlayFadeTimeoutRef.current = setTimeout(() => {
-      setPlaybackOverlayVisible(false);
-    }, 420);
-    playbackOverlayTimeoutRef.current = setTimeout(() => {
-      setShowPlaybackOverlay(false);
-      setPlaybackOverlayVisible(false);
-    }, 700);
+    showPlaybackFeedback(nextAction);
+  };
+
+  const handleImageGifPlaybackToggle = () => {
+    if (imgScale > 1) return;
+
+    const nextPaused = !isImageGifPaused;
+    setIsImageGifPaused(nextPaused);
+    showPlaybackFeedback(nextPaused ? 'pause' : 'play');
+  };
+
+  const handleArchiveGifPlaybackToggle = () => {
+    if (archiveImgScale > 1) return;
+
+    const nextPaused = !isArchiveGifPaused;
+    setIsArchiveGifPaused(nextPaused);
+    showPlaybackFeedback(nextPaused ? 'pause' : 'play');
   };
 
   const handleVolumeChange = (newVolume: number) => {
@@ -1124,7 +1157,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   useEffect(() => {
     const effectiveType = fileType || detectedFileType;
     if (effectiveType !== 'image' || !dataUrl) return;
-    const img = imgRef.current;
+    const img = /\.gif$/i.test(displayFilePath) ? imageGifCanvasRef.current : imgRef.current;
     const container = imgContainerRef.current;
     if (!img || !container) return;
     
@@ -1145,7 +1178,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       img.removeEventListener('wheel', wheelHandler);
       container.removeEventListener('wheel', wheelHandler);
     };
-  }, [fileType, detectedFileType, dataUrl]);
+  }, [fileType, detectedFileType, dataUrl, displayFilePath]);
 
   // 압축 이미지 휠 확대/축소
   useEffect(() => {
@@ -1153,7 +1186,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     const currentFile = archiveFiles[currentArchiveIndex];
     const isArchiveImage = !!currentFile && /\.(jpg|jpeg|png|gif|webp)$/i.test(currentFile.name);
     if (effectiveType !== 'archive' || !currentArchiveDataUrl || !isArchiveImage) return;
-    const img = archiveImgRef.current;
+    const img = /\.gif$/i.test(currentFile.name) ? archiveGifCanvasRef.current : archiveImgRef.current;
     const container = imgContainerRef.current;
     if (!img || !container) return;
     
@@ -1425,6 +1458,8 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const isDetectingType = !displayFileType;
   // 실제 사용할 파일 타입 (prop이 null이면 감지된 타입 사용)
   const effectiveFileType = displayFileType || detectedFileType;
+  const isImageGif = effectiveFileType === 'image' && /\.gif$/i.test(displayFilePath);
+  const isArchiveGif = effectiveFileType === 'archive' && /\.gif$/i.test(currentFile?.name || '');
 
   return (
     <AnimatedModal
@@ -1525,43 +1560,86 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                 <div className="w-full h-full flex flex-col items-center justify-center">
                   <div
                     ref={imgContainerRef}
-                    className="flex-1 w-full h-full flex items-center justify-center"
+                    className="relative flex-1 w-full h-full flex items-center justify-center"
                     style={{ 
                       maxHeight: '80vh', 
                       maxWidth: '100%',
                       overflow: imgScale > 1 ? 'hidden' : 'visible'
                     }}
                   >
-                    <img
-                      src={dataUrl}
-                      alt="이미지 뷰어"
-                      className="max-w-full max-h-full object-contain rounded shadow-lg select-none"
-                      style={{
-                        maxWidth: imgRotation % 180 !== 0 ? '80vh' : '100%',
-                        maxHeight: imgRotation % 180 !== 0 ? '95vw' : '80vh',
-                        transform: `scale(${imgScale}) translate(${imgOffset.x / imgScale}px, ${imgOffset.y / imgScale}px) rotate(${imgRotation}deg)`,
-                        cursor: imgScale > 1 ? (isPanning ? 'grabbing' : 'grab') : 'default',
-                        transition: isPanning ? 'none' : 'transform 0.2s',
-                      }}
-                      draggable={false}
-                      ref={imgRef}
-                      onMouseDown={(e) => {
-                        e.stopPropagation();
-                        handleImgMouseDown(e);
-                      }}
-                      onMouseMove={(e) => {
-                        e.stopPropagation();
-                        handleImgMouseMove(e);
-                      }}
-                      onMouseUp={(e) => {
-                        e.stopPropagation();
-                        handleImgMouseUp();
-                      }}
-                      onMouseLeave={(e) => {
-                        e.stopPropagation();
-                        handleImgMouseUp();
-                      }}
-                    />
+                    {isImageGif ? (
+                      <AnimatedGif
+                        ref={imageGifCanvasRef}
+                        src={dataUrl}
+                        paused={isImageGifPaused}
+                        aria-label="GIF 이미지 뷰어"
+                        className="max-w-full max-h-full object-contain rounded shadow-lg select-none"
+                        style={{
+                          maxWidth: imgRotation % 180 !== 0 ? '80vh' : '100%',
+                          maxHeight: imgRotation % 180 !== 0 ? '95vw' : '80vh',
+                          transform: `scale(${imgScale}) translate(${imgOffset.x / imgScale}px, ${imgOffset.y / imgScale}px) rotate(${imgRotation}deg)`,
+                          cursor: imgScale > 1 ? (isPanning ? 'grabbing' : 'grab') : 'pointer',
+                          transition: isPanning ? 'none' : 'transform 0.2s',
+                        }}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          handleImgMouseDown(e);
+                        }}
+                        onMouseMove={(e) => {
+                          e.stopPropagation();
+                          handleImgMouseMove(e);
+                        }}
+                        onMouseUp={(e) => {
+                          e.stopPropagation();
+                          handleImgMouseUp();
+                        }}
+                        onMouseLeave={(e) => {
+                          e.stopPropagation();
+                          handleImgMouseUp();
+                        }}
+                        onClick={handleImageGifPlaybackToggle}
+                      />
+                    ) : (
+                      <img
+                        src={dataUrl}
+                        alt="이미지 뷰어"
+                        className="max-w-full max-h-full object-contain rounded shadow-lg select-none"
+                        style={{
+                          maxWidth: imgRotation % 180 !== 0 ? '80vh' : '100%',
+                          maxHeight: imgRotation % 180 !== 0 ? '95vw' : '80vh',
+                          transform: `scale(${imgScale}) translate(${imgOffset.x / imgScale}px, ${imgOffset.y / imgScale}px) rotate(${imgRotation}deg)`,
+                          cursor: imgScale > 1 ? (isPanning ? 'grabbing' : 'grab') : 'default',
+                          transition: isPanning ? 'none' : 'transform 0.2s',
+                        }}
+                        draggable={false}
+                        ref={imgRef}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          handleImgMouseDown(e);
+                        }}
+                        onMouseMove={(e) => {
+                          e.stopPropagation();
+                          handleImgMouseMove(e);
+                        }}
+                        onMouseUp={(e) => {
+                          e.stopPropagation();
+                          handleImgMouseUp();
+                        }}
+                        onMouseLeave={(e) => {
+                          e.stopPropagation();
+                          handleImgMouseUp();
+                        }}
+                      />
+                    )}
+                    {isImageGif && showPlaybackOverlay && (
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                        <div className={`flex h-20 w-20 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-all duration-300 ${
+                          playbackOverlayVisible ? 'scale-100 opacity-100' : 'scale-90 opacity-0'
+                        }`}>
+                          {playbackOverlayState === 'pause' ? <Pause size={34} fill="currentColor" /> : <Play size={34} fill="currentColor" className="ml-1" />}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -2391,37 +2469,80 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                       ) : (
                         // 이미지 파일 표시
                         currentArchiveDataUrl ? (
-                          <div className="flex flex-col items-center w-full">
-                            <img
-                              src={currentArchiveDataUrl}
-                              alt={currentFile?.name || '압축 파일 이미지'}
-                              className="max-w-full max-h-full object-contain rounded shadow-lg block mx-auto select-none"
-                              style={{
-                                maxWidth: archiveImgRotation % 180 !== 0 ? '80vh' : '100%',
-                                maxHeight: archiveImgRotation % 180 !== 0 ? '95vw' : '80vh',
-                                transform: `scale(${archiveImgScale}) translate(${archiveImgOffset.x / archiveImgScale}px, ${archiveImgOffset.y / archiveImgScale}px) rotate(${archiveImgRotation}deg)`,
-                                cursor: archiveImgScale > 1 ? (archiveIsPanning ? 'grabbing' : 'grab') : 'default',
-                                transition: archiveIsPanning ? 'none' : 'transform 0.2s',
-                              }}
-                              draggable={false}
-                              ref={archiveImgRef}
-                              onMouseDown={(e) => {
-                                e.stopPropagation();
-                                handleArchiveImgMouseDown(e);
-                              }}
-                              onMouseMove={(e) => {
-                                e.stopPropagation();
-                                handleArchiveImgMouseMove(e);
-                              }}
-                              onMouseUp={(e) => {
-                                e.stopPropagation();
-                                handleArchiveImgMouseUp();
-                              }}
-                              onMouseLeave={(e) => {
-                                e.stopPropagation();
-                                handleArchiveImgMouseUp();
-                              }}
-                            />
+                          <div className="relative flex w-full flex-col items-center">
+                            {isArchiveGif ? (
+                              <AnimatedGif
+                                ref={archiveGifCanvasRef}
+                                src={currentArchiveDataUrl}
+                                paused={isArchiveGifPaused}
+                                aria-label={currentFile?.name || '압축 파일 GIF 이미지'}
+                                className="max-w-full max-h-full object-contain rounded shadow-lg block mx-auto select-none"
+                                style={{
+                                  maxWidth: archiveImgRotation % 180 !== 0 ? '80vh' : '100%',
+                                  maxHeight: archiveImgRotation % 180 !== 0 ? '95vw' : '80vh',
+                                  transform: `scale(${archiveImgScale}) translate(${archiveImgOffset.x / archiveImgScale}px, ${archiveImgOffset.y / archiveImgScale}px) rotate(${archiveImgRotation}deg)`,
+                                  cursor: archiveImgScale > 1 ? (archiveIsPanning ? 'grabbing' : 'grab') : 'pointer',
+                                  transition: archiveIsPanning ? 'none' : 'transform 0.2s',
+                                }}
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  handleArchiveImgMouseDown(e);
+                                }}
+                                onMouseMove={(e) => {
+                                  e.stopPropagation();
+                                  handleArchiveImgMouseMove(e);
+                                }}
+                                onMouseUp={(e) => {
+                                  e.stopPropagation();
+                                  handleArchiveImgMouseUp();
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.stopPropagation();
+                                  handleArchiveImgMouseUp();
+                                }}
+                                onClick={handleArchiveGifPlaybackToggle}
+                              />
+                            ) : (
+                              <img
+                                src={currentArchiveDataUrl}
+                                alt={currentFile?.name || '압축 파일 이미지'}
+                                className="max-w-full max-h-full object-contain rounded shadow-lg block mx-auto select-none"
+                                style={{
+                                  maxWidth: archiveImgRotation % 180 !== 0 ? '80vh' : '100%',
+                                  maxHeight: archiveImgRotation % 180 !== 0 ? '95vw' : '80vh',
+                                  transform: `scale(${archiveImgScale}) translate(${archiveImgOffset.x / archiveImgScale}px, ${archiveImgOffset.y / archiveImgScale}px) rotate(${archiveImgRotation}deg)`,
+                                  cursor: archiveImgScale > 1 ? (archiveIsPanning ? 'grabbing' : 'grab') : 'default',
+                                  transition: archiveIsPanning ? 'none' : 'transform 0.2s',
+                                }}
+                                draggable={false}
+                                ref={archiveImgRef}
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  handleArchiveImgMouseDown(e);
+                                }}
+                                onMouseMove={(e) => {
+                                  e.stopPropagation();
+                                  handleArchiveImgMouseMove(e);
+                                }}
+                                onMouseUp={(e) => {
+                                  e.stopPropagation();
+                                  handleArchiveImgMouseUp();
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.stopPropagation();
+                                  handleArchiveImgMouseUp();
+                                }}
+                              />
+                            )}
+                            {isArchiveGif && showPlaybackOverlay && (
+                              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                                <div className={`flex h-20 w-20 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-all duration-300 ${
+                                  playbackOverlayVisible ? 'scale-100 opacity-100' : 'scale-90 opacity-0'
+                                }`}>
+                                  {playbackOverlayState === 'pause' ? <Pause size={34} fill="currentColor" /> : <Play size={34} fill="currentColor" className="ml-1" />}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="text-discord-muted">이미지를 로드할 수 없습니다.</div>
