@@ -6,9 +6,9 @@ Local ERP는 컴퓨터에 보관한 파일과 관련 정보를 한곳에서 정�
 
 ## 다운로드 및 설치
 
-[**Local ERP v1.1.17 Windows 설치 파일 다운로드**](https://github.com/escape1004/LCERP/releases/download/v1.1.17/Local-ERP-Setup-1.1.17.exe)
+[**Local ERP v1.1.18 Windows 설치 파일 다운로드**](https://github.com/escape1004/LCERP/releases/download/v1.1.18/Local-ERP-Setup-1.1.18.exe)
 
-다운로드한 `Local-ERP-Setup-1.1.17.exe` 파일을 실행하고 안내에 따라 설치하면 됩니다. 이전 버전이 설치되어 있다면 기존 데이터와 설정을 유지한 상태로 업데이트됩니다.
+다운로드한 `Local-ERP-Setup-1.1.18.exe` 파일을 실행하고 안내에 따라 설치하면 됩니다. 이전 버전이 설치되어 있다면 기존 데이터와 설정을 유지한 상태로 업데이트됩니다.
 
 다른 버전과 전체 배포 파일은 [GitHub Releases](https://github.com/escape1004/LCERP/releases)에서 확인할 수 있습니다.
 
@@ -124,7 +124,17 @@ Local ERP는 컴퓨터에 보관한 파일과 관련 정보를 한곳에서 정�
 
 ## 현재 버전
 
-`1.1.17`
+`1.1.18`
+
+### 1.1.18 업데이트
+
+- 테이블과 갤러리에서 동영상 썸네일 호버 미리보기 지원
+- 동영상 재생바에 프레임 및 시간 미리보기 추가
+- 동영상과 압축파일 내부 동영상의 PIP 재생 지원
+- 이미지와 압축파일 내부 GIF의 재생 및 일시정지 지원
+- 압축파일 내부 파일 검색과 검색 결과 기반 탐색 추가
+- 앱 비밀번호를 랜덤 Salt 기반 scrypt 방식으로 강화
+- 대시보드 레코드 카드의 간격과 스타일 개선
 
 ### 1.1.17 업데이트
 
