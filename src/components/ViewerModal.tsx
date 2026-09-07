@@ -140,11 +140,28 @@ const PictureInPictureContextMenu: React.FC<{
           </span>
         </ContextMenuSubTrigger>
         <ContextMenuSubContent>
-          <ContextMenuItem onSelect={() => onSubtitleOffsetChange(Math.max(-10, subtitleOffset - 0.5))}>
+          <ContextMenuItem
+            onSelect={(event) => {
+              event.preventDefault();
+              onSubtitleOffsetChange(Math.max(-10, subtitleOffset - 0.5));
+            }}
+          >
             0.5초 빠르게
           </ContextMenuItem>
-          <ContextMenuItem onSelect={() => onSubtitleOffsetChange(0)}>초기화</ContextMenuItem>
-          <ContextMenuItem onSelect={() => onSubtitleOffsetChange(Math.min(10, subtitleOffset + 0.5))}>
+          <ContextMenuItem
+            onSelect={(event) => {
+              event.preventDefault();
+              onSubtitleOffsetChange(0);
+            }}
+          >
+            초기화
+          </ContextMenuItem>
+          <ContextMenuItem
+            onSelect={(event) => {
+              event.preventDefault();
+              onSubtitleOffsetChange(Math.min(10, subtitleOffset + 0.5));
+            }}
+          >
             0.5초 느리게
           </ContextMenuItem>
         </ContextMenuSubContent>
