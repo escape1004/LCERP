@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { X, ChevronLeft, ChevronRight, Download, File, FileImage, FileVideo, Archive, FileText, Play, Pause, Volume2, VolumeX, RotateCcw, RotateCw, Maximize, Minimize, Bookmark, Clock } from 'lucide-react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { X, ChevronLeft, ChevronRight, Download, File, FileImage, FileVideo, Archive, FileText, Play, Pause, Volume2, VolumeX, RotateCcw, RotateCw, Maximize, Minimize, Bookmark, Clock, Search } from 'lucide-react';
 import AdmZip from 'adm-zip';
 import { Button } from './ui/button';
+import { Input } from './ui/input';
 import { toast } from './ui/use-toast';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./ui/tooltip";
 import { AnimatedModal } from './ui/animated-modal';
@@ -33,6 +34,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const [displayRecordId, setDisplayRecordId] = useState(recordId);
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [archiveFiles, setArchiveFiles] = useState<ArchiveFile[]>([]);
+  const [archiveSearchQuery, setArchiveSearchQuery] = useState('');
   const [currentArchiveIndex, setCurrentArchiveIndex] = useState<number>(0);
   const [currentArchiveDataUrl, setCurrentArchiveDataUrl] = useState<string | null>(null);
   const [currentArchiveText, setCurrentArchiveText] = useState<string | null>(null);
@@ -124,6 +126,20 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   }, []);
 
   const getEffectiveFileType = useCallback(() => fileType || detectedFileType, [fileType, detectedFileType]);
+  const filteredArchiveFiles = useMemo(() => {
+    const normalizedQuery = archiveSearchQuery.trim().toLocaleLowerCase();
+    return archiveFiles
+      .map((file, originalIndex) => ({ file, originalIndex }))
+      .filter(({ file }) => !normalizedQuery || file.name.toLocaleLowerCase().includes(normalizedQuery));
+  }, [archiveFiles, archiveSearchQuery]);
+  const navigableArchiveFiles = useMemo(
+    () => filteredArchiveFiles.filter(({ file }) => file.isSupported),
+    [filteredArchiveFiles]
+  );
+  const currentArchiveNavigationIndex = useMemo(
+    () => navigableArchiveFiles.findIndex(({ originalIndex }) => originalIndex === currentArchiveIndex),
+    [currentArchiveIndex, navigableArchiveFiles]
+  );
 
   useEffect(() => {
     if (!isOpen) {
@@ -150,6 +166,10 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
         countedViewKeyRef.current = null;
       });
   }, [categoryId, filePath, isOpen, recordId]);
+
+  useEffect(() => {
+    setArchiveSearchQuery('');
+  }, [displayFilePath, isOpen]);
 
   const getActiveVideoElement = useCallback(() => {
     const effectiveType = getEffectiveFileType();
@@ -873,20 +893,27 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   };
 
   const handlePrevious = () => {
-    if (currentArchiveIndex > 0) {
-      setCurrentArchiveDataUrl(null);
-      setCurrentArchiveText(null);
-      setCurrentArchiveIndex(currentArchiveIndex - 1);
-    }
+    const targetPosition = currentArchiveNavigationIndex < 0
+      ? navigableArchiveFiles.length - 1
+      : currentArchiveNavigationIndex - 1;
+    const targetIndex = navigableArchiveFiles[targetPosition]?.originalIndex;
+    if (targetIndex === undefined) return;
+
+    setCurrentArchiveDataUrl(null);
+    setCurrentArchiveText(null);
+    setCurrentArchiveIndex(targetIndex);
   };
 
   const handleNext = () => {
-    const supportedFileCount = archiveFiles.filter(file => file.isSupported).length;
-    if (currentArchiveIndex < supportedFileCount - 1) {
-      setCurrentArchiveDataUrl(null);
-      setCurrentArchiveText(null);
-      setCurrentArchiveIndex(currentArchiveIndex + 1);
-    }
+    const targetPosition = currentArchiveNavigationIndex < 0
+      ? 0
+      : currentArchiveNavigationIndex + 1;
+    const targetIndex = navigableArchiveFiles[targetPosition]?.originalIndex;
+    if (targetIndex === undefined) return;
+
+    setCurrentArchiveDataUrl(null);
+    setCurrentArchiveText(null);
+    setCurrentArchiveIndex(targetIndex);
   };
 
   const handleOpenUnsupportedArchiveFile = async (file: ArchiveFile) => {
@@ -907,6 +934,14 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
       onClose();
+      return;
+    }
+
+    if (
+      e.target instanceof HTMLInputElement
+      || e.target instanceof HTMLTextAreaElement
+      || (e.target instanceof HTMLElement && e.target.isContentEditable)
+    ) {
       return;
     }
     
@@ -1380,11 +1415,11 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   if (!displayFilePath) return null;
 
   const currentFile = archiveFiles[currentArchiveIndex];
-  const supportedArchiveFileCount = archiveFiles.filter(file => file.isSupported).length;
   const fileName = displayFilePath.split(/[\\/]/).pop() || '';
   const currentFileExt = currentFile?.name.toLowerCase().split('.').pop();
-  const isFirstArchiveFile = currentArchiveIndex <= 0;
-  const isLastArchiveFile = currentArchiveIndex >= supportedArchiveFileCount - 1;
+  const isFirstArchiveFile = navigableArchiveFiles.length === 0 || currentArchiveNavigationIndex === 0;
+  const isLastArchiveFile = navigableArchiveFiles.length === 0
+    || currentArchiveNavigationIndex === navigableArchiveFiles.length - 1;
   
   // fileType이 null이면 로딩 중이므로 로딩 UI만 표시
   const isDetectingType = !displayFileType;
@@ -1413,7 +1448,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
             <span className="text-discord-text font-medium truncate max-w-md">{fileName}</span>
             {effectiveFileType === 'archive' && (
               <span className="text-discord-muted text-sm">
-                ({Math.max(0, currentArchiveIndex + 1)} / {supportedArchiveFileCount})
+                ({Math.max(0, currentArchiveNavigationIndex + 1)} / {navigableArchiveFiles.length})
               </span>
             )}
           </div>
@@ -1860,73 +1895,106 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
               {effectiveFileType === 'archive' && (
                 <div className="w-full h-full flex flex-row">
                   {/* 사이드 파일 리스트 */}
-                  <div className="h-full w-48 bg-discord-sidebar border-r border-gray-700 overflow-y-auto flex-shrink-0">
-                    <TooltipProvider>
-                      <ul className="py-2">
-                        {archiveFiles.map((file, idx) => {
-                          const fileExt = file.name.toLowerCase().split('.').pop();
-                          const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name);
-                          const isVideo = /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(file.name);
-                          const isText = fileExt === 'txt';
-                          const isSupported = Boolean(file.isSupported);
+                  <div className="flex h-full w-48 flex-shrink-0 flex-col border-r border-gray-700 bg-discord-sidebar">
+                    <div className="flex-shrink-0 border-b border-gray-700 p-2">
+                      <div className="relative">
+                        <Search
+                          size={14}
+                          className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-discord-muted"
+                        />
+                        <Input
+                          type="text"
+                          value={archiveSearchQuery}
+                          onChange={(event) => setArchiveSearchQuery(event.target.value)}
+                          placeholder="파일 검색"
+                          aria-label="압축파일 내부 파일 검색"
+                          className="h-8 border-gray-600 bg-discord-bg pl-8 pr-8 text-xs text-discord-text placeholder:text-discord-muted"
+                        />
+                        {archiveSearchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setArchiveSearchQuery('')}
+                            aria-label="검색어 지우기"
+                            className="absolute right-2 top-1/2 flex -translate-y-1/2 cursor-pointer items-center justify-center text-discord-muted transition-colors hover:text-discord-text"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="min-h-0 flex-1 overflow-y-auto">
+                      <TooltipProvider>
+                        <ul className="py-2">
+                          {filteredArchiveFiles.map(({ file, originalIndex: idx }) => {
+                            const fileExt = file.name.toLowerCase().split('.').pop();
+                            const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name);
+                            const isVideo = /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(file.name);
+                            const isText = fileExt === 'txt';
+                            const isSupported = Boolean(file.isSupported);
 
-                          const fileListItem = (
-                            <li
-                              aria-disabled={!isSupported}
-                              title={!isSupported ? `${file.name} (미지원 파일)` : undefined}
-                              className={`flex items-center gap-2 px-2 py-1 rounded ${
-                                isSupported
-                                  ? `cursor-pointer hover:bg-discord-hover ${idx === currentArchiveIndex ? 'bg-discord-hover font-bold' : ''}`
-                                  : 'cursor-not-allowed text-discord-muted opacity-45'
-                              }`}
-                              onClick={() => {
-                                if (isSupported && idx !== currentArchiveIndex) {
-                                  setCurrentArchiveDataUrl(null);
-                                  setCurrentArchiveText(null);
-                                  setCurrentArchiveIndex(idx);
-                                }
-                              }}
-                            >
-                              {isImage && <FileImage size={14} className="text-blue-400 flex-shrink-0" />}
-                              {isVideo && <FileVideo size={14} className="text-green-400 flex-shrink-0" />}
-                              {isText && <FileText size={14} className="text-green-400 flex-shrink-0" />}
-                              {!isSupported && <File size={14} className="flex-shrink-0" />}
-                              <span className="truncate flex-1 min-w-0">{file.name}</span>
-                            </li>
-                          );
-
-                          if (!isSupported) {
-                            return (
-                              <ContextMenu key={`${file.name}-${idx}`}>
-                                <ContextMenuTrigger asChild>
-                                  {fileListItem}
-                                </ContextMenuTrigger>
-                                <ContextMenuContent>
-                                  <ContextMenuItem onClick={() => void handleOpenUnsupportedArchiveFile(file)}>
-                                    원본 파일 열기
-                                  </ContextMenuItem>
-                                </ContextMenuContent>
-                              </ContextMenu>
-                            );
-                          }
-
-                          return (
-                            <Tooltip key={`${file.name}-${idx}`}>
-                              <TooltipTrigger asChild>
-                                {fileListItem}
-                              </TooltipTrigger>
-                              <TooltipContent
-                                side="right"
-                                align="center"
-                                className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs max-w-sm break-all"
+                            const fileListItem = (
+                              <li
+                                aria-disabled={!isSupported}
+                                title={!isSupported ? `${file.name} (미지원 파일)` : undefined}
+                                className={`flex items-center gap-2 px-2 py-1 rounded ${
+                                  isSupported
+                                    ? `cursor-pointer hover:bg-discord-hover ${idx === currentArchiveIndex ? 'bg-discord-hover font-bold' : ''}`
+                                    : 'cursor-not-allowed text-discord-muted opacity-45'
+                                }`}
+                                onClick={() => {
+                                  if (isSupported && idx !== currentArchiveIndex) {
+                                    setCurrentArchiveDataUrl(null);
+                                    setCurrentArchiveText(null);
+                                    setCurrentArchiveIndex(idx);
+                                  }
+                                }}
                               >
-                                {file.name}
-                              </TooltipContent>
-                            </Tooltip>
-                          );
-                        })}
-                      </ul>
-                    </TooltipProvider>
+                                {isImage && <FileImage size={14} className="text-blue-400 flex-shrink-0" />}
+                                {isVideo && <FileVideo size={14} className="text-green-400 flex-shrink-0" />}
+                                {isText && <FileText size={14} className="text-green-400 flex-shrink-0" />}
+                                {!isSupported && <File size={14} className="flex-shrink-0" />}
+                                <span className="truncate flex-1 min-w-0">{file.name}</span>
+                              </li>
+                            );
+
+                            if (!isSupported) {
+                              return (
+                                <ContextMenu key={`${file.name}-${idx}`}>
+                                  <ContextMenuTrigger asChild>
+                                    {fileListItem}
+                                  </ContextMenuTrigger>
+                                  <ContextMenuContent>
+                                    <ContextMenuItem onClick={() => void handleOpenUnsupportedArchiveFile(file)}>
+                                      원본 파일 열기
+                                    </ContextMenuItem>
+                                  </ContextMenuContent>
+                                </ContextMenu>
+                              );
+                            }
+
+                            return (
+                              <Tooltip key={`${file.name}-${idx}`}>
+                                <TooltipTrigger asChild>
+                                  {fileListItem}
+                                </TooltipTrigger>
+                                <TooltipContent
+                                  side="right"
+                                  align="center"
+                                  className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs max-w-sm break-all"
+                                >
+                                  {file.name}
+                                </TooltipContent>
+                              </Tooltip>
+                            );
+                          })}
+                          {filteredArchiveFiles.length === 0 && (
+                            <li className="px-3 py-6 text-center text-xs text-discord-muted">
+                              검색 결과가 없습니다.
+                            </li>
+                          )}
+                        </ul>
+                      </TooltipProvider>
+                    </div>
                   </div>
                   {/* 파일 내용 영역 */}
                   <div className="flex-1 flex flex-col h-full">
