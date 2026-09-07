@@ -16,6 +16,8 @@ export interface FieldDefinition {
   displayFieldId?: string;
   subDisplayFieldId?: string;
   description?: string;
+  filenamePattern?: string;
+  filenameTokenFields?: Record<string, string>;
 }
 
 export interface Category {

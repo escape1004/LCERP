@@ -16,6 +16,7 @@ import { AlertDialog } from './ui/alert-dialog';
 import { DatePicker } from './ui/date-picker';
 import { AnimatedModal } from './ui/animated-modal';
 import { formatFieldDisplayValue, hasTextAffixes } from '../lib/fieldFormat';
+import { applyFilenamePatternToFields } from '../lib/filenamePattern';
 import { getRelationDisplayLabel, getRelationPrimaryLabel, getRelationSecondaryLabel } from '../utils/relationDisplay';
 import type { Config } from '../types';
 import { OPENAI_TRANSLATION_MODEL, getTranslatedFieldId, getTranslationMetaFieldId, isTranslationEnabledField } from '../lib/translation';
@@ -590,6 +591,60 @@ export const RecordModal: React.FC<RecordModalProps> = ({
         || displayLabel === normalizedSearchValue
       );
     });
+  };
+
+  const applyFilenameAutofill = async (
+    filePath: string,
+    fileField: FieldDefinition,
+    currentValues: Record<string, unknown>
+  ) => {
+    if (!fileField.filenamePattern?.trim()) return;
+
+    const mappedFields = Object.values(fileField.filenameTokenFields || {})
+      .map((fieldId) => category.fields.find((candidate) => candidate.id === fieldId))
+      .filter((candidate): candidate is FieldDefinition => Boolean(candidate));
+    const relationCategoryIds = new Set<string>();
+    mappedFields.forEach((mappedField) => {
+      if (mappedField.type !== 'relation' || !mappedField.relationCategoryId) return;
+      relationCategoryIds.add(mappedField.relationCategoryId);
+
+      const relatedCategory = categories.find((candidate) => candidate.id === mappedField.relationCategoryId);
+      const subField = relatedCategory?.fields.find((candidate) => (
+        candidate.id === mappedField.subDisplayFieldId
+        || getTranslatedFieldId(candidate.id) === mappedField.subDisplayFieldId
+      ));
+      if (subField?.type === 'relation' && subField.relationCategoryId) {
+        relationCategoryIds.add(subField.relationCategoryId);
+      }
+    });
+    await Promise.all([...relationCategoryIds].map((categoryId) => loadRecords(categoryId)));
+
+    const filledValues = applyFilenamePatternToFields({
+      filePath,
+      fileField,
+      fields: category.fields,
+      currentValues,
+      dateFormats: config?.dateParseFormats,
+      findRelationMatches: (targetField, tokenValue) => {
+        if (!targetField.relationCategoryId) return [];
+        return findMatchingRelationRecords(
+          useERPStore.getState().getCategoryRecords(targetField.relationCategoryId),
+          targetField,
+          tokenValue
+        );
+      },
+    });
+
+    Object.entries(filledValues).forEach(([fieldId, value]) => {
+      updateFieldValue(fieldId, value);
+    });
+
+    if (Object.keys(filledValues).length > 0) {
+      toast({
+        title: '파일명에서 필드 값을 채웠습니다.',
+        description: `${Object.keys(filledValues).length}개 필드에 값을 넣었습니다.`,
+      });
+    }
   };
 
   const renderField = (field: FieldDefinition, isFirstField: boolean = false) => {
@@ -1328,6 +1383,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                   }
                   
                   updateFieldValue(field.id, relativePath);
+                  void applyFilenameAutofill(relativePath, field, { ...formData, [field.id]: relativePath });
                 } catch (error) {
                   console.error('파일 선택 중 오류:', error);
                   showAlert('오류', '파일 선택 중 오류가 발생했습니다.', 'error');

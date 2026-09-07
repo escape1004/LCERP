@@ -188,6 +188,8 @@ export interface Field {
   relationCategoryId?: string;
   displayFieldId?: string;
   subDisplayFieldId?: string;
+  filenamePattern?: string;
+  filenameTokenFields?: Record<string, string>;
 }
 
 export interface DataRecord {

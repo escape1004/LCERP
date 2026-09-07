@@ -55,6 +55,8 @@ export interface FieldDefinition {
   hidden?: boolean;
   displayFieldId?: string;
   subDisplayFieldId?: string;
+  filenamePattern?: string;
+  filenameTokenFields?: Record<string, string>;
 }
 
 export interface DataRecord {

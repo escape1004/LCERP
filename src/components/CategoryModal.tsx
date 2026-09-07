@@ -18,6 +18,7 @@ import { Switch } from './ui/switch';
 import { TagInput } from './ui/tag-input';
 import { AnimatedModal } from './ui/animated-modal';
 import { useLoadingStore } from '../hooks/useLoadingStore';
+import { extractFilenameTokens } from '../lib/filenamePattern';
 import { getTranslatedFieldId, isTranslationEnabledField } from '../lib/translation';
 
 interface CategoryModalProps {
@@ -42,6 +43,29 @@ const stripTextAffixes = (value: unknown, prefix?: string, suffix?: string) => {
     nextValue = nextValue.slice(0, -suffix.length);
   }
   return nextValue;
+};
+
+const FIELD_TYPE_LABELS: Record<FieldDefinition['type'], string> = {
+  text: '텍스트',
+  longtext: '긴 텍스트',
+  number: '숫자',
+  percentage: '퍼센트',
+  date: '날짜',
+  select: '선택',
+  relation: '관계형',
+  file: '파일',
+  checkbox: '체크박스',
+};
+
+const getFilenameTargetFieldLabel = (field: FieldDefinition, categoryList: Category[]) => {
+  const typeLabel = FIELD_TYPE_LABELS[field.type];
+  const name = field.name || '이름 없는 필드';
+  if (field.type !== 'relation') {
+    return `${name} (${typeLabel})`;
+  }
+
+  const relatedName = categoryList.find((category) => category.id === field.relationCategoryId)?.name;
+  return relatedName ? `${name} (${typeLabel} · ${relatedName})` : `${name} (${typeLabel})`;
 };
 
 const getRelationSubLabelOptions = (relatedCategory: Category, displayFieldId?: string) => (
@@ -86,7 +110,9 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   const [migratedAffixCount, setMigratedAffixCount] = useState(0);
   const [isDirty, setIsDirty] = useState(false);
   const [expandedTextDecorations, setExpandedTextDecorations] = useState<Record<string, boolean>>({});
+  const [expandedFilenameParse, setExpandedFilenameParse] = useState<Record<string, boolean>>({});
   const [openRelationCategoryId, setOpenRelationCategoryId] = useState<string | null>(null);
+  const [openFilenameTokenFieldId, setOpenFilenameTokenFieldId] = useState<string | null>(null);
   const [config, setConfig] = useState<Config | null>(null);
   
   // 카테고리 이름 입력 필드 ref
@@ -171,7 +197,9 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     setIsMigratingAffixes(false);
     setMigratedAffixCount(0);
     setExpandedTextDecorations({});
+    setExpandedFilenameParse({});
     setOpenRelationCategoryId(null);
+    setOpenFilenameTokenFieldId(null);
   }, [category, isOpen]);
 
   // formData가 변경될 때마다 isDirty 상태 업데이트
@@ -400,6 +428,9 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     if (updates.type === 'file' && !newFields[index].pathMode) {
       newFields[index] = { ...newFields[index], pathMode: 'direct', basePath: '', thumbnailOnly: false };
     }
+    if (updates.type && updates.type !== 'file') {
+      newFields[index] = { ...newFields[index], filenamePattern: '', filenameTokenFields: {} };
+    }
     if (updates.thumbnailOnly === true) {
       newFields[index] = { ...newFields[index], thumbnailOnly: true, pathMode: 'direct', basePath: '' };
     }
@@ -440,6 +471,24 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
       ...prev,
       [fieldId]: !prev[fieldId],
     }));
+  };
+
+  const toggleFilenameParseSection = (fieldId: string) => {
+    setExpandedFilenameParse(prev => ({
+      ...prev,
+      [fieldId]: !prev[fieldId],
+    }));
+  };
+
+  const updateFilenamePattern = (index: number, pattern: string) => {
+    const tokens = extractFilenameTokens(pattern);
+    const currentMappings = formData.fields[index].filenameTokenFields || {};
+    const nextMappings = Object.fromEntries(
+      tokens
+        .filter((token) => currentMappings[token])
+        .map((token) => [token, currentMappings[token]])
+    );
+    updateField(index, { filenamePattern: pattern, filenameTokenFields: nextMappings });
   };
 
   // 카테고리 경로 구하는 함수
@@ -743,6 +792,136 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                                         <p className="text-xs text-gray-500 mt-2">
                                           상대 경로를 선택하면 DB에 저장된 파일명만 사용해 베이스 경로와 결합합니다.
                                         </p>
+                                      </div>
+                                    )}
+
+                                    {field.type === 'file' && (
+                                      <div>
+                                        <div className="flex items-center gap-2 mb-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleFilenameParseSection(field.id)}
+                                            className="text-sm text-gray-400 hover:text-gray-200 transition-colors"
+                                          >
+                                            파일명 자동 채우기
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleFilenameParseSection(field.id)}
+                                            className="text-gray-400 hover:text-gray-200 transition-colors"
+                                            aria-label={expandedFilenameParse[field.id] ? '파일명 자동 채우기 접기' : '파일명 자동 채우기 펼치기'}
+                                          >
+                                            {expandedFilenameParse[field.id] ? (
+                                              <ChevronUp size={16} />
+                                            ) : (
+                                              <ChevronDown size={16} />
+                                            )}
+                                          </button>
+                                          {field.filenamePattern && (
+                                            <p className="text-xs text-gray-500 truncate">
+                                              {field.filenamePattern}
+                                            </p>
+                                          )}
+                                        </div>
+                                        <div
+                                          className={`grid transition-all duration-200 ease-out ${
+                                            expandedFilenameParse[field.id]
+                                              ? 'grid-rows-[1fr] opacity-100'
+                                              : 'grid-rows-[0fr] opacity-0'
+                                          }`}
+                                        >
+                                          <div className="overflow-hidden">
+                                            <div>
+                                              <Label className="text-xs text-gray-500 mb-1 block">파일명 규칙</Label>
+                                              <Input
+                                                value={field.filenamePattern || ''}
+                                                onChange={(e) => updateFilenamePattern(index, e.target.value)}
+                                                placeholder="예: [%A] %B (%C)"
+                                                className="bg-[#2b2d31] border-gray-600 text-gray-200"
+                                              />
+                                              <p className="text-xs text-gray-500 mt-2">
+                                                `%A`부터 `%Z`까지 토큰으로 쓰고, 대괄호나 공백 같은 고정 문자는 그대로 입력합니다. 관계형 필드는 연결된 레코드 이름과 정확히 하나 일치할 때만 채웁니다.
+                                              </p>
+                                            </div>
+                                            {extractFilenameTokens(field.filenamePattern || '').map((token) => {
+                                              const assignableFields = formData.fields.filter((candidate) => candidate.type !== 'file' && candidate.id);
+                                              const selectedField = assignableFields.find((candidate) => candidate.id === field.filenameTokenFields?.[token]);
+                                              const tokenFieldKey = `${field.id}:${token}`;
+                                              return (
+                                                <div key={token} className="mt-3">
+                                                  <Label className="text-xs text-gray-500 mb-1 block">%{token} 대입 필드</Label>
+                                                  <Popover
+                                                    open={openFilenameTokenFieldId === tokenFieldKey}
+                                                    onOpenChange={(open) => setOpenFilenameTokenFieldId(open ? tokenFieldKey : null)}
+                                                  >
+                                                    <PopoverTrigger asChild>
+                                                      <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        role="combobox"
+                                                        className="h-10 w-full justify-between bg-[#2b2d31] border-gray-600 text-gray-200 hover:bg-[#2b2d31] hover:text-gray-200"
+                                                      >
+                                                        <span className="truncate">
+                                                          {selectedField ? getFilenameTargetFieldLabel(selectedField, categories) : '필드 선택'}
+                                                        </span>
+                                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                      </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0 bg-[#2b2d31] border-gray-600">
+                                                      <Command className="bg-[#2b2d31] border-none">
+                                                        <CommandInput
+                                                          placeholder="필드 검색..."
+                                                          className="h-9 bg-[#2b2d31] text-gray-200 border-b border-gray-600"
+                                                        />
+                                                        <CommandList className="max-h-[200px] overflow-y-auto text-gray-200">
+                                                          <CommandEmpty className="py-2 pl-3 text-sm text-gray-500">항목을 찾을 수 없습니다.</CommandEmpty>
+                                                          <CommandGroup>
+                                                            <CommandItem
+                                                              value="연결 안 함 none"
+                                                              onSelect={() => {
+                                                                const nextMappings = { ...(field.filenameTokenFields || {}) };
+                                                                delete nextMappings[token];
+                                                                updateField(index, { filenameTokenFields: nextMappings });
+                                                                setOpenFilenameTokenFieldId(null);
+                                                              }}
+                                                              className="text-gray-200 hover:bg-discord-hover"
+                                                            >
+                                                              연결 안 함
+                                                            </CommandItem>
+                                                            {assignableFields.map((candidate) => (
+                                                              <CommandItem
+                                                                key={candidate.id}
+                                                                value={`${candidate.name} ${candidate.type} ${candidate.id} ${categories.find((category) => category.id === candidate.relationCategoryId)?.name || ''}`}
+                                                                onSelect={() => {
+                                                                  updateField(index, {
+                                                                    filenameTokenFields: {
+                                                                      ...(field.filenameTokenFields || {}),
+                                                                      [token]: candidate.id,
+                                                                    },
+                                                                  });
+                                                                  setOpenFilenameTokenFieldId(null);
+                                                                }}
+                                                                className="text-gray-200 hover:bg-discord-hover"
+                                                              >
+                                                                <Check
+                                                                  className={cn(
+                                                                    'mr-2 h-4 w-4',
+                                                                    field.filenameTokenFields?.[token] === candidate.id ? 'opacity-100' : 'opacity-0'
+                                                                  )}
+                                                                />
+                                                                {getFilenameTargetFieldLabel(candidate, categories)}
+                                                              </CommandItem>
+                                                            ))}
+                                                          </CommandGroup>
+                                                        </CommandList>
+                                                      </Command>
+                                                    </PopoverContent>
+                                                  </Popover>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
                                       </div>
                                     )}
 
