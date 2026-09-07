@@ -26,6 +26,22 @@ interface ArchiveFile {
   data?: Buffer;
 }
 
+const PictureInPictureContextMenu: React.FC<{
+  children: React.ReactElement;
+  onPlayInPictureInPicture: () => void;
+}> = ({ children, onPlayInPictureInPicture }) => (
+  <ContextMenu>
+    <ContextMenuTrigger asChild>
+      {children}
+    </ContextMenuTrigger>
+    <ContextMenuContent>
+      <ContextMenuItem onSelect={onPlayInPictureInPicture}>
+        PIP 재생
+      </ContextMenuItem>
+    </ContextMenuContent>
+  </ContextMenu>
+);
+
 const SUPPORTED_ARCHIVE_FILE_PATTERN = /\.(jpg|jpeg|png|gif|webp|mp4|avi|mkv|mov|wmv|flv|webm|txt)$/i;
 
 export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, fileType, categoryId = '', recordId = '', onClose }) => {
@@ -692,6 +708,48 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
           document.exitFullscreen();
         }
       }
+    }
+  };
+
+  const handlePictureInPictureStateChange = (active: boolean) => {
+    void window.electronAPI.setPictureInPictureActive(active).catch((error) => {
+      console.error('PIP 오디오 상태 동기화 실패:', error);
+    });
+  };
+
+  const handlePictureInPicture = async () => {
+    const activeVideo = getActiveVideoElement();
+    if (!activeVideo) {
+      toast({
+        title: 'PIP 재생 실패',
+        description: '재생할 동영상을 찾을 수 없습니다.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      if (!document.pictureInPictureEnabled || !activeVideo.requestPictureInPicture) {
+        throw new Error('현재 환경에서는 PIP 재생을 지원하지 않습니다.');
+      }
+
+      if (document.pictureInPictureElement !== activeVideo) {
+        if (document.pictureInPictureElement) {
+          await document.exitPictureInPicture();
+        }
+        await activeVideo.requestPictureInPicture();
+        handlePictureInPictureStateChange(true);
+      }
+
+      if (activeVideo.paused) {
+        await activeVideo.play();
+      }
+    } catch (error) {
+      toast({
+        title: 'PIP 재생 실패',
+        description: error instanceof Error ? error.message : 'PIP 모드를 시작하지 못했습니다.',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -1697,53 +1755,57 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                           </button>
                         </div>
                       ) : (
-                        <video
-                          ref={videoRef}
-                          src={dataUrl}
-                          autoPlay={videoAutoPlay}
-                          className="max-w-full max-h-[80vh] h-full object-contain bg-black"
-                          style={{
-                            maxWidth: videoRotation % 180 !== 0 ? '80vh' : '100%',
-                            maxHeight: videoRotation % 180 !== 0 ? '95vw' : '80vh',
-                            cursor: videoScale > 1 ? (videoIsPanning ? 'grabbing' : 'grab') : 'default',
-                          }}
-                          onMouseDown={(e) => {
-                            e.stopPropagation();
-                            handleVideoMouseDown(e);
-                          }}
-                          onMouseMove={(e) => {
-                            e.stopPropagation();
-                            handleVideoMouseMove(e);
-                          }}
-                          onMouseUp={(e) => {
-                            e.stopPropagation();
-                            handleVideoMouseUp();
-                          }}
-                          onMouseLeave={(e) => {
-                            e.stopPropagation();
-                            handleVideoMouseUp();
-                          }}
-                          onPlay={() => setIsPlaying(true)}
-                          onPause={() => setIsPlaying(false)}
-                          onLoadedMetadata={handleLoadedMetadata}
-                          onTimeUpdate={handleTimeUpdate}
-                          onEnded={handleLoopRangeEnded}
-                          onClick={handleVideoClick}
-                          onError={(e) => {
-                            const video = e.target as HTMLVideoElement;
-                            if (video.error) {
-                              console.error('동영상 재생 에러:', video.error.message);
-                            }
-                            setVideoError('동영상을 재생할 수 없습니다.');
-                            setCodecInfo(null);
-                            if (filePath) {
-                              window.electronAPI.getVideoCodecInfo(filePath).then(setCodecInfo);
-                            }
-                          }}
-                          onCanPlay={() => {
-                            setVideoError(null);
-                          }}
-                        />
+                        <PictureInPictureContextMenu onPlayInPictureInPicture={() => void handlePictureInPicture()}>
+                          <video
+                            ref={videoRef}
+                            src={dataUrl}
+                            autoPlay={videoAutoPlay}
+                            className="max-w-full max-h-[80vh] h-full object-contain bg-black"
+                            style={{
+                              maxWidth: videoRotation % 180 !== 0 ? '80vh' : '100%',
+                              maxHeight: videoRotation % 180 !== 0 ? '95vw' : '80vh',
+                              cursor: videoScale > 1 ? (videoIsPanning ? 'grabbing' : 'grab') : 'default',
+                            }}
+                            onMouseDown={(e) => {
+                              e.stopPropagation();
+                              handleVideoMouseDown(e);
+                            }}
+                            onMouseMove={(e) => {
+                              e.stopPropagation();
+                              handleVideoMouseMove(e);
+                            }}
+                            onMouseUp={(e) => {
+                              e.stopPropagation();
+                              handleVideoMouseUp();
+                            }}
+                            onMouseLeave={(e) => {
+                              e.stopPropagation();
+                              handleVideoMouseUp();
+                            }}
+                            onPlay={() => setIsPlaying(true)}
+                            onPause={() => setIsPlaying(false)}
+                            onLoadedMetadata={handleLoadedMetadata}
+                            onTimeUpdate={handleTimeUpdate}
+                            onEnded={handleLoopRangeEnded}
+                            onEnterPictureInPicture={() => handlePictureInPictureStateChange(true)}
+                            onLeavePictureInPicture={() => handlePictureInPictureStateChange(false)}
+                            onClick={handleVideoClick}
+                            onError={(e) => {
+                              const video = e.target as HTMLVideoElement;
+                              if (video.error) {
+                                console.error('동영상 재생 에러:', video.error.message);
+                              }
+                              setVideoError('동영상을 재생할 수 없습니다.');
+                              setCodecInfo(null);
+                              if (filePath) {
+                                window.electronAPI.getVideoCodecInfo(filePath).then(setCodecInfo);
+                              }
+                            }}
+                            onCanPlay={() => {
+                              setVideoError(null);
+                            }}
+                          />
+                        </PictureInPictureContextMenu>
                       )}
                     </div>
                   </div>
@@ -2193,54 +2255,58 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                                   </button>
                                 </div>
                               ) : (
-                                <video
-                                  src={currentArchiveDataUrl}
-                                  className="max-w-full max-h-[80vh] object-contain bg-black rounded shadow-lg"
-                                  style={{
-                                    maxWidth: archiveImgRotation % 180 !== 0 ? '80vh' : '100%',
-                                    maxHeight: archiveImgRotation % 180 !== 0 ? '95vw' : '80vh',
-                                    cursor: archiveVideoScale > 1 ? (archiveVideoIsPanning ? 'grabbing' : 'grab') : 'default',
-                                  }}
-                                  controls={false}
-                                  autoPlay={videoAutoPlay}
-                                  ref={archiveVideoRef}
-                                  onMouseDown={(e) => {
-                                    e.stopPropagation();
-                                    handleArchiveVideoMouseDown(e);
-                                  }}
-                                  onMouseMove={(e) => {
-                                    e.stopPropagation();
-                                    handleArchiveVideoMouseMove(e);
-                                  }}
-                                  onMouseUp={(e) => {
-                                    e.stopPropagation();
-                                    handleArchiveVideoMouseUp();
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    e.stopPropagation();
-                                    handleArchiveVideoMouseUp();
-                                  }}
-                                  onPlay={() => setIsPlaying(true)}
-                                  onPause={() => setIsPlaying(false)}
-                                  onLoadedMetadata={handleLoadedMetadata}
-                                  onTimeUpdate={handleTimeUpdate}
-                                  onEnded={handleLoopRangeEnded}
-                                  onClick={handleVideoClick}
-                                  onError={(e) => {
-                                    const video = e.target as HTMLVideoElement;
-                                    if (video.error) {
-                                      console.error('동영상 재생 에러:', video.error.message);
-                                    }
-                                    setVideoError('동영상을 재생할 수 없습니다.');
-                                    setCodecInfo(null);
-                                    if (filePath) {
-                                      window.electronAPI.getVideoCodecInfo(filePath).then(setCodecInfo);
-                                    }
-                                  }}
-                                  onCanPlay={() => {
-                                    setVideoError(null);
-                                  }}
-                                />
+                                <PictureInPictureContextMenu onPlayInPictureInPicture={() => void handlePictureInPicture()}>
+                                  <video
+                                    src={currentArchiveDataUrl}
+                                    className="max-w-full max-h-[80vh] object-contain bg-black rounded shadow-lg"
+                                    style={{
+                                      maxWidth: archiveImgRotation % 180 !== 0 ? '80vh' : '100%',
+                                      maxHeight: archiveImgRotation % 180 !== 0 ? '95vw' : '80vh',
+                                      cursor: archiveVideoScale > 1 ? (archiveVideoIsPanning ? 'grabbing' : 'grab') : 'default',
+                                    }}
+                                    controls={false}
+                                    autoPlay={videoAutoPlay}
+                                    ref={archiveVideoRef}
+                                    onMouseDown={(e) => {
+                                      e.stopPropagation();
+                                      handleArchiveVideoMouseDown(e);
+                                    }}
+                                    onMouseMove={(e) => {
+                                      e.stopPropagation();
+                                      handleArchiveVideoMouseMove(e);
+                                    }}
+                                    onMouseUp={(e) => {
+                                      e.stopPropagation();
+                                      handleArchiveVideoMouseUp();
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.stopPropagation();
+                                      handleArchiveVideoMouseUp();
+                                    }}
+                                    onPlay={() => setIsPlaying(true)}
+                                    onPause={() => setIsPlaying(false)}
+                                    onLoadedMetadata={handleLoadedMetadata}
+                                    onTimeUpdate={handleTimeUpdate}
+                                    onEnded={handleLoopRangeEnded}
+                                    onEnterPictureInPicture={() => handlePictureInPictureStateChange(true)}
+                                    onLeavePictureInPicture={() => handlePictureInPictureStateChange(false)}
+                                    onClick={handleVideoClick}
+                                    onError={(e) => {
+                                      const video = e.target as HTMLVideoElement;
+                                      if (video.error) {
+                                        console.error('동영상 재생 에러:', video.error.message);
+                                      }
+                                      setVideoError('동영상을 재생할 수 없습니다.');
+                                      setCodecInfo(null);
+                                      if (filePath) {
+                                        window.electronAPI.getVideoCodecInfo(filePath).then(setCodecInfo);
+                                      }
+                                    }}
+                                    onCanPlay={() => {
+                                      setVideoError(null);
+                                    }}
+                                  />
+                                </PictureInPictureContextMenu>
                               )}
                             </div>
                             

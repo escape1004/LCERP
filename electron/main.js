@@ -862,8 +862,34 @@ function createWindow() {
   });
 
   let saveBoundsTimer = null;
-  const syncWindowAudioMute = () => {
-    const shouldMute = Boolean(appConfig.muteAudioWhenBackgrounded) && !mainWindow.isFocused();
+  let isPictureInPictureActive = false;
+  let audioMuteSyncGeneration = 0;
+  const syncWindowAudioMute = async () => {
+    if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
+
+    const generation = ++audioMuteSyncGeneration;
+    try {
+      isPictureInPictureActive = await mainWindow.webContents.executeJavaScript(
+        'Boolean(document.pictureInPictureElement)',
+        true
+      );
+    } catch (error) {
+      if (!mainWindow.webContents.isLoading()) {
+        log('PIP 상태 확인 실패:', error);
+      }
+    }
+
+    if (
+      generation !== audioMuteSyncGeneration
+      || mainWindow.isDestroyed()
+      || mainWindow.webContents.isDestroyed()
+    ) {
+      return;
+    }
+
+    const shouldMute = Boolean(appConfig.muteAudioWhenBackgrounded)
+      && !mainWindow.isFocused()
+      && !isPictureInPictureActive;
     mainWindow.webContents.setAudioMuted(shouldMute);
   };
   const saveWindowBounds = () => {
@@ -1001,6 +1027,13 @@ function createWindow() {
   ipcMain.handle('setMuteAudioWhenBackgrounded', (_event, enabled) => {
     appConfig.muteAudioWhenBackgrounded = enabled === true;
     saveAppConfig();
+    syncWindowAudioMute();
+    return { success: true };
+  });
+
+  ipcMain.removeHandler?.('setPictureInPictureActive');
+  ipcMain.handle('setPictureInPictureActive', (_event, active) => {
+    isPictureInPictureActive = active === true;
     syncWindowAudioMute();
     return { success: true };
   });
