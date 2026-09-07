@@ -78,6 +78,9 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [timelinePreview, setTimelinePreview] = useState<{ time: number; left: number } | null>(null);
+  const [timelinePreviewSeeking, setTimelinePreviewSeeking] = useState(false);
+  const timelinePreviewVideoRef = useRef<HTMLVideoElement>(null);
   const [loopRange, setLoopRange] = useState<{ start: number; end: number } | null>(null);
   const [loopDraft, setLoopDraft] = useState<{ start: number; end: number } | null>(null);
   const loopSelectionRef = useRef<{ input: HTMLInputElement; anchorTime: number } | null>(null);
@@ -877,6 +880,45 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     }
   };
 
+  const handleTimelinePreviewMove = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!Number.isFinite(duration) || duration <= 0) return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0) return;
+
+    const pointerX = Math.min(rect.width, Math.max(0, event.clientX - rect.left));
+    const previewHalfWidth = 88;
+    setTimelinePreviewSeeking(true);
+    setTimelinePreview({
+      time: (pointerX / rect.width) * duration,
+      left: Math.min(rect.width - previewHalfWidth, Math.max(previewHalfWidth, pointerX))
+    });
+  };
+
+  const handleTimelinePreviewLeave = () => {
+    setTimelinePreview(null);
+    setTimelinePreviewSeeking(false);
+  };
+
+  useEffect(() => {
+    if (!timelinePreview) return;
+
+    const timeoutId = window.setTimeout(() => {
+      const previewVideo = timelinePreviewVideoRef.current;
+      if (!previewVideo || previewVideo.readyState < HTMLMediaElement.HAVE_METADATA) return;
+      previewVideo.currentTime = Math.min(timelinePreview.time, previewVideo.duration || timelinePreview.time);
+    }, 40);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [timelinePreview]);
+
+  useEffect(() => {
+    setTimelinePreview(null);
+    setTimelinePreviewSeeking(false);
+  }, [currentArchiveIndex, dataUrl, currentArchiveDataUrl, isOpen]);
+
   const handleSeekBarMouseDown = (e: React.MouseEvent<HTMLInputElement>) => {
     const input = e.currentTarget;
 
@@ -1565,6 +1607,52 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const effectiveFileType = displayFileType || detectedFileType;
   const isImageGif = effectiveFileType === 'image' && /\.gif$/i.test(displayFilePath);
   const isArchiveGif = effectiveFileType === 'archive' && /\.gif$/i.test(currentFile?.name || '');
+  const timelinePreviewSource = effectiveFileType === 'video'
+    ? dataUrl
+    : effectiveFileType === 'archive' && isVideoFileName(currentFile?.name)
+      ? currentArchiveDataUrl
+      : null;
+  const renderTimelinePreview = () => (
+    timelinePreviewSource ? (
+      <div
+        className={`pointer-events-none absolute bottom-10 z-30 w-44 -translate-x-1/2 transition-opacity duration-100 ${
+          timelinePreview ? 'visible opacity-100' : 'invisible opacity-0'
+        }`}
+        style={{ left: `${timelinePreview?.left ?? 88}px` }}
+      >
+        <div className="overflow-hidden rounded-xl border border-white/50 bg-black shadow-[0_8px_24px_rgba(0,0,0,0.55)]">
+          <video
+            ref={timelinePreviewVideoRef}
+            src={timelinePreviewSource}
+            muted
+            playsInline
+            preload="auto"
+            disablePictureInPicture
+            className={`aspect-video w-full bg-black object-contain transition-[filter,opacity,transform] duration-150 ${
+              timelinePreviewSeeking ? 'scale-[1.02] blur-[2px] opacity-75' : 'scale-100 blur-0 opacity-100'
+            }`}
+            onLoadedMetadata={(event) => {
+              if (!timelinePreview) return;
+              const previewVideo = event.currentTarget;
+              previewVideo.currentTime = Math.min(timelinePreview.time, previewVideo.duration || timelinePreview.time);
+            }}
+            onSeeking={() => setTimelinePreviewSeeking(true)}
+            onSeeked={(event) => {
+              if (
+                !timelinePreview
+                || Math.abs(event.currentTarget.currentTime - timelinePreview.time) < 0.2
+              ) {
+                setTimelinePreviewSeeking(false);
+              }
+            }}
+          />
+        </div>
+        <div className="mx-auto mt-2 w-fit rounded-full bg-[#202124]/90 px-4 py-1.5 text-center text-sm font-medium leading-none text-white shadow-lg">
+          {formatTime(timelinePreview?.time ?? 0)}
+        </div>
+      </div>
+    ) : null
+  );
 
   return (
     <AnimatedModal
@@ -1893,7 +1981,12 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                   <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
                     {/* 재생바 */}
                     <div className="mb-4">
-                      <div style={{ position: 'relative', width: '100%' }}>
+                      <div
+                        className="relative w-full"
+                        onMouseMove={handleTimelinePreviewMove}
+                        onMouseLeave={handleTimelinePreviewLeave}
+                      >
+                        {renderTimelinePreview()}
                         <input
                           type="range"
                           min={0}
@@ -2391,7 +2484,12 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                             <div className={`absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
                               {/* 재생바 */}
                               <div className="mb-4">
-                                <div style={{ position: 'relative', width: '100%' }}>
+                                <div
+                                  className="relative w-full"
+                                  onMouseMove={handleTimelinePreviewMove}
+                                  onMouseLeave={handleTimelinePreviewLeave}
+                                >
+                                  {renderTimelinePreview()}
                                   <input
                                     type="range"
                                     min={0}
