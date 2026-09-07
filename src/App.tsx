@@ -4,7 +4,7 @@ import { Toaster as Sonner } from '@/components/ui/sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HashRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { Lock, Plus, X } from 'lucide-react';
+import { Eye, EyeOff, Lock, Plus, X } from 'lucide-react';
 import Index from './pages/Index';
 import Dashboard from './pages/Dashboard';
 import NotFound from './pages/NotFound';
@@ -130,6 +130,7 @@ const App = () => {
   const [isCheckingPassword, setIsCheckingPassword] = useState(true);
   const [requiresPassword, setRequiresPassword] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [passwordLockUntil, setPasswordLockUntil] = useState<number | null>(null);
   const [passwordLockNow, setPasswordLockNow] = useState(Date.now());
@@ -536,6 +537,7 @@ const App = () => {
                 className="h-full flex items-center justify-center bg-discord-bg p-6"
                 onMouseDownCapture={(e) => {
                   if (e.target === passwordInputRef.current) return;
+                  if ((e.target as HTMLElement).closest('[data-password-toggle]')) return;
                   e.preventDefault();
                   keepPasswordInputFocus();
                 }}
@@ -546,29 +548,42 @@ const App = () => {
                   className="max-w-md"
                 >
                   <div className="max-w-md space-y-3">
-                    <Input
-                      ref={passwordInputRef}
-                      type="password"
-                      value={passwordInput}
-                      onChange={(e) => {
-                        setPasswordInput(e.target.value);
-                        setPasswordError('');
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          void handleUnlock();
-                        }
-                      }}
-                      onBlur={() => {
-                        if (requiresPassword && !isPasswordLocked) {
-                          keepPasswordInputFocus();
-                        }
-                      }}
-                      className="bg-discord-bg border-gray-600 text-discord-text"
-                      placeholder="비밀번호"
-                      autoFocus
-                      disabled={isPasswordLocked}
-                    />
+                    <div className="relative">
+                      <Input
+                        ref={passwordInputRef}
+                        type={showPassword ? 'text' : 'password'}
+                        value={passwordInput}
+                        onChange={(e) => {
+                          setPasswordInput(e.target.value);
+                          setPasswordError('');
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            void handleUnlock();
+                          }
+                        }}
+                        onBlur={() => {
+                          if (requiresPassword && !isPasswordLocked) {
+                            keepPasswordInputFocus();
+                          }
+                        }}
+                        className="bg-discord-bg border-gray-600 pr-10 text-discord-text"
+                        placeholder="비밀번호"
+                        autoFocus
+                        disabled={isPasswordLocked}
+                      />
+                      <button
+                        type="button"
+                        data-password-toggle
+                        className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-discord-muted hover:text-discord-text disabled:cursor-not-allowed disabled:opacity-50"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => setShowPassword((visible) => !visible)}
+                        disabled={isPasswordLocked}
+                        aria-label={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'}
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
                     {isPasswordLocked && (
                       <p className="text-sm text-amber-300">
                         보안을 위해 비밀번호 입력이 {passwordLockRemainingLabel} 동안 잠겼습니다.
