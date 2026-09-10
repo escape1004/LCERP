@@ -7,7 +7,6 @@ import { RecordModal } from './RecordModal';
 import { ViewRecordModal } from './ViewRecordModal';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Category, DataRecord } from '../types';
-import type { ElectronAPI } from '../types/electron';
 import { LinkIcon } from 'lucide-react';
 import { ConfirmDialog } from './ui/confirm-dialog';
 import { AlertDialog } from './ui/alert-dialog';

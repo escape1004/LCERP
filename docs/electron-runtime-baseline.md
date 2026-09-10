@@ -14,7 +14,7 @@ This document fixes the runtime and packaging contract that must be preserved wh
 | BrowserWindow preload | `preload.js`, next to the compiled main | Same relative path inside `app.asar` |
 | Installer output | Not applicable | `release/` |
 
-`src/main/main.ts` is the bootstrap entry. Shared paths and config live in `src/main/app/state.ts`, database connection/migrations in `src/main/database/`, and IPC handlers in feature modules under `src/main/ipc/` (registered once from `src/main/ipc/index.ts`). Updater, backup, password, translation, and the video HTTP server live under `src/main/services/`. `electron/main.js` has been removed after contract verification. Unused leftovers `electron/preload.ts`, root `preload.ts`, `src/preload/index.ts`, and `electron/preload.js` are still not built, referenced, or packaged.
+`src/main/main.ts` is the bootstrap entry. Shared paths and config live in `src/main/app/state.ts`, database connection/migrations in `src/main/database/`, and IPC handlers in feature modules under `src/main/ipc/` (registered once from `src/main/ipc/index.ts`). Updater, backup, password, translation, and the video HTTP server live under `src/main/services/`. Legacy `electron/main.js`, leftover preload copies, and compiled JS next to TypeScript sources are not part of the runtime and must not be packaged.
 
 The main process compiles with TypeScript checking enabled (no `@ts-nocheck`) and ESM `import` statements. ESLint exceptions for pre-existing expressions apply to `src/main/**/*.ts` except preload.
 

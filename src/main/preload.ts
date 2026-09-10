@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { NewCategory, CategoryUpdate, NewRecord, ElectronAPI } from '../types.d';
+import { NewCategory, CategoryUpdate, NewRecord, ElectronAPI } from '../types';
 
 const allowedSendChannels = new Set(['window-control']);
 
