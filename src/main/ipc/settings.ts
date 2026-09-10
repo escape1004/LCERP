@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -216,17 +216,6 @@ export function registerSettingsHandlers() {
       translationTargetLanguage: getConfiguredTranslationTargetLanguage(),
       translationModel: getConfiguredTranslationModel()
     };
-  });
-
-  ipcMain.handle('setDbPath', async () => {
-    const { filePaths } = await dialog.showOpenDialog({
-      properties: ['openFile'],
-      filters: [{ name: 'Database', extensions: ['db'] }]
-    });
-    if (filePaths && filePaths.length > 0) {
-      return { success: true, path: filePaths[0] };
-    }
-    return { success: false };
   });
 
   ipcMain.handle('setAppPassword', async (_event, password) => {

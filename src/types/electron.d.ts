@@ -49,7 +49,6 @@ export interface ElectronAPI {
   
   // Config methods
   getConfig: () => Promise<Config>;
-  setDbPath: () => Promise<{ success: boolean; path?: string; error?: string }>;
   setBackupDir: () => Promise<{ success: boolean; path?: string; error?: string }>;
   setBackupInterval: (minutes: number) => Promise<{ success: boolean; error?: string }>;
   setBackupEnabled: (enabled: boolean) => Promise<{ success: boolean; backupEnabled?: boolean; error?: string }>;

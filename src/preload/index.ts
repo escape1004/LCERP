@@ -4,7 +4,6 @@ const api = {
   getTables: () => ipcRenderer.invoke('db:getTables'),
   getTableData: (tableName: string, options?: { page?: number; pageSize?: number }) => ipcRenderer.invoke('db:getTableData', tableName, options),
   getDbPath: () => ipcRenderer.invoke('db:getPath'),
-  setDbPath: () => ipcRenderer.invoke('db:setDbPath'),
   openDbFile: () => ipcRenderer.invoke('db:openFile'),
   backupDatabase: () => ipcRenderer.invoke('db:backup'),
   openBackupLocation: () => ipcRenderer.invoke('db:openBackupLocation'),

@@ -35,7 +35,7 @@ These paths are behavior compatibility requirements. The build cleanup must not 
 
 ## IPC audit
 
-The checked-in JSON baseline fingerprints the complete sorted contract and records its size. It currently contains 100 unique `ipcMain.handle` channels, one `ipcMain.on` channel, and 101 preload APIs. Duplicate `ipcMain.handle` registrations are a verification failure. The verifier walks every `src/main/**/*.ts` file except preload and `*.test.ts`.
+The checked-in JSON baseline fingerprints the complete sorted contract and records its size. It currently contains 99 unique `ipcMain.handle` channels, one `ipcMain.on` channel, and 100 preload APIs. Duplicate `ipcMain.handle` registrations are a verification failure. The verifier walks every `src/main/**/*.ts` file except preload and `*.test.ts`.
 
 Safe corrections made while establishing this baseline:
 

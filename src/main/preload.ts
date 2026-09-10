@@ -83,7 +83,6 @@ const api: ElectronAPI = {
   openBackupLocation: () => ipcRenderer.invoke('openBackupLocation'),
   backupDatabase: () => ipcRenderer.invoke('backupDatabase'),
   resetDatabase: () => ipcRenderer.invoke('resetDatabase'),
-  setDbPath: () => ipcRenderer.invoke('setDbPath'),
   setBackupDir: () => ipcRenderer.invoke('setBackupDir'),
   setBackupInterval: (minutes: number) => ipcRenderer.invoke('setBackupInterval', minutes),
   setBackupEnabled: (enabled: boolean) => ipcRenderer.invoke('setBackupEnabled', enabled),
