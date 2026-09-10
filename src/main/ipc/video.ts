@@ -84,6 +84,7 @@ import {
 import { initializeDatabase } from '../database';
 import { getFileTypeFromPath, getThumbnailHash } from '../lib/files';
 import { decodeSubtitleBuffer } from '../lib/subtitles';
+import { asFiniteNumber, resolveUserFilePath, VIDEO_HTTP_PORT_MIN } from '../lib/security';
 import { electronDistDir, getFfmpegToolPaths, getUnpackedFfprobePath } from '../ffmpeg-paths';
 import {
   MAX_AUTOMATIC_BACKUPS,
@@ -189,11 +190,14 @@ import {
 } from '../import-export';
 
 export function registerVideoHandlers() {
+  const requireFilePath = (filePath) => resolveUserFilePath(filePath, appDataDir);
+
   ipcMain.handle('getVideoSubtitles', async (_, videoPath) => {
     try {
-      if (!videoPath || !fs.existsSync(videoPath)) return [];
+      const resolvedVideoPath = requireFilePath(videoPath);
+      if (!resolvedVideoPath || !fs.existsSync(resolvedVideoPath)) return [];
 
-      const parsedVideoPath = path.parse(videoPath);
+      const parsedVideoPath = path.parse(resolvedVideoPath);
       const normalizedVideoBase = parsedVideoPath.name.toLocaleLowerCase();
       const subtitlePattern = /\.(srt|vtt|ass)$/i;
 
@@ -228,15 +232,16 @@ export function registerVideoHandlers() {
   // getVideoBlobUrl 핸들러 (대용량 동영상 Blob 방식)
   ipcMain.handle('getVideoBlobUrl', async (_, filePath) => {
     try {
-      if (!fs.existsSync(filePath)) return null;
-      const ext = path.extname(filePath).toLowerCase();
+      const resolvedPath = requireFilePath(filePath);
+      if (!resolvedPath || !fs.existsSync(resolvedPath)) return null;
+      const ext = path.extname(resolvedPath).toLowerCase();
       const isVideo = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'].includes(ext);
       if (!isVideo) return null;
-      const stats = fs.statSync(filePath);
+      const stats = fs.statSync(resolvedPath);
       const fileSizeInMB = stats.size / (1024 * 1024);
       // 50MB 이상만 Blob 방식으로 처리
       if (fileSizeInMB > 50) {
-        const data = fs.readFileSync(filePath);
+        const data = fs.readFileSync(resolvedPath);
         // base64 인코딩
         return {
           base64: data.toString('base64'),
@@ -251,16 +256,13 @@ export function registerVideoHandlers() {
   });
 
   ipcMain.handle('getVideoServerPort', () => {
-    return globalThis.videoServerPort;
+    return asFiniteNumber(globalThis.videoServerPort, VIDEO_HTTP_PORT_MIN);
   });
 
   ipcMain.handle('getVideoDuration', async (_, filePath) => {
     try {
-      let normalizedPath = filePath;
-      if (!path.isAbsolute(filePath)) {
-        normalizedPath = path.join(appDataDir, filePath);
-      }
-      if (!fs.existsSync(normalizedPath)) {
+      const normalizedPath = requireFilePath(filePath);
+      if (!normalizedPath || !fs.existsSync(normalizedPath)) {
         return null;
       }
 
@@ -297,9 +299,9 @@ export function registerVideoHandlers() {
   ipcMain.handle('getVideoCodecInfo', async (_, filePath) => {
     try {
       const { ffprobePath } = getFfmpegToolPaths();
-      let normalizedPath = filePath;
-      if (!path.isAbsolute(filePath)) {
-        normalizedPath = path.join(appDataDir, filePath);
+      const normalizedPath = requireFilePath(filePath);
+      if (!normalizedPath) {
+        return { error: 'File not found' };
       }
       if (!ffprobePath || !fs.existsSync(ffprobePath)) {
         log('getVideoCodecInfo: ffprobe 경로를 찾을 수 없음', { filePath: normalizedPath, ffprobePath });

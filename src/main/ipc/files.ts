@@ -186,17 +186,27 @@ import {
   readImportRowsFromFile,
   importCategoryRecordsFromRows
 } from '../import-export';
+import { parseExternalHttpUrl, resolveUserFilePath } from '../lib/security';
 
 export function registerFileHandlers() {
-  ipcMain.handle('openExternal', async (_, url) => {
+  const requireFilePath = (filePath) => resolveUserFilePath(filePath, appDataDir);
+  const openAllowedExternalUrl = async (url) => {
+    const parsed = parseExternalHttpUrl(url);
+    if (!parsed) {
+      log('Blocked external URL', { protocol: 'rejected' });
+      return { success: false, error: '허용되지 않은 URL입니다.' };
+    }
+
     try {
-      await shell.openExternal(url);
+      await shell.openExternal(parsed.href);
       return { success: true };
     } catch (error) {
       log('Error opening external URL:', error);
       return { success: false, error: error.message };
     }
-  });
+  };
+
+  ipcMain.handle('openExternal', async (_, url) => openAllowedExternalUrl(url));
 
   ipcMain.handle('db:getTables', () => {
     return db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
@@ -230,28 +240,13 @@ export function registerFileHandlers() {
     shell.showItemInFolder(dbPath);
   });
 
-  ipcMain.handle('shell:openExternal', async (_, url) => {
-    try {
-      await shell.openExternal(url);
-      return { success: true };
-    } catch (error) {
-      log('Error opening URL:', error);
-      return { success: false, error: error.message };
-    }
-  });
+  ipcMain.handle('shell:openExternal', async (_, url) => openAllowedExternalUrl(url));
 
   function getDialogDefaultPath(inputPath) {
-    if (!inputPath || typeof inputPath !== 'string') return undefined;
+    const resolvedInput = requireFilePath(inputPath);
+    if (!resolvedInput) return undefined;
 
-    const trimmedPath = inputPath.trim();
-    if (!trimmedPath) return undefined;
-
-    const candidates = path.isAbsolute(trimmedPath)
-      ? [trimmedPath]
-      : [
-          path.join(app.getAppPath(), trimmedPath),
-          path.join(appDataDir, trimmedPath)
-        ];
+    const candidates = [resolvedInput];
 
     for (const candidate of candidates) {
       if (fs.existsSync(candidate)) {
@@ -310,11 +305,12 @@ export function registerFileHandlers() {
   });
 
   ipcMain.handle('openFile', async (_, filePath) => {
-    if (!filePath) {
+    const resolvedPath = requireFilePath(filePath);
+    if (!resolvedPath) {
       return { success: false, error: '파일 경로 없음' };
     }
     try {
-      await shell.openPath(filePath);
+      await shell.openPath(resolvedPath);
       return { success: true };
     } catch (e) {
       return { success: false, error: e.message };
@@ -323,7 +319,8 @@ export function registerFileHandlers() {
 
   ipcMain.handle('checkFileExists', async (_, filePath) => {
     try {
-      return fs.existsSync(filePath);
+      const resolvedPath = requireFilePath(filePath);
+      return Boolean(resolvedPath && fs.existsSync(resolvedPath));
     } catch (e) {
       return false;
     }
@@ -338,29 +335,31 @@ export function registerFileHandlers() {
   });
 
   ipcMain.handle('db:getFileType', async (_, filePath) => {
-    return getFileTypeFromPath(filePath);
+    const resolvedPath = requireFilePath(filePath);
+    return resolvedPath ? getFileTypeFromPath(resolvedPath) : 'other';
   });
 
   ipcMain.handle('getFileDataUrl', async (_, filePath) => {
     try {
-      if (!fs.existsSync(filePath)) return null;
+      const resolvedPath = requireFilePath(filePath);
+      if (!resolvedPath || !fs.existsSync(resolvedPath)) return null;
 
-      const ext = path.extname(filePath).toLowerCase();
+      const ext = path.extname(resolvedPath).toLowerCase();
       const isVideo = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'].includes(ext);
 
       // 동영상 파일이고 크기가 50MB 이상인 경우 스트리밍 방식 사용
       if (isVideo) {
-        const stats = fs.statSync(filePath);
+        const stats = fs.statSync(resolvedPath);
         const fileSizeInMB = stats.size / (1024 * 1024);
 
         if (fileSizeInMB > 50) {
-          log('Large video detected, using streaming mode:', { filePath, sizeMB: fileSizeInMB });
+          log('Large video detected, using streaming mode:', { sizeMB: fileSizeInMB });
           return 'stream'; // 스트리밍 방식 사용을 나타내는 특별한 값
         }
       }
 
       // 일반 파일 처리
-      const data = fs.readFileSync(filePath);
+      const data = fs.readFileSync(resolvedPath);
       let mimeType = 'application/octet-stream';
       if (['.jpg', '.jpeg'].includes(ext)) mimeType = 'image/jpeg';
       else if (ext === '.png') mimeType = 'image/png';
@@ -391,10 +390,11 @@ export function registerFileHandlers() {
 
   ipcMain.handle('getFileSize', async (_, filePath) => {
     try {
-      if (!fs.existsSync(filePath)) {
+      const resolvedPath = requireFilePath(filePath);
+      if (!resolvedPath || !fs.existsSync(resolvedPath)) {
         return { success: false, error: 'File not found' };
       }
-      const stats = fs.statSync(filePath);
+      const stats = fs.statSync(resolvedPath);
       const bytes = stats.size;
       const sizes = ['B', 'KB', 'MB', 'GB'];
       const i = Math.floor(Math.log(bytes) / Math.log(1024));

@@ -23,6 +23,7 @@ import { ConfirmDialog } from './ui/confirm-dialog';
 import { AlertDialog } from './ui/alert-dialog';
 import { CategoryModal } from './CategoryModal';
 import { format } from "date-fns";
+import { getLocalVideoHttpUrl } from '../lib/local-media';
 import {
   ContextMenu,
   ContextMenuCheckboxItem,
@@ -628,11 +629,10 @@ const HoverVideoPreview: React.FC<{
     let cancelled = false;
     const timeoutId = window.setTimeout(() => {
       void window.electronAPI.getFileDataUrl(filePath)
-        .then((result) => {
+        .then(async (result) => {
           if (cancelled || !result || result === 'error') return;
           if (result === 'stream') {
-            const port = (window as any).videoServerPort || 17345;
-            setVideoSrc(`http://localhost:${port}/video?path=${encodeURIComponent(filePath)}`);
+            setVideoSrc(await getLocalVideoHttpUrl(filePath));
             return;
           }
           setVideoSrc(result);

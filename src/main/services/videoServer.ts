@@ -4,6 +4,13 @@ import http from 'http';
 import { protocol } from 'electron';
 import { appDataDir, log } from '../store';
 import { ensureArchiveVideoExtracted } from '../media/archives';
+import {
+  VIDEO_HTTP_HOST,
+  VIDEO_HTTP_PORT_MAX,
+  VIDEO_HTTP_PORT_MIN,
+  resolveUserFilePath,
+  sanitizeArchiveEntryName
+} from '../lib/security';
 
 export function serveLocalFileWithRange(req, res, filePath, mimeType) {
   const stat = fs.statSync(filePath);
@@ -57,17 +64,19 @@ export function serveLocalFileWithRange(req, res, filePath, mimeType) {
   fs.createReadStream(filePath).pipe(res);
 }
 
-export let videoServerPort = 17345;
+export let videoServerPort = VIDEO_HTTP_PORT_MIN;
 globalThis.videoServerPort = videoServerPort;
 export function startVideoHttpServer() {
   const server = http.createServer((req, res) => {
-    const urlObj = new URL(req.url, `http://localhost:${videoServerPort}`);
+    const urlObj = new URL(req.url, `http://${VIDEO_HTTP_HOST}:${videoServerPort}`);
     if (urlObj.pathname === '/video') {
-      let filePath = decodeURIComponent(urlObj.searchParams.get('path') || '');
-      let resolvedPath = filePath;
-      if (!path.isAbsolute(filePath)) {
-        resolvedPath = path.join(appDataDir, filePath);
+      const filePath = resolveUserFilePath(decodeURIComponent(urlObj.searchParams.get('path') || ''), appDataDir);
+      if (!filePath) {
+        res.writeHead(400);
+        res.end('Invalid path');
+        return;
       }
+      const resolvedPath = filePath;
       const ext = path.extname(resolvedPath).toLowerCase();
       const isVideo = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'].includes(ext);
       if (!isVideo || !fs.existsSync(resolvedPath)) {
@@ -91,8 +100,8 @@ export function startVideoHttpServer() {
       const mimeType = mimeTypes[ext] || 'application/octet-stream';
       serveLocalFileWithRange(req, res, resolvedPath, mimeType);
     } else if (urlObj.pathname === '/archive-video') {
-      const archivePath = decodeURIComponent(urlObj.searchParams.get('archive') || '');
-      const fileName = decodeURIComponent(urlObj.searchParams.get('file') || '');
+      const archivePath = resolveUserFilePath(decodeURIComponent(urlObj.searchParams.get('archive') || ''), appDataDir);
+      const fileName = sanitizeArchiveEntryName(decodeURIComponent(urlObj.searchParams.get('file') || ''));
 
       if (!archivePath || !fileName) {
         res.writeHead(400);
@@ -100,10 +109,7 @@ export function startVideoHttpServer() {
         return;
       }
 
-      let resolvedArchivePath = archivePath;
-      if (!path.isAbsolute(archivePath)) {
-        resolvedArchivePath = path.join(appDataDir, archivePath);
-      }
+      const resolvedArchivePath = archivePath;
 
       if (!fs.existsSync(resolvedArchivePath)) {
         res.writeHead(404);
@@ -158,11 +164,11 @@ export function startVideoHttpServer() {
       res.end('Not found');
     }
   });
-  server.listen(videoServerPort, () => {
+  server.listen(videoServerPort, VIDEO_HTTP_HOST, () => {
     globalThis.videoServerPort = videoServerPort;
   });
   server.on('error', (err: NodeJS.ErrnoException) => {
-    if (err.code === 'EADDRINUSE') {
+    if (err.code === 'EADDRINUSE' && videoServerPort < VIDEO_HTTP_PORT_MAX) {
       videoServerPort++;
       startVideoHttpServer();
     } else {
@@ -175,11 +181,12 @@ export function registerLocalVideoProtocol() {
   protocol.registerStreamProtocol('localvideo', (request, callback) => {
     try {
       const parsedUrl = new URL(request.url);
-      const filePath = decodeURIComponent(parsedUrl.searchParams.get('path') || '');
-      let resolvedPath = filePath;
-      if (!path.isAbsolute(filePath)) {
-        resolvedPath = path.join(appDataDir, filePath);
+      const filePath = resolveUserFilePath(decodeURIComponent(parsedUrl.searchParams.get('path') || ''), appDataDir);
+      if (!filePath) {
+        callback({ statusCode: 400 });
+        return;
       }
+      const resolvedPath = filePath;
       const ext = path.extname(resolvedPath).toLowerCase();
       const isVideo = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'].includes(ext);
 

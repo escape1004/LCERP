@@ -612,14 +612,11 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
     const csv = [headers, ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    
-    try {
-      await window.electronAPI.openExternal(url);
-    } catch (error) {
-      console.error('Failed to export CSV:', error);
-    } finally {
-      URL.revokeObjectURL(url);
-    }
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${selectedCategory.name || 'export'}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const formatFieldValue = (field: any, value: any): string | JSX.Element => {

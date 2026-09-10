@@ -26,8 +26,8 @@
       "updateRecord"
     ]
   },
-  "rendererApiUsageCount": 87,
-  "rendererApiUsageSha256": "01a9f75b9d55f25edd23135b2d0cd471db773e5188fe997c373deff5a434f1e9",
+  "rendererApiUsageCount": 88,
+  "rendererApiUsageSha256": "2b9509928f245a6925c336a6fe3ee77ba9d1f7c48e3716e4c0cd8890859a10fa",
   "rendererSendChannels": [
     "window-control"
   ]

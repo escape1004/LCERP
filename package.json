@@ -19,7 +19,7 @@
     "electron:build": "npm run build && electron-builder",
     "electron:preview": "npm run build && cross-env ELECTRON=true electron .",
     "electron:preview-web": "npm run electron:preview",
-    "test": "node --experimental-strip-types --experimental-detect-module --test src/main/lib/files.test.ts src/main/lib/config-normalize.test.ts src/main/lib/redact.test.ts src/main/lib/sql.test.ts src/main/lib/zip-path.test.ts src/main/lib/media-time.test.ts src/main/lib/openai-response.test.ts src/main/lib/subtitles.test.ts src/main/services/password.test.ts",
+    "test": "node --experimental-strip-types --experimental-detect-module --test src/main/lib/files.test.ts src/main/lib/config-normalize.test.ts src/main/lib/redact.test.ts src/main/lib/sql.test.ts src/main/lib/zip-path.test.ts src/main/lib/media-time.test.ts src/main/lib/openai-response.test.ts src/main/lib/subtitles.test.ts src/main/lib/security.test.ts src/main/services/password.test.ts",
     "dev:electron": "npm run electron:dev",
     "postinstall": "electron-builder install-app-deps",
     "preload:watch": "vite build --mode preload --watch",

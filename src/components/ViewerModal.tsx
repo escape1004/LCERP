@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { X, ChevronLeft, ChevronRight, Download, File, FileImage, FileVideo, Archive, FileText, Play, Pause, Volume2, VolumeX, RotateCcw, RotateCw, Maximize, Minimize, Bookmark, Clock, Search } from 'lucide-react';
-import AdmZip from 'adm-zip';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { toast } from './ui/use-toast';
@@ -21,6 +20,7 @@ import {
 } from './ui/context-menu';
 import { parseSubtitle, SubtitleCue } from '../lib/subtitle';
 import { SubtitleOverlay } from './SubtitleOverlay';
+import { getArchiveVideoHttpUrl, getLocalVideoHttpUrl } from '../lib/local-media';
 
 interface ViewerModalProps {
   isOpen: boolean;
@@ -724,14 +724,12 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
         if (detectedType === 'image' || detectedType === 'video') {
           // 이미지나 동영상인 경우 로드
           setPlaybackSpeed(1.0);
-          window.electronAPI.getFileDataUrl(displayFilePath).then((url) => {
+          window.electronAPI.getFileDataUrl(displayFilePath).then(async (url) => {
             if (url === null || url === 'error') {
               setFileNotFound(true);
               setDataUrl(null);
             } else if (detectedType === 'video' && url === 'stream') {
-              const port = (window as any).videoServerPort || 17345;
-              const streamUrl = `http://localhost:${port}/video?path=${encodeURIComponent(displayFilePath)}`;
-              setDataUrl(streamUrl);
+              setDataUrl(await getLocalVideoHttpUrl(displayFilePath));
             } else {
               setDataUrl(url);
             }
@@ -767,16 +765,12 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       setPlaybackSpeed(1.0);
       setLoading(true);
       setFileNotFound(false);
-      window.electronAPI.getFileDataUrl(displayFilePath).then((url) => {
+      window.electronAPI.getFileDataUrl(displayFilePath).then(async (url) => {
         if (url === null || url === 'error') {
           setFileNotFound(true);
           setDataUrl(null);
         } else if (displayFileType === 'video' && url === 'stream') {
-          // 스트리밍 서버 URL로 연결
-          // filePath에 한글/공백 등 특수문자 있을 수 있으므로 encodeURIComponent 적용
-          const port = (window as any).videoServerPort || 17345;
-          const streamUrl = `http://localhost:${port}/video?path=${encodeURIComponent(displayFilePath)}`;
-          setDataUrl(streamUrl);
+          setDataUrl(await getLocalVideoHttpUrl(displayFilePath));
         } else {
           setDataUrl(url);
         }
@@ -1285,8 +1279,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
           setCurrentArchiveText(text);
           setCurrentArchiveDataUrl(null);
         } else if (['mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'webm'].includes(fileExt || '')) {
-          const port = (window as any).videoServerPort || 17345;
-          const streamUrl = `http://localhost:${port}/archive-video?archive=${encodeURIComponent(filePath)}&file=${encodeURIComponent(currentFile.name)}`;
+          const streamUrl = await getArchiveVideoHttpUrl(filePath, currentFile.name);
           setCurrentArchiveDataUrl(streamUrl);
           setCurrentArchiveText(null);
         } else {

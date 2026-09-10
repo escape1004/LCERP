@@ -186,18 +186,15 @@ import {
   readImportRowsFromFile,
   importCategoryRecordsFromRows
 } from '../import-export';
+import { asFiniteNumber, resolveUserFilePath } from '../lib/security';
 
 export function registerThumbnailHandlers() {
-
+  const requireFilePath = (filePath) => resolveUserFilePath(filePath, appDataDir);
 
   ipcMain.handle('getThumbnailDataUrl', async (_, filePath, context: any = {}) => {
     try {
-      let normalizedPath = filePath;
-
-      if (!path.isAbsolute(filePath)) {
-        // appDataDir 사용
-        normalizedPath = path.join(appDataDir, filePath);
-      }
+      const normalizedPath = requireFilePath(filePath);
+      if (!normalizedPath) return null;
 
       let thumbnailPath = getThumbnailPathForContext(normalizedPath, context).thumbnailPath;
       if (!fs.existsSync(thumbnailPath)) {
@@ -221,16 +218,15 @@ export function registerThumbnailHandlers() {
 
   // 썸네일 삭제 IPC 핸들러 등록
   ipcMain.handle('deleteThumbnail', async (_, filePath, context: any = {}) => {
-    return deleteThumbnail(filePath, context);
+    const resolvedPath = requireFilePath(filePath);
+    if (!resolvedPath) return false;
+    return deleteThumbnail(resolvedPath, context);
   });
 
   const generateVideoThumbnailWithTime = async (filePath, timestampSec, context: any = {}) => {
     try {
-      let normalizedPath = filePath;
-      if (!path.isAbsolute(filePath)) {
-        normalizedPath = path.join(appDataDir, filePath);
-      }
-      if (!fs.existsSync(normalizedPath)) {
+      const normalizedPath = requireFilePath(filePath);
+      if (!normalizedPath || !fs.existsSync(normalizedPath)) {
         return null;
       }
 
@@ -269,7 +265,7 @@ export function registerThumbnailHandlers() {
       if (embeddedCoverPath) {
         return embeddedCoverPath;
       }
-      let ts = Number(timestampSec);
+      let ts = asFiniteNumber(timestampSec, null);
       if (!Number.isFinite(ts)) {
         ts = getAutoThumbnailTimestamp(duration);
       }
@@ -301,9 +297,9 @@ export function registerThumbnailHandlers() {
   const regenerateImageOrArchiveThumbnail = async (filePath, context: any = {}) => {
     try {
 
-      let normalizedPath = filePath;
-      if (!path.isAbsolute(filePath)) {
-        normalizedPath = path.join(appDataDir, filePath);
+      const normalizedPath = requireFilePath(filePath);
+      if (!normalizedPath) {
+        return null;
       }
 
       if (!fs.existsSync(normalizedPath)) {
@@ -347,22 +343,23 @@ export function registerThumbnailHandlers() {
     let temporaryThumbnailPath = null;
     try {
 
-      if (!imagePath) {
+      const resolvedImagePath = requireFilePath(imagePath);
+      if (!resolvedImagePath) {
         log('커스텀 썸네일 이미지 경로가 비어 있습니다.');
         return null;
       }
 
-      if (!fs.existsSync(imagePath)) {
-        log('커스텀 썸네일 이미지 파일이 존재하지 않습니다:', imagePath);
+      if (!fs.existsSync(resolvedImagePath)) {
+        log('커스텀 썸네일 이미지 파일이 존재하지 않습니다.');
         return null;
       }
 
-      let normalizedTargetPath = targetFilePath;
-      if (!path.isAbsolute(targetFilePath)) {
-        normalizedTargetPath = path.join(appDataDir, targetFilePath);
+      const normalizedTargetPath = requireFilePath(targetFilePath);
+      if (!normalizedTargetPath) {
+        return null;
       }
 
-      const ext = path.extname(imagePath).toLowerCase();
+      const ext = path.extname(resolvedImagePath).toLowerCase();
       const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext);
       if (!isImage) {
         log('커스텀 썸네일로 지원하지 않는 이미지 형식:', ext);
@@ -374,7 +371,7 @@ export function registerThumbnailHandlers() {
 
       log('커스텀 썸네일 생성 시작:', { targetFilePath: normalizedTargetPath, imagePath, thumbnailPath });
 
-      const sourceImageBuffer = await fs.promises.readFile(imagePath);
+      const sourceImageBuffer = await fs.promises.readFile(resolvedImagePath);
       await sharp(sourceImageBuffer)
         .resize(400, 400, { fit: 'inside' })
         .jpeg({ quality: 90 })
@@ -435,16 +432,15 @@ export function registerThumbnailHandlers() {
   });
 
   ipcMain.handle('generateThumbnail', async (_, filePath, context: any = {}) => {
-    return await generateThumbnail(filePath, context);
+    const resolvedPath = requireFilePath(filePath);
+    if (!resolvedPath) return null;
+    return await generateThumbnail(resolvedPath, context);
   });
 
   ipcMain.handle('getThumbnailDataUrlHybrid', async (_, record, filePath) => {
     try {
-      if (!filePath) return null;
-      let normalizedPath = filePath;
-      if (!path.isAbsolute(filePath)) {
-        normalizedPath = path.join(appDataDir, filePath);
-      }
+      const normalizedPath = requireFilePath(filePath);
+      if (!normalizedPath) return null;
 
       const thumbnailContext = getThumbnailContextForRecordLike(record);
       let thumbnailPath = null;

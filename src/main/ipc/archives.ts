@@ -187,21 +187,23 @@ import {
   readImportRowsFromFile,
   importCategoryRecordsFromRows
 } from '../import-export';
+import { resolveUserFilePath, sanitizeArchiveEntryName } from '../lib/security';
 
 export function registerArchiveHandlers() {
-
+  const requireFilePath = (filePath) => resolveUserFilePath(filePath, appDataDir);
 
   // getArchiveFiles 핸들러
   ipcMain.handle('getArchiveFiles', async (_, filePath) => {
     try {
-      if (!fs.existsSync(filePath)) return [];
-      const ext = path.extname(filePath).toLowerCase();
+      const resolvedPath = requireFilePath(filePath);
+      if (!resolvedPath || !fs.existsSync(resolvedPath)) return [];
+      const ext = path.extname(resolvedPath).toLowerCase();
       if (ext === '.7z') return [];
 
       // 대용량 파일을 위해 unzipper 스트리밍 방식 사용
       const entries = [];
       await new Promise((resolve, reject) => {
-        fs.createReadStream(filePath)
+        fs.createReadStream(resolvedPath)
           .pipe(unzipper.Parse())
           .on('entry', function (entry) {
             entries.push({
@@ -225,27 +227,29 @@ export function registerArchiveHandlers() {
 
   ipcMain.handle('openArchiveFile', async (_, archivePath, fileName) => {
     try {
-      if (!archivePath || !fileName || !fs.existsSync(archivePath)) {
+      const resolvedArchivePath = requireFilePath(archivePath);
+      const safeFileName = sanitizeArchiveEntryName(fileName);
+      if (!resolvedArchivePath || !safeFileName || !fs.existsSync(resolvedArchivePath)) {
         return { success: false, error: '압축파일 또는 내부 파일을 찾을 수 없습니다.' };
       }
 
-      const archiveExtension = path.extname(archivePath).toLowerCase();
+      const archiveExtension = path.extname(resolvedArchivePath).toLowerCase();
       if (archiveExtension === '.7z') {
         return { success: false, error: '7z 압축파일은 현재 지원되지 않습니다.' };
       }
 
-      const directory = await unzipper.Open.file(archivePath);
+      const directory = await unzipper.Open.file(resolvedArchivePath);
       const entry = directory.files.find((candidate) => (
         candidate.type !== 'Directory'
         && !String(candidate.path || '').endsWith('/')
-        && isSameZipEntry(candidate.path, fileName)
+        && isSameZipEntry(candidate.path, safeFileName)
       ));
 
       if (!entry) {
         return { success: false, error: '압축파일 내부에서 파일을 찾을 수 없습니다.' };
       }
 
-      const normalizedFileName = normalizeZipPath(fileName);
+      const normalizedFileName = normalizeZipPath(safeFileName);
       const originalBaseName = path.posix.basename(normalizedFileName) || 'archive-file';
       const rawExtension = path.extname(originalBaseName);
       const safeExtension = /^\.[a-z0-9]{1,10}$/i.test(rawExtension) ? rawExtension : '';
@@ -257,9 +261,9 @@ export function registerArchiveHandlers() {
       const extractedFileName = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(sanitizedBaseName)
         ? `_${sanitizedBaseName}`
         : (sanitizedBaseName || fallbackFileName);
-      const archiveStat = fs.statSync(archivePath);
+      const archiveStat = fs.statSync(resolvedArchivePath);
       const cacheKey = crypto.createHash('sha1')
-        .update(`${path.resolve(archivePath)}|${archiveStat.mtimeMs}|${normalizedFileName}`)
+        .update(`${path.resolve(resolvedArchivePath)}|${archiveStat.mtimeMs}|${normalizedFileName}`)
         .digest('hex');
       const cacheDirectory = path.join(app.getPath('temp'), 'local-erp-archive-files', cacheKey);
       const extractedPath = path.join(cacheDirectory, extractedFileName);
@@ -294,15 +298,17 @@ export function registerArchiveHandlers() {
   // getArchiveFileDataUrl 핸들러
   ipcMain.handle('getArchiveFileDataUrl', async (_, filePath, fileName) => {
     try {
-      if (!fs.existsSync(filePath)) return null;
-      const ext = path.extname(filePath).toLowerCase();
+      const resolvedPath = requireFilePath(filePath);
+      const safeFileName = sanitizeArchiveEntryName(fileName);
+      if (!resolvedPath || !safeFileName || !fs.existsSync(resolvedPath)) return null;
+      const ext = path.extname(resolvedPath).toLowerCase();
       if (ext === '.7z') return null;
-      const requestedFileExt = path.extname(fileName).toLowerCase();
+      const requestedFileExt = path.extname(safeFileName).toLowerCase();
       const isVideo = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'].includes(requestedFileExt);
       if (isVideo) return null;
 
       const buffer = await enqueueArchiveIo(() => (
-        readArchiveEntryBuffer(filePath, fileName, ARCHIVE_DATA_URL_MAX_BYTES)
+        readArchiveEntryBuffer(resolvedPath, safeFileName, ARCHIVE_DATA_URL_MAX_BYTES)
       ));
       if (!buffer) return null;
 
@@ -322,11 +328,13 @@ export function registerArchiveHandlers() {
   // 압축 동영상은 크기와 무관하게 스트리밍한다.
   ipcMain.handle('getArchiveFileStreamInfo', async (_, filePath, fileName) => {
     try {
-      if (!fs.existsSync(filePath)) return null;
-      const ext = path.extname(filePath).toLowerCase();
+      const resolvedPath = requireFilePath(filePath);
+      const safeFileName = sanitizeArchiveEntryName(fileName);
+      if (!resolvedPath || !safeFileName || !fs.existsSync(resolvedPath)) return null;
+      const ext = path.extname(resolvedPath).toLowerCase();
       if (ext === '.7z') return null;
 
-      const fileExt = path.extname(fileName).toLowerCase();
+      const fileExt = path.extname(safeFileName).toLowerCase();
       const isVideo = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'].includes(fileExt);
 
       if (!isVideo) return null;
@@ -341,25 +349,25 @@ export function registerArchiveHandlers() {
   // getArchiveFileText 핸들러
   ipcMain.handle('getArchiveFileText', async (_, filePath, fileName) => {
     try {
-      if (!fs.existsSync(filePath)) {
-        log('[압축 파일 존재하지 않음]', filePath);
+      const resolvedPath = requireFilePath(filePath);
+      const safeFileName = sanitizeArchiveEntryName(fileName);
+      if (!resolvedPath || !safeFileName || !fs.existsSync(resolvedPath)) {
         return null;
       }
 
-      const ext = path.extname(filePath).toLowerCase();
+      const ext = path.extname(resolvedPath).toLowerCase();
       if (ext === '.7z') {
-        log('[7z 파일은 현재 지원되지 않습니다]', filePath);
         return null;
       }
 
-      const fileExt = path.extname(fileName).toLowerCase();
+      const fileExt = path.extname(safeFileName).toLowerCase();
       if (!['.txt', '.srt', '.vtt', '.ass'].includes(fileExt)) {
         log('[텍스트 파일이 아님]', fileName);
         return null;
       }
 
       const buffer = await enqueueArchiveIo(() => (
-        readArchiveEntryBuffer(filePath, fileName, ARCHIVE_TEXT_MAX_BYTES)
+        readArchiveEntryBuffer(resolvedPath, safeFileName, ARCHIVE_TEXT_MAX_BYTES)
       ));
       if (!buffer) return null;
 

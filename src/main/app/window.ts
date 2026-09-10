@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, protocol } from 'electron';
 import path from 'path';
 import { electronDistDir } from '../ffmpeg-paths';
+import { buildContentSecurityPolicy } from './csp';
 import {
   appConfig,
   applyWindowZoom,
@@ -11,13 +12,58 @@ import {
   saveAppConfig,
 } from '../store';
 
+function isAllowedNavigationUrl(targetUrl) {
+  try {
+    const parsed = new URL(targetUrl);
+    if (isolatedRendererUrl) {
+      return parsed.origin === new URL(isolatedRendererUrl).origin;
+    }
+    if (process.env.VITE_DEV_SERVER_URL) {
+      return parsed.origin === 'http://localhost:5174' || parsed.origin === 'http://127.0.0.1:5174';
+    }
+    if (parsed.protocol !== 'file:') return false;
+
+    const distRoot = path.resolve(electronDistDir, '..', 'dist');
+    const filePath = decodeURIComponent(parsed.pathname);
+    const normalizedPath = process.platform === 'win32' && filePath.startsWith('/')
+      ? filePath.slice(1)
+      : filePath;
+    const relative = path.relative(distRoot, path.resolve(normalizedPath));
+    return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  } catch {
+    return false;
+  }
+}
+
+function attachNavigationGuards(contents) {
+  contents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  contents.on('will-navigate', (event, targetUrl) => {
+    if (!isAllowedNavigationUrl(targetUrl)) {
+      event.preventDefault();
+    }
+  });
+  contents.on('will-redirect', (event, targetUrl) => {
+    if (!isAllowedNavigationUrl(targetUrl)) {
+      event.preventDefault();
+    }
+  });
+}
+
 export function registerProtocol() {
   protocol.registerFileProtocol('app', (request, callback) => {
-    const url = request.url.replace('app://', '');
     try {
-      return callback(decodeURIComponent(path.normalize(url)));
+      const relative = decodeURIComponent(request.url.replace(/^app:\/*/i, ''));
+      const distRoot = path.resolve(electronDistDir, '..', 'dist');
+      const target = path.resolve(distRoot, relative);
+      const relativeToRoot = path.relative(distRoot, target);
+      if (!relativeToRoot || relativeToRoot.startsWith('..') || path.isAbsolute(relativeToRoot)) {
+        callback({ error: -10 });
+        return;
+      }
+      callback(target);
     } catch (error) {
       console.error(error);
+      callback({ error: -2 });
     }
   });
 }
@@ -35,10 +81,13 @@ export function createWindow() {
     y: typeof rememberedBounds?.y === 'number' ? rememberedBounds.y : undefined,
     frame: false,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: true,
       preload: path.join(electronDistDir, 'preload.js'),
-      sandbox: false
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      navigateOnDragDrop: false
     },
     icon: iconPath
   });
@@ -91,22 +140,21 @@ export function createWindow() {
     }, 150);
   };
 
-  // CSP 설정
+  const contentSecurityPolicy = buildContentSecurityPolicy();
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
         ...details.responseHeaders,
-        'Content-Security-Policy': [
-          "default-src 'self' 'unsafe-inline' data: localvideo: http://localhost:17345; " +
-          "media-src 'self' data: localvideo: http://localhost:17345; " +
-          "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-          "img-src 'self' data: https:; " +
-          "font-src 'self' data: https://fonts.gstatic.com; " +
-          "connect-src 'self' ws: wss:;"
-        ]
+        'Content-Security-Policy': [contentSecurityPolicy]
       }
     });
+  });
+  mainWindow.webContents.session.setPermissionRequestHandler((_contents, permission, callback) => {
+    callback(permission === 'clipboard-sanitized-write' || permission === 'clipboard-read');
+  });
+  attachNavigationGuards(mainWindow.webContents);
+  mainWindow.webContents.on('did-attach-webview', (_event, guestContents) => {
+    attachNavigationGuards(guestContents);
   });
 
   // 개발 모드에서는 Vite 개발 서버 URL을 사용
@@ -180,6 +228,9 @@ export function createWindow() {
 
   // 창 제어 이벤트 처리
   ipcMain.on('window-control', (_, command) => {
+    if (command !== 'minimize' && command !== 'maximize' && command !== 'restore' && command !== 'close') {
+      return;
+    }
     switch (command) {
       case 'minimize':
         mainWindow.minimize();
