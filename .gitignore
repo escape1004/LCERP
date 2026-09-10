@@ -41,6 +41,9 @@ lerna-debug.log*
 .vscode/*
 !.vscode/extensions.json
 .idea
+.vs/
+.history/
+*.code-workspace
 .DS_Store
 *.suo
 *.ntvs*
@@ -110,6 +113,19 @@ pids
 
 # Optional npm cache directory
 .npm
+
+# Local coding-agent state
+.agents/
+.codex/
+
+# Local repository maintenance and diagnostics tools
+/bfg.jar
+/Handle.zip
+/handle.exe
+/handle64.exe
+/handle64a.exe
+/handle_app_output.txt
+/handle_output.txt
 
 # Optional eslint cache
 .eslintcache
