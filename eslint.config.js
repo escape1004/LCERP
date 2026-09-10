@@ -28,10 +28,9 @@ module.exports = tseslint.config(
     },
   },
   {
-    files: ["src/main/main.ts"],
+    files: ["src/main/**/*.ts"],
+    ignores: ["src/main/preload.ts"],
     rules: {
-      "@typescript-eslint/ban-ts-comment": "off",
-      "@typescript-eslint/no-require-imports": "off",
       "prefer-const": "off",
       "no-control-regex": "off",
       "no-useless-escape": "off",

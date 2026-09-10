@@ -4,31 +4,30 @@ import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { spawn, spawnSync } from 'node:child_process';
-import electronPath from 'electron';
 import AdmZip from 'adm-zip';
 
 const rootDir = process.cwd();
-const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'local-erp-electron-smoke-'));
-const appDir = path.join(tempRoot, 'app');
+const unpackedDir = path.join(rootDir, 'release', 'win-unpacked');
+const exeName = 'Local ERP.exe';
+const sourceExePath = path.join(unpackedDir, exeName);
+
+if (!fs.existsSync(sourceExePath)) {
+  console.log(`Packaged media/update smoke skipped: ${path.relative(rootDir, sourceExePath)} is not present.`);
+  console.log('Build it with `npx electron-builder --dir` (or `npm run electron:build`) then rerun `npm run smoke:electron-packaged`.');
+  process.exit(0);
+}
+
+const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'local-erp-electron-packaged-smoke-'));
 const userDataDir = path.join(tempRoot, 'user-data');
+const dataDir = path.join(tempRoot, 'app-data');
 const backupDir = path.join(tempRoot, 'backups');
 const pngBytes = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
   'base64',
 );
-const jpegBytes = Buffer.from(
-  '/9j/4AAQSkZJRgABAQAAAQABAAD/2wAAAQIBAQIBAQICAgICAgICAwUDAwMDAwYEBAMFBwYHBwcGBwcICQsJCAgKCAcHCg0KCgsMDAwMBwkODw0MDgsMDAz/wAARCAABAAEDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAAECkjEBAhIxBEFRImEFEyJxgTKykUGh0fAjM7HB8RVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD9/KKKKAP/2Q==',
-  'base64',
-);
 let electronProcess;
 let reportReceived = false;
 let rendererReport = null;
-
-function copyDirectory(relativePath) {
-  const sourcePath = path.join(rootDir, relativePath);
-  const destinationPath = path.join(appDir, relativePath);
-  fs.cpSync(sourcePath, destinationPath, { recursive: true });
-}
 
 async function stopElectron() {
   if (!electronProcess || electronProcess.exitCode !== null) return;
@@ -49,7 +48,7 @@ async function stopElectron() {
 function cleanup() {
   const resolvedTempRoot = path.resolve(tempRoot);
   const resolvedSystemTemp = `${path.resolve(os.tmpdir())}${path.sep}`;
-  if (!resolvedTempRoot.startsWith(resolvedSystemTemp) || !path.basename(resolvedTempRoot).startsWith('local-erp-electron-smoke-')) {
+  if (!resolvedTempRoot.startsWith(resolvedSystemTemp) || !path.basename(resolvedTempRoot).startsWith('local-erp-electron-packaged-smoke-')) {
     throw new Error(`Refusing to remove unexpected smoke directory: ${resolvedTempRoot}`);
   }
   fs.rmSync(resolvedTempRoot, {
@@ -61,29 +60,17 @@ function cleanup() {
 }
 
 try {
-  copyDirectory('dist-electron-app');
-  fs.mkdirSync(path.join(appDir, 'resources'), { recursive: true });
-  fs.copyFileSync(path.join(rootDir, 'resources', 'icon.ico'), path.join(appDir, 'resources', 'icon.ico'));
-
-  const pngPath = path.join(appDir, 'viewer-fixture.png');
-  const jpegPath = path.join(appDir, 'viewer-fixture.jpg');
-  const videoPath = path.join(appDir, 'viewer-fixture.mp4');
-  const zipPath = path.join(appDir, 'viewer-fixture.zip');
-  fs.mkdirSync(appDir, { recursive: true });
+  const exePath = sourceExePath;
+  const pngPath = path.join(tempRoot, 'viewer-fixture.png');
+  const zipPath = path.join(tempRoot, 'viewer-fixture.zip');
+  const videoPath = path.join(tempRoot, 'viewer-fixture.mp4');
   fs.writeFileSync(pngPath, pngBytes);
-  fs.writeFileSync(jpegPath, jpegBytes);
   fs.writeFileSync(videoPath, Buffer.from('ftypisom'));
   const zip = new AdmZip();
   zip.addFile('inside.png', pngBytes);
   zip.writeZip(zipPath);
-
-  fs.symlinkSync(path.join(rootDir, 'node_modules'), path.join(appDir, 'node_modules'), 'junction');
-  fs.writeFileSync(path.join(appDir, 'package.json'), JSON.stringify({
-    name: 'local-erp-electron-smoke',
-    version: '1.1.19',
-    main: 'dist-electron-app/main.js',
-  }));
   fs.mkdirSync(userDataDir, { recursive: true });
+  fs.mkdirSync(dataDir, { recursive: true });
   fs.mkdirSync(backupDir, { recursive: true });
   fs.writeFileSync(path.join(userDataDir, 'config.json'), JSON.stringify({
     backupDir,
@@ -122,11 +109,8 @@ try {
         }
 
         const pngType = await window.electronAPI.getFileType(${JSON.stringify(pngPath)});
-        const jpegType = await window.electronAPI.getFileType(${JSON.stringify(jpegPath)});
         const videoType = await window.electronAPI.getFileType(${JSON.stringify(videoPath)});
         const zipType = await window.electronAPI.getFileType(${JSON.stringify(zipPath)});
-        const pngData = await window.electronAPI.getFileDataUrl(${JSON.stringify(pngPath)});
-        const jpegData = await window.electronAPI.getFileDataUrl(${JSON.stringify(jpegPath)});
         const archiveFiles = await window.electronAPI.getArchiveFiles(${JSON.stringify(zipPath)});
         const archiveData = await window.electronAPI.getArchiveFileDataUrl(${JSON.stringify(zipPath)}, 'inside.png');
         const updateState = await window.electronAPI.getAppUpdateState();
@@ -134,16 +118,14 @@ try {
 
         await report({
           pngType,
-          jpegType,
           videoType,
           zipType,
-          pngData: String(typeof pngData === 'string' && pngData.startsWith('data:image/png;base64,')),
-          jpegData: String(typeof jpegData === 'string' && jpegData.startsWith('data:image/jpeg;base64,')),
-          archiveCount: String(Array.isArray(archiveFiles) ? archiveFiles.length : 0),
           archiveName: archiveFiles?.[0]?.name || '',
           archiveData: String(typeof archiveData === 'string' && archiveData.startsWith('data:image/png;base64,')),
           updateStatus: updateCheck?.status || updateState?.status || '',
-          updateVersion: updateState?.currentVersion || '',
+          updateError: updateCheck?.error || updateState?.error || '',
+          packaged: String(updateCheck?.status !== 'disabled'),
+          currentVersion: updateState?.currentVersion || '',
         });
       };
 
@@ -157,15 +139,18 @@ try {
   });
 
   const address = server.address();
-  const devServerUrl = `http://127.0.0.1:${address.port}`;
   const electronEnv = { ...process.env };
   delete electronEnv.ELECTRON_RUN_AS_NODE;
-  electronProcess = spawn(electronPath, [appDir, `--user-data-dir=${userDataDir}`, '--no-sandbox'], {
-    cwd: appDir,
+  electronProcess = spawn(exePath, [
+    `--user-data-dir=${userDataDir}`,
+    `--data-dir=${dataDir}`,
+    `--smoke-url=http://127.0.0.1:${address.port}`,
+    '--no-sandbox',
+  ], {
+    cwd: unpackedDir,
     env: {
       ...electronEnv,
-      NODE_PATH: path.join(rootDir, 'node_modules'),
-      VITE_DEV_SERVER_URL: devServerUrl,
+      ELECTRON_ENABLE_LOGGING: '1',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -174,7 +159,7 @@ try {
   electronProcess.stdout.on('data', (chunk) => { output += chunk; });
   electronProcess.stderr.on('data', (chunk) => { output += chunk; });
 
-  const deadline = Date.now() + 20000;
+  const deadline = Date.now() + 60000;
   while (!reportReceived && electronProcess.exitCode === null && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
@@ -183,39 +168,27 @@ try {
   await new Promise((resolve) => server.close(resolve));
 
   if (!reportReceived) {
-    throw new Error(`Electron renderer did not confirm the preload bridge: ${JSON.stringify(rendererReport)}\n${output}`);
+    throw new Error(`Packaged app did not confirm the preload bridge: ${JSON.stringify(rendererReport)}\n${output}`);
   }
   if (rendererReport?.error) {
-    throw new Error(`Electron smoke renderer error: ${rendererReport.error}\n${output}`);
+    throw new Error(`Packaged smoke renderer error: ${rendererReport.error}\n${output}`);
   }
-  if (rendererReport?.pngType !== 'image' || rendererReport?.jpegType !== 'image') {
-    throw new Error(`Image fixtures were not classified: ${JSON.stringify(rendererReport)}`);
-  }
-  if (rendererReport?.videoType !== 'video') {
-    throw new Error(`Video fixture was not classified: ${JSON.stringify(rendererReport)}`);
-  }
-  if (rendererReport?.zipType !== 'archive') {
-    throw new Error(`Archive fixture was not classified: ${JSON.stringify(rendererReport)}`);
-  }
-  if (rendererReport?.pngData !== 'true' || rendererReport?.jpegData !== 'true') {
-    throw new Error(`Image fixtures could not be loaded: ${JSON.stringify(rendererReport)}`);
+  if (rendererReport?.pngType !== 'image' || rendererReport?.videoType !== 'video' || rendererReport?.zipType !== 'archive') {
+    throw new Error(`Packaged media fixtures were not classified: ${JSON.stringify(rendererReport)}`);
   }
   if (rendererReport?.archiveName !== 'inside.png' || rendererReport?.archiveData !== 'true') {
-    throw new Error(`Archive fixture could not be read: ${JSON.stringify(rendererReport)}`);
+    throw new Error(`Packaged archive fixture could not be read: ${JSON.stringify(rendererReport)}`);
   }
-  if (rendererReport?.updateStatus !== 'disabled') {
-    throw new Error(`Unpackaged update check should be disabled: ${JSON.stringify(rendererReport)}`);
-  }
-  if (!fs.existsSync(path.join(appDir, 'save', 'erp.db'))) {
-    throw new Error('Electron main did not create the isolated development database fixture.');
+  if (rendererReport?.updateStatus === 'disabled') {
+    throw new Error(`Packaged update check should not be disabled: ${JSON.stringify(rendererReport)}`);
   }
 
-  console.log('Electron runtime smoke test passed with isolated DB, media fixtures, archive APIs, and unpackaged update state.');
+  console.log(`Packaged media/update smoke passed (${rendererReport.currentVersion}, status=${rendererReport.updateStatus}${rendererReport.updateError ? `, error=${rendererReport.updateError}` : ''}).`);
 } finally {
   await stopElectron();
   try {
     cleanup();
   } catch (error) {
-    console.warn(`Could not remove the isolated smoke directory ${tempRoot}: ${error.message}`);
+    console.warn(`Could not remove the isolated packaged smoke directory ${tempRoot}: ${error.message}`);
   }
 }

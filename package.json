@@ -27,7 +27,8 @@
     "clean:electron": "node scripts/clean-electron-output.mjs",
     "build:main": "tsc --project tsconfig.main.json",
     "verify:electron-contracts": "node scripts/verify-electron-contracts.mjs",
-    "smoke:electron": "node scripts/smoke-electron-runtime.mjs"
+    "smoke:electron": "node scripts/smoke-electron-runtime.mjs",
+    "smoke:electron-packaged": "node scripts/smoke-packaged-runtime.mjs"
   },
   "build": {
     "appId": "com.escape.local-erp",
@@ -48,6 +49,7 @@
       "dist/**/*",
       "dist-electron-app/main.js",
       "dist-electron-app/preload.js",
+      "dist-electron-app/**/*.js",
       "resources/**/*"
     ],
     "extraResources": [
