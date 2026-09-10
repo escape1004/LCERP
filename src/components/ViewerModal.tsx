@@ -1,198 +1,30 @@
-import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { X, ChevronLeft, ChevronRight, Download, File, FileImage, FileVideo, Archive, FileText, Play, Pause, Volume2, VolumeX, RotateCcw, RotateCw, Maximize, Minimize, Bookmark, Clock, Search } from 'lucide-react';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { toast } from './ui/use-toast';
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./ui/tooltip";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Archive, FileImage, FileVideo, RotateCcw, RotateCw, X } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { AnimatedModal } from './ui/animated-modal';
-import { AnimatedGif } from './AnimatedGif';
+import { ArchiveViewer } from './viewer/ArchiveViewer';
+import { ImageViewer } from './viewer/ImageViewer';
+import { VideoViewer } from './viewer/VideoViewer';
+import type { ViewerFileType, ViewerModalProps } from './viewer/types';
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuRadioGroup,
-  ContextMenuRadioItem,
-  ContextMenuSeparator,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
-  ContextMenuTrigger,
-} from './ui/context-menu';
-import { parseSubtitle, SubtitleCue } from '../lib/subtitle';
-import { SubtitleOverlay } from './SubtitleOverlay';
-import { getArchiveVideoHttpUrl, getLocalVideoHttpUrl } from '../lib/local-media';
+  clampPanOffset,
+  findArchiveSubtitles,
+  formatMediaTime,
+  hasBookmarkAtTime,
+  isVideoFileName,
+  nextWheelScale,
+  toViewerFileType,
+} from './viewer/viewerLogic';
+import { parseSubtitle } from '../lib/subtitle';
+import { getLocalVideoHttpUrl } from '../lib/local-media';
+import { useArchiveViewer } from '../hooks/useArchiveViewer';
+import { useMediaKeyboard } from '../hooks/useMediaKeyboard';
+import { exitPictureInPicture } from '../hooks/pictureInPicture';
+import { useVideoPlayback } from '../hooks/useVideoPlayback';
 
-interface ViewerModalProps {
-  isOpen: boolean;
-  filePath: string;
-  fileType: 'image' | 'video' | 'archive' | null;
-  categoryId?: string;
-  recordId?: string;
-  onClose: () => void;
-}
+export type { ViewerModalProps };
 
-interface ArchiveFile {
-  name: string;
-  size: number;
-  isDirectory: boolean;
-  isSupported?: boolean;
-  data?: Buffer;
-}
-
-interface SubtitleSource {
-  id: string;
-  name: string;
-  cues: SubtitleCue[];
-}
-
-type SubtitleSize = 'small' | 'medium' | 'large';
-type SubtitleColor = 'white' | 'yellow';
-type SubtitleBackground = 'none' | 'translucent' | 'dark';
-
-const PictureInPictureContextMenu: React.FC<{
-  children: React.ReactElement;
-  onPlayInPictureInPicture: () => void;
-  subtitles: SubtitleSource[];
-  activeSubtitleId: string | null;
-  subtitleSize: SubtitleSize;
-  subtitleColor: SubtitleColor;
-  subtitleBackground: SubtitleBackground;
-  subtitleOffset: number;
-  onSubtitleChange: (id: string | null) => void;
-  onSubtitleSizeChange: (size: SubtitleSize) => void;
-  onSubtitleColorChange: (color: SubtitleColor) => void;
-  onSubtitleBackgroundChange: (background: SubtitleBackground) => void;
-  onSubtitleOffsetChange: (offset: number) => void;
-}> = ({
-  children,
-  onPlayInPictureInPicture,
-  subtitles,
-  activeSubtitleId,
-  subtitleSize,
-  subtitleColor,
-  subtitleBackground,
-  subtitleOffset,
-  onSubtitleChange,
-  onSubtitleSizeChange,
-  onSubtitleColorChange,
-  onSubtitleBackgroundChange,
-  onSubtitleOffsetChange,
-}) => (
-  <ContextMenu>
-    <ContextMenuTrigger asChild>
-      {children}
-    </ContextMenuTrigger>
-    <ContextMenuContent className="min-w-[180px]">
-      <ContextMenuItem onSelect={onPlayInPictureInPicture}>
-        PIP 재생
-      </ContextMenuItem>
-      <ContextMenuSeparator />
-      <ContextMenuSub>
-        <ContextMenuSubTrigger>자막</ContextMenuSubTrigger>
-        <ContextMenuSubContent className="min-w-[220px]">
-          <ContextMenuRadioGroup value={activeSubtitleId || 'off'} onValueChange={value => onSubtitleChange(value === 'off' ? null : value)}>
-            <ContextMenuRadioItem value="off">끄기</ContextMenuRadioItem>
-            {subtitles.map(subtitle => (
-              <ContextMenuRadioItem key={subtitle.id} value={subtitle.id}>
-                <span className="max-w-[260px] truncate">{subtitle.name}</span>
-              </ContextMenuRadioItem>
-            ))}
-          </ContextMenuRadioGroup>
-          {subtitles.length === 0 && (
-            <ContextMenuItem disabled>일치하는 자막 없음</ContextMenuItem>
-          )}
-        </ContextMenuSubContent>
-      </ContextMenuSub>
-      <ContextMenuSub>
-        <ContextMenuSubTrigger>자막 크기</ContextMenuSubTrigger>
-        <ContextMenuSubContent>
-          <ContextMenuRadioGroup value={subtitleSize} onValueChange={value => onSubtitleSizeChange(value as SubtitleSize)}>
-            <ContextMenuRadioItem value="small">작게</ContextMenuRadioItem>
-            <ContextMenuRadioItem value="medium">보통</ContextMenuRadioItem>
-            <ContextMenuRadioItem value="large">크게</ContextMenuRadioItem>
-          </ContextMenuRadioGroup>
-        </ContextMenuSubContent>
-      </ContextMenuSub>
-      <ContextMenuSub>
-        <ContextMenuSubTrigger>자막 색상</ContextMenuSubTrigger>
-        <ContextMenuSubContent>
-          <ContextMenuRadioGroup value={subtitleColor} onValueChange={value => onSubtitleColorChange(value as SubtitleColor)}>
-            <ContextMenuRadioItem value="white">흰색</ContextMenuRadioItem>
-            <ContextMenuRadioItem value="yellow">노란색</ContextMenuRadioItem>
-          </ContextMenuRadioGroup>
-        </ContextMenuSubContent>
-      </ContextMenuSub>
-      <ContextMenuSub>
-        <ContextMenuSubTrigger>자막 배경</ContextMenuSubTrigger>
-        <ContextMenuSubContent>
-          <ContextMenuRadioGroup value={subtitleBackground} onValueChange={value => onSubtitleBackgroundChange(value as SubtitleBackground)}>
-            <ContextMenuRadioItem value="none">없음</ContextMenuRadioItem>
-            <ContextMenuRadioItem value="translucent">반투명</ContextMenuRadioItem>
-            <ContextMenuRadioItem value="dark">진하게</ContextMenuRadioItem>
-          </ContextMenuRadioGroup>
-        </ContextMenuSubContent>
-      </ContextMenuSub>
-      <ContextMenuSub>
-        <ContextMenuSubTrigger>
-          자막 싱크
-          <span className="ml-auto pl-3 text-xs text-discord-muted">
-            {subtitleOffset > 0 ? '+' : ''}{subtitleOffset.toFixed(1)}초
-          </span>
-        </ContextMenuSubTrigger>
-        <ContextMenuSubContent>
-          <ContextMenuItem
-            onSelect={(event) => {
-              event.preventDefault();
-              onSubtitleOffsetChange(Math.max(-10, subtitleOffset - 0.5));
-            }}
-          >
-            0.5초 빠르게
-          </ContextMenuItem>
-          <ContextMenuItem
-            onSelect={(event) => {
-              event.preventDefault();
-              onSubtitleOffsetChange(0);
-            }}
-          >
-            초기화
-          </ContextMenuItem>
-          <ContextMenuItem
-            onSelect={(event) => {
-              event.preventDefault();
-              onSubtitleOffsetChange(Math.min(10, subtitleOffset + 0.5));
-            }}
-          >
-            0.5초 느리게
-          </ContextMenuItem>
-        </ContextMenuSubContent>
-      </ContextMenuSub>
-    </ContextMenuContent>
-  </ContextMenu>
-);
-
-const SUPPORTED_ARCHIVE_FILE_PATTERN = /\.(jpg|jpeg|png|gif|webp|mp4|avi|mkv|mov|wmv|flv|webm|txt)$/i;
-const SUBTITLE_FILE_PATTERN = /\.(srt|vtt|ass)$/i;
-
-const findArchiveSubtitles = (files: ArchiveFile[], videoName: string) => {
-  const normalizedVideoName = videoName.replace(/\\/g, '/');
-  const lastSlashIndex = normalizedVideoName.lastIndexOf('/');
-  const videoDirectory = normalizedVideoName.slice(0, Math.max(0, lastSlashIndex + 1)).toLocaleLowerCase();
-  const videoFileName = normalizedVideoName.slice(lastSlashIndex + 1);
-  const videoBase = videoFileName.replace(/\.[^.]+$/, '').toLocaleLowerCase();
-
-  return files.filter(file => {
-    const normalizedName = file.name.replace(/\\/g, '/');
-    const subtitleSlashIndex = normalizedName.lastIndexOf('/');
-    const subtitleDirectory = normalizedName.slice(0, Math.max(0, subtitleSlashIndex + 1)).toLocaleLowerCase();
-    const subtitleFileName = normalizedName.slice(subtitleSlashIndex + 1);
-    const subtitleBase = subtitleFileName.replace(/\.[^.]+$/, '').toLocaleLowerCase();
-
-    return !file.isDirectory
-      && SUBTITLE_FILE_PATTERN.test(subtitleFileName)
-      && subtitleDirectory === videoDirectory
-      && (subtitleBase === videoBase || subtitleBase.startsWith(`${videoBase}.`));
-  });
-};
+const tooltipClassName = "relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words";
 
 export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, fileType, categoryId = '', recordId = '', onClose }) => {
   const [displayFilePath, setDisplayFilePath] = useState(filePath);
@@ -200,175 +32,117 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const [displayCategoryId, setDisplayCategoryId] = useState(categoryId);
   const [displayRecordId, setDisplayRecordId] = useState(recordId);
   const [dataUrl, setDataUrl] = useState<string | null>(null);
-  const [archiveFiles, setArchiveFiles] = useState<ArchiveFile[]>([]);
-  const [archiveSearchQuery, setArchiveSearchQuery] = useState('');
-  const [currentArchiveIndex, setCurrentArchiveIndex] = useState<number>(0);
-  const [currentArchiveDataUrl, setCurrentArchiveDataUrl] = useState<string | null>(null);
-  const [currentArchiveText, setCurrentArchiveText] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  // fileType이 null일 때 감지된 파일 타입을 저장
-  const [detectedFileType, setDetectedFileType] = useState<'image' | 'video' | 'archive' | null>(null);
-  
-  // 비디오 관련 상태
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const modalContainerRef = useRef<HTMLDivElement>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [volume, setVolume] = useState(() => {
-    const savedVolume = localStorage.getItem('videoVolume');
-    return savedVolume ? parseFloat(savedVolume) : 0.5;
-  });
-  const [isMuted, setIsMuted] = useState(() => {
-    const savedMuted = localStorage.getItem('videoMuted');
-    return savedMuted ? JSON.parse(savedMuted) : false;
-  });
-  const [isLooping, setIsLooping] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showControls, setShowControls] = useState(true);
-  const controlsTimeoutRef = useRef<NodeJS.Timeout>();
-  
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [timelinePreview, setTimelinePreview] = useState<{ time: number; left: number } | null>(null);
-  const [timelinePreviewSeeking, setTimelinePreviewSeeking] = useState(false);
-  const timelinePreviewVideoRef = useRef<HTMLVideoElement>(null);
-  const [loopRange, setLoopRange] = useState<{ start: number; end: number } | null>(null);
-  const [loopDraft, setLoopDraft] = useState<{ start: number; end: number } | null>(null);
-  const loopSelectionRef = useRef<{ input: HTMLInputElement; anchorTime: number } | null>(null);
-  
-  const [videoError, setVideoError] = useState<string | null>(null);
-  const [codecInfo, setCodecInfo] = useState<any>(null);
-
-  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
-  const [showSpeedMenu, setShowSpeedMenu] = useState(false);
-  const [videoScale, setVideoScale] = useState(1);
-  const [videoOffset, setVideoOffset] = useState({ x: 0, y: 0 });
-  const [videoIsPanning, setVideoIsPanning] = useState(false);
-  const videoPanStart = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
-  const videoScaleRef = useRef(1);
-
-  // 일반 이미지 상태 및 핸들러
+  const [detectedFileType, setDetectedFileType] = useState<ViewerFileType | null>(null);
+  const [fileNotFound, setFileNotFound] = useState(false);
   const [imgScale, setImgScale] = useState(1);
   const [imgOffset, setImgOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
-  const panStart = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
-  const imgRef = useRef<HTMLImageElement>(null);
-  const imgScaleRef = useRef(1);
-
-  // 압축 이미지 상태 및 핸들러
   const [archiveImgScale, setArchiveImgScale] = useState(1);
   const [archiveImgOffset, setArchiveImgOffset] = useState({ x: 0, y: 0 });
   const [archiveIsPanning, setArchiveIsPanning] = useState(false);
-  const archivePanStart = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
-  const archiveImgRef = useRef<HTMLImageElement>(null);
-  const archiveGifCanvasRef = useRef<HTMLCanvasElement>(null);
-  const archiveImgScaleRef = useRef(1);
-
-  // 압축 동영상 상태 및 핸들러
   const [archiveVideoScale, setArchiveVideoScale] = useState(1);
   const [archiveVideoOffset, setArchiveVideoOffset] = useState({ x: 0, y: 0 });
   const [archiveVideoIsPanning, setArchiveVideoIsPanning] = useState(false);
-  const archiveVideoPanStart = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
-  const archiveVideoRef = useRef<HTMLVideoElement>(null);
-  const archiveVideoScaleRef = useRef(1);
-
-  const imgContainerRef = useRef<HTMLDivElement>(null);
-  const imageGifCanvasRef = useRef<HTMLCanvasElement>(null);
-
+  const [videoScale, setVideoScale] = useState(1);
+  const [videoOffset, setVideoOffset] = useState({ x: 0, y: 0 });
+  const [videoIsPanning, setVideoIsPanning] = useState(false);
   const [imgRotation, setImgRotation] = useState(0);
   const [videoRotation, setVideoRotation] = useState(0);
   const [archiveImgRotation, setArchiveImgRotation] = useState(0);
-  
-  const [showVolumeOverlay, setShowVolumeOverlay] = useState(false);
-  const volumeOverlayTimeoutRef = useRef<NodeJS.Timeout>();
-  const [showPlaybackOverlay, setShowPlaybackOverlay] = useState(false);
-  const [playbackOverlayState, setPlaybackOverlayState] = useState<'play' | 'pause'>('play');
-  const playbackOverlayTimeoutRef = useRef<NodeJS.Timeout>();
-  const playbackOverlayFadeTimeoutRef = useRef<NodeJS.Timeout>();
-  const [playbackOverlayVisible, setPlaybackOverlayVisible] = useState(false);
   const [isImageGifPaused, setIsImageGifPaused] = useState(false);
   const [isArchiveGifPaused, setIsArchiveGifPaused] = useState(false);
-  const [videoSeekSeconds, setVideoSeekSeconds] = useState(5);
-  const [videoAutoPlay, setVideoAutoPlay] = useState(true);
-  const [subtitles, setSubtitles] = useState<SubtitleSource[]>([]);
+  const [subtitles, setSubtitles] = useState<import('./viewer/types').SubtitleSource[]>([]);
   const [activeSubtitleId, setActiveSubtitleId] = useState<string | null>(null);
   const [subtitleOffset, setSubtitleOffset] = useState(0);
-  const [subtitleSize, setSubtitleSize] = useState<SubtitleSize>(() => {
+  const [subtitleSize, setSubtitleSize] = useState<import('./viewer/types').SubtitleSize>(() => {
     const saved = localStorage.getItem('subtitleSize');
     return saved === 'small' || saved === 'large' ? saved : 'medium';
   });
-  const [subtitleColor, setSubtitleColor] = useState<SubtitleColor>(() => (
+  const [subtitleColor, setSubtitleColor] = useState<import('./viewer/types').SubtitleColor>(() => (
     localStorage.getItem('subtitleColor') === 'yellow' ? 'yellow' : 'white'
   ));
-  const [subtitleBackground, setSubtitleBackground] = useState<SubtitleBackground>(() => {
+  const [subtitleBackground, setSubtitleBackground] = useState<import('./viewer/types').SubtitleBackground>(() => {
     const saved = localStorage.getItem('subtitleBackground');
     return saved === 'none' || saved === 'dark' ? saved : 'translucent';
   });
-
   const [bookmarks, setBookmarks] = useState<{ time: number; createdAt: string }[]>([]);
+  const [timelinePreview, setTimelinePreview] = useState<{ time: number; left: number } | null>(null);
+  const [timelinePreviewSeeking, setTimelinePreviewSeeking] = useState(false);
 
-  const [fileNotFound, setFileNotFound] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const archiveVideoRef = useRef<HTMLVideoElement>(null);
+  const modalContainerRef = useRef<HTMLDivElement>(null);
+  const imgContainerRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const imageGifCanvasRef = useRef<HTMLCanvasElement>(null);
+  const archiveImgRef = useRef<HTMLImageElement>(null);
+  const archiveGifCanvasRef = useRef<HTMLCanvasElement>(null);
+  const timelinePreviewVideoRef = useRef<HTMLVideoElement>(null);
+  const panStart = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
+  const archivePanStart = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
+  const archiveVideoPanStart = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
+  const videoPanStart = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
+  const imgScaleRef = useRef(1);
+  const videoScaleRef = useRef(1);
+  const archiveImgScaleRef = useRef(1);
+  const archiveVideoScaleRef = useRef(1);
   const countedViewKeyRef = useRef<string | null>(null);
 
-  const isVideoFileName = useCallback((name?: string) => {
-    return Boolean(name && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(name));
-  }, []);
-  const activeSubtitleCues = useMemo(() => {
-    const activeSubtitle = subtitles.find(subtitle => subtitle.id === activeSubtitleId);
-    return activeSubtitle?.cues || [];
-  }, [activeSubtitleId, subtitles]);
+  const archive = useArchiveViewer({
+    isOpen,
+    filePath,
+    displayFilePath,
+    fileType,
+    detectedFileType,
+    setLoading,
+    setFileNotFound,
+  });
 
-  const getEffectiveFileType = useCallback(() => fileType || detectedFileType, [fileType, detectedFileType]);
-  const filteredArchiveFiles = useMemo(() => {
-    const normalizedQuery = archiveSearchQuery.trim().toLocaleLowerCase();
-    return archiveFiles
-      .map((file, originalIndex) => ({ file, originalIndex }))
-      .filter(({ file }) => !normalizedQuery || file.name.toLocaleLowerCase().includes(normalizedQuery));
-  }, [archiveFiles, archiveSearchQuery]);
-  const navigableArchiveFiles = useMemo(
-    () => filteredArchiveFiles.filter(({ file }) => file.isSupported),
-    [filteredArchiveFiles]
-  );
-  const currentArchiveNavigationIndex = useMemo(
-    () => navigableArchiveFiles.findIndex(({ originalIndex }) => originalIndex === currentArchiveIndex),
-    [currentArchiveIndex, navigableArchiveFiles]
-  );
-  const exitPictureInPicture = useCallback(async () => {
-    const pictureInPictureVideo = document.pictureInPictureElement;
-    if (pictureInPictureVideo instanceof HTMLVideoElement) {
-      pictureInPictureVideo.pause();
-    }
+  const playback = useVideoPlayback({
+    fileType,
+    detectedFileType,
+    archiveFiles: archive.archiveFiles,
+    currentArchiveIndex: archive.currentArchiveIndex,
+    videoRef,
+    archiveVideoRef,
+  });
 
-    try {
-      if (document.pictureInPictureElement) {
-        await document.exitPictureInPicture();
-      }
-    } catch (error) {
-      if (document.pictureInPictureElement) {
-        console.error('PIP 종료 실패:', error);
-      }
-    }
-
-    try {
-      await window.electronAPI.setPictureInPictureActive(false);
-    } catch (error) {
-      console.error('PIP 오디오 상태 초기화 실패:', error);
-    }
-  }, []);
   const handleClose = useCallback(() => {
     void exitPictureInPicture().finally(onClose);
-  }, [exitPictureInPicture, onClose]);
+  }, [onClose]);
+
+  const handleKeyDown = useMediaKeyboard({
+    fileType,
+    detectedFileType,
+    archiveFiles: archive.archiveFiles,
+    currentArchiveIndex: archive.currentArchiveIndex,
+    videoSeekSeconds: playback.videoSeekSeconds,
+    volume: playback.volume,
+    playbackSpeed: playback.playbackSpeed,
+    onClose: handleClose,
+    onPlayPause: playback.handlePlayPause,
+    onVolumeChange: playback.handleVolumeChange,
+    onSeekBySeconds: playback.seekBySeconds,
+    onSeekByFrame: playback.seekByFrame,
+    onSpeedChange: playback.handleSpeedChange,
+    onPreviousArchive: () => void archive.handlePrevious(),
+    onNextArchive: () => void archive.handleNext(),
+  });
+
+  const activeSubtitleCues = useMemo(() => {
+    const activeSubtitle = subtitles.find((subtitle) => subtitle.id === activeSubtitleId);
+    return activeSubtitle?.cues || [];
+  }, [activeSubtitleId, subtitles]);
 
   useEffect(() => {
     if (!isOpen) {
       countedViewKeyRef.current = null;
       return;
     }
-
     if (!categoryId || !recordId) return;
-
     const viewKey = `${categoryId}:${recordId}:${filePath}`;
     if (countedViewKeyRef.current === viewKey) return;
-
     countedViewKeyRef.current = viewKey;
     void window.electronAPI.incrementRecordViewCount(categoryId, recordId)
       .then((result) => {
@@ -376,7 +150,6 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
           window.dispatchEvent(new CustomEvent('record:view-counted'));
           return;
         }
-
         countedViewKeyRef.current = null;
       })
       .catch(() => {
@@ -385,122 +158,52 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   }, [categoryId, filePath, isOpen, recordId]);
 
   useEffect(() => {
-    setArchiveSearchQuery('');
-  }, [displayFilePath, isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      void exitPictureInPicture();
-    }
-  }, [exitPictureInPicture, isOpen]);
+    if (!isOpen) void exitPictureInPicture();
+  }, [isOpen]);
 
   useEffect(() => {
     void exitPictureInPicture();
-  }, [displayFilePath, exitPictureInPicture]);
+  }, [displayFilePath]);
 
-  useEffect(() => {
-    return () => {
-      void exitPictureInPicture();
-    };
-  }, [exitPictureInPicture]);
-
-  const getActiveVideoElement = useCallback(() => {
-    const effectiveType = getEffectiveFileType();
-    if (effectiveType === 'video') {
-      return videoRef.current;
-    }
-
-    if (effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
-      const currentFile = archiveFiles[currentArchiveIndex];
-      if (isVideoFileName(currentFile?.name)) {
-        return archiveVideoRef.current;
-      }
-    }
-
-    return null;
-  }, [archiveFiles, currentArchiveIndex, getEffectiveFileType, isVideoFileName]);
-
-  const clearLoopSelection = useCallback(() => {
-    loopSelectionRef.current = null;
-    setLoopDraft(null);
-    setLoopRange(null);
+  useEffect(() => () => {
+    void exitPictureInPicture();
   }, []);
-
-  const handleLoopRangeEnded = useCallback(() => {
-    const activeVideo = getActiveVideoElement();
-    if (!activeVideo || !loopRange) return;
-
-    activeVideo.currentTime = loopRange.start;
-    setCurrentTime(loopRange.start);
-    activeVideo.play().catch(() => {});
-  }, [getActiveVideoElement, loopRange]);
-
-  const getSeekTimeFromPointer = useCallback((clientX: number, input: HTMLInputElement) => {
-    const rect = input.getBoundingClientRect();
-    const ratio = rect.width <= 0 ? 0 : Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-    return ratio * duration;
-  }, [duration]);
-
-  const seekByFrame = useCallback((direction: 'backward' | 'forward') => {
-    const activeVideo = getActiveVideoElement();
-    if (!activeVideo) return;
-
-    const frameDuration = 1 / 30;
-    const nextTime = direction === 'backward'
-      ? Math.max(0, activeVideo.currentTime - frameDuration)
-      : Math.min(duration, activeVideo.currentTime + frameDuration);
-
-    activeVideo.currentTime = nextTime;
-    setCurrentTime(nextTime);
-  }, [duration, getActiveVideoElement]);
 
   useEffect(() => {
     if (!isOpen) return;
-
-    const handleMouseBack = (e: MouseEvent) => {
-      if (e.button !== 3) return;
-      e.preventDefault();
-      e.stopPropagation();
+    const handleMouseBack = (event: MouseEvent) => {
+      if (event.button !== 3) return;
+      event.preventDefault();
+      event.stopPropagation();
       handleClose();
     };
-
     window.addEventListener('mousedown', handleMouseBack, true);
-
-    return () => {
-      window.removeEventListener('mousedown', handleMouseBack, true);
-    };
+    return () => window.removeEventListener('mousedown', handleMouseBack, true);
   }, [handleClose, isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
-
     let cancelled = false;
-
     window.electronAPI.getConfig().then((config) => {
-      if (!cancelled) {
-        setVideoSeekSeconds(Math.max(1, Number(config?.videoSeekSeconds ?? 5)));
-        setVideoAutoPlay(config?.videoAutoPlay !== false);
-      }
+      if (cancelled) return;
+      playback.setVideoSeekSeconds(Math.max(1, Number(config?.videoSeekSeconds ?? 5)));
+      playback.setVideoAutoPlay(config?.videoAutoPlay !== false);
     }).catch(() => {
-      if (!cancelled) {
-        setVideoSeekSeconds(5);
-        setVideoAutoPlay(true);
-      }
+      if (cancelled) return;
+      playback.setVideoSeekSeconds(5);
+      playback.setVideoAutoPlay(true);
     });
-
     return () => {
       cancelled = true;
     };
-  }, [isOpen]);
+  }, [isOpen, playback.setVideoAutoPlay, playback.setVideoSeekSeconds]);
 
   useEffect(() => {
     localStorage.setItem('subtitleSize', subtitleSize);
   }, [subtitleSize]);
-
   useEffect(() => {
     localStorage.setItem('subtitleColor', subtitleColor);
   }, [subtitleColor]);
-
   useEffect(() => {
     localStorage.setItem('subtitleBackground', subtitleBackground);
   }, [subtitleBackground]);
@@ -513,39 +216,36 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     }
 
     let cancelled = false;
-
     const loadSubtitles = async () => {
       const effectiveType = displayFileType || detectedFileType;
-      let loadedSubtitles: SubtitleSource[] = [];
-
+      let loadedSubtitles: typeof subtitles = [];
       try {
         if (effectiveType === 'video' && displayFilePath) {
           const sources = await window.electronAPI.getVideoSubtitles(displayFilePath);
           loadedSubtitles = sources
-            .map(source => ({
+            .map((source) => ({
               id: source.id,
               name: source.name,
               cues: parseSubtitle(source.content, source.name),
             }))
-            .filter(source => source.cues.length > 0);
-        } else if (effectiveType === 'archive' && currentArchiveIndex >= 0) {
-          const currentFile = archiveFiles[currentArchiveIndex];
+            .filter((source) => source.cues.length > 0);
+        } else if (effectiveType === 'archive' && archive.currentArchiveIndex >= 0) {
+          const currentFile = archive.archiveFiles[archive.currentArchiveIndex];
           if (currentFile && isVideoFileName(currentFile.name)) {
-            const matches = findArchiveSubtitles(archiveFiles, currentFile.name);
-            const sources = await Promise.all(matches.map(async subtitle => ({
+            const matches = findArchiveSubtitles(archive.archiveFiles, currentFile.name);
+            const sources = await Promise.all(matches.map(async (subtitle) => ({
               id: `archive:${subtitle.name}`,
               name: subtitle.name.replace(/\\/g, '/').split('/').pop() || subtitle.name,
               content: await window.electronAPI.getArchiveFileText(displayFilePath, subtitle.name),
             })));
-
             loadedSubtitles = sources
               .filter((source): source is typeof source & { content: string } => typeof source.content === 'string')
-              .map(source => ({
+              .map((source) => ({
                 id: source.id,
                 name: source.name,
                 cues: parseSubtitle(source.content, source.name),
               }))
-              .filter(source => source.cues.length > 0);
+              .filter((source) => source.cues.length > 0);
           }
         }
       } catch (error) {
@@ -563,43 +263,24 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     return () => {
       cancelled = true;
     };
-  }, [
-    archiveFiles,
-    currentArchiveIndex,
-    detectedFileType,
-    displayFilePath,
-    displayFileType,
-    isOpen,
-    isVideoFileName,
-  ]);
+  }, [archive.archiveFiles, archive.currentArchiveIndex, detectedFileType, displayFilePath, displayFileType, isOpen]);
 
   useEffect(() => {
-    if (filePath) {
-      setDisplayFilePath(filePath);
-    }
+    if (filePath) setDisplayFilePath(filePath);
   }, [filePath]);
-
   useEffect(() => {
-    if (fileType !== undefined) {
-      setDisplayFileType(fileType);
-    }
+    if (fileType !== undefined) setDisplayFileType(fileType);
   }, [fileType]);
-
   useEffect(() => {
-    if (categoryId) {
-      setDisplayCategoryId(categoryId);
-    }
+    if (categoryId) setDisplayCategoryId(categoryId);
   }, [categoryId]);
-
   useEffect(() => {
-    if (recordId) {
-      setDisplayRecordId(recordId);
-    }
+    if (recordId) setDisplayRecordId(recordId);
   }, [recordId]);
 
   useEffect(() => {
-    clearLoopSelection();
-  }, [clearLoopSelection, displayFilePath, displayFileType, currentArchiveIndex, isOpen]);
+    playback.clearLoopSelection();
+  }, [archive.currentArchiveIndex, displayFilePath, displayFileType, isOpen, playback.clearLoopSelection]);
 
   useEffect(() => {
     setIsImageGifPaused(false);
@@ -607,123 +288,60 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
 
   useEffect(() => {
     setIsArchiveGifPaused(false);
-  }, [currentArchiveDataUrl, currentArchiveIndex]);
+  }, [archive.currentArchiveDataUrl, archive.currentArchiveIndex]);
 
-  useEffect(() => {
-    const handleMouseMove = (event: MouseEvent) => {
-      const selection = loopSelectionRef.current;
-      if (!selection) return;
-
-      const nextTime = getSeekTimeFromPointer(event.clientX, selection.input);
-      const start = Math.min(selection.anchorTime, nextTime);
-      const end = Math.max(selection.anchorTime, nextTime);
-      setLoopDraft({ start, end });
-    };
-
-    const handleMouseUp = (event: MouseEvent) => {
-      const selection = loopSelectionRef.current;
-      if (!selection) return;
-
-      const nextTime = getSeekTimeFromPointer(event.clientX, selection.input);
-      const start = Math.min(selection.anchorTime, nextTime);
-      const end = Math.max(selection.anchorTime, nextTime);
-
-      loopSelectionRef.current = null;
-      setLoopDraft(null);
-
-      if (end - start < 0.1) {
-        return;
-      }
-
-      setLoopRange({ start, end });
-      const activeVideo = getActiveVideoElement();
-      if (activeVideo && activeVideo.currentTime < start) {
-        activeVideo.currentTime = start;
-        setCurrentTime(start);
-      }
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [getActiveVideoElement, getSeekTimeFromPointer]);
-
-  // 파일이 없을 때 북마크 자동 삭제
   useEffect(() => {
     if (fileNotFound && fileType === 'video' && categoryId && recordId) {
-      // 파일이 없으면 해당 레코드의 모든 북마크 삭제
-      (async () => {
+      void (async () => {
         try {
           if ((window.electronAPI as any).removeAllBookmarks) {
             const res = await (window.electronAPI as any).removeAllBookmarks(categoryId, recordId);
-            if (res && res.error) {
-              console.error('북마크 자동 삭제 실패:', res.error);
-            }
+            if (res && res.error) console.error('북마크 자동 삭제 실패:', res.error);
           }
         } catch (error) {
           console.error('북마크 삭제 중 오류:', error);
         }
       })();
     }
-  }, [fileNotFound, fileType, categoryId, recordId]);
+  }, [categoryId, fileNotFound, fileType, recordId]);
 
   useEffect(() => {
     const effectiveType = fileType || detectedFileType;
     if (effectiveType === 'video' && isOpen && filePath && categoryId && recordId) {
-      window.electronAPI.getBookmarks(categoryId, recordId).then(res => {
+      window.electronAPI.getBookmarks(categoryId, recordId).then((res) => {
         if (res.success) setBookmarks(res.bookmarks);
         else setBookmarks([]);
       });
     } else {
       setBookmarks([]);
     }
-  }, [fileType, detectedFileType, isOpen, filePath, categoryId, recordId]);
+  }, [categoryId, detectedFileType, filePath, fileType, isOpen, recordId]);
 
-  useEffect(() => {
-    videoScaleRef.current = videoScale;
-  }, [videoScale]);
-
-  useEffect(() => {
-    imgScaleRef.current = imgScale;
-  }, [imgScale]);
-
-  useEffect(() => {
-    archiveImgScaleRef.current = archiveImgScale;
-  }, [archiveImgScale]);
-
-  useEffect(() => {
-    archiveVideoScaleRef.current = archiveVideoScale;
-  }, [archiveVideoScale]);
+  useEffect(() => { videoScaleRef.current = videoScale; }, [videoScale]);
+  useEffect(() => { imgScaleRef.current = imgScale; }, [imgScale]);
+  useEffect(() => { archiveImgScaleRef.current = archiveImgScale; }, [archiveImgScale]);
+  useEffect(() => { archiveVideoScaleRef.current = archiveVideoScale; }, [archiveVideoScale]);
 
   useEffect(() => {
     if (!displayFilePath) {
       setDataUrl(null);
-      setArchiveFiles([]);
-      setCurrentArchiveIndex(0);
-      setCurrentArchiveDataUrl(null);
-      setCurrentArchiveText(null);
-      setIsPlaying(false);
-      setVideoError(null);
+      archive.resetArchiveState();
+      playback.setIsPlaying(false);
+      playback.setVideoError(null);
       setFileNotFound(false);
-      setPlaybackSpeed(1.0);
+      playback.setPlaybackSpeed(1.0);
       setDetectedFileType(null);
       return;
     }
 
-    // fileType이 null이면 파일 타입을 확인
     if (!displayFileType) {
       setLoading(true);
       setFileNotFound(false);
       setDetectedFileType(null);
       window.electronAPI.getFileType(displayFilePath).then((detectedType) => {
-        setDetectedFileType(detectedType);
+        setDetectedFileType(toViewerFileType(detectedType));
         if (detectedType === 'image' || detectedType === 'video') {
-          // 이미지나 동영상인 경우 로드
-          setPlaybackSpeed(1.0);
+          playback.setPlaybackSpeed(1.0);
           window.electronAPI.getFileDataUrl(displayFilePath).then(async (url) => {
             if (url === null || url === 'error') {
               setFileNotFound(true);
@@ -741,8 +359,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
             setLoading(false);
           });
         } else if (detectedType === 'archive') {
-          // 압축파일인 경우 읽을 수 있는 파일이 있는지 확인
-          loadArchiveFiles().catch((error) => {
+          archive.loadArchiveFiles().catch((error) => {
             console.error('압축파일 로드 실패:', error);
             setFileNotFound(true);
             setLoading(false);
@@ -762,7 +379,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     }
 
     if (displayFileType === 'image' || displayFileType === 'video') {
-      setPlaybackSpeed(1.0);
+      playback.setPlaybackSpeed(1.0);
       setLoading(true);
       setFileNotFound(false);
       window.electronAPI.getFileDataUrl(displayFilePath).then(async (url) => {
@@ -784,714 +401,27 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     } else if (displayFileType === 'archive') {
       setLoading(true);
       setFileNotFound(false);
-      loadArchiveFiles();
+      void archive.loadArchiveFiles();
     } else {
       setDataUrl(null);
     }
-  }, [displayFilePath, displayFileType]);
-
-  useEffect(() => {
-    const effectiveType = fileType || detectedFileType;
-    if (effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
-      loadCurrentArchiveFile();
-    }
-  }, [currentArchiveIndex, archiveFiles, fileType, detectedFileType]);
-
-  // 볼륨 설정 저장
-  useEffect(() => {
-    localStorage.setItem('videoVolume', volume.toString());
-  }, [volume]);
-
-  useEffect(() => {
-    localStorage.setItem('videoMuted', JSON.stringify(isMuted));
-  }, [isMuted]);
-
-  // 동영상 볼륨 설정
-  useEffect(() => {
-    const effectiveType = fileType || detectedFileType;
-    if (videoRef.current && effectiveType === 'video') {
-      videoRef.current.volume = isMuted ? 0 : volume;
-      videoRef.current.muted = isMuted;
-    }
-    if (archiveVideoRef.current && effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
-      const currentFile = archiveFiles[currentArchiveIndex];
-      if (currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name)) {
-        archiveVideoRef.current.volume = isMuted ? 0 : volume;
-        archiveVideoRef.current.muted = isMuted;
-      }
-    }
-  }, [volume, isMuted, fileType, detectedFileType, archiveFiles, currentArchiveIndex]);
-
-  // 동영상 배속 설정
-  useEffect(() => {
-    const effectiveType = fileType || detectedFileType;
-    if (videoRef.current && effectiveType === 'video') {
-      videoRef.current.playbackRate = playbackSpeed;
-    }
-    if (archiveVideoRef.current && effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
-      const currentFile = archiveFiles[currentArchiveIndex];
-      if (currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name)) {
-        archiveVideoRef.current.playbackRate = playbackSpeed;
-      }
-    }
-  }, [playbackSpeed, fileType, detectedFileType, archiveFiles, currentArchiveIndex]);
-
-  useEffect(() => {
-    const activeVideo = getActiveVideoElement();
-    if (!activeVideo) return;
-    activeVideo.loop = isLooping && !loopRange;
-  }, [getActiveVideoElement, isLooping, loopRange]);
-
-  // 배속 메뉴 외부 클릭 시 닫기
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Element;
-      if (showSpeedMenu && !target.closest('[data-speed-menu]')) {
-        setShowSpeedMenu(false);
-      }
-    };
-
-    if (showSpeedMenu) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showSpeedMenu]);
-
-  const showPlaybackFeedback = (action: 'play' | 'pause') => {
-    setPlaybackOverlayState(action);
-    setShowPlaybackOverlay(true);
-    setPlaybackOverlayVisible(true);
-    if (playbackOverlayFadeTimeoutRef.current) {
-      clearTimeout(playbackOverlayFadeTimeoutRef.current);
-    }
-    if (playbackOverlayTimeoutRef.current) {
-      clearTimeout(playbackOverlayTimeoutRef.current);
-    }
-    playbackOverlayFadeTimeoutRef.current = setTimeout(() => {
-      setPlaybackOverlayVisible(false);
-    }, 420);
-    playbackOverlayTimeoutRef.current = setTimeout(() => {
-      setShowPlaybackOverlay(false);
-      setPlaybackOverlayVisible(false);
-    }, 700);
-  };
-
-  // 동영상 플레이어 포커스 설정
-  // 비디오 이벤트 핸들러
-  const handlePlayPause = () => {
-    const effectiveType = fileType || detectedFileType;
-    const nextAction = isPlaying ? 'pause' : 'play';
-
-    if (videoRef.current && effectiveType === 'video') {
-      if (isPlaying) {
-        videoRef.current.pause();
-      } else {
-        videoRef.current.play();
-      }
-    }
-    if (archiveVideoRef.current && effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
-      const currentFile = archiveFiles[currentArchiveIndex];
-      if (currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name)) {
-        if (isPlaying) {
-          archiveVideoRef.current.pause();
-        } else {
-          archiveVideoRef.current.play();
-        }
-      }
-    }
-
-    showPlaybackFeedback(nextAction);
-  };
-
-  const handleImageGifPlaybackToggle = () => {
-    if (imgScale > 1) return;
-
-    const nextPaused = !isImageGifPaused;
-    setIsImageGifPaused(nextPaused);
-    showPlaybackFeedback(nextPaused ? 'pause' : 'play');
-  };
-
-  const handleArchiveGifPlaybackToggle = () => {
-    if (archiveImgScale > 1) return;
-
-    const nextPaused = !isArchiveGifPaused;
-    setIsArchiveGifPaused(nextPaused);
-    showPlaybackFeedback(nextPaused ? 'pause' : 'play');
-  };
-
-  const handleVolumeChange = (newVolume: number) => {
-    const effectiveType = fileType || detectedFileType;
-    const nextMuted = newVolume === 0;
-
-    setVolume(newVolume);
-    setIsMuted(nextMuted);
-
-    if (videoRef.current && effectiveType === 'video') {
-      videoRef.current.volume = newVolume;
-      videoRef.current.muted = nextMuted;
-    }
-    if (archiveVideoRef.current && effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
-      const currentFile = archiveFiles[currentArchiveIndex];
-      if (currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name)) {
-        archiveVideoRef.current.volume = newVolume;
-        archiveVideoRef.current.muted = nextMuted;
-      }
-    }
-    
-    // 볼륨 오버레이 표시
-    setShowVolumeOverlay(true);
-    if (volumeOverlayTimeoutRef.current) {
-      clearTimeout(volumeOverlayTimeoutRef.current);
-    }
-    volumeOverlayTimeoutRef.current = setTimeout(() => {
-      setShowVolumeOverlay(false);
-    }, 1500);
-  };
-
-  const handleMuteToggle = () => {
-    const effectiveType = fileType || detectedFileType;
-    const nextMuted = !isMuted;
-
-    setIsMuted(nextMuted);
-    if (videoRef.current && effectiveType === 'video') {
-      videoRef.current.muted = nextMuted;
-    }
-    if (archiveVideoRef.current && effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
-      const currentFile = archiveFiles[currentArchiveIndex];
-      if (currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name)) {
-        archiveVideoRef.current.muted = nextMuted;
-      }
-    }
-  };
-
-  const handleLoopToggle = () => {
-    const nextLooping = !isLooping;
-    setIsLooping(nextLooping);
-    const activeVideo = getActiveVideoElement();
-    if (activeVideo) {
-      activeVideo.loop = nextLooping && !loopRange;
-    }
-  };
-
-  const handleFullscreenToggle = () => {
-    const effectiveType = fileType || detectedFileType;
-    if (videoRef.current && effectiveType === 'video') {
-      if (!isFullscreen) {
-        videoRef.current.requestFullscreen();
-      } else {
-        document.exitFullscreen();
-      }
-    }
-    if (archiveVideoRef.current && effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
-      const currentFile = archiveFiles[currentArchiveIndex];
-      if (currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name)) {
-        if (!isFullscreen) {
-          archiveVideoRef.current.requestFullscreen();
-        } else {
-          document.exitFullscreen();
-        }
-      }
-    }
-  };
-
-  const handlePictureInPictureStateChange = (active: boolean) => {
-    void window.electronAPI.setPictureInPictureActive(active).catch((error) => {
-      console.error('PIP 오디오 상태 동기화 실패:', error);
-    });
-  };
-
-  const handlePictureInPicture = async () => {
-    const activeVideo = getActiveVideoElement();
-    if (!activeVideo) {
-      toast({
-        title: 'PIP 재생 실패',
-        description: '재생할 동영상을 찾을 수 없습니다.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    try {
-      if (!document.pictureInPictureEnabled || !activeVideo.requestPictureInPicture) {
-        throw new Error('현재 환경에서는 PIP 재생을 지원하지 않습니다.');
-      }
-
-      if (document.pictureInPictureElement !== activeVideo) {
-        if (document.pictureInPictureElement) {
-          await document.exitPictureInPicture();
-        }
-        await activeVideo.requestPictureInPicture();
-        handlePictureInPictureStateChange(true);
-      }
-
-      if (activeVideo.paused) {
-        await activeVideo.play();
-      }
-    } catch (error) {
-      toast({
-        title: 'PIP 재생 실패',
-        description: error instanceof Error ? error.message : 'PIP 모드를 시작하지 못했습니다.',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleVideoClick = () => {
-    const effectiveType = fileType || detectedFileType;
-    const currentFile = archiveFiles[currentArchiveIndex];
-    const isArchiveVideo =
-      effectiveType === 'archive' &&
-      !!currentFile &&
-      /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name);
-
-    if (effectiveType === 'video' && videoScale > 1) {
-      setShowControls(true);
-      return;
-    }
-
-    if (isArchiveVideo && archiveVideoScale > 1) {
-      setShowControls(true);
-      return;
-    }
-
-    // 재생/정지 토글
-    handlePlayPause();
-    
-    // 컨트롤 표시
-    setShowControls(true);
-    if (controlsTimeoutRef.current) {
-      clearTimeout(controlsTimeoutRef.current);
-    }
-    controlsTimeoutRef.current = setTimeout(() => {
-      setShowControls(false);
-    }, 3000);
-  };
-
-  const handleMouseMove = () => {
-    setShowControls(true);
-    if (controlsTimeoutRef.current) {
-      clearTimeout(controlsTimeoutRef.current);
-    }
-    controlsTimeoutRef.current = setTimeout(() => {
-      setShowControls(false);
-    }, 3000);
-  };
-
-  // 재생바 관련 핸들러 추가
-  const handleTimeUpdate = () => {
-    const activeVideo = getActiveVideoElement();
-    if (!activeVideo) return;
-
-    if (loopRange && activeVideo.currentTime >= loopRange.end) {
-      activeVideo.currentTime = loopRange.start;
-      if (activeVideo.paused) {
-        activeVideo.play().catch(() => {});
-      }
-      setCurrentTime(loopRange.start);
-      return;
-    }
-
-    setCurrentTime(activeVideo.currentTime);
-  };
-
-  const handleLoadedMetadata = () => {
-    const activeVideo = getActiveVideoElement();
-    if (!activeVideo) return;
-
-    setDuration(activeVideo.duration);
-    activeVideo.volume = isMuted ? 0 : volume;
-    activeVideo.muted = isMuted;
-    activeVideo.loop = isLooping && !loopRange;
-    activeVideo.playbackRate = playbackSpeed;
-    if (!videoAutoPlay) {
-      activeVideo.pause();
-      activeVideo.currentTime = 0;
-      setIsPlaying(false);
-    }
-  };
-
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newTime = parseFloat(e.target.value);
-    setCurrentTime(newTime);
-    const activeVideo = getActiveVideoElement();
-    if (activeVideo) {
-      activeVideo.currentTime = newTime;
-    }
-  };
-
-  const handleTimelinePreviewMove = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (!Number.isFinite(duration) || duration <= 0) return;
-
-    const rect = event.currentTarget.getBoundingClientRect();
-    if (rect.width <= 0) return;
-
-    const pointerX = Math.min(rect.width, Math.max(0, event.clientX - rect.left));
-    const previewHalfWidth = 88;
-    setTimelinePreviewSeeking(true);
-    setTimelinePreview({
-      time: (pointerX / rect.width) * duration,
-      left: Math.min(rect.width - previewHalfWidth, Math.max(previewHalfWidth, pointerX))
-    });
-  };
-
-  const handleTimelinePreviewLeave = () => {
-    setTimelinePreview(null);
-    setTimelinePreviewSeeking(false);
-  };
+  }, [archive.loadArchiveFiles, archive.resetArchiveState, displayFilePath, displayFileType, playback.setIsPlaying, playback.setPlaybackSpeed, playback.setVideoError]);
 
   useEffect(() => {
     if (!timelinePreview) return;
-
     const timeoutId = window.setTimeout(() => {
       const previewVideo = timelinePreviewVideoRef.current;
       if (!previewVideo || previewVideo.readyState < HTMLMediaElement.HAVE_METADATA) return;
       previewVideo.currentTime = Math.min(timelinePreview.time, previewVideo.duration || timelinePreview.time);
     }, 40);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
+    return () => window.clearTimeout(timeoutId);
   }, [timelinePreview]);
 
   useEffect(() => {
     setTimelinePreview(null);
     setTimelinePreviewSeeking(false);
-  }, [currentArchiveIndex, dataUrl, currentArchiveDataUrl, isOpen]);
+  }, [archive.currentArchiveDataUrl, archive.currentArchiveIndex, dataUrl, isOpen]);
 
-  const handleSeekBarMouseDown = (e: React.MouseEvent<HTMLInputElement>) => {
-    const input = e.currentTarget;
-
-    if (e.shiftKey) {
-      e.preventDefault();
-      const anchorTime = getSeekTimeFromPointer(e.clientX, input);
-      loopSelectionRef.current = { input, anchorTime };
-      setLoopDraft({ start: anchorTime, end: anchorTime });
-      return;
-    }
-
-    if (loopRange) {
-      clearLoopSelection();
-    }
-  };
-
-  const getVisibleLoopRange = () => loopDraft || loopRange;
-
-  const getSeekBarStyle = (): React.CSSProperties => {
-    const visibleRange = getVisibleLoopRange();
-    if (!visibleRange || duration <= 0) return {};
-
-    const startPercent = Math.max(0, Math.min(100, (visibleRange.start / duration) * 100));
-    const endPercent = Math.max(startPercent, Math.min(100, (visibleRange.end / duration) * 100));
-    const gradient = `linear-gradient(to right, #4b5563 0%, #4b5563 ${startPercent}%, #5865f2 ${startPercent}%, #5865f2 ${endPercent}%, #4b5563 ${endPercent}%, #4b5563 100%)`;
-
-    return {
-      ['--slider-track-bg' as string]: gradient,
-    };
-  };
-
-  const renderLoopRangeMarkers = () => {
-    const visibleRange = getVisibleLoopRange();
-    if (!visibleRange || duration <= 0) return null;
-
-    const startPercent = Math.max(0, Math.min(100, (visibleRange.start / duration) * 100));
-    const endPercent = Math.max(startPercent, Math.min(100, (visibleRange.end / duration) * 100));
-
-    return (
-      <div className="pointer-events-none absolute inset-x-0 top-[12px] z-[1] h-2">
-        <div
-          className="absolute left-0 top-0 h-full w-[2px] -translate-x-1/2 rounded-full bg-[#c7d2fe] shadow-[0_0_6px_rgba(199,210,254,0.55)]"
-          style={{ left: `${startPercent}%` }}
-        />
-        <div
-          className="absolute left-0 top-0 h-full w-[2px] -translate-x-1/2 rounded-full bg-[#c7d2fe] shadow-[0_0_6px_rgba(199,210,254,0.55)]"
-          style={{ left: `${endPercent}%` }}
-        />
-      </div>
-    );
-  };
-
-  const formatTime = (time: number) => {
-    const minutes = Math.floor(time / 60);
-    const seconds = Math.floor(time % 60);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  // 전체화면 상태 감지
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-    };
-  }, []);
-
-  const loadArchiveFiles = async () => {
-    try {
-      setLoading(true);
-      setFileNotFound(false);
-      const files = await window.electronAPI.getArchiveFiles(filePath);
-      const archiveEntries = files
-        .filter(file => !file.isDirectory)
-        .map(file => ({
-          ...file,
-          isSupported: SUPPORTED_ARCHIVE_FILE_PATTERN.test(file.name),
-        }))
-        .sort((a, b) => {
-          if (a.isSupported !== b.isSupported) return a.isSupported ? -1 : 1;
-          return a.name.localeCompare(b.name);
-        });
-      const supportedFileCount = archiveEntries.filter(file => file.isSupported).length;
-      
-      if (archiveEntries.length === 0) {
-        setFileNotFound(true);
-        setArchiveFiles([]);
-      } else {
-        setArchiveFiles(archiveEntries);
-        setCurrentArchiveIndex(supportedFileCount > 0 ? 0 : -1);
-      }
-    } catch (error) {
-      console.error('압축 파일 로드 실패:', error);
-      setFileNotFound(true);
-      setArchiveFiles([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadCurrentArchiveFile = async () => {
-    if (currentArchiveIndex >= 0 && currentArchiveIndex < archiveFiles.length) {
-      setCurrentArchiveDataUrl(null);
-      setCurrentArchiveText(null);
-      try {
-        const currentFile = archiveFiles[currentArchiveIndex];
-        if (!currentFile.isSupported) return;
-        const fileExt = currentFile.name.toLowerCase().split('.').pop();
-        
-        if (fileExt === 'txt') {
-          // 텍스트 파일인 경우
-          const text = await window.electronAPI.getArchiveFileText(filePath, currentFile.name);
-          setCurrentArchiveText(text);
-          setCurrentArchiveDataUrl(null);
-        } else if (['mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'webm'].includes(fileExt || '')) {
-          const streamUrl = await getArchiveVideoHttpUrl(filePath, currentFile.name);
-          setCurrentArchiveDataUrl(streamUrl);
-          setCurrentArchiveText(null);
-        } else {
-          // 이미지 파일인 경우
-          const dataUrl = await window.electronAPI.getArchiveFileDataUrl(filePath, currentFile.name);
-          setCurrentArchiveDataUrl(dataUrl);
-          setCurrentArchiveText(null);
-        }
-      } catch (error) {
-        console.error('압축 파일 로드 실패:', error);
-        setCurrentArchiveDataUrl(null);
-        setCurrentArchiveText(null);
-      }
-    }
-  };
-
-  const selectArchiveFile = async (targetIndex: number) => {
-    if (document.pictureInPictureElement) {
-      await exitPictureInPicture();
-    }
-
-    setCurrentArchiveDataUrl(null);
-    setCurrentArchiveText(null);
-    setCurrentArchiveIndex(targetIndex);
-  };
-
-  const handlePrevious = async () => {
-    const targetPosition = currentArchiveNavigationIndex < 0
-      ? navigableArchiveFiles.length - 1
-      : currentArchiveNavigationIndex - 1;
-    const targetIndex = navigableArchiveFiles[targetPosition]?.originalIndex;
-    if (targetIndex === undefined) return;
-
-    await selectArchiveFile(targetIndex);
-  };
-
-  const handleNext = async () => {
-    const targetPosition = currentArchiveNavigationIndex < 0
-      ? 0
-      : currentArchiveNavigationIndex + 1;
-    const targetIndex = navigableArchiveFiles[targetPosition]?.originalIndex;
-    if (targetIndex === undefined) return;
-
-    await selectArchiveFile(targetIndex);
-  };
-
-  const handleOpenUnsupportedArchiveFile = async (file: ArchiveFile) => {
-    try {
-      const result = await window.electronAPI.openArchiveFile(filePath, file.name);
-      if (!result.success) {
-        throw new Error(result.error || '파일을 실행하지 못했습니다.');
-      }
-    } catch (error) {
-      toast({
-        title: '파일 실행 실패',
-        description: error instanceof Error ? error.message : '압축파일 내부 파일을 실행하지 못했습니다.',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      handleClose();
-      return;
-    }
-
-    if (
-      e.target instanceof HTMLInputElement
-      || e.target instanceof HTMLTextAreaElement
-      || (e.target instanceof HTMLElement && e.target.isContentEditable)
-    ) {
-      return;
-    }
-    
-    // 동영상 플레이어 키보드 단축키
-    const effectiveType = fileType || detectedFileType;
-    if (effectiveType === 'video') {
-      switch (e.key) {
-        case ' ':
-          e.preventDefault();
-          handlePlayPause();
-          break;
-        case 'ArrowLeft':
-          e.preventDefault();
-          if (videoRef.current) {
-            const newTime = Math.max(0, videoRef.current.currentTime - videoSeekSeconds);
-            videoRef.current.currentTime = newTime;
-            setCurrentTime(newTime);
-          }
-          break;
-        case 'ArrowRight':
-          e.preventDefault();
-          if (videoRef.current) {
-            const newTime = Math.min(duration, videoRef.current.currentTime + videoSeekSeconds);
-            videoRef.current.currentTime = newTime;
-            setCurrentTime(newTime);
-          }
-          break;
-        case 'ArrowUp':
-          e.preventDefault();
-          const newVolumeUp = Math.min(1, volume + 0.05);
-          handleVolumeChange(newVolumeUp);
-          break;
-        case 'ArrowDown':
-          e.preventDefault();
-          const newVolumeDown = Math.max(0, volume - 0.05);
-          handleVolumeChange(newVolumeDown);
-          break;
-        case '.':
-          e.preventDefault();
-          seekByFrame('forward');
-          break;
-        case ',':
-          e.preventDefault();
-          seekByFrame('backward');
-          break;
-        case ']':
-          e.preventDefault();
-          const speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
-          const currentIndex = speeds.indexOf(playbackSpeed);
-          const nextIndex = currentIndex < speeds.length - 1 ? currentIndex + 1 : 0;
-          handleSpeedChange(speeds[nextIndex]);
-          break;
-        case '[':
-          e.preventDefault();
-          const speeds2 = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
-          const currentIndex2 = speeds2.indexOf(playbackSpeed);
-          const prevIndex = currentIndex2 > 0 ? currentIndex2 - 1 : speeds2.length - 1;
-          handleSpeedChange(speeds2[prevIndex]);
-          break;
-      }
-    }
-    
-    // 압축파일 내 동영상 키보드 단축키
-    if (effectiveType === 'archive' && archiveFiles.length > 0 && currentArchiveIndex >= 0) {
-      const currentFile = archiveFiles[currentArchiveIndex];
-      if (currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name)) {
-        switch (e.key) {
-          case ' ':
-            e.preventDefault();
-            handlePlayPause();
-            break;
-          case 'ArrowLeft':
-            e.preventDefault();
-            if (archiveVideoRef.current) {
-              const newTime = Math.max(0, archiveVideoRef.current.currentTime - videoSeekSeconds);
-              archiveVideoRef.current.currentTime = newTime;
-              setCurrentTime(newTime);
-            }
-            break;
-          case 'ArrowRight':
-            e.preventDefault();
-            if (archiveVideoRef.current) {
-              const newTime = Math.min(duration, archiveVideoRef.current.currentTime + videoSeekSeconds);
-              archiveVideoRef.current.currentTime = newTime;
-              setCurrentTime(newTime);
-            }
-            break;
-          case 'ArrowUp':
-            e.preventDefault();
-            const newVolumeUp = Math.min(1, volume + 0.05);
-            handleVolumeChange(newVolumeUp);
-            break;
-          case 'ArrowDown':
-            e.preventDefault();
-            const newVolumeDown = Math.max(0, volume - 0.05);
-            handleVolumeChange(newVolumeDown);
-            break;
-          case '.':
-            e.preventDefault();
-            seekByFrame('forward');
-            break;
-          case ',':
-            e.preventDefault();
-            seekByFrame('backward');
-            break;
-          case ']':
-            e.preventDefault();
-            const speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
-            const currentIndex = speeds.indexOf(playbackSpeed);
-            const nextIndex = currentIndex < speeds.length - 1 ? currentIndex + 1 : 0;
-            handleSpeedChange(speeds[nextIndex]);
-            break;
-          case '[':
-            e.preventDefault();
-            const speeds2 = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
-            const currentIndex2 = speeds2.indexOf(playbackSpeed);
-            const prevIndex = currentIndex2 > 0 ? currentIndex2 - 1 : speeds2.length - 1;
-            handleSpeedChange(speeds2[prevIndex]);
-            break;
-        }
-      } else {
-        // 압축파일 내 이미지/텍스트 파일 네비게이션
-        if (e.key === 'ArrowLeft') {
-          e.preventDefault();
-          handlePrevious();
-        } else if (e.key === 'ArrowRight') {
-          e.preventDefault();
-          handleNext();
-        } else if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          handlePrevious();
-        } else if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          handleNext();
-        }
-      }
-    }
-  };
-
-  // 파일이 바뀌면 확대/위치/회전 초기화 (압축/일반 모두)
   useEffect(() => {
     setVideoScale(1);
     setVideoOffset({ x: 0, y: 0 });
@@ -1504,369 +434,167 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     setArchiveImgOffset({ x: 0, y: 0 });
     setArchiveVideoScale(1);
     setArchiveVideoOffset({ x: 0, y: 0 });
-  }, [filePath, fileType, currentArchiveIndex]);
+  }, [filePath, fileType, archive.currentArchiveIndex]);
+
+  const clampToContainer = useCallback((offset: { x: number; y: number }, scale: number) => {
+    if (!imgContainerRef.current) return offset;
+    const rect = imgContainerRef.current.getBoundingClientRect();
+    return clampPanOffset(offset, scale, rect.width, rect.height);
+  }, []);
 
   useEffect(() => {
     const effectiveType = fileType || detectedFileType;
     if (effectiveType !== 'video' || !dataUrl) return;
     const video = videoRef.current;
-    const container = imgContainerRef.current;
-    if (!video || !container) return;
-
-    const wheelHandler = (e: WheelEvent) => {
-      e.preventDefault();
-      const nextScale = Math.max(1, Math.min(5, videoScaleRef.current - e.deltaY * 0.001));
+    if (!video) return;
+    const wheelHandler = (event: WheelEvent) => {
+      event.preventDefault();
+      const nextScale = nextWheelScale(videoScaleRef.current, event.deltaY);
       setVideoScale(nextScale);
-      setVideoOffset(prevOffset => {
-        if (nextScale === 1) return { x: 0, y: 0 };
-        return clampImgOffset(prevOffset, nextScale);
-      });
+      setVideoOffset((prevOffset) => (nextScale === 1 ? { x: 0, y: 0 } : clampToContainer(prevOffset, nextScale)));
     };
-
     video.addEventListener('wheel', wheelHandler, { passive: false });
+    return () => video.removeEventListener('wheel', wheelHandler);
+  }, [clampToContainer, dataUrl, detectedFileType, fileType]);
 
-    return () => {
-      video.removeEventListener('wheel', wheelHandler);
-    };
-  }, [fileType, detectedFileType, dataUrl]);
-
-  // 일반 이미지 휠 확대/축소
   useEffect(() => {
     const effectiveType = fileType || detectedFileType;
     if (effectiveType !== 'image' || !dataUrl) return;
     const img = /\.gif$/i.test(displayFilePath) ? imageGifCanvasRef.current : imgRef.current;
     const container = imgContainerRef.current;
     if (!img || !container) return;
-    
-    const wheelHandler = (e: WheelEvent) => {
-      e.preventDefault();
-      const nextScale = Math.max(1, Math.min(5, imgScaleRef.current - e.deltaY * 0.001));
+    const wheelHandler = (event: WheelEvent) => {
+      event.preventDefault();
+      const nextScale = nextWheelScale(imgScaleRef.current, event.deltaY);
       setImgScale(nextScale);
-      setImgOffset(prevOffset => {
-        if (nextScale === 1) return { x: 0, y: 0 };
-        return clampImgOffset(prevOffset, nextScale);
-      });
+      setImgOffset((prevOffset) => (nextScale === 1 ? { x: 0, y: 0 } : clampToContainer(prevOffset, nextScale)));
     };
-    
     img.addEventListener('wheel', wheelHandler, { passive: false });
     container.addEventListener('wheel', wheelHandler, { passive: false });
-    
     return () => {
       img.removeEventListener('wheel', wheelHandler);
       container.removeEventListener('wheel', wheelHandler);
     };
-  }, [fileType, detectedFileType, dataUrl, displayFilePath]);
+  }, [clampToContainer, dataUrl, detectedFileType, displayFilePath, fileType]);
 
-  // 압축 이미지 휠 확대/축소
   useEffect(() => {
     const effectiveType = fileType || detectedFileType;
-    const currentFile = archiveFiles[currentArchiveIndex];
+    const currentFile = archive.archiveFiles[archive.currentArchiveIndex];
     const isArchiveImage = !!currentFile && /\.(jpg|jpeg|png|gif|webp)$/i.test(currentFile.name);
-    if (effectiveType !== 'archive' || !currentArchiveDataUrl || !isArchiveImage) return;
+    if (effectiveType !== 'archive' || !archive.currentArchiveDataUrl || !isArchiveImage) return;
     const img = /\.gif$/i.test(currentFile.name) ? archiveGifCanvasRef.current : archiveImgRef.current;
     const container = imgContainerRef.current;
     if (!img || !container) return;
-    
-    const wheelHandler = (e: WheelEvent) => {
-      e.preventDefault();
-      const nextScale = Math.max(1, Math.min(5, archiveImgScaleRef.current - e.deltaY * 0.001));
+    const wheelHandler = (event: WheelEvent) => {
+      event.preventDefault();
+      const nextScale = nextWheelScale(archiveImgScaleRef.current, event.deltaY);
       setArchiveImgScale(nextScale);
-      setArchiveImgOffset(prevOffset => {
-        if (nextScale === 1) return { x: 0, y: 0 };
-        return clampImgOffset(prevOffset, nextScale);
-      });
+      setArchiveImgOffset((prevOffset) => (nextScale === 1 ? { x: 0, y: 0 } : clampToContainer(prevOffset, nextScale)));
     };
-    
     img.addEventListener('wheel', wheelHandler, { passive: false });
     container.addEventListener('wheel', wheelHandler, { passive: false });
-    
     return () => {
       img.removeEventListener('wheel', wheelHandler);
       container.removeEventListener('wheel', wheelHandler);
     };
-  }, [fileType, detectedFileType, archiveFiles, currentArchiveIndex, currentArchiveDataUrl]);
+  }, [archive.archiveFiles, archive.currentArchiveDataUrl, archive.currentArchiveIndex, clampToContainer, detectedFileType, fileType]);
 
-  // 압축 동영상 휠 확대/축소
   useEffect(() => {
     const effectiveType = fileType || detectedFileType;
-    const currentFile = archiveFiles[currentArchiveIndex];
-    const isArchiveVideo = !!currentFile && /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile.name);
-    if (effectiveType !== 'archive' || !currentArchiveDataUrl || !isArchiveVideo) return;
+    const currentFile = archive.archiveFiles[archive.currentArchiveIndex];
+    if (effectiveType !== 'archive' || !archive.currentArchiveDataUrl || !isVideoFileName(currentFile?.name)) return;
     const video = archiveVideoRef.current;
-    const container = imgContainerRef.current;
-    if (!video || !container) return;
-    
-    const wheelHandler = (e: WheelEvent) => {
-      e.preventDefault();
-      const nextScale = Math.max(1, Math.min(5, archiveVideoScaleRef.current - e.deltaY * 0.001));
+    if (!video) return;
+    const wheelHandler = (event: WheelEvent) => {
+      event.preventDefault();
+      const nextScale = nextWheelScale(archiveVideoScaleRef.current, event.deltaY);
       setArchiveVideoScale(nextScale);
-      setArchiveVideoOffset(prevOffset => {
-        if (nextScale === 1) return { x: 0, y: 0 };
-        return clampImgOffset(prevOffset, nextScale);
-      });
+      setArchiveVideoOffset((prevOffset) => (nextScale === 1 ? { x: 0, y: 0 } : clampToContainer(prevOffset, nextScale)));
     };
-    
     video.addEventListener('wheel', wheelHandler, { passive: false });
+    return () => video.removeEventListener('wheel', wheelHandler);
+  }, [archive.archiveFiles, archive.currentArchiveDataUrl, archive.currentArchiveIndex, clampToContainer, detectedFileType, fileType]);
 
-    return () => {
-      video.removeEventListener('wheel', wheelHandler);
-    };
-  }, [fileType, detectedFileType, archiveFiles, currentArchiveIndex, currentArchiveDataUrl]);
-
-  // 일반 이미지 드래그 패닝
-  const handleVideoMouseDown = (e: React.MouseEvent) => {
-    if (videoScale === 1) return;
-    setVideoIsPanning(true);
-    videoPanStart.current = {
-      x: e.clientX,
-      y: e.clientY,
-      offsetX: videoOffset.x,
-      offsetY: videoOffset.y,
-    };
-  };
-  const handleVideoMouseMove = (e: React.MouseEvent) => {
-    if (!videoIsPanning || !videoPanStart.current) return;
-    const dx = e.clientX - videoPanStart.current.x;
-    const dy = e.clientY - videoPanStart.current.y;
-    const next = {
-      x: videoPanStart.current.offsetX + dx,
-      y: videoPanStart.current.offsetY + dy,
-    };
-    setVideoOffset(clampImgOffset(next, videoScale));
-  };
-  const handleVideoMouseUp = () => {
-    setVideoIsPanning(false);
-  };
-
-  const handleImgMouseDown = (e: React.MouseEvent) => {
-    if (imgScale === 1) return;
-    setIsPanning(true);
-    panStart.current = {
-      x: e.clientX,
-      y: e.clientY,
-      offsetX: imgOffset.x,
-      offsetY: imgOffset.y,
-    };
-  };
-  const handleImgMouseMove = (e: React.MouseEvent) => {
-    if (!isPanning || !panStart.current) return;
-    const dx = e.clientX - panStart.current.x;
-    const dy = e.clientY - panStart.current.y;
-    const next = {
-      x: panStart.current.offsetX + dx,
-      y: panStart.current.offsetY + dy,
-    };
-    setImgOffset(clampImgOffset(next, imgScale));
-  };
-  const handleImgMouseUp = () => {
-    setIsPanning(false);
-  };
-
-  // 압축 이미지 드래그 패닝
-  const handleArchiveImgMouseDown = (e: React.MouseEvent) => {
-    if (archiveImgScale === 1) return;
-    setArchiveIsPanning(true);
-    archivePanStart.current = {
-      x: e.clientX,
-      y: e.clientY,
-      offsetX: archiveImgOffset.x,
-      offsetY: archiveImgOffset.y,
-    };
-  };
-  const handleArchiveImgMouseMove = (e: React.MouseEvent) => {
-    if (!archiveIsPanning || !archivePanStart.current) return;
-    const dx = e.clientX - archivePanStart.current.x;
-    const dy = e.clientY - archivePanStart.current.y;
-    const next = {
-      x: archivePanStart.current.offsetX + dx,
-      y: archivePanStart.current.offsetY + dy,
-    };
-    setArchiveImgOffset(clampImgOffset(next, archiveImgScale));
-  };
-  const handleArchiveImgMouseUp = () => {
-    setArchiveIsPanning(false);
-  };
-
-  // 압축 동영상 드래그 패닝
-  const handleArchiveVideoMouseDown = (e: React.MouseEvent) => {
-    if (archiveVideoScale === 1) return;
-    setArchiveVideoIsPanning(true);
-    archiveVideoPanStart.current = {
-      x: e.clientX,
-      y: e.clientY,
-      offsetX: archiveVideoOffset.x,
-      offsetY: archiveVideoOffset.y,
-    };
-  };
-  const handleArchiveVideoMouseMove = (e: React.MouseEvent) => {
-    if (!archiveVideoIsPanning || !archiveVideoPanStart.current) return;
-    const dx = e.clientX - archiveVideoPanStart.current.x;
-    const dy = e.clientY - archiveVideoPanStart.current.y;
-    const next = {
-      x: archiveVideoPanStart.current.offsetX + dx,
-      y: archiveVideoPanStart.current.offsetY + dy,
-    };
-    setArchiveVideoOffset(clampImgOffset(next, archiveVideoScale));
-  };
-  const handleArchiveVideoMouseUp = () => {
-    setArchiveVideoIsPanning(false);
-  };
-
-  // 패닝 한계 계산 함수
-  function clampImgOffset(offset: { x: number; y: number }, scale: number): { x: number; y: number } {
-    if (!imgContainerRef.current) return offset;
-    const container = imgContainerRef.current;
-    const rect = container.getBoundingClientRect();
-    // 이미지 실제 크기 (컨테이너 기준)
-    const imgW = rect.width * scale;
-    const imgH = rect.height * scale;
-    const maxX = Math.max(0, (imgW - rect.width) / 2);
-    const maxY = Math.max(0, (imgH - rect.height) / 2);
-    return {
-      x: Math.max(-maxX, Math.min(maxX, offset.x)),
-      y: Math.max(-maxY, Math.min(maxY, offset.y)),
-    };
-  }
-
-  // 모달이 열릴 때 포커스 설정
   useEffect(() => {
     if (!isOpen) return;
-
-    const focusModal = () => {
-      modalContainerRef.current?.focus();
-    };
-
+    const focusModal = () => modalContainerRef.current?.focus();
     focusModal();
     const timeoutId = window.setTimeout(focusModal, 0);
     const rafId = window.requestAnimationFrame(focusModal);
-
     return () => {
       window.clearTimeout(timeoutId);
       window.cancelAnimationFrame(rafId);
     };
-  }, [isOpen, detectedFileType, dataUrl, currentArchiveDataUrl]);
+  }, [archive.currentArchiveDataUrl, dataUrl, detectedFileType, isOpen]);
 
-  // 컴포넌트 언마운트 시 타이머 정리
-  useEffect(() => {
-    return () => {
-      if (volumeOverlayTimeoutRef.current) {
-        clearTimeout(volumeOverlayTimeoutRef.current);
-      }
-      if (playbackOverlayTimeoutRef.current) {
-        clearTimeout(playbackOverlayTimeoutRef.current);
-      }
-      if (playbackOverlayFadeTimeoutRef.current) {
-        clearTimeout(playbackOverlayFadeTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  // 볼륨 슬라이더 wheel 이벤트 등록
   useEffect(() => {
     const volumeSliders = document.querySelectorAll('#volume-slider');
-    
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? -0.05 : 0.05;
-      const newVolume = Math.max(0, Math.min(1, (isMuted ? 0 : volume) + delta));
-      handleVolumeChange(newVolume);
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const delta = event.deltaY > 0 ? -0.05 : 0.05;
+      playback.handleVolumeChange((playback.isMuted ? 0 : playback.volume) + delta);
     };
-
-    volumeSliders.forEach(slider => {
-      slider.addEventListener('wheel', handleWheel, { passive: false });
-    });
-
+    volumeSliders.forEach((slider) => slider.addEventListener('wheel', handleWheel, { passive: false }));
     return () => {
-      volumeSliders.forEach(slider => {
-        slider.removeEventListener('wheel', handleWheel);
-      });
+      volumeSliders.forEach((slider) => slider.removeEventListener('wheel', handleWheel));
     };
-  }, [volume, isMuted, handleVolumeChange]);
+  }, [playback.handleVolumeChange, playback.isMuted, playback.volume]);
 
   const handleAddBookmark = () => {
-    const effectiveType = fileType || detectedFileType;
-    if (effectiveType !== 'video') return; // 일반 동영상에서만 북마크 추가 가능
-    window.electronAPI.addBookmark(categoryId, recordId, currentTime).then(res => {
-      if (res.success) {
-        setBookmarks(prev => [...prev, res.bookmark].sort((a, b) => a.time - b.time));
-      } else {
-        console.error('북마크 추가 실패:', res.error);
-      }
+    if ((fileType || detectedFileType) !== 'video') return;
+    window.electronAPI.addBookmark(categoryId, recordId, playback.currentTime).then((res) => {
+      if (res.success) setBookmarks((prev) => [...prev, res.bookmark].sort((left, right) => left.time - right.time));
+      else console.error('북마크 추가 실패:', res.error);
     });
   };
+
   const handleRemoveBookmark = (time: number) => {
-    const effectiveType = fileType || detectedFileType;
-    if (effectiveType !== 'video') return; // 일반 동영상에서만 북마크 삭제 가능
-    window.electronAPI.removeBookmark(categoryId, recordId, time).then(res => {
-      if (res.success) {
-        setBookmarks(prev => prev.filter(b => Math.abs(b.time - time) >= 1));
-      } else {
-        console.error('북마크 삭제 실패:', res.error);
-      }
+    if ((fileType || detectedFileType) !== 'video') return;
+    window.electronAPI.removeBookmark(categoryId, recordId, time).then((res) => {
+      if (res.success) setBookmarks((prev) => prev.filter((bookmark) => Math.abs(bookmark.time - time) >= 1));
+      else console.error('북마크 삭제 실패:', res.error);
     });
-  };
-
-  // 현재 시간에 북마크가 있는지 확인하는 함수
-  const hasBookmarkAtCurrentTime = () => {
-    return bookmarks.some(bm => Math.abs(bm.time - currentTime) < 1);
-  };
-
-  // 배속 변경 함수
-  const handleSpeedChange = (speed: number) => {
-    setPlaybackSpeed(speed);
-    setShowSpeedMenu(false);
-  };
-
-  // 배속 메뉴 토글 함수
-  const handleSpeedMenuToggle = () => {
-    setShowSpeedMenu(!showSpeedMenu);
   };
 
   if (!displayFilePath) return null;
 
-  const currentFile = archiveFiles[currentArchiveIndex];
+  const currentFile = archive.archiveFiles[archive.currentArchiveIndex];
   const fileName = displayFilePath.split(/[\\/]/).pop() || '';
   const currentFileExt = currentFile?.name.toLowerCase().split('.').pop();
-  const isFirstArchiveFile = navigableArchiveFiles.length === 0 || currentArchiveNavigationIndex === 0;
-  const isLastArchiveFile = navigableArchiveFiles.length === 0
-    || currentArchiveNavigationIndex === navigableArchiveFiles.length - 1;
-  
-  // fileType이 null이면 로딩 중이므로 로딩 UI만 표시
-  const isDetectingType = !displayFileType;
-  // 실제 사용할 파일 타입 (prop이 null이면 감지된 타입 사용)
+  const isFirstArchiveFile = archive.navigableArchiveFiles.length === 0 || archive.currentArchiveNavigationIndex === 0;
+  const isLastArchiveFile = archive.navigableArchiveFiles.length === 0
+    || archive.currentArchiveNavigationIndex === archive.navigableArchiveFiles.length - 1;
   const effectiveFileType = displayFileType || detectedFileType;
   const isImageGif = effectiveFileType === 'image' && /\.gif$/i.test(displayFilePath);
   const isArchiveGif = effectiveFileType === 'archive' && /\.gif$/i.test(currentFile?.name || '');
-  const subtitleContextMenuProps = {
+  const timelinePreviewSource = effectiveFileType === 'video'
+    ? dataUrl
+    : effectiveFileType === 'archive' && isVideoFileName(currentFile?.name)
+      ? archive.currentArchiveDataUrl
+      : null;
+
+  const subtitleMenu = {
     subtitles,
     activeSubtitleId,
-    subtitleSize,
-    subtitleColor,
-    subtitleBackground,
-    subtitleOffset,
     onSubtitleChange: setActiveSubtitleId,
     onSubtitleSizeChange: setSubtitleSize,
     onSubtitleColorChange: setSubtitleColor,
     onSubtitleBackgroundChange: setSubtitleBackground,
     onSubtitleOffsetChange: setSubtitleOffset,
   };
-  const renderSubtitle = (targetVideoRef: React.RefObject<HTMLVideoElement>, sourceKey?: string | null) => (
-    <SubtitleOverlay
-      videoRef={targetVideoRef}
-      sourceKey={sourceKey}
-      cues={activeSubtitleCues}
-      currentTime={currentTime}
-      offsetSeconds={subtitleOffset}
-      size={subtitleSize}
-      color={subtitleColor}
-      background={subtitleBackground}
-    />
-  );
-  const timelinePreviewSource = effectiveFileType === 'video'
-    ? dataUrl
-    : effectiveFileType === 'archive' && isVideoFileName(currentFile?.name)
-      ? currentArchiveDataUrl
-      : null;
+
+  const handleTimelinePreviewMove = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!Number.isFinite(playback.duration) || playback.duration <= 0) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const pointerX = Math.min(rect.width, Math.max(0, event.clientX - rect.left));
+    setTimelinePreviewSeeking(true);
+    setTimelinePreview({
+      time: (pointerX / rect.width) * playback.duration,
+      left: Math.min(rect.width - 88, Math.max(88, pointerX)),
+    });
+  };
+
   const renderTimelinePreview = () => (
     timelinePreviewSource ? (
       <div
@@ -1893,21 +621,71 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
             }}
             onSeeking={() => setTimelinePreviewSeeking(true)}
             onSeeked={(event) => {
-              if (
-                !timelinePreview
-                || Math.abs(event.currentTarget.currentTime - timelinePreview.time) < 0.2
-              ) {
+              if (!timelinePreview || Math.abs(event.currentTarget.currentTime - timelinePreview.time) < 0.2) {
                 setTimelinePreviewSeeking(false);
               }
             }}
           />
         </div>
         <div className="mx-auto mt-2 w-fit rounded-full bg-[#202124]/90 px-4 py-1.5 text-center text-sm font-medium leading-none text-white shadow-lg">
-          {formatTime(timelinePreview?.time ?? 0)}
+          {formatMediaTime(timelinePreview?.time ?? 0)}
         </div>
       </div>
     ) : null
   );
+
+  const sharedVideoProps = {
+    autoPlay: playback.videoAutoPlay,
+    videoError: playback.videoError,
+    codecInfo: playback.codecInfo,
+    showVolumeOverlay: playback.showVolumeOverlay,
+    isMuted: playback.isMuted,
+    volume: playback.volume,
+    showPlaybackOverlay: playback.showPlaybackOverlay,
+    playbackOverlayState: playback.playbackOverlayState,
+    playbackOverlayVisible: playback.playbackOverlayVisible,
+    showControls: playback.showControls,
+    currentTime: playback.currentTime,
+    duration: playback.duration,
+    loopRange: playback.loopRange,
+    loopDraft: playback.loopDraft,
+    isPlaying: playback.isPlaying,
+    isLooping: playback.isLooping,
+    playbackSpeed: playback.playbackSpeed,
+    showSpeedMenu: playback.showSpeedMenu,
+    isFullscreen: playback.isFullscreen,
+    timelinePreview: renderTimelinePreview(),
+    subtitleCues: activeSubtitleCues,
+    subtitleOffset,
+    subtitleSize,
+    subtitleColor,
+    subtitleBackground,
+    subtitleMenu,
+    onPlay: () => playback.setIsPlaying(true),
+    onPause: () => playback.setIsPlaying(false),
+    onLoadedMetadata: playback.handleLoadedMetadata,
+    onTimeUpdate: playback.handleTimeUpdate,
+    onEnded: playback.handleLoopRangeEnded,
+    onPictureInPicture: () => void playback.handlePictureInPicture(),
+    onPictureInPictureStateChange: playback.handlePictureInPictureStateChange,
+    onCanPlay: () => playback.setVideoError(null),
+    onContainerMouseMove: playback.revealControls,
+    onContainerMouseLeave: () => playback.setShowControls(false),
+    onSeek: playback.handleSeek,
+    onSeekBarMouseDown: playback.handleSeekBarMouseDown,
+    onTimelinePreviewMove: handleTimelinePreviewMove,
+    onTimelinePreviewLeave: () => {
+      setTimelinePreview(null);
+      setTimelinePreviewSeeking(false);
+    },
+    onPlayPause: playback.handlePlayPause,
+    onMuteToggle: playback.handleMuteToggle,
+    onVolumeChange: playback.handleVolumeChange,
+    onLoopToggle: playback.handleLoopToggle,
+    onSpeedMenuToggle: playback.handleSpeedMenuToggle,
+    onSpeedChange: playback.handleSpeedChange,
+    onFullscreenToggle: playback.handleFullscreenToggle,
+  };
 
   return (
     <AnimatedModal
@@ -1922,7 +700,6 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
         tabIndex={0}
         data-modal-container
       >
-        {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-700">
           <div className="flex items-center gap-3">
             {effectiveFileType === 'image' && <FileImage size={20} className="text-blue-400" />}
@@ -1931,21 +708,16 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
             <span className="text-discord-text font-medium truncate max-w-md">{fileName}</span>
             {effectiveFileType === 'archive' && (
               <span className="text-discord-muted text-sm">
-                ({Math.max(0, currentArchiveNavigationIndex + 1)} / {navigableArchiveFiles.length})
+                ({Math.max(0, archive.currentArchiveNavigationIndex + 1)} / {archive.navigableArchiveFiles.length})
               </span>
             )}
           </div>
-          <button
-            onClick={handleClose}
-            className="text-discord-muted hover:text-white transition-colors"
-          >
+          <button onClick={handleClose} className="text-discord-muted hover:text-white transition-colors">
             <X size={24} />
           </button>
         </div>
 
-        {/* Content (Body) */}
         <div className="flex-1 min-h-0 flex items-center justify-center relative" style={{ overflow: 'hidden' }}>
-          {/* 회전 버튼: 바디 영역 우측 상단에 fixed 배치 */}
           {((effectiveFileType === 'image') || (effectiveFileType === 'video') || (effectiveFileType === 'archive' && currentFile && (currentFileExt !== 'txt'))) && (
             <div className="absolute top-4 right-4 z-20 flex gap-2">
               <TooltipProvider>
@@ -1953,16 +725,16 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                   <TooltipTrigger asChild>
                     <button
                       onClick={() => {
-                        if (effectiveFileType === 'image') setImgRotation((r) => (r - 90) % 360);
-                        else if (effectiveFileType === 'video') setVideoRotation((r) => (r - 90) % 360);
-                        else if (effectiveFileType === 'archive' && (currentFileExt !== 'txt')) setArchiveImgRotation((r) => (r - 90) % 360);
+                        if (effectiveFileType === 'image') setImgRotation((value) => (value - 90) % 360);
+                        else if (effectiveFileType === 'video') setVideoRotation((value) => (value - 90) % 360);
+                        else if (effectiveFileType === 'archive' && currentFileExt !== 'txt') setArchiveImgRotation((value) => (value - 90) % 360);
                       }}
                       className="p-2 rounded bg-black/70 text-white hover:bg-black/90 transition-colors backdrop-blur-sm"
                     >
                       <RotateCcw size={20} />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">왼쪽으로 90도 회전</TooltipContent>
+                  <TooltipContent side="top" align="center" className={tooltipClassName}>왼쪽으로 90도 회전</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
               <TooltipProvider>
@@ -1970,21 +742,21 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
                   <TooltipTrigger asChild>
                     <button
                       onClick={() => {
-                        if (effectiveFileType === 'image') setImgRotation((r) => (r + 90) % 360);
-                        else if (effectiveFileType === 'video') setVideoRotation((r) => (r + 90) % 360);
-                        else if (effectiveFileType === 'archive' && (currentFileExt !== 'txt')) setArchiveImgRotation((r) => (r + 90) % 360);
+                        if (effectiveFileType === 'image') setImgRotation((value) => (value + 90) % 360);
+                        else if (effectiveFileType === 'video') setVideoRotation((value) => (value + 90) % 360);
+                        else if (effectiveFileType === 'archive' && currentFileExt !== 'txt') setArchiveImgRotation((value) => (value + 90) % 360);
                       }}
                       className="p-2 rounded bg-black/70 text-white hover:bg-black/90 transition-colors backdrop-blur-sm"
                     >
                       <RotateCw size={20} />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">오른쪽으로 90도 회전</TooltipContent>
+                  <TooltipContent side="top" align="center" className={tooltipClassName}>오른쪽으로 90도 회전</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             </div>
           )}
-          
+
           {loading ? (
             <div className="flex items-center justify-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-discord-accent"></div>
@@ -2003,1064 +775,201 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
             </div>
           ) : (
             <>
-              {/* Image Viewer */}
               {effectiveFileType === 'image' && dataUrl && (
                 <div className="w-full h-full flex flex-col items-center justify-center">
-                  <div
-                    ref={imgContainerRef}
-                    className="relative flex-1 w-full h-full flex items-center justify-center"
-                    style={{ 
-                      maxHeight: '80vh', 
+                  <ImageViewer
+                    src={dataUrl}
+                    alt="이미지 뷰어"
+                    isGif={isImageGif}
+                    paused={isImageGifPaused}
+                    scale={imgScale}
+                    offset={imgOffset}
+                    rotation={imgRotation}
+                    isPanning={isPanning}
+                    imageRef={imgRef}
+                    gifCanvasRef={imageGifCanvasRef}
+                    containerRef={imgContainerRef}
+                    showPlaybackOverlay={playback.showPlaybackOverlay}
+                    playbackOverlayState={playback.playbackOverlayState}
+                    playbackOverlayVisible={playback.playbackOverlayVisible}
+                    wrapperClassName="relative flex-1 w-full h-full flex items-center justify-center"
+                    containerStyle={{
+                      maxHeight: '80vh',
                       maxWidth: '100%',
-                      overflow: imgScale > 1 ? 'hidden' : 'visible'
+                      overflow: imgScale > 1 ? 'hidden' : 'visible',
                     }}
-                  >
-                    {isImageGif ? (
-                      <AnimatedGif
-                        ref={imageGifCanvasRef}
-                        src={dataUrl}
-                        paused={isImageGifPaused}
-                        aria-label="GIF 이미지 뷰어"
-                        className="max-w-full max-h-full object-contain rounded shadow-lg select-none"
-                        style={{
-                          maxWidth: imgRotation % 180 !== 0 ? '80vh' : '100%',
-                          maxHeight: imgRotation % 180 !== 0 ? '95vw' : '80vh',
-                          transform: `scale(${imgScale}) translate(${imgOffset.x / imgScale}px, ${imgOffset.y / imgScale}px) rotate(${imgRotation}deg)`,
-                          cursor: imgScale > 1 ? (isPanning ? 'grabbing' : 'grab') : 'pointer',
-                          transition: isPanning ? 'none' : 'transform 0.2s',
-                        }}
-                        onMouseDown={(e) => {
-                          e.stopPropagation();
-                          handleImgMouseDown(e);
-                        }}
-                        onMouseMove={(e) => {
-                          e.stopPropagation();
-                          handleImgMouseMove(e);
-                        }}
-                        onMouseUp={(e) => {
-                          e.stopPropagation();
-                          handleImgMouseUp();
-                        }}
-                        onMouseLeave={(e) => {
-                          e.stopPropagation();
-                          handleImgMouseUp();
-                        }}
-                        onClick={handleImageGifPlaybackToggle}
-                      />
-                    ) : (
-                      <img
-                        src={dataUrl}
-                        alt="이미지 뷰어"
-                        className="max-w-full max-h-full object-contain rounded shadow-lg select-none"
-                        style={{
-                          maxWidth: imgRotation % 180 !== 0 ? '80vh' : '100%',
-                          maxHeight: imgRotation % 180 !== 0 ? '95vw' : '80vh',
-                          transform: `scale(${imgScale}) translate(${imgOffset.x / imgScale}px, ${imgOffset.y / imgScale}px) rotate(${imgRotation}deg)`,
-                          cursor: imgScale > 1 ? (isPanning ? 'grabbing' : 'grab') : 'default',
-                          transition: isPanning ? 'none' : 'transform 0.2s',
-                        }}
-                        draggable={false}
-                        ref={imgRef}
-                        onMouseDown={(e) => {
-                          e.stopPropagation();
-                          handleImgMouseDown(e);
-                        }}
-                        onMouseMove={(e) => {
-                          e.stopPropagation();
-                          handleImgMouseMove(e);
-                        }}
-                        onMouseUp={(e) => {
-                          e.stopPropagation();
-                          handleImgMouseUp();
-                        }}
-                        onMouseLeave={(e) => {
-                          e.stopPropagation();
-                          handleImgMouseUp();
-                        }}
-                      />
-                    )}
-                    {isImageGif && showPlaybackOverlay && (
-                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                        <div className={`flex h-20 w-20 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-all duration-300 ${
-                          playbackOverlayVisible ? 'scale-100 opacity-100' : 'scale-90 opacity-0'
-                        }`}>
-                          {playbackOverlayState === 'pause' ? <Pause size={34} fill="currentColor" /> : <Play size={34} fill="currentColor" className="ml-1" />}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                    onMouseDown={(event) => {
+                      if (imgScale === 1) return;
+                      setIsPanning(true);
+                      panStart.current = { x: event.clientX, y: event.clientY, offsetX: imgOffset.x, offsetY: imgOffset.y };
+                    }}
+                    onMouseMove={(event) => {
+                      if (!isPanning || !panStart.current) return;
+                      setImgOffset(clampToContainer({
+                        x: panStart.current.offsetX + event.clientX - panStart.current.x,
+                        y: panStart.current.offsetY + event.clientY - panStart.current.y,
+                      }, imgScale));
+                    }}
+                    onMouseUp={() => setIsPanning(false)}
+                    onGifClick={() => {
+                      if (imgScale > 1) return;
+                      const nextPaused = !isImageGifPaused;
+                      setIsImageGifPaused(nextPaused);
+                      playback.showPlaybackFeedback(nextPaused ? 'pause' : 'play');
+                    }}
+                  />
                 </div>
               )}
 
-              {/* Video Player */}
               {effectiveFileType === 'video' && dataUrl && (
-                <div 
-                  className="relative w-full h-full flex flex-col items-center justify-center"
-                  onMouseMove={handleMouseMove}
-                  onMouseLeave={() => setShowControls(false)}
-                  tabIndex={0}
-                  data-video-container
-                >
-                  <div
-                    ref={imgContainerRef}
-                    className="flex-1 w-full h-full flex items-center justify-center"
-                    style={{ overflow: videoScale > 1 ? 'hidden' : 'visible' }}
-                  >
-                    <div style={{ 
-                      transform: `scale(${videoScale}) translate(${videoOffset.x / videoScale}px, ${videoOffset.y / videoScale}px) rotate(${videoRotation}deg)`,
-                      transition: videoIsPanning ? 'none' : 'transform 0.2s'
-                    }}>
-                      {videoError ? (
-                        <div className="flex flex-col items-center justify-center bg-black text-white p-8 rounded-lg">
-                          <div className="text-2xl mb-4">⚠️</div>
-                          <div className="text-lg font-semibold mb-2">{videoError}</div>
-                          <div className="text-sm text-gray-300 text-center">
-                            지원되지 않는 코덱이거나<br />
-                            파일이 손상되었을 수 있습니다.
-                          </div>
-                          {codecInfo && (
-                            <div className="mt-4 text-xs bg-gray-800 rounded p-2 text-left">
-                              <div className="mb-1 font-bold text-blue-300">코덱 정보</div>
-                              {codecInfo.error && <div className="text-red-400">{codecInfo.error}</div>}
-                              {codecInfo.video && (
-                                <div>Video: {codecInfo.video.codec} {codecInfo.video.profile ? `(${codecInfo.video.profile})` : ''} {codecInfo.video.pix_fmt ? `[${codecInfo.video.pix_fmt}]` : ''}</div>
-                              )}
-                              {codecInfo.audio && (
-                                <div>Audio: {codecInfo.audio.codec} {codecInfo.audio.sample_rate ? `@${codecInfo.audio.sample_rate}Hz` : ''} {codecInfo.audio.channels ? `채널:${codecInfo.audio.channels}` : ''}</div>
-                              )}
-                              {!codecInfo.video && !codecInfo.audio && !codecInfo.error && <div>코덱 정보를 찾을 수 없습니다.</div>}
-                            </div>
-                          )}
-                          <button
-                            onClick={() => {
-                              setVideoError(null);
-                              setCodecInfo(null);
-                              if (videoRef.current) {
-                                videoRef.current.load();
-                              }
-                            }}
-                            className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded transition-colors"
-                          >
-                            다시 시도
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="relative inline-block max-w-full">
-                        <PictureInPictureContextMenu
-                          onPlayInPictureInPicture={() => void handlePictureInPicture()}
-                          {...subtitleContextMenuProps}
-                        >
-                          <video
-                            ref={videoRef}
-                            src={dataUrl}
-                            autoPlay={videoAutoPlay}
-                            className="max-w-full max-h-[80vh] h-full object-contain bg-black"
-                            style={{
-                              maxWidth: videoRotation % 180 !== 0 ? '80vh' : '100%',
-                              maxHeight: videoRotation % 180 !== 0 ? '95vw' : '80vh',
-                              cursor: videoScale > 1 ? (videoIsPanning ? 'grabbing' : 'grab') : 'default',
-                            }}
-                            onMouseDown={(e) => {
-                              e.stopPropagation();
-                              handleVideoMouseDown(e);
-                            }}
-                            onMouseMove={(e) => {
-                              e.stopPropagation();
-                              handleVideoMouseMove(e);
-                            }}
-                            onMouseUp={(e) => {
-                              e.stopPropagation();
-                              handleVideoMouseUp();
-                            }}
-                            onMouseLeave={(e) => {
-                              e.stopPropagation();
-                              handleVideoMouseUp();
-                            }}
-                            onPlay={() => setIsPlaying(true)}
-                            onPause={() => setIsPlaying(false)}
-                            onLoadedMetadata={handleLoadedMetadata}
-                            onTimeUpdate={handleTimeUpdate}
-                            onEnded={handleLoopRangeEnded}
-                            onEnterPictureInPicture={() => handlePictureInPictureStateChange(true)}
-                            onLeavePictureInPicture={() => handlePictureInPictureStateChange(false)}
-                            onClick={handleVideoClick}
-                            onError={(e) => {
-                              const video = e.target as HTMLVideoElement;
-                              if (video.error) {
-                                console.error('동영상 재생 에러:', video.error.message);
-                              }
-                              setVideoError('동영상을 재생할 수 없습니다.');
-                              setCodecInfo(null);
-                              if (filePath) {
-                                window.electronAPI.getVideoCodecInfo(filePath).then(setCodecInfo);
-                              }
-                            }}
-                            onCanPlay={() => {
-                              setVideoError(null);
-                            }}
-                          />
-                        </PictureInPictureContextMenu>
-                        {renderSubtitle(videoRef, dataUrl)}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {/* 볼륨 오버레이 */}
-                  {showVolumeOverlay && (
-                    <div className="absolute top-4 left-4 transition-opacity duration-300">
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center justify-center w-8 h-8 bg-discord-accent rounded-full">
-                          {isMuted || volume === 0 ? (
-                            <VolumeX size={16} className="text-white" />
-                          ) : volume < 0.5 ? (
-                            <Volume2 size={16} className="text-white" />
-                          ) : (
-                            <Volume2 size={16} className="text-white" />
-                          )}
-                        </div>
-                        <div className="text-center">
-                          <div className="text-xl font-bold text-white">
-                            {Math.round((isMuted ? 0 : volume) * 100)}%
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {showPlaybackOverlay && (
-                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                      <div className={`flex h-20 w-20 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-all duration-300 ${
-                        playbackOverlayVisible ? 'scale-100 opacity-100' : 'scale-90 opacity-0'
-                      }`}>
-                        {playbackOverlayState === 'pause' ? <Pause size={34} fill="currentColor" /> : <Play size={34} fill="currentColor" className="ml-1" />}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* 커스텀 컨트롤 */}
-                  <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-                    {/* 재생바 */}
-                    <div className="mb-4">
-                      <div
-                        className="relative w-full"
-                        onMouseMove={handleTimelinePreviewMove}
-                        onMouseLeave={handleTimelinePreviewLeave}
-                      >
-                        {renderTimelinePreview()}
-                        <input
-                          type="range"
-                          min={0}
-                          max={duration}
-                          step={0.01}
-                          value={currentTime}
-                          onChange={handleSeek}
-                          onMouseDown={handleSeekBarMouseDown}
-                          style={getSeekBarStyle()}
-                          className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
-                          id="seekbar"
-                        />
-                        {renderLoopRangeMarkers()}
-                        {/* 북마크 마커 (일반 동영상에서만 표시) */}
-                        {(effectiveFileType === 'video' && Array.isArray(bookmarks)) && bookmarks.map(bm => (
-                          <div
-                            key={bm.time}
-                            style={{
-                              position: 'absolute',
-                              left: `${(bm.time / duration) * 100}%`,
-                              top: 0,
-                              width: 12,
-                              height: 12,
-                              borderRadius: '50%',
-                              transform: 'translate(-50%, -50%)',
-                              cursor: 'pointer',
-                              zIndex: 10,
-                              transition: 'all 0.2s ease-in-out',
-                            }}
-                            className="bg-red-500/60 shadow-md shadow-red-500/30 border border-white/10 hover:bg-red-500 hover:shadow-lg hover:shadow-red-500/60"
-                            onClick={() => {
-                              if (videoRef.current && effectiveFileType === 'video') {
-                                videoRef.current.currentTime = bm.time;
-                                setCurrentTime(bm.time);
-                              }
-                            }}
-                            onContextMenu={e => {
-                              e.preventDefault();
-                              handleRemoveBookmark(bm.time);
-                            }}
-                            title={`북마크: ${formatTime(bm.time)} (클릭: 이동, 우클릭: 삭제)`}
-                          />
-                        ))}
-                      </div>
-                      <div className="flex justify-between text-white text-xs mt-1">
-                        <span>{formatTime(currentTime)}</span>
-                        <span>{loopRange ? `${formatTime(loopRange.start)} - ${formatTime(loopRange.end)} · ` : ''}{formatTime(duration)}</span>
-                      </div>
-                    </div>
-                    {/* 컨트롤바: 좌우 분리 */}
-                    <div className="flex items-center justify-between w-full">
-                      {/* 왼쪽 그룹 */}
-                      <div className="flex items-center gap-5">
-                        {/* 재생/정지 버튼 */}
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button onClick={handlePlayPause} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors">
-                                {isPlaying ? <Pause size={20} /> : <Play size={20} />}
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">{isPlaying ? '일시정지' : '재생'}</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        {/* 볼륨 컨트롤 */}
-                        <div className="flex items-center gap-2">
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button onClick={handleMuteToggle} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors">
-                                  {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">{isMuted ? '음소거 해제' : '음소거'}</TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                          <input
-                            type="range"
-                            min="0"
-                            max="1"
-                            step="0.01"
-                            value={isMuted ? 0 : volume}
-                            onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-                            className="w-20 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
-                            id="volume-slider"
-                          />
-                        </div>
-                        {/* 북마크 버튼 (일반 동영상만) */}
-                        {effectiveFileType === 'video' && (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  onClick={() => {
-                                    if (hasBookmarkAtCurrentTime()) {
-                                      const bookmarkToRemove = bookmarks.find(bm => Math.abs(bm.time - currentTime) < 1);
-                                      if (bookmarkToRemove) {
-                                        handleRemoveBookmark(bookmarkToRemove.time);
-                                      }
-                                    } else {
-                                      handleAddBookmark();
-                                    }
-                                  }}
-                                  className={`w-8 h-8 flex items-center justify-center transition-colors ${
-                                    hasBookmarkAtCurrentTime() 
-                                      ? 'text-blue-400' 
-                                      : 'text-white hover:text-gray-300'
-                                  }`}
-                                >
-                                  <Bookmark size={20} />
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">{hasBookmarkAtCurrentTime() ? '북마크 삭제' : '현재 위치 북마크'}</TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        )}
-                      </div>
-                      {/* 오른쪽 그룹 */}
-                      <div className="flex items-center gap-5">
-                        {/* 루프 버튼 */}
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button onClick={handleLoopToggle} className={`w-8 h-8 flex items-center justify-center transition-colors ${isLooping ? 'text-blue-400' : 'text-white hover:text-gray-300'}`}>
-                                <RotateCcw size={20} />
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">{isLooping ? '반복 해제' : '반복 재생'}</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        {/* 배속 버튼 */}
-                        <div className="relative">
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  onClick={handleSpeedMenuToggle}
-                                  className={`w-8 h-8 flex items-center justify-center transition-colors ${
-                                    playbackSpeed !== 1 ? 'text-blue-400' : 'text-white hover:text-gray-300'
-                                  }`}
-                                  data-speed-menu
-                                >
-                                  <Clock size={20} />
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">{`재생 속도: ${playbackSpeed}x ([, ] 키로 변경)`}</TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                          {showSpeedMenu && (
-                            <div className="absolute bottom-full right-0 mb-2 bg-discord-sidebar border border-gray-700 rounded-lg shadow-lg z-50 min-w-[120px]" data-speed-menu>
-                              <div className="p-2 text-xs text-discord-muted border-b border-gray-700">
-                                재생 속도
-                              </div>
-                              {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((speed) => (
-                                <button
-                                  key={speed}
-                                  onClick={() => handleSpeedChange(speed)}
-                                  className={`w-full text-left px-3 py-2 text-sm hover:bg-discord-hover transition-colors ${
-                                    playbackSpeed === speed ? 'text-discord-accent bg-discord-hover' : 'text-discord-text'
-                                  }`}
-                                >
-                                  {speed}x
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        {/* 전체화면 버튼 */}
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button onClick={handleFullscreenToggle} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors ml-auto">
-                                {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">{isFullscreen ? '전체화면 해제' : '전체화면'}</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <VideoViewer
+                  {...sharedVideoProps}
+                  src={dataUrl}
+                  videoRef={videoRef}
+                  containerRef={imgContainerRef}
+                  scale={videoScale}
+                  offset={videoOffset}
+                  rotation={videoRotation}
+                  isPanning={videoIsPanning}
+                  showBookmarks
+                  bookmarks={bookmarks}
+                  subtitleSourceKey={dataUrl}
+                  onRetry={() => {
+                    playback.setVideoError(null);
+                    playback.setCodecInfo(null);
+                    videoRef.current?.load();
+                  }}
+                  onMouseDown={(event) => {
+                    if (videoScale === 1) return;
+                    setVideoIsPanning(true);
+                    videoPanStart.current = { x: event.clientX, y: event.clientY, offsetX: videoOffset.x, offsetY: videoOffset.y };
+                  }}
+                  onMouseMove={(event) => {
+                    if (!videoIsPanning || !videoPanStart.current) return;
+                    setVideoOffset(clampToContainer({
+                      x: videoPanStart.current.offsetX + event.clientX - videoPanStart.current.x,
+                      y: videoPanStart.current.offsetY + event.clientY - videoPanStart.current.y,
+                    }, videoScale));
+                  }}
+                  onMouseUp={() => setVideoIsPanning(false)}
+                  onVideoClick={() => playback.handleVideoClick(videoScale, archiveVideoScale)}
+                  onError={(event) => {
+                    const video = event.target as HTMLVideoElement;
+                    if (video.error) console.error('동영상 재생 에러:', video.error.message);
+                    playback.setVideoError('동영상을 재생할 수 없습니다.');
+                    playback.setCodecInfo(null);
+                    if (filePath) window.electronAPI.getVideoCodecInfo(filePath).then(playback.setCodecInfo);
+                  }}
+                  onBookmarkClick={(time) => {
+                    if (videoRef.current) {
+                      videoRef.current.currentTime = time;
+                      playback.setCurrentTime(time);
+                    }
+                  }}
+                  onBookmarkContextMenu={handleRemoveBookmark}
+                  onToggleBookmark={() => {
+                    if (hasBookmarkAtTime(bookmarks, playback.currentTime)) {
+                      const bookmarkToRemove = bookmarks.find((bookmark) => Math.abs(bookmark.time - playback.currentTime) < 1);
+                      if (bookmarkToRemove) handleRemoveBookmark(bookmarkToRemove.time);
+                    } else {
+                      handleAddBookmark();
+                    }
+                  }}
+                />
               )}
 
-              {/* Archive Viewer */}
               {effectiveFileType === 'archive' && (
-                <div className="w-full h-full flex flex-row">
-                  {/* 사이드 파일 리스트 */}
-                  <div className="flex h-full w-48 flex-shrink-0 flex-col border-r border-gray-700 bg-discord-sidebar">
-                    <div className="flex-shrink-0 border-b border-gray-700 p-2">
-                      <div className="relative">
-                        <Search
-                          size={14}
-                          className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-discord-muted"
-                        />
-                        <Input
-                          type="text"
-                          value={archiveSearchQuery}
-                          onChange={(event) => setArchiveSearchQuery(event.target.value)}
-                          placeholder="파일 검색"
-                          aria-label="압축파일 내부 파일 검색"
-                          className="h-8 border-gray-600 bg-discord-bg pl-8 pr-8 text-xs text-discord-text placeholder:text-discord-muted"
-                        />
-                        {archiveSearchQuery && (
-                          <button
-                            type="button"
-                            onClick={() => setArchiveSearchQuery('')}
-                            aria-label="검색어 지우기"
-                            className="absolute right-2 top-1/2 flex -translate-y-1/2 cursor-pointer items-center justify-center text-discord-muted transition-colors hover:text-discord-text"
-                          >
-                            <X size={14} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="min-h-0 flex-1 overflow-y-auto">
-                      <TooltipProvider>
-                        <ul className="py-2">
-                          {filteredArchiveFiles.map(({ file, originalIndex: idx }) => {
-                            const fileExt = file.name.toLowerCase().split('.').pop();
-                            const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name);
-                            const isVideo = /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(file.name);
-                            const isText = fileExt === 'txt';
-                            const isSupported = Boolean(file.isSupported);
-
-                            const fileListItem = (
-                              <li
-                                aria-disabled={!isSupported}
-                                title={!isSupported ? `${file.name} (미지원 파일)` : undefined}
-                                className={`flex items-center gap-2 px-2 py-1 rounded ${
-                                  isSupported
-                                    ? `cursor-pointer hover:bg-discord-hover ${idx === currentArchiveIndex ? 'bg-discord-hover font-bold' : ''}`
-                                    : 'cursor-not-allowed text-discord-muted opacity-45'
-                                }`}
-                                onClick={() => {
-                                  if (isSupported && idx !== currentArchiveIndex) {
-                                  void selectArchiveFile(idx);
-                                  }
-                                }}
-                              >
-                                {isImage && <FileImage size={14} className="text-blue-400 flex-shrink-0" />}
-                                {isVideo && <FileVideo size={14} className="text-green-400 flex-shrink-0" />}
-                                {isText && <FileText size={14} className="text-green-400 flex-shrink-0" />}
-                                {!isSupported && <File size={14} className="flex-shrink-0" />}
-                                <span className="truncate flex-1 min-w-0">{file.name}</span>
-                              </li>
-                            );
-
-                            if (!isSupported) {
-                              return (
-                                <ContextMenu key={`${file.name}-${idx}`}>
-                                  <ContextMenuTrigger asChild>
-                                    {fileListItem}
-                                  </ContextMenuTrigger>
-                                  <ContextMenuContent>
-                                    <ContextMenuItem onClick={() => void handleOpenUnsupportedArchiveFile(file)}>
-                                      원본 파일 열기
-                                    </ContextMenuItem>
-                                  </ContextMenuContent>
-                                </ContextMenu>
-                              );
-                            }
-
-                            return (
-                              <Tooltip key={`${file.name}-${idx}`}>
-                                <TooltipTrigger asChild>
-                                  {fileListItem}
-                                </TooltipTrigger>
-                                <TooltipContent
-                                  side="right"
-                                  align="center"
-                                  className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs max-w-sm break-all"
-                                >
-                                  {file.name}
-                                </TooltipContent>
-                              </Tooltip>
-                            );
-                          })}
-                          {filteredArchiveFiles.length === 0 && (
-                            <li className="px-3 py-6 text-center text-xs text-discord-muted">
-                              검색 결과가 없습니다.
-                            </li>
-                          )}
-                        </ul>
-                      </TooltipProvider>
-                    </div>
-                  </div>
-                  {/* 파일 내용 영역 */}
-                  <div className="flex-1 flex flex-col h-full">
-                    <div 
-                      ref={imgContainerRef}
-                      className="flex-1 flex items-center justify-center relative overflow-hidden"
-                    >
-                      {/* 좌/우 투명 클릭 영역 */}
-                      {currentFile && currentFileExt !== 'txt' && archiveImgScale === 1 && archiveVideoScale === 1 && (
-                        <>
-                          {!isFirstArchiveFile && (
-                            <button
-                              type="button"
-                              className="group absolute top-0 left-0 h-full w-16 z-[1] flex items-center justify-center bg-transparent"
-                              onClick={handlePrevious}
-                              aria-label="이전 파일"
-                            >
-                              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/0 transition-all group-hover:bg-black/55">
-                                <ChevronLeft size={24} className="text-white/0 transition-all group-hover:scale-110 group-hover:text-white/90" />
-                              </span>
-                            </button>
-                          )}
-                          {!isLastArchiveFile && (
-                            <button
-                              type="button"
-                              className="group absolute top-0 right-0 h-full w-16 z-[1] flex items-center justify-center bg-transparent"
-                              onClick={handleNext}
-                              aria-label="다음 파일"
-                            >
-                              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/0 transition-all group-hover:bg-black/55">
-                                <ChevronRight size={24} className="text-white/0 transition-all group-hover:scale-110 group-hover:text-white/90" />
-                              </span>
-                            </button>
-                          )}
-                        </>
-                      )}
-                      {!currentFile ? (
-                        <div className="text-discord-muted">지원되는 파일이 없습니다.</div>
-                      ) : currentFileExt === 'txt' ? (
-                        // 텍스트 파일 표시
-                        <div className="relative h-full w-full bg-discord-bg text-discord-text">
-                          {!isFirstArchiveFile && (
-                            <button
-                              type="button"
-                              className="absolute left-3 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-white/70 transition-all hover:scale-110 hover:bg-black/60 hover:text-white"
-                              onClick={handlePrevious}
-                              aria-label="이전 파일"
-                            >
-                              <ChevronLeft size={24} />
-                            </button>
-                          )}
-                          <div className="h-full w-full overflow-auto p-4">
-                            {currentArchiveText ? (
-                              <pre className="select-text whitespace-pre-wrap font-noto text-sm leading-relaxed">
-                                {currentArchiveText}
-                              </pre>
-                            ) : (
-                              <div className="text-discord-muted">텍스트를 로드할 수 없습니다.</div>
-                            )}
-                          </div>
-                          {!isLastArchiveFile && (
-                            <button
-                              type="button"
-                              className="absolute right-3 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-white/70 transition-all hover:scale-110 hover:bg-black/60 hover:text-white"
-                              onClick={handleNext}
-                              aria-label="다음 파일"
-                            >
-                              <ChevronRight size={24} />
-                            </button>
-                          )}
-                        </div>
-                      ) : /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(currentFile?.name || '') ? (
-                        // 동영상 파일 표시
-                        currentArchiveDataUrl ? (
-                          <div 
-                            className="relative w-full h-full flex items-center justify-center"
-                            onMouseMove={handleMouseMove}
-                            onMouseLeave={() => setShowControls(false)}
-                            tabIndex={0}
-                            data-video-container
-                          >
-                            <div style={{ 
-                              transform: `scale(${archiveVideoScale}) translate(${archiveVideoOffset.x / archiveVideoScale}px, ${archiveVideoOffset.y / archiveVideoScale}px) rotate(${archiveImgRotation}deg)`,
-                              transition: archiveVideoIsPanning ? 'none' : 'transform 0.2s',
-                            }}>
-                              {videoError ? (
-                                <div className="flex flex-col items-center justify-center bg-black text-white p-8 rounded-lg">
-                                  <div className="text-2xl mb-4">⚠️</div>
-                                  <div className="text-lg font-semibold mb-2">{videoError}</div>
-                                  <div className="text-sm text-gray-300 text-center">
-                                    지원되지 않는 코덱이거나<br />
-                                    파일이 손상되었을 수 있습니다.
-                                  </div>
-                                  {codecInfo && (
-                                    <div className="mt-4 text-xs bg-gray-800 rounded p-2 text-left">
-                                      <div className="mb-1 font-bold text-blue-300">코덱 정보</div>
-                                      {codecInfo.error && <div className="text-red-400">{codecInfo.error}</div>}
-                                      {codecInfo.video && (
-                                        <div>Video: {codecInfo.video.codec} {codecInfo.video.profile ? `(${codecInfo.video.profile})` : ''} {codecInfo.video.pix_fmt ? `[${codecInfo.video.pix_fmt}]` : ''}</div>
-                                      )}
-                                      {codecInfo.audio && (
-                                        <div>Audio: {codecInfo.audio.codec} {codecInfo.audio.sample_rate ? `@${codecInfo.audio.sample_rate}Hz` : ''} {codecInfo.audio.channels ? `채널:${codecInfo.audio.channels}` : ''}</div>
-                                      )}
-                                      {!codecInfo.video && !codecInfo.audio && !codecInfo.error && <div>코덱 정보를 찾을 수 없습니다.</div>}
-                                    </div>
-                                  )}
-                                  <button
-                                    onClick={() => {
-                                      setVideoError(null);
-                                      setCodecInfo(null);
-                                      if (archiveVideoRef.current) {
-                                        archiveVideoRef.current.load();
-                                      }
-                                    }}
-                                    className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded transition-colors"
-                                  >
-                                    다시 시도
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="relative inline-block max-w-full">
-                                <PictureInPictureContextMenu
-                                  onPlayInPictureInPicture={() => void handlePictureInPicture()}
-                                  {...subtitleContextMenuProps}
-                                >
-                                  <video
-                                    src={currentArchiveDataUrl}
-                                    className="max-w-full max-h-[80vh] object-contain bg-black rounded shadow-lg"
-                                    style={{
-                                      maxWidth: archiveImgRotation % 180 !== 0 ? '80vh' : '100%',
-                                      maxHeight: archiveImgRotation % 180 !== 0 ? '95vw' : '80vh',
-                                      cursor: archiveVideoScale > 1 ? (archiveVideoIsPanning ? 'grabbing' : 'grab') : 'default',
-                                    }}
-                                    controls={false}
-                                    autoPlay={videoAutoPlay}
-                                    ref={archiveVideoRef}
-                                    onMouseDown={(e) => {
-                                      e.stopPropagation();
-                                      handleArchiveVideoMouseDown(e);
-                                    }}
-                                    onMouseMove={(e) => {
-                                      e.stopPropagation();
-                                      handleArchiveVideoMouseMove(e);
-                                    }}
-                                    onMouseUp={(e) => {
-                                      e.stopPropagation();
-                                      handleArchiveVideoMouseUp();
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      e.stopPropagation();
-                                      handleArchiveVideoMouseUp();
-                                    }}
-                                    onPlay={() => setIsPlaying(true)}
-                                    onPause={() => setIsPlaying(false)}
-                                    onLoadedMetadata={handleLoadedMetadata}
-                                    onTimeUpdate={handleTimeUpdate}
-                                    onEnded={handleLoopRangeEnded}
-                                    onEnterPictureInPicture={() => handlePictureInPictureStateChange(true)}
-                                    onLeavePictureInPicture={() => handlePictureInPictureStateChange(false)}
-                                    onClick={handleVideoClick}
-                                    onError={(e) => {
-                                      const video = e.target as HTMLVideoElement;
-                                      if (video.error) {
-                                        console.error('동영상 재생 에러:', video.error.message);
-                                      }
-                                      setVideoError('동영상을 재생할 수 없습니다.');
-                                      setCodecInfo(null);
-                                      if (filePath) {
-                                        window.electronAPI.getVideoCodecInfo(filePath).then(setCodecInfo);
-                                      }
-                                    }}
-                                    onCanPlay={() => {
-                                      setVideoError(null);
-                                    }}
-                                  />
-                                </PictureInPictureContextMenu>
-                                {renderSubtitle(archiveVideoRef, currentArchiveDataUrl)}
-                                </div>
-                              )}
-                            </div>
-                            
-                            {/* 볼륨 오버레이 */}
-                            {showVolumeOverlay && (
-                              <div className="absolute top-4 left-4 transition-opacity duration-300">
-                                <div className="flex items-center gap-3">
-                                  <div className="flex items-center justify-center w-8 h-8 bg-discord-accent rounded-full">
-                                    {isMuted || volume === 0 ? (
-                                      <VolumeX size={16} className="text-white" />
-                                    ) : volume < 0.5 ? (
-                                      <Volume2 size={16} className="text-white" />
-                                    ) : (
-                                      <Volume2 size={16} className="text-white" />
-                                    )}
-                                  </div>
-                                  <div className="text-center">
-                                    <div className="text-xl font-bold text-white">
-                                      {Math.round((isMuted ? 0 : volume) * 100)}%
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-
-                            {showPlaybackOverlay && (
-                              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                                <div className={`flex h-20 w-20 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-all duration-300 ${
-                                  playbackOverlayVisible ? 'scale-100 opacity-100' : 'scale-90 opacity-0'
-                                }`}>
-                                  {playbackOverlayState === 'pause' ? <Pause size={34} fill="currentColor" /> : <Play size={34} fill="currentColor" className="ml-1" />}
-                                </div>
-                              </div>
-                            )}
-                            
-                            {/* 커스텀 컨트롤 */}
-                            <div className={`absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-                              {/* 재생바 */}
-                              <div className="mb-4">
-                                <div
-                                  className="relative w-full"
-                                  onMouseMove={handleTimelinePreviewMove}
-                                  onMouseLeave={handleTimelinePreviewLeave}
-                                >
-                                  {renderTimelinePreview()}
-                                  <input
-                                    type="range"
-                                    min={0}
-                                    max={duration}
-                                    step={0.01}
-                                    value={currentTime}
-                                    onChange={handleSeek}
-                                    onMouseDown={handleSeekBarMouseDown}
-                                    style={getSeekBarStyle()}
-                                    className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
-                                    id="seekbar"
-                                  />
-                                  {renderLoopRangeMarkers()}
-                                  {/* 북마크 마커 (일반 동영상에서만 표시) */}
-                                  {(effectiveFileType === 'video' && Array.isArray(bookmarks)) && bookmarks.map(bm => (
-                                    <div
-                                      key={bm.time}
-                                      style={{
-                                        position: 'absolute',
-                                        left: `${(bm.time / duration) * 100}%`,
-                                        top: 0,
-                                        width: 12,
-                                        height: 12,
-                                        borderRadius: '50%',
-                                        transform: 'translate(-50%, -50%)',
-                                        cursor: 'pointer',
-                                        zIndex: 10,
-                                        transition: 'all 0.2s ease-in-out',
-                                      }}
-                                      className="bg-red-500/60 shadow-md shadow-red-500/30 border border-white/10 hover:bg-red-500 hover:shadow-lg hover:shadow-red-500/60"
-                                      onClick={() => {
-                                        if (videoRef.current && effectiveFileType === 'video') {
-                                          videoRef.current.currentTime = bm.time;
-                                          setCurrentTime(bm.time);
-                                        }
-                                      }}
-                                      onContextMenu={e => {
-                                        e.preventDefault();
-                                        handleRemoveBookmark(bm.time);
-                                      }}
-                                      title={`북마크: ${formatTime(bm.time)} (클릭: 이동, 우클릭: 삭제)`}
-                                    />
-                                  ))}
-                                </div>
-                                <div className="flex justify-between text-white text-xs mt-1">
-                                  <span>{formatTime(currentTime)}</span>
-                                  <span>{loopRange ? `${formatTime(loopRange.start)} - ${formatTime(loopRange.end)} · ` : ''}{formatTime(duration)}</span>
-                                </div>
-                              </div>
-                              {/* 컨트롤바: 좌우 분리 */}
-                              <div className="flex items-center justify-between w-full">
-                                {/* 왼쪽 그룹 */}
-                                <div className="flex items-center gap-5">
-                                  {/* 재생/정지 버튼 */}
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <button onClick={handlePlayPause} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors">
-                                          {isPlaying ? <Pause size={20} /> : <Play size={20} />}
-                                        </button>
-                                      </TooltipTrigger>
-                                      <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">{isPlaying ? '일시정지' : '재생'}</TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                  {/* 볼륨 컨트롤 */}
-                                  <div className="flex items-center gap-2">
-                                    <TooltipProvider>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <button onClick={handleMuteToggle} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors">
-                                            {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
-                                          </button>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">{isMuted ? '음소거 해제' : '음소거'}</TooltipContent>
-                                      </Tooltip>
-                                    </TooltipProvider>
-                                    <input
-                                      type="range"
-                                      min="0"
-                                      max="1"
-                                      step="0.01"
-                                      value={isMuted ? 0 : volume}
-                                      onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-                                      className="w-20 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
-                                      id="volume-slider"
-                                    />
-                                  </div>
-                                  {/* 북마크 버튼 (일반 동영상만) */}
-                                  {effectiveFileType === 'video' && (
-                                    <TooltipProvider>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <button
-                                            onClick={() => {
-                                              if (hasBookmarkAtCurrentTime()) {
-                                                const bookmarkToRemove = bookmarks.find(bm => Math.abs(bm.time - currentTime) < 1);
-                                                if (bookmarkToRemove) {
-                                                  handleRemoveBookmark(bookmarkToRemove.time);
-                                                }
-                                              } else {
-                                                handleAddBookmark();
-                                              }
-                                            }}
-                                            className={`w-8 h-8 flex items-center justify-center transition-colors ${
-                                              hasBookmarkAtCurrentTime() 
-                                                ? 'text-blue-400' 
-                                                : 'text-white hover:text-gray-300'
-                                            }`}
-                                          >
-                                            <Bookmark size={20} />
-                                          </button>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">{hasBookmarkAtCurrentTime() ? '북마크 삭제' : '현재 위치 북마크'}</TooltipContent>
-                                      </Tooltip>
-                                    </TooltipProvider>
-                                  )}
-                                </div>
-                                {/* 오른쪽 그룹 */}
-                                <div className="flex items-center gap-5">
-                                  {/* 루프 버튼 */}
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <button onClick={handleLoopToggle} className={`w-8 h-8 flex items-center justify-center transition-colors ${isLooping ? 'text-blue-400' : 'text-white hover:text-gray-300'}`}>
-                                          <RotateCcw size={20} />
-                                        </button>
-                                      </TooltipTrigger>
-                                      <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">{isLooping ? '반복 해제' : '반복 재생'}</TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                  {/* 배속 버튼 */}
-                                  <div className="relative">
-                                    <TooltipProvider>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <button
-                                            onClick={handleSpeedMenuToggle}
-                                            className={`w-8 h-8 flex items-center justify-center transition-colors ${
-                                              playbackSpeed !== 1 ? 'text-blue-400' : 'text-white hover:text-gray-300'
-                                            }`}
-                                            data-speed-menu
-                                          >
-                                            <Clock size={20} />
-                                          </button>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">{`재생 속도: ${playbackSpeed}x ([, ] 키로 변경)`}</TooltipContent>
-                                      </Tooltip>
-                                    </TooltipProvider>
-                                    {showSpeedMenu && (
-                                      <div className="absolute bottom-full right-0 mb-2 bg-discord-sidebar border border-gray-700 rounded-lg shadow-lg z-50 min-w-[120px]" data-speed-menu>
-                                        <div className="p-2 text-xs text-discord-muted border-b border-gray-700">
-                                          재생 속도
-                                        </div>
-                                        {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((speed) => (
-                                          <button
-                                            key={speed}
-                                            onClick={() => handleSpeedChange(speed)}
-                                            className={`w-full text-left px-3 py-2 text-sm hover:bg-discord-hover transition-colors ${
-                                              playbackSpeed === speed ? 'text-discord-accent bg-discord-hover' : 'text-discord-text'
-                                            }`}
-                                          >
-                                            {speed}x
-                                          </button>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                  {/* 전체화면 버튼 */}
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <button onClick={handleFullscreenToggle} className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors ml-auto">
-                                          {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
-                                        </button>
-                                      </TooltipTrigger>
-                                      <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">{isFullscreen ? '전체화면 해제' : '전체화면'}</TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="text-discord-muted">동영상을 로드할 수 없습니다.</div>
-                        )
-                      ) : (
-                        // 이미지 파일 표시
-                        currentArchiveDataUrl ? (
-                          <div className="relative flex w-full flex-col items-center">
-                            {isArchiveGif ? (
-                              <AnimatedGif
-                                ref={archiveGifCanvasRef}
-                                src={currentArchiveDataUrl}
-                                paused={isArchiveGifPaused}
-                                aria-label={currentFile?.name || '압축 파일 GIF 이미지'}
-                                className="max-w-full max-h-full object-contain rounded shadow-lg block mx-auto select-none"
-                                style={{
-                                  maxWidth: archiveImgRotation % 180 !== 0 ? '80vh' : '100%',
-                                  maxHeight: archiveImgRotation % 180 !== 0 ? '95vw' : '80vh',
-                                  transform: `scale(${archiveImgScale}) translate(${archiveImgOffset.x / archiveImgScale}px, ${archiveImgOffset.y / archiveImgScale}px) rotate(${archiveImgRotation}deg)`,
-                                  cursor: archiveImgScale > 1 ? (archiveIsPanning ? 'grabbing' : 'grab') : 'pointer',
-                                  transition: archiveIsPanning ? 'none' : 'transform 0.2s',
-                                }}
-                                onMouseDown={(e) => {
-                                  e.stopPropagation();
-                                  handleArchiveImgMouseDown(e);
-                                }}
-                                onMouseMove={(e) => {
-                                  e.stopPropagation();
-                                  handleArchiveImgMouseMove(e);
-                                }}
-                                onMouseUp={(e) => {
-                                  e.stopPropagation();
-                                  handleArchiveImgMouseUp();
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.stopPropagation();
-                                  handleArchiveImgMouseUp();
-                                }}
-                                onClick={handleArchiveGifPlaybackToggle}
-                              />
-                            ) : (
-                              <img
-                                src={currentArchiveDataUrl}
-                                alt={currentFile?.name || '압축 파일 이미지'}
-                                className="max-w-full max-h-full object-contain rounded shadow-lg block mx-auto select-none"
-                                style={{
-                                  maxWidth: archiveImgRotation % 180 !== 0 ? '80vh' : '100%',
-                                  maxHeight: archiveImgRotation % 180 !== 0 ? '95vw' : '80vh',
-                                  transform: `scale(${archiveImgScale}) translate(${archiveImgOffset.x / archiveImgScale}px, ${archiveImgOffset.y / archiveImgScale}px) rotate(${archiveImgRotation}deg)`,
-                                  cursor: archiveImgScale > 1 ? (archiveIsPanning ? 'grabbing' : 'grab') : 'default',
-                                  transition: archiveIsPanning ? 'none' : 'transform 0.2s',
-                                }}
-                                draggable={false}
-                                ref={archiveImgRef}
-                                onMouseDown={(e) => {
-                                  e.stopPropagation();
-                                  handleArchiveImgMouseDown(e);
-                                }}
-                                onMouseMove={(e) => {
-                                  e.stopPropagation();
-                                  handleArchiveImgMouseMove(e);
-                                }}
-                                onMouseUp={(e) => {
-                                  e.stopPropagation();
-                                  handleArchiveImgMouseUp();
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.stopPropagation();
-                                  handleArchiveImgMouseUp();
-                                }}
-                              />
-                            )}
-                            {isArchiveGif && showPlaybackOverlay && (
-                              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                                <div className={`flex h-20 w-20 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-all duration-300 ${
-                                  playbackOverlayVisible ? 'scale-100 opacity-100' : 'scale-90 opacity-0'
-                                }`}>
-                                  {playbackOverlayState === 'pause' ? <Pause size={34} fill="currentColor" /> : <Play size={34} fill="currentColor" className="ml-1" />}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="text-discord-muted">이미지를 로드할 수 없습니다.</div>
-                        )
-                      )}
-                    </div>
-                    {/* Navigation Controls */}
-                    <div className="flex-shrink-0 flex items-center justify-center gap-4 p-4">
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              onClick={handlePrevious}
-                              disabled={isFirstArchiveFile}
-                              className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors disabled:text-white/30 disabled:hover:text-white/30"
-                            >
-                              <ChevronLeft size={20} />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">이전 파일 (←)</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                      <div className="text-discord-text text-sm min-w-[200px] text-center">
-                        {currentFile?.name}
-                      </div>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              onClick={handleNext}
-                              disabled={isLastArchiveFile}
-                              className="w-8 h-8 flex items-center justify-center text-white hover:text-gray-300 transition-colors disabled:text-white/30 disabled:hover:text-white/30"
-                            >
-                              <ChevronRight size={20} />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">다음 파일 (→)</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
-                  </div>
-                </div>
+                <ArchiveViewer
+                  currentFile={currentFile}
+                  currentFileExt={currentFileExt}
+                  filteredArchiveFiles={archive.filteredArchiveFiles}
+                  currentArchiveIndex={archive.currentArchiveIndex}
+                  archiveSearchQuery={archive.archiveSearchQuery}
+                  currentArchiveDataUrl={archive.currentArchiveDataUrl}
+                  currentArchiveText={archive.currentArchiveText}
+                  isFirstArchiveFile={isFirstArchiveFile}
+                  isLastArchiveFile={isLastArchiveFile}
+                  isArchiveGif={isArchiveGif}
+                  archiveImgScale={archiveImgScale}
+                  archiveVideoScale={archiveVideoScale}
+                  imgContainerRef={imgContainerRef}
+                  onSearchChange={archive.setArchiveSearchQuery}
+                  onClearSearch={() => archive.setArchiveSearchQuery('')}
+                  onSelectFile={(index) => void archive.selectArchiveFile(index)}
+                  onOpenUnsupportedFile={(file) => void archive.handleOpenUnsupportedArchiveFile(file)}
+                  onPrevious={() => void archive.handlePrevious()}
+                  onNext={() => void archive.handleNext()}
+                  imageViewer={{
+                    src: archive.currentArchiveDataUrl || '',
+                    alt: currentFile?.name || '압축 파일 이미지',
+                    isGif: isArchiveGif,
+                    paused: isArchiveGifPaused,
+                    scale: archiveImgScale,
+                    offset: archiveImgOffset,
+                    rotation: archiveImgRotation,
+                    isPanning: archiveIsPanning,
+                    imageRef: archiveImgRef,
+                    gifCanvasRef: archiveGifCanvasRef,
+                    showPlaybackOverlay: playback.showPlaybackOverlay,
+                    playbackOverlayState: playback.playbackOverlayState,
+                    playbackOverlayVisible: playback.playbackOverlayVisible,
+                    onMouseDown: (event) => {
+                      if (archiveImgScale === 1) return;
+                      setArchiveIsPanning(true);
+                      archivePanStart.current = { x: event.clientX, y: event.clientY, offsetX: archiveImgOffset.x, offsetY: archiveImgOffset.y };
+                    },
+                    onMouseMove: (event) => {
+                      if (!archiveIsPanning || !archivePanStart.current) return;
+                      setArchiveImgOffset(clampToContainer({
+                        x: archivePanStart.current.offsetX + event.clientX - archivePanStart.current.x,
+                        y: archivePanStart.current.offsetY + event.clientY - archivePanStart.current.y,
+                      }, archiveImgScale));
+                    },
+                    onMouseUp: () => setArchiveIsPanning(false),
+                    onGifClick: () => {
+                      if (archiveImgScale > 1) return;
+                      const nextPaused = !isArchiveGifPaused;
+                      setIsArchiveGifPaused(nextPaused);
+                      playback.showPlaybackFeedback(nextPaused ? 'pause' : 'play');
+                    },
+                  }}
+                  videoViewer={{
+                    ...sharedVideoProps,
+                    src: archive.currentArchiveDataUrl || '',
+                    videoRef: archiveVideoRef,
+                    scale: archiveVideoScale,
+                    offset: archiveVideoOffset,
+                    rotation: archiveImgRotation,
+                    isPanning: archiveVideoIsPanning,
+                    subtitleSourceKey: archive.currentArchiveDataUrl,
+                    onRetry: () => {
+                      playback.setVideoError(null);
+                      playback.setCodecInfo(null);
+                      archiveVideoRef.current?.load();
+                    },
+                    onMouseDown: (event) => {
+                      if (archiveVideoScale === 1) return;
+                      setArchiveVideoIsPanning(true);
+                      archiveVideoPanStart.current = { x: event.clientX, y: event.clientY, offsetX: archiveVideoOffset.x, offsetY: archiveVideoOffset.y };
+                    },
+                    onMouseMove: (event) => {
+                      if (!archiveVideoIsPanning || !archiveVideoPanStart.current) return;
+                      setArchiveVideoOffset(clampToContainer({
+                        x: archiveVideoPanStart.current.offsetX + event.clientX - archiveVideoPanStart.current.x,
+                        y: archiveVideoPanStart.current.offsetY + event.clientY - archiveVideoPanStart.current.y,
+                      }, archiveVideoScale));
+                    },
+                    onMouseUp: () => setArchiveVideoIsPanning(false),
+                    onVideoClick: () => playback.handleVideoClick(videoScale, archiveVideoScale),
+                    onError: (event) => {
+                      const video = event.target as HTMLVideoElement;
+                      if (video.error) console.error('동영상 재생 에러:', video.error.message);
+                      playback.setVideoError('동영상을 재생할 수 없습니다.');
+                      playback.setCodecInfo(null);
+                      if (filePath) window.electronAPI.getVideoCodecInfo(filePath).then(playback.setCodecInfo);
+                    },
+                  }}
+                />
               )}
             </>
           )}
