@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from 'vitest';
 import { cleanupRelationReferencesForDatabase } from './relations';
-import { applyDatabaseSchema } from './schema';
+import { applyDatabaseSchema } from './migrations';
 import { openTempSqlite } from '../../test/temp-sqlite';
 
 let cleanup: (() => void) | null = null;

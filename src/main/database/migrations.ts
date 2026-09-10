@@ -1,16 +1,183 @@
-import { db } from './connection';
-import { ensureDefaultProfile } from './scope';
-import { applyDatabaseSchema } from './schema';
-import { log } from '../app/state';
+import fs from 'fs';
+import path from 'path';
+import {
+  addColumnIfMissing,
+  applyConnectionPragmas,
+  ensureSchemaMigrationsTable,
+  getSchemaVersion,
+  indexExists,
+  recordSchemaMigration,
+} from './schema';
 
-export function initializeDatabase() {
-  try {
-    applyDatabaseSchema(db);
-    const defaultProfile = ensureDefaultProfile();
-    db.prepare('UPDATE categories SET profileId = ? WHERE profileId IS NULL OR profileId = ?').run(defaultProfile.id, '');
-    db.prepare('UPDATE records SET profileId = ? WHERE profileId IS NULL OR profileId = ?').run(defaultProfile.id, '');
-  } catch (error) {
-    log('Error initializing database:', error);
-    throw error;
+export const SCHEMA_MIGRATIONS = [
+  {
+    version: 1,
+    name: 'initial_core_tables',
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS profiles (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL COLLATE NOCASE,
+          createdAt TEXT,
+          updatedAt TEXT
+        )
+      `);
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS categories (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL COLLATE NOCASE,
+          parentId TEXT,
+          fields TEXT NOT NULL,
+          order_num INTEGER,
+          createdAt TEXT,
+          updatedAt TEXT,
+          FOREIGN KEY (parentId) REFERENCES categories(id)
+        )
+      `);
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS records (
+          id TEXT PRIMARY KEY,
+          categoryId TEXT NOT NULL,
+          data TEXT NOT NULL,
+          createdAt TEXT,
+          updatedAt TEXT
+        )
+      `);
+    },
+  },
+  {
+    version: 2,
+    name: 'record_media_columns',
+    up(database) {
+      addColumnIfMissing(database, 'records', 'duration', 'INTEGER');
+      addColumnIfMissing(database, 'records', 'thumbnailPath', 'TEXT');
+      addColumnIfMissing(database, 'records', 'thumbnailTimestamp', 'REAL');
+    },
+  },
+  {
+    version: 3,
+    name: 'profile_scoping_and_category_meta',
+    up(database) {
+      addColumnIfMissing(database, 'profiles', 'avatarColor', 'TEXT');
+      addColumnIfMissing(database, 'categories', 'profileId', 'TEXT');
+      addColumnIfMissing(database, 'records', 'profileId', 'TEXT');
+      addColumnIfMissing(database, 'categories', 'itemType', "TEXT DEFAULT 'category'");
+      addColumnIfMissing(database, 'categories', 'memo', 'TEXT');
+      database.exec("UPDATE categories SET itemType = 'category' WHERE itemType IS NULL OR itemType = ''");
+    },
+  },
+  {
+    version: 4,
+    name: 'record_view_counts',
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS record_view_counts (
+          profileId TEXT NOT NULL,
+          recordId TEXT NOT NULL,
+          categoryId TEXT NOT NULL,
+          viewCount INTEGER NOT NULL DEFAULT 0,
+          updatedAt TEXT NOT NULL,
+          PRIMARY KEY (profileId, recordId)
+        )
+      `);
+      if (!indexExists(database, 'idx_record_view_counts_profile_category')) {
+        database.exec(
+          'CREATE INDEX IF NOT EXISTS idx_record_view_counts_profile_category ON record_view_counts(profileId, categoryId)'
+        );
+      }
+    },
+  },
+];
+
+export const CURRENT_SCHEMA_VERSION = SCHEMA_MIGRATIONS[SCHEMA_MIGRATIONS.length - 1].version;
+
+assertMigrationList(SCHEMA_MIGRATIONS);
+
+function assertMigrationList(migrations) {
+  const seen = new Set();
+  let previousVersion = 0;
+
+  migrations.forEach((migration) => {
+    if (!Number.isInteger(migration.version) || migration.version <= previousVersion) {
+      throw new Error(`Database migrations must use increasing integer versions: ${migration.version}`);
+    }
+    if (!migration.name || typeof migration.up !== 'function') {
+      throw new Error(`Database migration ${migration.version} is missing a name or up() implementation`);
+    }
+    if (seen.has(migration.name)) {
+      throw new Error(`Duplicate database migration name: ${migration.name}`);
+    }
+    seen.add(migration.name);
+    previousVersion = migration.version;
+  });
+}
+
+export function createPreMigrationBackup(database, backupDir) {
+  const sourcePath = database.name;
+  if (!sourcePath || sourcePath === ':memory:') {
+    throw new Error('Refusing to migrate a database that is not a local file');
   }
+
+  fs.mkdirSync(backupDir, { recursive: true });
+  database.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const currentVersion = getSchemaVersion(database);
+  const backupPath = path.join(backupDir, `pre-migration-v${currentVersion}-${timestamp}.db`);
+  fs.copyFileSync(sourcePath, backupPath);
+  return backupPath;
+}
+
+export function migrateDatabase(database, options) {
+  const {
+    migrations = SCHEMA_MIGRATIONS,
+    skipBackup = false,
+    backupDir = null,
+  } = options || {};
+
+  applyConnectionPragmas(database);
+  ensureSchemaMigrationsTable(database);
+  assertMigrationList(migrations);
+
+  const currentVersion = getSchemaVersion(database);
+  const pending = migrations
+    .filter((migration) => migration.version > currentVersion)
+    .sort((left, right) => left.version - right.version);
+
+  if (pending.length === 0) {
+    return {
+      appliedVersions: [],
+      version: currentVersion,
+      backupPath: null,
+    };
+  }
+
+  let backupPath = null;
+  if (!skipBackup) {
+    if (!backupDir) {
+      throw new Error('backupDir is required before applying database migrations');
+    }
+    backupPath = createPreMigrationBackup(database, backupDir);
+  }
+
+  const applyPending = database.transaction((pendingMigrations) => {
+    pendingMigrations.forEach((migration) => {
+      database.transaction(() => {
+        migration.up(database);
+        recordSchemaMigration(database, migration.version, migration.name);
+      })();
+    });
+  });
+
+  applyPending(pending);
+
+  return {
+    appliedVersions: pending.map((migration) => migration.version),
+    version: getSchemaVersion(database),
+    backupPath,
+  };
+}
+
+export function applyDatabaseSchema(database, options) {
+  return migrateDatabase(database, { skipBackup: true, ...(options || {}) });
 }

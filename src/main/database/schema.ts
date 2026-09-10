@@ -1,78 +1,60 @@
-export function applyDatabaseSchema(database) {
+export const SCHEMA_MIGRATIONS_TABLE = 'schema_migrations';
+
+export function applyConnectionPragmas(database) {
+  database.exec('PRAGMA encoding = "UTF-8"');
+  database.exec('PRAGMA foreign_keys = ON');
+  database.exec('PRAGMA journal_mode = WAL');
+}
+
+export function tableExists(database, tableName) {
+  const row = database.prepare(
+    "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1"
+  ).get(tableName);
+  return Boolean(row);
+}
+
+export function columnExists(database, tableName, columnName) {
+  return getTableColumns(database, tableName).includes(columnName);
+}
+
+export function indexExists(database, indexName) {
+  const row = database.prepare(
+    "SELECT 1 AS present FROM sqlite_master WHERE type = 'index' AND name = ? LIMIT 1"
+  ).get(indexName);
+  return Boolean(row);
+}
+
+export function getTableColumns(database, tableName) {
+  if (!tableExists(database, tableName)) return [];
+  return database.prepare(`PRAGMA table_info(${tableName})`).all().map((column) => column.name);
+}
+
+export function addColumnIfMissing(database, tableName, columnName, definition) {
+  if (columnExists(database, tableName, columnName)) return false;
+  database.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+  return true;
+}
+
+export function ensureSchemaMigrationsTable(database) {
   database.exec(`
-    CREATE TABLE IF NOT EXISTS profiles (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL COLLATE NOCASE,
-      avatarColor TEXT,
-      createdAt TEXT,
-      updatedAt TEXT
+    CREATE TABLE IF NOT EXISTS ${SCHEMA_MIGRATIONS_TABLE} (
+      version INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      appliedAt TEXT NOT NULL
     )
   `);
+}
 
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS categories (
-      id TEXT PRIMARY KEY,
-      profileId TEXT,
-      name TEXT NOT NULL COLLATE NOCASE,
-      parentId TEXT,
-      fields TEXT NOT NULL,
-      order_num INTEGER,
-      itemType TEXT DEFAULT 'category',
-      memo TEXT,
-      createdAt TEXT,
-      updatedAt TEXT,
-      FOREIGN KEY (parentId) REFERENCES categories(id)
-    )
-  `);
+export function getSchemaVersion(database) {
+  if (!tableExists(database, SCHEMA_MIGRATIONS_TABLE)) return 0;
+  const row = database.prepare(
+    `SELECT MAX(version) AS version FROM ${SCHEMA_MIGRATIONS_TABLE}`
+  ).get();
+  return Number(row?.version) || 0;
+}
 
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS records (
-      id TEXT PRIMARY KEY,
-      profileId TEXT,
-      categoryId TEXT NOT NULL,
-      data TEXT NOT NULL,
-      createdAt TEXT,
-      updatedAt TEXT,
-      duration INTEGER,
-      thumbnailTimestamp REAL
-    )
-  `);
-
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS record_view_counts (
-      profileId TEXT NOT NULL,
-      recordId TEXT NOT NULL,
-      categoryId TEXT NOT NULL,
-      viewCount INTEGER NOT NULL DEFAULT 0,
-      updatedAt TEXT NOT NULL,
-      PRIMARY KEY (profileId, recordId)
-    )
-  `);
-  database.exec('CREATE INDEX IF NOT EXISTS idx_record_view_counts_profile_category ON record_view_counts(profileId, categoryId)');
-
-  const categoryColumns = database.prepare('PRAGMA table_info(categories)').all();
-  if (!categoryColumns.some((col) => col.name === 'profileId')) {
-    database.exec('ALTER TABLE categories ADD COLUMN profileId TEXT');
-  }
-  if (!categoryColumns.some((col) => col.name === 'itemType')) {
-    database.exec("ALTER TABLE categories ADD COLUMN itemType TEXT DEFAULT 'category'");
-    database.exec("UPDATE categories SET itemType = 'category' WHERE itemType IS NULL OR itemType = ''");
-  }
-  if (!categoryColumns.some((col) => col.name === 'memo')) {
-    database.exec('ALTER TABLE categories ADD COLUMN memo TEXT');
-  }
-
-  const columns = database.prepare('PRAGMA table_info(records)').all();
-  if (!columns.some((col) => col.name === 'duration')) {
-    database.exec('ALTER TABLE records ADD COLUMN duration INTEGER');
-  }
-  if (!columns.some((col) => col.name === 'thumbnailPath')) {
-    database.exec('ALTER TABLE records ADD COLUMN thumbnailPath TEXT');
-  }
-  if (!columns.some((col) => col.name === 'thumbnailTimestamp')) {
-    database.exec('ALTER TABLE records ADD COLUMN thumbnailTimestamp REAL');
-  }
-  if (!columns.some((col) => col.name === 'profileId')) {
-    database.exec('ALTER TABLE records ADD COLUMN profileId TEXT');
-  }
+export function recordSchemaMigration(database, version, name) {
+  database.prepare(
+    `INSERT INTO ${SCHEMA_MIGRATIONS_TABLE} (version, name, appliedAt) VALUES (?, ?, ?)`
+  ).run(version, name, new Date().toISOString());
 }

@@ -1,7 +1,7 @@
 import { app, BrowserWindow } from 'electron';
 import { db, migratePersistedOpenAiSecrets } from './store';
 import { createWindow, registerProtocol } from './app/window';
-import { initializeDatabase } from './database/migrations';
+import { initializeDatabase } from './database';
 import { startAutomaticBackup, stopAutomaticBackup } from './services/backup';
 import { registerLocalVideoProtocol, startVideoHttpServer } from './services/videoServer';
 import { registerAllIpcHandlers } from './ipc';
