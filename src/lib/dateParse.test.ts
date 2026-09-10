@@ -1,0 +1,40 @@
+import { expect, test } from 'vitest';
+import { parseFlexibleDateValue } from './dateParse';
+
+test('empty or whitespace input becomes an empty string', () => {
+  expect(parseFlexibleDateValue('')).toBe('');
+  expect(parseFlexibleDateValue('   ')).toBe('');
+});
+
+test('parses common calendar date formats', () => {
+  expect(parseFlexibleDateValue('2024-03-09')).toBe('2024-03-09');
+  expect(parseFlexibleDateValue('2024.03.09')).toBe('2024-03-09');
+  expect(parseFlexibleDateValue('2024/03/09')).toBe('2024-03-09');
+  expect(parseFlexibleDateValue('03/09/2024')).toBe('2024-03-09');
+  expect(parseFlexibleDateValue('24-03-09')).toBe('2024-03-09');
+});
+
+test('parses year-month values without inventing a day', () => {
+  expect(parseFlexibleDateValue('2024-03')).toBe('2024-03');
+  expect(parseFlexibleDateValue('2024.3')).toBe('2024-03');
+  expect(parseFlexibleDateValue('2024년 3월')).toBe('2024-03');
+});
+
+test('parses Korean and compact numeric dates', () => {
+  expect(parseFlexibleDateValue('2024년 3월 9일')).toBe('2024-03-09');
+  expect(parseFlexibleDateValue('24년 3월 9일')).toBe('2024-03-09');
+  expect(parseFlexibleDateValue('20240309')).toBe('2024-03-09');
+  expect(parseFlexibleDateValue('240309')).toBe('2024-03-09');
+});
+
+test('rejects invalid dates instead of coercing them', () => {
+  expect(parseFlexibleDateValue('not-a-date')).toBeNull();
+  expect(parseFlexibleDateValue('2024-13')).toBeNull();
+  expect(parseFlexibleDateValue('1899-01')).toBeNull();
+  expect(parseFlexibleDateValue('abcdefgh')).toBeNull();
+});
+
+test('uses custom date-fns formats when provided', () => {
+  expect(parseFlexibleDateValue('09-03-2024', ['dd-MM-yyyy'])).toBe('2024-03-09');
+  expect(parseFlexibleDateValue('2024-03-09', ['dd/MM/yyyy'])).toBeNull();
+});

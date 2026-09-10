@@ -15,6 +15,7 @@ import {
 import crypto from 'crypto';
 import { getThumbnailHash } from '../lib/files';
 import { getAutoThumbnailTimestamp } from '../lib/media-time';
+import { cleanupRelationReferencesForDatabase } from '../database/relations';
 import { electronDistDir, getFfmpegToolPaths, getUnpackedFfprobePath } from '../ffmpeg-paths';
 import {
   ARCHIVE_IMAGE_RE,
@@ -548,70 +549,6 @@ export const cleanupThumbnailsForCategory = (categoryId) => {
 };
 
 // 관계형 데이터에서 참조 정리
-export const cleanupRelationReferences = (categoryId) => {
-  try {
-    const targetCategory = db.prepare('SELECT profileId FROM categories WHERE id = ?').get(categoryId);
-    if (!targetCategory) return 0;
-
-    const relatedCategories = db
-      .prepare('SELECT id, fields FROM categories WHERE profileId = ?')
-      .all(targetCategory.profileId)
-      .map((category) => ({
-        id: category.id,
-        relationFields: JSON.parse(category.fields).filter(
-          (field) => field.type === 'relation' && field.relationCategoryId === categoryId
-        )
-      }))
-      .filter((category) => category.relationFields.length > 0);
-
-    if (relatedCategories.length === 0) return 0;
-
-    const relatedCategoryIds = relatedCategories.map((category) => category.id);
-    const records = db.prepare(`
-      SELECT id, categoryId, data
-      FROM records
-      WHERE profileId = ? AND categoryId IN (${getSqlPlaceholders(relatedCategoryIds.length)})
-    `).all(targetCategory.profileId, ...relatedCategoryIds);
-    const recordsByCategoryId = new Map();
-    records.forEach((record) => {
-      const categoryRecords = recordsByCategoryId.get(record.categoryId) || [];
-      categoryRecords.push(record);
-      recordsByCategoryId.set(record.categoryId, categoryRecords);
-    });
-
-    const updateRecord = db.prepare('UPDATE records SET data = ? WHERE id = ?');
-    let updatedCount = 0;
-
-    relatedCategories.forEach((category) => {
-      (recordsByCategoryId.get(category.id) || []).forEach((record) => {
-        const data = JSON.parse(record.data);
-        let hasChanges = false;
-
-        category.relationFields.forEach(field => {
-          const value = data[field.id];
-
-          if (field.multiple && Array.isArray(value)) {
-            const filteredValue = value.filter(id => id !== categoryId);
-            if (filteredValue.length !== value.length) {
-              data[field.id] = filteredValue;
-              hasChanges = true;
-            }
-          } else if (value === categoryId) {
-            data[field.id] = null;
-            hasChanges = true;
-          }
-        });
-
-        if (hasChanges) {
-          updateRecord.run(JSON.stringify(data), record.id);
-          updatedCount++;
-        }
-      });
-    });
-
-    return updatedCount;
-  } catch (error) {
-    log('관계형 참조 정리 중 오류:', error);
-    return 0;
-  }
-};
+export const cleanupRelationReferences = (categoryId) => (
+  cleanupRelationReferencesForDatabase(db, categoryId)
+);

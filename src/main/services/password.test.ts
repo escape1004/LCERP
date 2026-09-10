@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import {
   createPasswordHash,
   hashLegacyPassword,
@@ -24,4 +24,14 @@ test('legacy SHA-256 hashes still verify and request an upgrade', async () => {
   assert.equal(result.valid, true);
   assert.equal(result.needsUpgrade, true);
   assert.equal((await verifyStoredPassword('nope', storedHash)).valid, false);
+});
+
+test('corrupt or incomplete stored hashes do not verify', async () => {
+  const password = 'secret';
+
+  assert.deepEqual(await verifyStoredPassword(password, ''), { valid: false, needsUpgrade: false });
+  assert.deepEqual(await verifyStoredPassword(password, null), { valid: false, needsUpgrade: false });
+  assert.deepEqual(await verifyStoredPassword(password, 'scrypt$v1$not-hex$also-not-hex'), { valid: false, needsUpgrade: false });
+  assert.deepEqual(await verifyStoredPassword(password, 'scrypt$v1$aabbcc'), { valid: false, needsUpgrade: false });
+  assert.deepEqual(await verifyStoredPassword(password, 'totally-not-a-hash'), { valid: false, needsUpgrade: false });
 });

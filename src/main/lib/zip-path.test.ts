@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import { isSameZipEntry, normalizeZipPath } from './zip-path.ts';
 
 test('normalizeZipPath converts Windows separators', () => {

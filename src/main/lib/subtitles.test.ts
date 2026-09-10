@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import { decodeSubtitleBuffer } from './subtitles.ts';
 
 test('decodeSubtitleBuffer reads UTF-8 subtitles', () => {

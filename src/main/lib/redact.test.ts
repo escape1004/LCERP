@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import { redactSensitive } from './redact.ts';
 
 test('redactSensitive masks API keys, passwords, and authorization headers', () => {

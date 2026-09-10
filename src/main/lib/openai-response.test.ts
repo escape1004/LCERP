@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import { extractResponseText } from './openai-response.ts';
 
 test('extractResponseText prefers output_text', () => {

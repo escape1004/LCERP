@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import { getSqlPlaceholders } from './sql.ts';
 
 test('getSqlPlaceholders builds a comma-separated list', () => {
