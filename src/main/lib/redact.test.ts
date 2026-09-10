@@ -5,6 +5,7 @@ import { redactSensitive } from './redact.ts';
 test('redactSensitive masks API keys, passwords, and authorization headers', () => {
   const redacted = redactSensitive({
     openAiApiKey: 'sk-live-secret',
+    openAiApiKeyEncrypted: 'base64-ciphertext',
     apiKey: 'also-secret',
     password: 'hunter2',
     passwordHash: 'abc123',
@@ -13,6 +14,7 @@ test('redactSensitive masks API keys, passwords, and authorization headers', () 
     backupDir: 'C:\\backups'
   });
 
+  assert.equal(redacted.openAiApiKeyEncrypted, '[redacted]');
   assert.equal(redacted.openAiApiKey, '[redacted]');
   assert.equal(redacted.apiKey, '[redacted]');
   assert.equal(redacted.password, '[redacted]');

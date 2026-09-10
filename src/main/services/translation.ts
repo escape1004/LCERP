@@ -1,6 +1,6 @@
 import { extractResponseText } from '../lib/openai-response';
 import { normalizeTranslationModel, normalizeTranslationTargetLanguage } from '../lib/config-normalize';
-import { appConfig } from '../app/state';
+import { getOpenAiApiKey } from './openai-secret';
 
 export { extractResponseText };
 
@@ -20,8 +20,17 @@ export function getTranslationLanguageLabel(language) {
   }
 }
 
+function sanitizeTranslationError(error, apiKey) {
+  const fallback = '자동 번역에 실패했습니다.';
+  const message = String(error?.message || fallback);
+  if (apiKey && message.includes(apiKey)) {
+    return fallback;
+  }
+  return message;
+}
+
 export async function translateTextWithOpenAi(text, targetLanguage, model) {
-  const apiKey = String(appConfig.openAiApiKey || '').trim();
+  const apiKey = getOpenAiApiKey();
   if (!apiKey) {
     throw new Error('OpenAI API 키가 설정되지 않았습니다.');
   }
@@ -52,7 +61,10 @@ export async function translateTextWithOpenAi(text, targetLanguage, model) {
 
     const responseBody = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const apiError = responseBody?.error?.message || `OpenAI API 요청에 실패했습니다. (${response.status})`;
+      const apiError = sanitizeTranslationError(
+        { message: responseBody?.error?.message || `OpenAI API 요청에 실패했습니다. (${response.status})` },
+        apiKey
+      );
       const error: any = new Error(apiError);
       error.status = response.status;
       error.code = responseBody?.error?.code;
@@ -70,7 +82,12 @@ export async function translateTextWithOpenAi(text, targetLanguage, model) {
     if (error?.name === 'AbortError') {
       throw new Error('번역 요청 시간이 초과되었습니다.');
     }
-    throw error;
+
+    const wrapped: any = new Error(sanitizeTranslationError(error, apiKey));
+    wrapped.status = error?.status;
+    wrapped.code = error?.code;
+    wrapped.type = error?.type;
+    throw wrapped;
   } finally {
     clearTimeout(timeoutId);
   }

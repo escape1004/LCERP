@@ -1,5 +1,5 @@
 import { app, BrowserWindow } from 'electron';
-import { db } from './store';
+import { db, migratePersistedOpenAiSecrets } from './store';
 import { createWindow, registerProtocol } from './app/window';
 import { initializeDatabase } from './database/migrations';
 import { startAutomaticBackup, stopAutomaticBackup } from './services/backup';
@@ -9,6 +9,7 @@ import { registerAllIpcHandlers } from './ipc';
 registerAllIpcHandlers();
 
 app.whenReady().then(() => {
+  migratePersistedOpenAiSecrets();
   registerProtocol();
   initializeDatabase();
   startAutomaticBackup({ runImmediately: true });

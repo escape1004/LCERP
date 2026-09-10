@@ -26,6 +26,11 @@ import {
   normalizeTranslationTargetLanguage,
   normalizeZoomPercent
 } from '../lib/config-normalize';
+import {
+  ingestSavedOpenAiSecrets,
+  migrateOpenAiSecrets,
+  omitOpenAiSecretsFromConfig
+} from '../services/openai-secret';
 
 export { electronDistDir };
 export {
@@ -109,7 +114,7 @@ export const defaultConfig = {
   passwordLockDurationMinutes: 1,
   passwordFailedAttempts: 0,
   passwordLockUntil: null,
-  openAiApiKey: '',
+  openAiApiKeyEncrypted: '',
   translationTargetLanguage: 'ko',
   translationModel: DEFAULT_TRANSLATION_MODEL,
   videoSeekSeconds: 5,
@@ -144,18 +149,44 @@ export function loadAppConfig() {
   try {
     if (fs.existsSync(configPath)) {
       const savedConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      appConfig = { ...defaultConfig, ...savedConfig };
+      if (!savedConfig || typeof savedConfig !== 'object' || Array.isArray(savedConfig)) {
+        appConfig = { ...defaultConfig };
+        ingestSavedOpenAiSecrets({});
+        return;
+      }
+
+      const {
+        openAiApiKey: _ignoredPlaintextKey,
+        openAiApiKeyEncrypted: _ignoredEncryptedKey,
+        ...rest
+      } = savedConfig;
+      appConfig = { ...defaultConfig, ...rest, openAiApiKeyEncrypted: '' };
+      ingestSavedOpenAiSecrets(savedConfig);
     }
   } catch (error) {
     console.error('Failed to load app config:', error);
+    appConfig = { ...defaultConfig };
+    ingestSavedOpenAiSecrets({});
   }
 }
 
 export function saveAppConfig() {
   try {
-    fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2), 'utf8');
+    const persisted = omitOpenAiSecretsFromConfig(appConfig);
+    fs.writeFileSync(configPath, JSON.stringify(persisted, null, 2), 'utf8');
   } catch (error) {
     console.error('Failed to save app config:', error);
+  }
+}
+
+export function migratePersistedOpenAiSecrets() {
+  try {
+    const result = migrateOpenAiSecrets();
+    if (result.shouldSave) {
+      saveAppConfig();
+    }
+  } catch (error) {
+    console.error('Failed to migrate OpenAI API key storage:', error);
   }
 }
 

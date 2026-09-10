@@ -186,6 +186,7 @@ import {
   readImportRowsFromFile,
   importCategoryRecordsFromRows
 } from '../import-export';
+import { hasOpenAiApiKey } from '../services/openai-secret';
 
 export function registerSettingsHandlers() {
 
@@ -211,7 +212,7 @@ export function registerSettingsHandlers() {
       thumbnailPreviewScale: getConfiguredThumbnailPreviewScale(),
       defaultGalleryZoom: getConfiguredDefaultGalleryZoom(),
       dateParseFormats: normalizeDateParseFormats(appConfig.dateParseFormats),
-      hasOpenAiApiKey: Boolean(String(appConfig.openAiApiKey || '').trim()),
+      hasOpenAiApiKey: hasOpenAiApiKey(),
       translationTargetLanguage: getConfiguredTranslationTargetLanguage(),
       translationModel: getConfiguredTranslationModel()
     };

@@ -186,6 +186,11 @@ import {
   readImportRowsFromFile,
   importCategoryRecordsFromRows
 } from '../import-export';
+import {
+  clearStoredOpenAiApiKey,
+  hasOpenAiApiKey,
+  setStoredOpenAiApiKey
+} from '../services/openai-secret';
 
 export function registerTranslationHandlers() {
 
@@ -211,20 +216,27 @@ export function registerTranslationHandlers() {
   });
 
   ipcMain.handle('setOpenAiApiKey', (_event, apiKey) => {
-    const normalizedApiKey = String(apiKey || '').trim();
-    if (!normalizedApiKey) {
-      return { success: false, error: 'OpenAI API 키를 입력해주세요.' };
-    }
+    try {
+      const result = setStoredOpenAiApiKey(apiKey);
+      if (!result.success) {
+        return { success: false, error: result.error };
+      }
 
-    appConfig.openAiApiKey = normalizedApiKey;
-    saveAppConfig();
-    return { success: true, hasOpenAiApiKey: true };
+      saveAppConfig();
+      return { success: true, hasOpenAiApiKey: true };
+    } catch {
+      return { success: false, error: 'API 키를 저장하지 못했습니다.' };
+    }
   });
 
   ipcMain.handle('clearOpenAiApiKey', () => {
-    appConfig.openAiApiKey = '';
-    saveAppConfig();
-    return { success: true, hasOpenAiApiKey: false };
+    try {
+      const result = clearStoredOpenAiApiKey();
+      saveAppConfig();
+      return { success: true, hasOpenAiApiKey: result.hasOpenAiApiKey };
+    } catch {
+      return { success: false, error: 'API 키를 삭제하지 못했습니다.', hasOpenAiApiKey: hasOpenAiApiKey() };
+    }
   });
 
   ipcMain.handle('translateText', async (_event, payload = {}) => {
