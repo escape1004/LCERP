@@ -1,16 +1,12 @@
 import { app, BrowserWindow } from 'electron';
 import { db } from './store';
-import { registerUpdateIpc } from './updater';
-import { createWindow, registerProtocol } from './window';
-import { initializeDatabase } from './database';
-import { startAutomaticBackup, stopAutomaticBackup } from './backup';
-import { registerLocalVideoProtocol, startVideoHttpServer } from './media/video-server';
-import { registerBookmarkHandlers } from './ipc/bookmarks';
-import { registerIpcHandlers } from './ipc/register';
+import { createWindow, registerProtocol } from './app/window';
+import { initializeDatabase } from './database/migrations';
+import { startAutomaticBackup, stopAutomaticBackup } from './services/backup';
+import { registerLocalVideoProtocol, startVideoHttpServer } from './services/videoServer';
+import { registerAllIpcHandlers } from './ipc';
 
-registerUpdateIpc();
-registerBookmarkHandlers();
-registerIpcHandlers();
+registerAllIpcHandlers();
 
 app.whenReady().then(() => {
   registerProtocol();

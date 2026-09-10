@@ -19,7 +19,12 @@ function listMainSourceFiles() {
       const entryPath = path.join(current, entry.name);
       if (entry.isDirectory()) {
         pending.push(entryPath);
-      } else if (entry.name.endsWith('.ts') && entry.name !== 'preload.ts' && !entry.name.endsWith('.d.ts')) {
+      } else if (
+        entry.name.endsWith('.ts')
+        && entry.name !== 'preload.ts'
+        && !entry.name.endsWith('.d.ts')
+        && !entry.name.endsWith('.test.ts')
+      ) {
         files.push(entryPath);
       }
     }
@@ -184,7 +189,7 @@ function buildActualContract() {
     preload: {
       source: 'src/main/preload.ts',
       output: 'dist-electron-app/preload.js',
-      browserWindowPath: "path.join(__dirname, 'preload.js')",
+      browserWindowPath: "path.join(electronDistDir, 'preload.js')",
       api: preloadApi,
     },
     ipcAudit: {

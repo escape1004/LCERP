@@ -14,6 +14,7 @@ import {
 } from '../store';
 import crypto from 'crypto';
 import { getThumbnailHash } from '../lib/files';
+import { getAutoThumbnailTimestamp } from '../lib/media-time';
 import { electronDistDir, getFfmpegToolPaths, getUnpackedFfprobePath } from '../ffmpeg-paths';
 import {
   ARCHIVE_IMAGE_RE,
@@ -23,6 +24,8 @@ import {
   normalizeZipPath,
 } from './archives';
 import { extractEmbeddedVideoCover } from './video-cover';
+
+export { getAutoThumbnailTimestamp };
 
 export function generateUUID() {
   return crypto.randomUUID();
@@ -327,17 +330,6 @@ export const deleteThumbnail = (filePath, context: any = {}) => {
     return false;
   }
 };
-
-// 썸네일 생성 함수
-export function getAutoThumbnailTimestamp(duration) {
-  if (!Number.isFinite(duration)) {
-    return 1;
-  }
-  if (duration <= 1) {
-    return 0;
-  }
-  return duration / 2;
-}
 
 export function getThumbnailTimestampForFile(filePath, duration) {
   if (typeof filePath !== 'string' || !/\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(filePath)) {

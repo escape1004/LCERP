@@ -3,14 +3,9 @@ import path from 'path';
 import crypto from 'crypto';
 import unzipper from 'unzipper';
 import { appDataDir, log } from '../store';
+import { isSameZipEntry, normalizeZipPath } from '../lib/zip-path';
 
-export function normalizeZipPath(entryPath) {
-  return String(entryPath || '').replace(/\\/g, '/');
-}
-
-export function isSameZipEntry(entryPath, requestedPath) {
-  return normalizeZipPath(entryPath) === normalizeZipPath(requestedPath);
-}
+export { isSameZipEntry, normalizeZipPath };
 
 export function getArchiveVideoCachePath(archivePath, fileName) {
   const hash = crypto.createHash('sha1')

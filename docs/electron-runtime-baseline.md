@@ -14,7 +14,7 @@ This document fixes the runtime and packaging contract that must be preserved wh
 | BrowserWindow preload | `preload.js`, next to the compiled main | Same relative path inside `app.asar` |
 | Installer output | Not applicable | `release/` |
 
-`src/main/main.ts` is the bootstrap entry. Database, backup, media, updater, and IPC live in domain modules under `src/main/`. The incomplete historical stubs in `src/main/ipc/*` were compared with the v1.1.19 implementation and deleted; `src/main/ipc/register.ts` and `src/main/ipc/bookmarks.ts` are the live handlers. `electron/main.js` has been removed after contract verification. Unused leftovers `electron/preload.ts`, root `preload.ts`, `src/preload/index.ts`, and `electron/preload.js` are still not built, referenced, or packaged.
+`src/main/main.ts` is the bootstrap entry. Shared paths and config live in `src/main/app/state.ts`, database connection/migrations in `src/main/database/`, and IPC handlers in feature modules under `src/main/ipc/` (registered once from `src/main/ipc/index.ts`). Updater, backup, password, translation, and the video HTTP server live under `src/main/services/`. `electron/main.js` has been removed after contract verification. Unused leftovers `electron/preload.ts`, root `preload.ts`, `src/preload/index.ts`, and `electron/preload.js` are still not built, referenced, or packaged.
 
 The main process compiles with TypeScript checking enabled (no `@ts-nocheck`) and ESM `import` statements. ESLint exceptions for pre-existing expressions apply to `src/main/**/*.ts` except preload.
 
@@ -35,7 +35,7 @@ These paths are behavior compatibility requirements. The build cleanup must not 
 
 ## IPC audit
 
-The checked-in JSON baseline fingerprints the complete sorted contract and records its size. It currently contains 100 unique `ipcMain.handle` channels, one `ipcMain.on` channel, and 101 preload APIs. Duplicate `ipcMain.handle` registrations are a verification failure. The verifier walks every `src/main/**/*.ts` file except preload.
+The checked-in JSON baseline fingerprints the complete sorted contract and records its size. It currently contains 100 unique `ipcMain.handle` channels, one `ipcMain.on` channel, and 101 preload APIs. Duplicate `ipcMain.handle` registrations are a verification failure. The verifier walks every `src/main/**/*.ts` file except preload and `*.test.ts`.
 
 Safe corrections made while establishing this baseline:
 
