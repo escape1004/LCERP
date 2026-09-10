@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { NewCategory, CategoryUpdate, NewRecord, ElectronAPI } from '../types.d';
 
+const allowedSendChannels = new Set(['window-control']);
+
 const setupMouseBackButtonPrevention = () => {
   const preventMouseBackButton = (event: MouseEvent) => {
     if (event.button !== 3) return;
@@ -55,7 +57,12 @@ const api: ElectronAPI = {
   openFileDialog: (defaultPath?: string) => ipcRenderer.invoke('openFileDialog', defaultPath),
   openDirectoryDialog: () => ipcRenderer.invoke('openDirectoryDialog'),
   openImageFileDialog: (defaultPath?: string) => ipcRenderer.invoke('openImageFileDialog', defaultPath),
-  send: (channel: string, ...args: any[]) => ipcRenderer.send(channel, ...args),
+  send: (channel: string, ...args: any[]) => {
+    if (!allowedSendChannels.has(channel)) {
+      throw new Error(`Unsupported renderer IPC channel: ${channel}`);
+    }
+    ipcRenderer.send(channel, ...args);
+  },
   openFile: (filePath: string) => ipcRenderer.invoke('openFile', filePath),
   checkFileExists: (filePath: string) => ipcRenderer.invoke('checkFileExists', filePath),
   getDashboardWarnings: (previewLimit?: number) => ipcRenderer.invoke('dashboard:getWarnings', previewLimit),
@@ -123,6 +130,7 @@ const api: ElectronAPI = {
   getBookmarks: (categoryId, recordId) => ipcRenderer.invoke('getBookmarks', categoryId, recordId),
   addBookmark: (categoryId, recordId, time) => ipcRenderer.invoke('addBookmark', categoryId, recordId, time),
   removeBookmark: (categoryId, recordId, time) => ipcRenderer.invoke('removeBookmark', categoryId, recordId, time),
+  removeAllBookmarks: (categoryId, recordId) => ipcRenderer.invoke('removeAllBookmarks', categoryId, recordId),
   getThumbnailDataUrlHybrid: (record, filePath) => ipcRenderer.invoke('getThumbnailDataUrlHybrid', record, filePath),
   migrateThumbnailPaths: () => ipcRenderer.invoke('migrateThumbnailPaths'),
   checkThumbnailSync: () => ipcRenderer.invoke('checkThumbnailSync'),

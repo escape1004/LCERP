@@ -1,0 +1,33 @@
+{
+  "main": {
+    "entry": "electron/main.js",
+    "handlerCount": 100,
+    "handlersSha256": "faa9dad5bd1438ddfa1db129a2ac7e923793df84a3dfccaf3fd9d22021766b43",
+    "onChannels": [
+      "window-control"
+    ],
+    "duplicateHandlers": []
+  },
+  "preload": {
+    "source": "src/main/preload.ts",
+    "output": "dist-electron-app/preload.js",
+    "browserWindowPath": "path.join(__dirname, '..', 'dist-electron-app', 'preload.js')",
+    "apiCount": 101,
+    "apiAndChannelsSha256": "5c71a60680d4edcdb9febfffa91b327f9478ac4bd791062ccc36c237009ba23d"
+  },
+  "ipcAudit": {
+    "preloadWithoutMainHandler": [
+      "getVideoStream"
+    ],
+    "mainHandlerWithoutPreload": [
+      "openDbFile",
+      "openExternal",
+      "updateRecord"
+    ]
+  },
+  "rendererApiUsageCount": 87,
+  "rendererApiUsageSha256": "01a9f75b9d55f25edd23135b2d0cd471db773e5188fe997c373deff5a434f1e9",
+  "rendererSendChannels": [
+    "window-control"
+  ]
+}

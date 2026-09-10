@@ -13,6 +13,22 @@ const AdmZip = require('adm-zip');
 const { format, isValid, parse } = require('date-fns');
 const { autoUpdater } = require('electron-updater');
 
+const FILE_EXTENSIONS = {
+  image: new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp']),
+  video: new Set(['.mp4', '.avi', '.mkv', '.mov']),
+  archive: new Set(['.zip', '.7z'])
+};
+
+function getFileTypeFromPath(filePath) {
+  if (!filePath || typeof filePath !== 'string') return 'other';
+
+  const extension = path.extname(filePath).toLowerCase();
+  if (FILE_EXTENSIONS.image.has(extension)) return 'image';
+  if (FILE_EXTENSIONS.video.has(extension)) return 'video';
+  if (FILE_EXTENSIONS.archive.has(extension)) return 'archive';
+  return 'other';
+}
+
 // 콘솔 출력 인코딩을 UTF-8로 고정 (Windows 환경 한글 깨짐 방지)
 if (process.stdout && typeof process.stdout.setDefaultEncoding === 'function') {
   process.stdout.setDefaultEncoding('utf8');
@@ -869,7 +885,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, '..', 'dist-electron-app', 'preload.js'),
       sandbox: false
     },
     icon: iconPath
@@ -4054,6 +4070,17 @@ ipcMain.handle('setZoomPercent', (_event, percent) => {
   return { success: true };
 });
 
+ipcMain.handle('setThumbnailPreviewScale', (_event, scale) => {
+  const normalized = normalizeThumbnailPreviewScale(scale);
+  if (normalized === null) {
+    return { success: false, error: 'Thumbnail preview scale must be a number.' };
+  }
+
+  appConfig.thumbnailPreviewScale = normalized;
+  saveAppConfig();
+  return { success: true, thumbnailPreviewScale: normalized };
+});
+
 ipcMain.handle('setVideoAutoPlay', (_event, enabled) => {
   appConfig.videoAutoPlay = enabled !== false;
   saveAppConfig();
@@ -4705,13 +4732,7 @@ ipcMain.handle('getAppRoot', () => {
 });
 
 ipcMain.handle('db:getFileType', async (_, filePath) => {
-  try {
-    const { getFileType } = require('../dist/lib/fileHandler');
-    return getFileType(filePath);
-  } catch (e) {
-    log('Error getting file type:', e);
-    return 'other';
-  }
+  return getFileTypeFromPath(filePath);
 });
 
 function decodeSubtitleBuffer(buffer) {

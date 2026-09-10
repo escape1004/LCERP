@@ -2,14 +2,14 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import { builtinModules } from 'module';
-import electron from 'vite-plugin-electron';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ command, mode }) => {
   if (mode === 'preload') {
     return {
+      publicDir: false,
       build: {
-        outDir: 'dist',
+        outDir: 'dist-electron-app',
         lib: {
           entry: path.resolve(__dirname, 'src/main/preload.ts'),
           formats: ['cjs'],
@@ -24,7 +24,7 @@ export default defineConfig(({ command, mode }) => {
             entryFileNames: '[name].js',
           },
         },
-        emptyOutDir: false,
+        emptyOutDir: true,
       },
     };
   }
@@ -32,15 +32,10 @@ export default defineConfig(({ command, mode }) => {
   return {
     server: {
       port: 5174,
+      strictPort: true,
     },
     plugins: [
       react(),
-      electron({
-        entry: [
-          'src/main/main.ts',
-          'src/main/preload.ts'
-        ],
-      }),
     ],
     resolve: {
       alias: {
