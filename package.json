@@ -4,18 +4,18 @@
   "version": "1.1.19",
   "description": "Local ERP System for Personal File Management",
   "author": "Escape",
-  "main": "electron/main.js",
+  "main": "dist-electron-app/main.js",
   "scripts": {
     "dev": "vite",
     "build": "npm run build:electron && npm run build:renderer",
     "build:dev": "tsc && vite build --mode development",
     "build:renderer": "vite build",
-    "build:electron": "npm run build:main && npm run build:preload",
+    "build:electron": "npm run clean:electron && npm run build:main && npm run build:preload",
     "build:preload": "vite build --mode preload",
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "cross-env ELECTRON=true electron .",
-    "electron:dev": "npm run build:preload && concurrently --kill-others \"npm run dev\" \"wait-on tcp:5174 && cross-env VITE_DEV_SERVER_URL=http://localhost:5174 electron .\"",
+    "electron:dev": "npm run build:electron && concurrently --kill-others \"npm run dev\" \"wait-on tcp:5174 && cross-env VITE_DEV_SERVER_URL=http://localhost:5174 electron .\"",
     "electron:build": "npm run build && electron-builder",
     "electron:preview": "npm run build && cross-env ELECTRON=true electron .",
     "electron:preview-web": "npm run electron:preview",
@@ -24,7 +24,8 @@
     "postinstall": "electron-builder install-app-deps",
     "preload:watch": "vite build --mode preload --watch",
     "build:lib": "tsc --project tsconfig.build.json",
-    "build:main": "node --check electron/main.js",
+    "clean:electron": "node scripts/clean-electron-output.mjs",
+    "build:main": "tsc --project tsconfig.main.json",
     "verify:electron-contracts": "node scripts/verify-electron-contracts.mjs",
     "smoke:electron": "node scripts/smoke-electron-runtime.mjs"
   },
@@ -45,8 +46,8 @@
     ],
     "files": [
       "dist/**/*",
+      "dist-electron-app/main.js",
       "dist-electron-app/preload.js",
-      "electron/main.js",
       "resources/**/*"
     ],
     "extraResources": [

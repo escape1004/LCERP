@@ -5,7 +5,8 @@ import process from 'node:process';
 import ts from 'typescript';
 
 const rootDir = process.cwd();
-const mainPath = path.join(rootDir, 'electron', 'main.js');
+const mainPath = path.join(rootDir, 'src', 'main', 'main.ts');
+const legacyMainPath = path.join(rootDir, 'electron', 'main.js');
 const preloadPath = path.join(rootDir, 'src', 'main', 'preload.ts');
 const baselinePath = path.join(rootDir, 'docs', 'electron-runtime-baseline.json');
 
@@ -143,7 +144,7 @@ function listRendererSendChannels() {
 }
 
 function buildActualContract() {
-  const mainSource = parseSource(mainPath, ts.ScriptKind.JS);
+  const mainSource = parseSource(mainPath, ts.ScriptKind.TS);
   const preloadSource = parseSource(preloadPath, ts.ScriptKind.TS);
   const mainRegistrations = extractMainRegistrations(mainSource);
   const preloadApi = extractPreloadApi(preloadSource);
@@ -156,7 +157,8 @@ function buildActualContract() {
 
   return {
     main: {
-      entry: 'electron/main.js',
+      source: 'src/main/main.ts',
+      entry: 'dist-electron-app/main.js',
       handlers: [...new Set(handlers)].sort(),
       onChannels: [...new Set(onChannels)].sort(),
       duplicateHandlers: findDuplicates(handlers),
@@ -164,7 +166,7 @@ function buildActualContract() {
     preload: {
       source: 'src/main/preload.ts',
       output: 'dist-electron-app/preload.js',
-      browserWindowPath: "path.join(__dirname, '..', 'dist-electron-app', 'preload.js')",
+      browserWindowPath: "path.join(__dirname, 'preload.js')",
       api: preloadApi,
     },
     ipcAudit: {
@@ -183,24 +185,37 @@ function buildActualContract() {
 function assertRuntimeTopology(actual) {
   const packageJson = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
   const mainSource = fs.readFileSync(mainPath, 'utf8');
+  const legacyMainSource = fs.readFileSync(legacyMainPath, 'utf8');
+  const legacyMain = extractMainRegistrations(parseSource(legacyMainPath, ts.ScriptKind.JS));
+  const legacyHandlers = legacyMain.filter(({ method }) => method === 'handle').map(({ channel }) => channel);
+  const legacyOnChannels = legacyMain.filter(({ method }) => method === 'on').map(({ channel }) => channel);
   const viteSource = fs.readFileSync(path.join(rootDir, 'vite.config.ts'), 'utf8');
+  const mainTsconfig = JSON.parse(fs.readFileSync(path.join(rootDir, 'tsconfig.main.json'), 'utf8'));
   const errors = [];
 
   if (packageJson.main !== actual.main.entry) errors.push(`package.json main is ${packageJson.main}`);
   if (packageJson.build?.directories?.output !== 'release') errors.push('electron-builder output is not release');
+  if (!packageJson.build?.files?.includes('dist-electron-app/main.js')) errors.push('compiled main is not packaged');
   if (!packageJson.build?.files?.includes('dist-electron-app/preload.js')) errors.push('compiled preload is not packaged');
-  if (!packageJson.build?.files?.includes('electron/main.js')) errors.push('active main is not packaged');
+  if (packageJson.build?.files?.includes('electron/main.js')) errors.push('legacy JavaScript main is still packaged');
   const electronDevScript = packageJson.scripts?.['electron:dev'] ?? '';
   const electronLaunchCount = (electronDevScript.match(/electron\s+\./g) ?? []).length;
   if (electronLaunchCount !== 1) errors.push(`electron:dev launches Electron ${electronLaunchCount} times`);
   if (electronDevScript.includes('5173')) errors.push('electron:dev still waits for port 5173');
-  if ((electronDevScript.match(/build:preload/g) ?? []).length !== 1) errors.push('electron:dev does not build preload exactly once');
+  if ((electronDevScript.match(/build:electron/g) ?? []).length !== 1) errors.push('electron:dev does not build Electron sources exactly once');
   if (packageJson.scripts?.dev !== 'vite') errors.push('npm run dev has responsibilities other than the renderer server');
+  if (packageJson.scripts?.['build:main'] !== 'tsc --project tsconfig.main.json') errors.push('build:main does not compile the canonical TypeScript main');
+  if (packageJson.scripts?.['build:electron'] !== 'npm run clean:electron && npm run build:main && npm run build:preload') errors.push('Electron clean/main/preload build order differs from baseline');
+  if (mainTsconfig.compilerOptions?.outDir !== 'dist-electron-app') errors.push('TypeScript main output differs from baseline');
+  if (mainTsconfig.compilerOptions?.rootDir !== 'src/main') errors.push('TypeScript main root differs from baseline');
   if (!mainSource.includes(actual.preload.browserWindowPath)) errors.push('BrowserWindow preload path differs from baseline');
   if (!viteSource.includes("outDir: 'dist-electron-app'")) errors.push('preload build output differs from baseline');
   if (!viteSource.includes('strictPort: true')) errors.push('Vite development server is not pinned to port 5174');
   if (viteSource.includes('vite-plugin-electron')) errors.push('vite-plugin-electron still owns Electron startup/build');
   if (/require\(['"]\.\.\/dist\//.test(mainSource)) errors.push('active main has a runtime dependency on renderer output');
+  if (JSON.stringify([...new Set(legacyHandlers)].sort()) !== JSON.stringify(actual.main.handlers)) errors.push('TypeScript main IPC handlers differ from the preserved v1.1.19 JavaScript main');
+  if (JSON.stringify([...new Set(legacyOnChannels)].sort()) !== JSON.stringify(actual.main.onChannels)) errors.push('TypeScript main IPC listeners differ from the preserved v1.1.19 JavaScript main');
+  if (normalizeMainForParity(mainSource, true) !== normalizeMainForParity(legacyMainSource)) errors.push('TypeScript main implementation differs from the preserved JavaScript main beyond the expected preload path');
   if (actual.main.duplicateHandlers.length > 0) errors.push('duplicate ipcMain.handle registrations detected');
   if (actual.rendererSendChannels.some((channel) => channel !== 'window-control')) errors.push('renderer uses a non-allowlisted send channel');
 
@@ -211,9 +226,23 @@ function fingerprint(value) {
   return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
 
+function normalizeMainForParity(source, isTypeScriptSource = false) {
+  let normalized = source.replace(/\r\n/g, '\n');
+  if (isTypeScriptSource) {
+    normalized = normalized
+      .replace(/^\/\/ @ts-nocheck\n/, '')
+      .replace(
+        "path.join(__dirname, 'preload.js')",
+        "path.join(__dirname, '..', 'dist-electron-app', 'preload.js')",
+      );
+  }
+  return normalized.split('\n').map((line) => line.trimEnd()).join('\n').trimEnd();
+}
+
 function buildBaselineSummary(actual) {
   return {
     main: {
+      source: actual.main.source,
       entry: actual.main.entry,
       handlerCount: actual.main.handlers.length,
       handlersSha256: fingerprint(actual.main.handlers),

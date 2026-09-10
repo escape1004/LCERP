@@ -24,7 +24,7 @@ export default defineConfig(({ command, mode }) => {
             entryFileNames: '[name].js',
           },
         },
-        emptyOutDir: true,
+        emptyOutDir: false,
       },
     };
   }

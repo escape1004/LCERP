@@ -1,15 +1,18 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
+    "target": "ES2022",
     "module": "commonjs",
-    "outDir": "dist-electron",
-    "rootDir": "src",
+    "outDir": "dist-electron-app",
+    "rootDir": "src/main",
     "strict": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    "types": ["node"],
     "noImplicitAny": false,
     "noUnusedLocals": false,
-    "noUnusedParameters": false
+    "noUnusedParameters": false,
+    "sourceMap": false,
+    "declaration": false
   },
-  "include": ["src/main/**/*.ts", "src/lib/**/*.ts"]
-} 
+  "include": ["src/main/main.ts"]
+}

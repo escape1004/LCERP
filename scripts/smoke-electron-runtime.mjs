@@ -54,7 +54,7 @@ function cleanup() {
 }
 
 try {
-  copyFile('electron/main.js');
+  copyFile('dist-electron-app/main.js');
   copyFile('dist-electron-app/preload.js');
   copyFile('resources/icon.ico');
   const viewerFixturePath = path.join(appDir, 'viewer-fixture.png');
@@ -67,7 +67,7 @@ try {
   fs.writeFileSync(path.join(appDir, 'package.json'), JSON.stringify({
     name: 'local-erp-electron-smoke',
     version: '1.1.19',
-    main: 'electron/main.js',
+    main: 'dist-electron-app/main.js',
   }));
   fs.mkdirSync(userDataDir, { recursive: true });
   fs.mkdirSync(backupDir, { recursive: true });

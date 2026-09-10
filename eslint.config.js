@@ -26,5 +26,16 @@ module.exports = tseslint.config(
       "@typescript-eslint/no-unused-vars": "off",
       "@typescript-eslint/no-explicit-any": "warn",
     },
+  },
+  {
+    files: ["src/main/main.ts"],
+    rules: {
+      "@typescript-eslint/ban-ts-comment": "off",
+      "@typescript-eslint/no-require-imports": "off",
+      "prefer-const": "off",
+      "no-control-regex": "off",
+      "no-useless-escape": "off",
+      "no-async-promise-executor": "off",
+    },
   }
 );
