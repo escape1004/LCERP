@@ -14,6 +14,7 @@ dist/
 dist-electron/
 dist-electron-app/
 release/
+release-*/
 out/
 app/dist/
 *.asar
