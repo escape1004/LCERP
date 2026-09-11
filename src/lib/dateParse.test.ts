@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { parseFlexibleDateValue } from './dateParse';
+import { parseFlexibleDateValue, isStoredDateValue } from './dateParse';
 
 test('empty or whitespace input becomes an empty string', () => {
   expect(parseFlexibleDateValue('')).toBe('');
@@ -37,4 +37,10 @@ test('rejects invalid dates instead of coercing them', () => {
 test('uses custom date-fns formats when provided', () => {
   expect(parseFlexibleDateValue('09-03-2024', ['dd-MM-yyyy'])).toBe('2024-03-09');
   expect(parseFlexibleDateValue('2024-03-09', ['dd/MM/yyyy'])).toBeNull();
+});
+
+test('accepts stored yyyy-MM-dd and yyyy-MM values', () => {
+  expect(isStoredDateValue('2024-03-09')).toBe(true);
+  expect(isStoredDateValue('2024-03')).toBe(true);
+  expect(isStoredDateValue('2024-3-9')).toBe(false);
 });

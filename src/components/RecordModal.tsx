@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { format, isValid, parse } from 'date-fns';
 import { X, Search, Check, ChevronsUpDown, ChevronRight, CheckCircle2, XCircle, Languages } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import type { Category, DataRecord, FieldDefinition, NewRecord } from '../types';
@@ -16,7 +15,15 @@ import { AlertDialog } from './ui/alert-dialog';
 import { DatePicker } from './ui/date-picker';
 import { AnimatedModal } from './ui/animated-modal';
 import { formatFieldDisplayValue, hasTextAffixes } from '../lib/fieldFormat';
+import { isStoredDateValue } from '../lib/dateParse';
 import { applyFilenamePatternToFields } from '../lib/filenamePattern';
+import {
+  clampPercentageValue,
+  getEditablePercentageValue,
+  getPercentageTextClassName,
+  normalizePercentageValue,
+  parseNonNegativeNumberInput,
+} from '../lib/recordFields';
 import { getRelationDisplayLabel, getRelationPrimaryLabel, getRelationSecondaryLabel } from '../utils/relationDisplay';
 import type { Config } from '../types';
 import { OPENAI_TRANSLATION_MODEL, getTranslatedFieldId, getTranslationMetaFieldId, isTranslationEnabledField } from '../lib/translation';
@@ -39,67 +46,6 @@ interface RecordModalProps {
   category: Category;
   record?: DataRecord | null;
 }
-
-const DATE_STORAGE_FORMAT = 'yyyy-MM-dd';
-const YEAR_MONTH_STORAGE_FORMAT = 'yyyy-MM';
-
-const isStoredDateValue = (value: string) => {
-  const parsedFullDate = parse(value, DATE_STORAGE_FORMAT, new Date());
-  if (isValid(parsedFullDate) && format(parsedFullDate, DATE_STORAGE_FORMAT) === value) {
-    return true;
-  }
-
-  const parsedYearMonth = parse(value, YEAR_MONTH_STORAGE_FORMAT, new Date());
-  return isValid(parsedYearMonth) && format(parsedYearMonth, YEAR_MONTH_STORAGE_FORMAT) === value;
-};
-
-const parseNonNegativeNumberInput = (value: string): number => {
-  if (value === '') return 0;
-  const numericValue = Number(value);
-  return Number.isFinite(numericValue) ? Math.max(0, numericValue) : 0;
-};
-
-const clampPercentageValue = (value: number, max: number): number => {
-  return Math.min(value, Math.max(0, max));
-};
-
-type PercentageValue = {
-  value: number;
-  max: number;
-};
-
-const isPercentageValue = (value: unknown): value is PercentageValue => (
-  typeof value === 'object'
-  && value !== null
-  && 'value' in value
-  && 'max' in value
-);
-
-const getEditablePercentageValue = (value: unknown) => {
-  const numericMax = Number(isPercentageValue(value) ? value.max : 0);
-  const max = Number.isFinite(numericMax) ? Math.max(0, numericMax) : 0;
-  const numericValue = Number(isPercentageValue(value) ? value.value : 0);
-  const current = Number.isFinite(numericValue) ? Math.max(0, numericValue) : 0;
-  return {
-    value: max > 0 ? clampPercentageValue(current, max) : current,
-    max,
-  };
-};
-
-const normalizePercentageValue = (value: unknown) => {
-  const numericMax = Number(isPercentageValue(value) ? value.max : 0);
-  const max = Number.isFinite(numericMax) ? Math.max(0, numericMax) : 0;
-  const numericValue = Number(isPercentageValue(value) ? value.value : 0);
-  const current = Number.isFinite(numericValue) ? Math.max(0, numericValue) : 0;
-  return {
-    value: clampPercentageValue(current, max),
-    max
-  };
-};
-
-const getPercentageTextClassName = (percent: number) => (
-  percent >= 100 ? 'text-discord-accent font-semibold' : 'text-discord-text font-semibold'
-);
 
 export const RecordModal: React.FC<RecordModalProps> = ({
   isOpen,

@@ -140,3 +140,16 @@ export const parseFlexibleDateValue = (inputValue: string, customFormats: string
 
   return null;
 };
+
+const DATE_STORAGE_FORMAT = 'yyyy-MM-dd';
+const YEAR_MONTH_STORAGE_FORMAT = 'yyyy-MM';
+
+export const isStoredDateValue = (value: string) => {
+  const parsedFullDate = parse(value, DATE_STORAGE_FORMAT, new Date());
+  if (isValid(parsedFullDate) && format(parsedFullDate, DATE_STORAGE_FORMAT) === value) {
+    return true;
+  }
+
+  const parsedYearMonth = parse(value, YEAR_MONTH_STORAGE_FORMAT, new Date());
+  return isValid(parsedYearMonth) && format(parsedYearMonth, YEAR_MONTH_STORAGE_FORMAT) === value;
+};

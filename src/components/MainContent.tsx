@@ -1,5 +1,5 @@
 ﻿import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Search, Plus, Download, Edit, Trash2, ExternalLink, Filter, X, ChevronRight, LinkIcon, FileText, ChevronDown, ChevronUp, ArrowUpWideNarrow, ArrowDownWideNarrow, SortAsc, SortDesc, Check, RefreshCw, HelpCircle, ChevronsUpDown, LayoutGrid, TableProperties, Archive, Info, ImageOff, Languages } from 'lucide-react';
+import { Search, Plus, Filter, X, FileText, Check, ChevronsUpDown, LayoutGrid, TableProperties, Archive, Info, HelpCircle, ImageOff } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { useLoadingStore } from '../hooks/useLoadingStore';
 import { DataRecord, FieldDefinition, Category } from '../types';
@@ -22,8 +22,6 @@ import {
 import { ConfirmDialog } from './ui/confirm-dialog';
 import { AlertDialog } from './ui/alert-dialog';
 import { CategoryModal } from './CategoryModal';
-import { format } from "date-fns";
-import { getLocalVideoHttpUrl } from '../lib/local-media';
 import {
   ContextMenu,
   ContextMenuCheckboxItem,
@@ -36,572 +34,22 @@ import {
 import { BulkAddModal } from './BulkAddModal';
 import { resolveFilePath } from '../lib/pathResolver';
 import { formatFieldDisplayValue } from '../lib/fieldFormat';
-import { getRelationDisplayLabel } from '../utils/relationDisplay';
 import { DatePicker } from './ui/date-picker';
 import { cn } from '../lib/utils';
-import { getTranslatedFieldValue, getTranslationMeta, isTranslationEnabledField } from '../lib/translation';
-
-type PercentageValue = {
-  value: number;
-  max: number;
-};
-
-type FieldValue = string | number | boolean | null | undefined | PercentageValue | Array<string | number>;
-
-const isPercentageValue = (value: unknown): value is PercentageValue => (
-  typeof value === 'object'
-  && value !== null
-  && 'value' in value
-  && 'max' in value
-);
-
-const getFileTypeFromPath = (filePath: string): 'image' | 'video' | 'archive' | 'other' => {
-  if (!filePath || typeof filePath !== 'string') return 'other';
-  const extension = filePath.slice(filePath.lastIndexOf('.')).toLowerCase();
-  if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(extension)) return 'image';
-  if (['.mp4', '.avi', '.mkv', '.mov'].includes(extension)) return 'video';
-  if (['.zip', '.7z'].includes(extension)) return 'archive';
-  return 'other';
-};
-
-const isEmptyValue = (value: unknown) => {
-  if (value === null || value === undefined) return true;
-  if (typeof value === 'string' && value.trim() === '') return true;
-  if (Array.isArray(value) && value.length === 0) return true;
-  return typeof value === 'object' && Object.keys(value).length === 0;
-};
-
-const parseHashtags = (text: string): { hashtags: string[]; plainText: string } => {
-  const hashtagRegex = /#(\S+)/g;
-  const hashtags: string[] = [];
-  let match;
-  
-  while ((match = hashtagRegex.exec(text)) !== null) {
-    hashtags.push(match[1]);
-  }
-  
-  const plainText = text.replace(hashtagRegex, '').trim();
-  
-  return { hashtags, plainText };
-};
-
-const renderTextWithHashtags = (text: string) => {
-  const hashtagRegex = /#(\S+)/g;
-  const parts = [];
-  let lastIndex = 0;
-  let match;
-  
-  while ((match = hashtagRegex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index));
-    }
-    
-    parts.push(
-      <span
-        key={match.index}
-        className="inline-block px-2 py-0.5 text-xs rounded bg-gray-600/20 text-gray-400 mr-1"
-      >
-        #{match[1]}
-      </span>
-    );
-    
-    lastIndex = match.index + match[0].length;
-  }
-  
-  if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex));
-  }
-  
-  return parts;
-};
-
-const getPercentageMeta = (_field: FieldDefinition, value: unknown) => {
-  const currentValue = isPercentageValue(value) ? value.value : value;
-  const maxValue = isPercentageValue(value) ? value.max : 0;
-  const numericValue = Number(currentValue || 0);
-  const numericMax = Number(maxValue || 0);
-  const safeMax = Number.isFinite(numericMax) ? Math.max(0, numericMax) : 0;
-  const safeValue = Number.isFinite(numericValue) ? Math.min(Math.max(0, numericValue), safeMax) : 0;
-  const percentValue = safeMax > 0 ? Math.round((safeValue / safeMax) * 100) : 0;
-
-  return {
-    value: safeValue,
-    max: safeMax,
-    percent: percentValue
-  };
-};
-
-const parseNonNegativeNumberInput = (value: string): number => {
-  if (value === '') return 0;
-  const numericValue = Number(value);
-  return Number.isFinite(numericValue) ? Math.max(0, numericValue) : 0;
-};
-
-const getFieldOptions = (field: FieldDefinition): string[] => {
-  const legacyField = field as FieldDefinition & { options?: string[] };
-  return legacyField.options ?? field.selectOptions ?? [];
-};
-
-const isFieldMultiple = (field: FieldDefinition): boolean => {
-  const legacyField = field as FieldDefinition & { multiple?: boolean };
-  return Boolean(legacyField.multiple ?? field.multiSelect);
-};
-
-const getPercentageTextClassName = (percent: number) => (
-  percent >= 100 ? 'text-discord-accent font-semibold' : 'text-discord-text font-semibold'
-);
-
-const TOOLTIP_CONTENT_CLASSNAME = "relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words";
-
-const copyOnCtrlClick = async (
-  e: React.MouseEvent,
-  text: string,
-  successDescription: string,
-  onSelectRow?: () => void
-) => {
-  onSelectRow?.();
-  e.stopPropagation();
-
-  if (!e.ctrlKey) {
-    return;
-  }
-
-  try {
-    await navigator.clipboard.writeText(text);
-    toast({
-      title: '복사 완료',
-      description: successDescription,
-    });
-  } catch (error) {
-    toast({
-      title: '복사 실패',
-      description: '클립보드 복사에 실패했습니다.',
-      variant: 'destructive',
-    });
-  }
-};
-
-// URL 렌더링 함수
-const renderUrl = (url: string, onSelectRow?: () => void, displayText?: string) => (
-  <div className="flex items-center gap-2">
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span
-            className="text-discord-accent px-1 py-0.5 rounded transition-colors truncate flex-1 cursor-pointer"
-            onClick={async (e) => {
-              onSelectRow?.();
-              e.stopPropagation();
-              try {
-                await navigator.clipboard.writeText(url);
-                toast({
-                  title: '복사 완료',
-                  description: 'URL이 클립보드에 복사되었습니다.',
-                });
-              } catch (error) {
-                toast({
-                  title: '복사 실패',
-                  description: '클립보드 복사에 실패했습니다.',
-                  variant: 'destructive',
-                });
-              }
-            }}
-          >
-            {displayText || url}
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-            {`${url} (클릭하여 복사)`}
-          </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            onClick={async (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              try {
-                const result = await window.electronAPI.openExternal(url);
-                if (!result.success) {
-                  console.error('Failed to open URL:', result.error);
-                  toast({ 
-                    title: '링크 열기 실패', 
-                    description: '외부 브라우저에서 링크를 열 수 없습니다.', 
-                    variant: 'destructive' 
-                  });
-                }
-              } catch (error) {
-                console.error('Error opening URL:', error);
-                toast({ 
-                  title: '링크 열기 실패', 
-                  description: '외부 브라우저에서 링크를 열 수 없습니다.', 
-                  variant: 'destructive' 
-                });
-              }
-            }}
-            className="text-discord-accent hover:text-blue-400 flex-shrink-0"
-          >
-            <ExternalLink size={16} />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-          외부 브라우저에서 열기
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  </div>
-);
-
-const renderGalleryCopyableText = (
-  text: string,
-  successDescription: string,
-  onSelectRow?: () => void,
-  className?: string
-) => (
-  <TooltipProvider>
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          className={className}
-          onClick={async (e) => {
-            await copyOnCtrlClick(e, text, successDescription, onSelectRow);
-          }}
-        >
-          {text}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="top" align="center" className={TOOLTIP_CONTENT_CLASSNAME}>
-        Ctrl+클릭하여 복사
-      </TooltipContent>
-    </Tooltip>
-  </TooltipProvider>
-);
-
-// 필드 값 포맷팅 함수
-const formatFieldValue = (
-  field: FieldDefinition,
-  value: FieldValue,
-  categories: Category[],
-  getCategoryRecords: (categoryId: string) => DataRecord[],
-  onViewRelatedRecord?: (record: DataRecord, category: Category) => void,
-  onSelectRow?: () => void,
-  recordData?: Record<string, unknown>
-) => {
-  const urlPattern = /^https?:\/\/.+/;
-  
-  // 빈 값 처리 - 레코드 리스트 테이블과 동일하게
-  if (value === null || value === undefined || value === '' || value === '-') {
-    return <span className="text-gray-500">-</span>;
-  }
-
-  // 배열이지만 비어있는 경우
-  if (Array.isArray(value) && value.length === 0) {
-    return <span className="text-gray-500">-</span>;
-  }
-  
-  switch (field.type) {
-    case 'text':
-    case 'longtext': {
-      const formattedValue = formatFieldDisplayValue(field, value);
-      const translatedText = isTranslationEnabledField(field)
-        ? getTranslatedFieldValue(recordData, field.id)
-        : '';
-      const translationMeta = translatedText ? getTranslationMeta(recordData, field.id) : null;
-      if (urlPattern.test(formattedValue)) {
-        return renderUrl(formattedValue, onSelectRow);
-      }
-      return (
-        <div className="flex items-center gap-1 min-w-0">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span 
-                  className="min-w-0 flex-1 text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block" 
-                  onClick={async (e) => {
-                    await copyOnCtrlClick(e, formattedValue, '값이 클립보드에 복사되었습니다.', onSelectRow);
-                  }}
-                >
-                  {typeof formattedValue === 'string' ? renderTextWithHashtags(formattedValue) : String(formattedValue)}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="top" align="center" className={TOOLTIP_CONTENT_CLASSNAME}>
-                Ctrl+클릭하여 복사
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          {translatedText && (
-            <TooltipProvider delayDuration={0} skipDelayDuration={0}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span
-                    className="inline-flex shrink-0 cursor-help items-center rounded p-1 text-blue-300 transition-colors hover:bg-discord-hover hover:text-blue-200"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelectRow?.();
-                    }}
-                  >
-                    <Languages size={14} />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top" align="center" className={TOOLTIP_CONTENT_CLASSNAME}>
-                  <div className="max-w-xs whitespace-pre-wrap break-words">{translatedText}</div>
-                  {translationMeta?.autoTranslated && (
-                    <div className="mt-1 text-[11px] text-blue-200">자동 번역</div>
-                  )}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-        </div>
-      );
-    }
-    
-    case 'number':
-      return (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span 
-                className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block" 
-                onClick={async (e) => {
-                  await copyOnCtrlClick(e, String(value), '숫자가 클립보드에 복사되었습니다.', onSelectRow);
-                }}
-              >
-                {String(value)}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-              Ctrl+클릭하여 복사
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      );
-
-    case 'percentage': {
-      const percentage = getPercentageMeta(field, value);
-      return (
-        <span className="text-discord-text px-1 py-0.5 rounded truncate block">
-          {percentage.value} / {percentage.max}{' '}
-          <span className={getPercentageTextClassName(percentage.percent)}>
-            ({percentage.percent}%)
-          </span>
-        </span>
-      );
-    }
-    
-    case 'checkbox':
-      return value ? <Check className="w-5 h-5 text-discord-accent" /> : <X className="w-5 h-5 text-discord-danger" />;
-    
-    case 'relation': {
-      if (!field.relationCategoryId) return String(value);
-      const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
-      if (!relatedCategory) return String(value);
-      const relatedRecords = getCategoryRecords(field.relationCategoryId);
-      if (Array.isArray(value)) {
-        // 다중 선택 관계형 필드 - 더보기 기능 추가
-        const MultiSelectRelationField: React.FC = () => {
-          const [isExpanded, setIsExpanded] = React.useState(false);
-          const maxVisible = 3;
-          const hasMore = value.length > maxVisible;
-          const visibleItems = isExpanded ? value : value.slice(0, maxVisible);
-          return (
-            <div className="flex flex-wrap gap-1">
-              {visibleItems.map((relatedId) => {
-                const relatedRecord = relatedRecords.find(r => r.id === relatedId);
-                if (!relatedRecord) return null;
-                const label = getRelationDisplayLabel(relatedRecord, field, categories, getCategoryRecords);
-                return (
-                  <TooltipProvider key={relatedId}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span
-                          className="px-2 py-1 text-xs rounded bg-green-600/20 text-green-500 cursor-pointer hover:bg-green-600/30"
-                          onClick={async (e) => {
-                            if (e.ctrlKey) {
-                              await copyOnCtrlClick(e, label, '관계형 필드 값이 클립보드에 복사되었습니다.', onSelectRow);
-                              return;
-                            }
-
-                            e.stopPropagation();
-                            onSelectRow?.();
-                            if (onViewRelatedRecord) {
-                              onViewRelatedRecord(relatedRecord, relatedCategory);
-                            }
-                          }}
-                        >
-                          {label}
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-                        클릭하여 상세 보기, Ctrl+클릭하여 복사
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                );
-              })}
-              {hasMore && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setIsExpanded(!isExpanded);
-                        }}
-                        className="px-2 py-1 text-xs rounded bg-gray-600/20 text-gray-400 hover:bg-gray-600/30 cursor-pointer"
-                      >
-                        {isExpanded ? "접기" : `+${value.length - maxVisible}개 더보기`}
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-                      더보기
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-            </div>
-          );
-        };
-        return <MultiSelectRelationField />;
-      }
-      const relatedRecord = relatedRecords.find(r => r.id === value);
-      const label = relatedRecord
-        ? getRelationDisplayLabel(relatedRecord, field, categories, getCategoryRecords)
-        : '';
-      return relatedRecord 
-        ? (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span
-                  className="text-green-500 hover:underline cursor-pointer truncate block"
-                  onClick={async (e) => {
-                    if (e.ctrlKey) {
-                      await copyOnCtrlClick(e, label, '관계형 필드 값이 클립보드에 복사되었습니다.', onSelectRow);
-                      return;
-                    }
-
-                    e.stopPropagation();
-                    onSelectRow?.();
-                    if (onViewRelatedRecord) {
-                      onViewRelatedRecord(relatedRecord, relatedCategory);
-                    }
-                  }}
-                >
-                  {label}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-                클릭하여 상세 보기, Ctrl+클릭하여 복사
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )
-        : <span className="truncate block">{String(value)}</span>;
-    }
-    
-    default:
-      if (typeof value === 'string' && urlPattern.test(value)) {
-        return renderUrl(value, onSelectRow);
-      }
-      
-      // 배열 값 처리 (다중 선택 필드들)
-      if (Array.isArray(value)) {
-        const MultiSelectField: React.FC = () => {
-          const [isExpanded, setIsExpanded] = React.useState(false);
-          const maxVisible = 3;
-          const hasMore = value.length > maxVisible;
-          
-          const visibleItems = isExpanded ? value : value.slice(0, maxVisible);
-          
-          return (
-            <div className="flex flex-wrap gap-1">
-              {visibleItems.map((item, index) => (
-                <TooltipProvider key={index}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span
-                        className="px-2 py-1 text-xs rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/30"
-                        onClick={async (e) => {
-                          onSelectRow?.();
-                          e.stopPropagation();
-                          try {
-                            await navigator.clipboard.writeText(String(item));
-                            toast({ 
-                              title: '복사 완료', 
-                              description: '값이 클립보드에 복사되었습니다.' 
-                            });
-                          } catch (error) {
-                            toast({ 
-                              title: '복사 실패', 
-                              description: '클립보드 복사에 실패했습니다.', 
-                              variant: 'destructive' 
-                            });
-                          }
-                        }}
-                      >
-                        {String(item)}
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-                      복사하기
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              ))}
-              {hasMore && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setIsExpanded(!isExpanded);
-                        }}
-                        className="px-2 py-1 text-xs rounded bg-gray-600/20 text-gray-400 hover:bg-gray-600/30 cursor-pointer"
-                      >
-                        {isExpanded ? "접기" : `+${value.length - maxVisible}개 더보기`}
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-                      더보기
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-            </div>
-          );
-        };
-        
-        return <MultiSelectField />;
-      }
-      
-      return (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span 
-                className="text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block" 
-                onClick={async (e) => {
-                  await copyOnCtrlClick(e, String(value), '값이 클립보드에 복사되었습니다.', onSelectRow);
-                }}
-              >
-                {typeof value === 'string' ? renderTextWithHashtags(value) : String(value)}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-              Ctrl+클릭하여 복사
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      );
-  }
-};
+import {
+  getFieldOptions,
+  getPercentageMeta,
+  isFieldMultiple,
+  parseNonNegativeNumberInput,
+  type ListFileType,
+} from '../lib/recordFields';
+import { getNextSortState } from '../lib/recordQuery';
+import { useRecordListKeyboard } from '../hooks/useRecordListKeyboard';
+import { useRecordQuery } from '../hooks/useRecordQuery';
+import { FIELD_TOOLTIP_CLASSNAME } from './records/FieldValueRenderer';
+import { RecordGalleryView } from './records/RecordGalleryView';
+import { RecordTableView } from './records/RecordTableView';
+import { HoverVideoPreview } from './records/ThumbnailCell';
 
 declare global {
   interface WindowEventMap {
@@ -615,279 +63,6 @@ declare global {
     }>;
   }
 }
-
-const VIDEO_HOVER_PREVIEW_PATTERN = /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i;
-
-const HoverVideoPreview: React.FC<{
-  filePath: string;
-  className: string;
-  delayMs?: number;
-}> = ({ filePath, className, delayMs = 500 }) => {
-  const [videoSrc, setVideoSrc] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    const timeoutId = window.setTimeout(() => {
-      void window.electronAPI.getFileDataUrl(filePath)
-        .then(async (result) => {
-          if (cancelled || !result || result === 'error') return;
-          if (result === 'stream') {
-            setVideoSrc(await getLocalVideoHttpUrl(filePath));
-            return;
-          }
-          setVideoSrc(result);
-        })
-        .catch(() => {
-          if (!cancelled) setVideoSrc(null);
-        });
-    }, delayMs);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeoutId);
-    };
-  }, [delayMs, filePath]);
-
-  if (!videoSrc) return null;
-
-  return (
-    <video
-      src={videoSrc}
-      className={className}
-      autoPlay
-      muted
-      loop
-      playsInline
-      preload="metadata"
-      disablePictureInPicture
-    />
-  );
-};
-
-// 썸네일 렌더링 유틸
-const ThumbnailCell: React.FC<{ 
-  filePath: string | undefined;
-  record: DataRecord | undefined;
-  onThumbnailClick: (filePath: string) => void;
-  thumbnailFit: 'cover' | 'contain';
-  thumbnailOnly?: boolean;
-  sizeClassName?: string;
-  sizeStyle?: React.CSSProperties;
-  videoHoverPreviewEnabled?: boolean;
-  inlineVideoPreview?: boolean;
-  onPreviewChange?: (preview: {
-    dataUrl: string | null;
-    filePath: string;
-    missingFile: boolean;
-    thumbnailFit: 'cover' | 'contain';
-    isVideo: boolean;
-  } | null) => void;
-}> = ({
-  filePath,
-  record,
-  onThumbnailClick,
-  thumbnailFit,
-  thumbnailOnly = false,
-  sizeClassName = 'w-24 h-24',
-  sizeStyle,
-  videoHoverPreviewEnabled = true,
-  inlineVideoPreview = false,
-  onPreviewChange
-}) => {
-  const [dataUrl, setDataUrl] = React.useState<string | null>(null);
-  const [fileExists, setFileExists] = React.useState<boolean | null>(null);
-  const [isHovered, setIsHovered] = React.useState(false);
-  const hasRetriedAfterErrorRef = React.useRef(false);
-  const reloadThumbnail = React.useCallback(() => {
-    if (!filePath || !record) {
-      setDataUrl(null);
-      return;
-    }
-
-    window.electronAPI.getThumbnailDataUrlHybrid(record, filePath).then((res) => {
-      setDataUrl(res);
-    });
-  }, [filePath, record]);
-  
-  React.useEffect(() => {
-    let ignore = false;
-    if (filePath && record) {
-      hasRetriedAfterErrorRef.current = false;
-      window.electronAPI.getThumbnailDataUrlHybrid(record, filePath).then(res => {
-        if (!ignore) setDataUrl(res);
-      });
-    } else {
-      setDataUrl(null);
-    }
-    return () => { ignore = true; };
-  }, [filePath, record]);
-
-  React.useEffect(() => {
-    let ignore = false;
-    if (thumbnailOnly) {
-      setFileExists(true);
-      return () => { ignore = true; };
-    }
-    if (filePath) {
-      window.electronAPI.checkFileExists(filePath).then(exists => {
-        if (!ignore) setFileExists(exists);
-      });
-    } else {
-      setFileExists(null);
-    }
-    return () => { ignore = true; };
-  }, [filePath, thumbnailOnly]);
-
-  const handleThumbnailImageError = React.useCallback(() => {
-    if (!filePath || !record || hasRetriedAfterErrorRef.current) {
-      setDataUrl(null);
-      return;
-    }
-
-    hasRetriedAfterErrorRef.current = true;
-    setDataUrl(null);
-
-    window.electronAPI.regenerateThumbnail(filePath, {
-      recordId: record.id,
-      categoryId: record.categoryId,
-    })
-      .catch(() => null)
-      .finally(() => {
-        reloadThumbnail();
-      });
-  }, [filePath, record, reloadThumbnail]);
-
-  // 썸네일 삭제 이벤트 감지하여 캐시 초기화
-  React.useEffect(() => {
-    const handleThumbnailRegenerated = (event: CustomEvent<{ filePath: string }>) => {
-      if (filePath && event.detail.filePath === filePath) {
-        // 해당 파일의 썸네일이 변경되었으므로 캐시 초기화
-        setDataUrl(null);
-        // 새로운 썸네일 데이터 다시 로드
-        reloadThumbnail();
-      }
-    };
-
-    window.addEventListener('thumbnail:regenerated', handleThumbnailRegenerated as EventListener);
-    return () => {
-      window.removeEventListener('thumbnail:regenerated', handleThumbnailRegenerated as EventListener);
-    };
-  }, [filePath, record, reloadThumbnail]);
-
-  // 파일 확장자 추출
-  const getFileExtension = (path: string) => {
-    const ext = path.slice(path.lastIndexOf('.')).toLowerCase();
-    return ext;
-  };
-
-  // 썸네일이 해시 기반인지 여부
-  const isHashBased = record && !record.thumbnailPath;
-  const missingFile = !thumbnailOnly && !!filePath && fileExists === false;
-  const canOpen = !!filePath && fileExists !== false && !thumbnailOnly;
-  const isArchiveFile = !!filePath && /\.(zip|7z)$/i.test(filePath);
-  const isVideoFile = !!filePath && VIDEO_HOVER_PREVIEW_PATTERN.test(filePath);
-  const showInlineVideoPreview = videoHoverPreviewEnabled
-    && inlineVideoPreview
-    && isHovered
-    && isVideoFile
-    && canOpen;
-
-  React.useEffect(() => {
-    if (!onPreviewChange) return;
-    if (!isHovered || !filePath) {
-      onPreviewChange(null);
-      return;
-    }
-
-    onPreviewChange({
-      dataUrl,
-      filePath,
-      missingFile,
-      thumbnailFit,
-      isVideo: videoHoverPreviewEnabled && isVideoFile && canOpen
-    });
-  }, [onPreviewChange, isHovered, filePath, dataUrl, missingFile, thumbnailFit, videoHoverPreviewEnabled, isVideoFile, canOpen]);
-
-  const thumbnailBody = (
-    <div
-      className={cn("relative", sizeClassName)}
-      style={sizeStyle}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      {dataUrl ? (
-        <>
-          <img 
-            src={dataUrl} 
-            alt="썸네일" 
-            className={`${sizeClassName} ${thumbnailFit === 'contain' ? 'object-contain bg-black' : 'object-cover'} rounded border border-gray-700 ${canOpen ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
-            style={sizeStyle}
-            onClick={() => filePath && canOpen && onThumbnailClick(filePath)}
-            onError={handleThumbnailImageError}
-          />
-          {isHashBased && (
-            <div className="absolute top-1 left-1 z-10">
-              <RefreshCw size={16} className="text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.7)]" />
-            </div>
-          )}
-          {missingFile && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <HelpCircle size={20} className="text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]" />
-            </div>
-          )}
-        </>
-      ) : filePath ? (
-        <div 
-          className={`${sizeClassName} flex items-center justify-center rounded border border-dashed border-[#4f545c] bg-[radial-gradient(circle_at_top,_rgba(88,101,242,0.20),_transparent_58%),linear-gradient(180deg,_#2b2d31_0%,_#1e1f22_100%)] text-[#b5bac1] transition-colors ${canOpen ? 'cursor-pointer hover:border-[#6d73c9] hover:bg-[radial-gradient(circle_at_top,_rgba(88,101,242,0.30),_transparent_58%),linear-gradient(180deg,_#313338_0%,_#232428_100%)]' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
-          style={sizeStyle}
-          onClick={() => canOpen && onThumbnailClick(filePath)}
-        >
-          {missingFile ? (
-            <HelpCircle size={20} className="text-[#dcddde]" />
-          ) : isArchiveFile ? (
-            <Archive size={24} className="text-[#f0b232]" />
-          ) : (
-            <ImageOff size={22} className="text-[#b9bbbe]" />
-          )}
-        </div>
-      ) : (
-        <div className={`${sizeClassName} flex items-center justify-center rounded border border-dashed border-[#3b3f46] bg-[linear-gradient(180deg,_#232428_0%,_#18191c_100%)] text-[#72767d]`} style={sizeStyle}>
-          <ImageOff size={20} className="text-[#72767d]" />
-        </div>
-      )}
-      {showInlineVideoPreview && filePath && (
-        <HoverVideoPreview
-          filePath={filePath}
-          className={`pointer-events-none absolute inset-0 h-full w-full rounded border border-gray-700 ${
-            thumbnailFit === 'contain' ? 'object-contain bg-black' : 'object-cover'
-          }`}
-        />
-      )}
-      {filePath && !thumbnailOnly && (
-        <div className="absolute bottom-1 right-1 bg-black bg-opacity-70 text-white text-xs px-1 py-0.5 rounded">
-          {getFileExtension(filePath)}
-        </div>
-      )}
-    </div>
-  );
-
-  if (thumbnailOnly) {
-    return thumbnailBody;
-  }
-
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          {thumbnailBody}
-        </TooltipTrigger>
-        <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-          {filePath ? (missingFile ? '원본 파일이 존재하지 않습니다' : dataUrl ? '썸네일 클릭 시 뷰어 모달 열기' : isArchiveFile ? '클릭 시 뷰어 모달 열기 (압축파일)' : '클릭 시 뷰어 모달 열기 (썸네일 없음)') : '첨부파일이 없습니다'}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-};
 
 export const MainContent: React.FC = () => {
   const {
@@ -1323,272 +498,26 @@ export const MainContent: React.FC = () => {
 
   const normalizedSearchTerm = searchTerm.trim().toLowerCase();
 
-  const matchesSearchValue = useCallback((field: FieldDefinition, value: FieldValue, recordData?: Record<string, unknown>) => {
-    if (!normalizedSearchTerm && normalizedMultiSearchTerms.length === 0) return true;
-
-    if (field.type === 'number') {
-      const numericSearch = Number(searchTerm);
-      return Number.isFinite(numericSearch) && Number(value) === numericSearch;
-    }
-
-    if (field.type === 'date') {
-      return String(value || '').trim() === searchTerm.trim();
-    }
-
-    if (field.type === 'select') {
-      if (isFieldMultiple(field) && Array.isArray(value)) {
-        if (
-          effectiveSearchField === field.id
-          && isMultiValueSearchField
-          && normalizedMultiSearchTerms.length > 0
-        ) {
-          return value.some((item) => normalizedMultiSearchTerms.includes(String(item || '').toLowerCase()));
-        }
-        return value.some((item) => String(item || '').toLowerCase() === normalizedSearchTerm);
-      }
-      return String(value || '').toLowerCase() === normalizedSearchTerm;
-    }
-
-    if (field.type === 'checkbox') {
-      if (searchTerm !== 'true' && searchTerm !== 'false') return false;
-      return Boolean(value) === (searchTerm === 'true');
-    }
-
-    if (field.type === 'percentage') {
-      const percentage = getPercentageMeta(field, value);
-      const numericSearch = Number(searchTerm);
-
-      if (Number.isFinite(numericSearch)) {
-        return percentage.value === numericSearch
-          || percentage.max === numericSearch
-          || percentage.percent === numericSearch;
-      }
-
-      return `${percentage.value} ${percentage.max} ${percentage.percent}`
-        .toLowerCase()
-        .includes(normalizedSearchTerm);
-    }
-
-    if ((field.type === 'text' || field.type === 'longtext') && isTranslationEnabledField(field)) {
-      const translatedText = getTranslatedFieldValue(recordData, field.id);
-      return [String(value || ''), translatedText].some((item) =>
-        item.toLowerCase().includes(normalizedSearchTerm)
-      );
-    }
-
-    return String(value || '').toLowerCase().includes(normalizedSearchTerm);
-  }, [normalizedSearchTerm, normalizedMultiSearchTerms, searchTerm, effectiveSearchField, isMultiValueSearchField]);
-
-  const customFilteredRecords = useMemo(() => {
-    if (!selectedCategoryId) return [];
-    
-    // 먼저 파일 타입 필터 적용
-    let filteredByFileType = currentRecordsSafe;
-    if (fileField && fileTypeFilter !== 'all') {
-      filteredByFileType = currentRecordsSafe.filter((record) => {
-        const filePath = resolveFilePath(record.data[fileField.id], fileField);
-        if (!filePath || filePath === '' || filePath === '-') return false;
-        const fileType = getFileTypeFromPath(filePath);
-        return fileType === fileTypeFilter;
-      });
-    }
-    
-    // 검색어가 없으면 파일 타입 필터만 적용한 결과 반환
-    if (!hasActiveSearch) return filteredByFileType;
-
-    return filteredByFileType.filter((record) => {
-      if (effectiveSearchField === 'all') {
-        return visibleFields.some((field) => {
-          const value = getRecordFieldValue(record, field.id);
-
-          // 관계형 필드 처리
-          if (field.type === 'relation' && field.relationCategoryId) {
-            const relatedCategory = categoryById.get(field.relationCategoryId);
-            if (!relatedCategory) return false;
-            const relatedRecordMap = recordsByIdByCategory.get(field.relationCategoryId);
-            const displayField = field.displayFieldId
-              ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
-              : relatedCategory.fields[0];
-
-            if (isFieldMultiple(field) && Array.isArray(value)) {
-              return value.some((relatedId) => {
-                const relatedRecord = relatedRecordMap?.get(String(relatedId));
-                if (!relatedRecord) return false;
-                const displayValue = relatedRecord.data[displayField?.id];
-                return String(displayValue || '').toLowerCase().includes(normalizedSearchTerm);
-              });
-            } else {
-              const relatedRecord = relatedRecordMap?.get(String(value));
-              if (!relatedRecord) return false;
-              const displayValue = relatedRecord.data[displayField?.id];
-              return String(displayValue || '').toLowerCase().includes(normalizedSearchTerm);
-            }
-          }
-
-          return matchesSearchValue(field, value, record.data as Record<string, unknown>);
-        });
-      } else {
-        // 특정 필드만 검색
-        const field = selectedCategoryFieldMap.get(effectiveSearchField);
-        if (!field) return false;
-        const value = getRecordFieldValue(record, field.id);
-
-        if (field.type === 'relation' && field.relationCategoryId) {
-          const relatedCategory = categoryById.get(field.relationCategoryId);
-          if (!relatedCategory) return false;
-          const relatedRecordMap = recordsByIdByCategory.get(field.relationCategoryId);
-          const displayField = field.displayFieldId
-            ? relatedCategory.fields.find(f => f.id === field.displayFieldId)
-            : relatedCategory.fields[0];
-
-          if (isFieldMultiple(field) && Array.isArray(value)) {
-            return value.some((relatedId) => {
-              const relatedRecord = relatedRecordMap?.get(String(relatedId));
-              if (!relatedRecord) return false;
-              const displayValue = relatedRecord.data[displayField?.id];
-              if (
-                effectiveSearchField === field.id
-                && isMultiValueSearchField
-                && normalizedMultiSearchTerms.length > 0
-              ) {
-                return normalizedMultiSearchTerms.includes(String(displayValue || '').toLowerCase());
-              }
-              return String(displayValue || '').toLowerCase().includes(normalizedSearchTerm);
-            });
-          } else {
-            const relatedRecord = relatedRecordMap?.get(String(value));
-            if (!relatedRecord) return false;
-            const displayValue = relatedRecord.data[displayField?.id];
-            return String(displayValue || '').toLowerCase().includes(normalizedSearchTerm);
-          }
-        }
-
-        return matchesSearchValue(field, value, record.data as Record<string, unknown>);
-      }
-    });
-  }, [selectedCategoryId, effectiveSearchField, fileTypeFilter, currentRecordsSafe, categoryById, recordsByIdByCategory, fileField, getRecordFieldValue, matchesSearchValue, normalizedSearchTerm, hasActiveSearch, isMultiValueSearchField, normalizedMultiSearchTerms, visibleFields, selectedCategoryFieldMap]);
-
-  // Sorting
-  const sortedRecords = useMemo(() => {
-    if (!sortField) return customFilteredRecords;
-
-    const sortFieldDef = selectedCategoryFieldMap.get(sortField);
-    const relatedCategory = sortFieldDef?.type === 'relation' && sortFieldDef.relationCategoryId
-      ? categoryById.get(sortFieldDef.relationCategoryId)
-      : null;
-    const relatedRecordMap = sortFieldDef?.type === 'relation' && sortFieldDef.relationCategoryId
-      ? recordsByIdByCategory.get(sortFieldDef.relationCategoryId)
-      : null;
-    const displayField = relatedCategory
-      ? sortFieldDef?.displayFieldId
-        ? relatedCategory.fields.find((field) => field.id === sortFieldDef.displayFieldId)
-        : relatedCategory.fields[0]
-      : null;
-
-    return [...customFilteredRecords].sort((a, b) => {
-      if (sortField === '__refCount') {
-        const countA = getRecordReferenceCount(a.id, selectedCategorySafe?.id || '');
-        const countB = getRecordReferenceCount(b.id, selectedCategorySafe?.id || '');
-        return sortDirection === 'asc' ? countA - countB : countB - countA;
-      }
-
-      if (sortField === '__thumbnail') {
-        // 썸네일 유무에 따른 정렬
-        if (!fileField) return 0; // 파일 필드가 없으면 정렬하지 않음
-        
-        const getFileValue = (record: DataRecord): string | null => {
-          const value = resolveFilePath(record.data[fileField.id], fileField);
-          if (!value || value === '' || value === '-') return null;
-          return String(value);
-        };
-        
-        const fileValueA = getFileValue(a);
-        const fileValueB = getFileValue(b);
-        
-        const hasThumbnailA = fileValueA !== null;
-        const hasThumbnailB = fileValueB !== null;
-        
-        // 둘 다 썸네일이 있거나 둘 다 없는 경우
-        if (hasThumbnailA === hasThumbnailB) {
-          return 0;
-        }
-        
-        // 썸네일 유무에 따라 정렬
-        if (hasThumbnailA && !hasThumbnailB) {
-          return sortDirection === 'asc' ? -1 : 1; // 오름차순: 썸네일 있는 것 먼저, 내림차순: 썸네일 없는 것 먼저
-        }
-        if (!hasThumbnailA && hasThumbnailB) {
-          return sortDirection === 'asc' ? 1 : -1; // 오름차순: 썸네일 없는 것 나중, 내림차순: 썸네일 없는 것 먼저
-        }
-        
-        return 0;
-      }
-
-      let aValue = getRecordFieldValue(a, sortField);
-      let bValue = getRecordFieldValue(b, sortField);
-
-      if (sortFieldDef?.type === 'relation' && relatedCategory) {
-          if (sortFieldDef.multiple && Array.isArray(aValue) && Array.isArray(bValue)) {
-            const aDisplayValues = aValue
-              .map((id: string) => {
-                const rec = relatedRecordMap?.get(id);
-                return rec ? String(rec.data[displayField?.id] || '') : '';
-              })
-              .filter(Boolean)
-              .sort();
-            const bDisplayValues = bValue
-              .map((id: string) => {
-                const rec = relatedRecordMap?.get(id);
-                return rec ? String(rec.data[displayField?.id] || '') : '';
-              })
-              .filter(Boolean)
-              .sort();
-            
-            aValue = aDisplayValues.join(',');
-            bValue = bDisplayValues.join(',');
-          } else if (sortFieldDef.multiple) {
-            aValue = '';
-            bValue = '';
-          } else {
-            const aRelatedRecord = relatedRecordMap?.get(String(aValue));
-            const bRelatedRecord = relatedRecordMap?.get(String(bValue));
-            
-            aValue = aRelatedRecord ? String(aRelatedRecord.data[displayField?.id] || '') : '';
-            bValue = bRelatedRecord ? String(bRelatedRecord.data[displayField?.id] || '') : '';
-          }
-      }
-
-      const aIsEmpty = isEmptyValue(aValue);
-      const bIsEmpty = isEmptyValue(bValue);
-
-      // 둘 다 빈 값인 경우
-      if (aIsEmpty && bIsEmpty) return 0;
-      // a만 빈 값인 경우
-      if (aIsEmpty) return sortDirection === 'asc' ? 1 : -1;
-      // b만 빈 값인 경우
-      if (bIsEmpty) return sortDirection === 'asc' ? -1 : 1;
-
-      if (sortFieldDef?.type === 'number') {
-        aValue = Number(aValue);
-        bValue = Number(bValue);
-      }
-
-      if (sortFieldDef?.type === 'percentage') {
-        aValue = getPercentageMeta(sortFieldDef, aValue).percent;
-        bValue = getPercentageMeta(sortFieldDef, bValue).percent;
-      }
-
-      // Handle different data types
-      if (typeof aValue === 'string' && typeof bValue === 'string') {
-        aValue = aValue.toLowerCase();
-        bValue = bValue.toLowerCase();
-      }
-
-      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
-    });
-  }, [customFilteredRecords, sortField, sortDirection, selectedCategorySafe?.id, getRecordReferenceCount, fileField, getRecordFieldValue, selectedCategoryFieldMap, categoryById, recordsByIdByCategory]);
+  const { sortedRecords } = useRecordQuery({
+    records: selectedCategoryId ? currentRecordsSafe : [],
+    searchTerm,
+    normalizedSearchTerm,
+    normalizedMultiSearchTerms,
+    effectiveSearchField,
+    isMultiValueSearchField,
+    hasActiveSearch,
+    fileTypeFilter: fileTypeFilter as ListFileType | 'all',
+    sortField,
+    sortDirection,
+    fileField,
+    visibleFields,
+    fieldMap: selectedCategoryFieldMap,
+    categoryById,
+    recordsByIdByCategory,
+    getRecordFieldValue,
+    getRecordReferenceCount,
+    categoryId: selectedCategorySafe?.id || '',
+  });
 
   // Pagination
   const totalPages = Math.ceil(sortedRecords.length / itemsPerPage);
@@ -1879,110 +808,6 @@ export const MainContent: React.FC = () => {
     };
   }, []);
 
-  // Ctrl+좌우 방향키 페이지 이동 핸들러
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      const isEditableTarget = !!target && (
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.tagName === 'SELECT' ||
-        target.isContentEditable
-      );
-
-      // 모달이 열려있으면 단축키 비활성화
-      if (isRecordModalOpen || isViewModalOpen || viewerModalOpen || isConfirmDialogOpen || isAlertDialogOpen) {
-        return;
-      }
-
-      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === 'r' || e.key === 'R')) {
-        e.preventDefault();
-        openRandomCategoryRecord();
-        return;
-      }
-
-      if (e.key === 'F5' && selectedCategoryId) {
-        e.preventDefault();
-        showLoading('데이터 새로고침 중...', 30000, true); // 30초 타임아웃, 취소 버튼 표시
-        loadRecords(selectedCategoryId).finally(() => {
-          hideLoading();
-          toast({
-            title: "새로고침 완료",
-            description: "레코드 목록이 새로고침되었습니다.",
-          });
-        });
-      } else if (e.ctrlKey && e.key === 'f') {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      } else if (e.ctrlKey && e.key === 'n') {
-        e.preventDefault();
-        if (selectedCategoryId) {
-          setEditingRecord(null);
-          setIsRecordModalOpen(true);
-        }
-      } else if (e.key === 'F2' && selectedCategoryId && selectedRecordId) {
-        e.preventDefault();
-        const selectedRecord = paginatedRecords.find(record => record.id === selectedRecordId)
-          || sortedRecords.find(record => record.id === selectedRecordId);
-        if (selectedRecord) {
-          handleEdit(selectedRecord);
-        }
-      } else if (!e.ctrlKey && !e.metaKey && !e.altKey && !isEditableTarget && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-        if (paginatedRecords.length === 0) {
-          return;
-        }
-
-        e.preventDefault();
-        const currentIndex = paginatedRecords.findIndex(record => record.id === selectedRecordId);
-
-        if (e.key === 'ArrowUp') {
-          const nextIndex = currentIndex <= 0 ? 0 : currentIndex - 1;
-          setSelectedRecordId(paginatedRecords[nextIndex].id);
-        } else {
-          const nextIndex = currentIndex < 0 ? 0 : Math.min(currentIndex + 1, paginatedRecords.length - 1);
-          setSelectedRecordId(paginatedRecords[nextIndex].id);
-        }
-      } else if (e.ctrlKey && e.key === 'ArrowRight') {
-        if (currentPage < totalPages) {
-          setCurrentPage(currentPage + 1);
-          scrollTableToTop();
-        }
-      } else if (e.ctrlKey && e.key === 'ArrowLeft') {
-        if (currentPage > 1) {
-          setCurrentPage(currentPage - 1);
-          scrollTableToTop();
-        }
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [selectedCategoryId, selectedRecordId, paginatedRecords, sortedRecords, loadRecords, currentPage, totalPages, showLoading, hideLoading, isRecordModalOpen, isViewModalOpen, viewerModalOpen, isConfirmDialogOpen, isAlertDialogOpen, openRandomCategoryRecord, setCurrentPage]);
-
-  useEffect(() => {
-    if (!selectedRecordId) return;
-    const exists = sortedRecords.some(record => record.id === selectedRecordId);
-    if (!exists) {
-      setSelectedRecordId(null);
-    }
-  }, [selectedRecordId, sortedRecords]);
-
-  const handleSort = (fieldId: string) => {
-    if (sortField === fieldId) {
-      if (sortDirection === 'asc') {
-        setSortDirection('desc');
-      } else {
-        // Reset sorting on third click
-        setSortField('');
-        setSortDirection('asc');
-      }
-    } else {
-      setSortField(fieldId);
-      setSortDirection('asc');
-    }
-  };
-
   const handleEdit = (record: DataRecord) => {
     setEditingRecord(record);
     setIsRecordModalOpen(true);
@@ -2015,6 +840,57 @@ export const MainContent: React.FC = () => {
     }
 
     handleDelete(record);
+  };
+
+  const handleNewRecord = () => {
+    setEditingRecord(null);
+    setIsRecordModalOpen(true);
+  };
+
+  const handleRefreshRecords = () => {
+    if (!selectedCategoryId) return;
+    showLoading('데이터 새로고침 중...', 30000, true);
+    loadRecords(selectedCategoryId).finally(() => {
+      hideLoading();
+      toast({
+        title: "새로고침 완료",
+        description: "레코드 목록이 새로고침되었습니다.",
+      });
+    });
+  };
+
+  useRecordListKeyboard({
+    disabled: isRecordModalOpen || isViewModalOpen || viewerModalOpen || isConfirmDialogOpen || isAlertDialogOpen,
+    selectedCategoryId,
+    selectedRecordId,
+    paginatedRecords,
+    sortedRecords,
+    currentPage,
+    totalPages,
+    searchInputRef,
+    onSelectRecord: setSelectedRecordId,
+    onNewRecord: handleNewRecord,
+    onEditRecord: handleEdit,
+    onRefresh: handleRefreshRecords,
+    onRandomRecord: openRandomCategoryRecord,
+    onPageChange: (page) => {
+      setCurrentPage(page);
+      scrollTableToTop();
+    },
+  });
+
+  useEffect(() => {
+    if (!selectedRecordId) return;
+    const exists = sortedRecords.some(record => record.id === selectedRecordId);
+    if (!exists) {
+      setSelectedRecordId(null);
+    }
+  }, [selectedRecordId, sortedRecords]);
+
+  const handleSort = (fieldId: string) => {
+    const next = getNextSortState({ sortField, sortDirection }, fieldId);
+    setSortField(next.sortField);
+    setSortDirection(next.sortDirection);
   };
 
   const getGalleryFieldText = useCallback((record: DataRecord, field: FieldDefinition): string => {
@@ -2615,7 +1491,7 @@ export const MainContent: React.FC = () => {
                           <TableProperties size={16} />
                         </button>
                       </TooltipTrigger>
-                      <TooltipContent side="top" align="center" className={TOOLTIP_CONTENT_CLASSNAME}>테이블 뷰</TooltipContent>
+                      <TooltipContent side="top" align="center" className={FIELD_TOOLTIP_CLASSNAME}>테이블 뷰</TooltipContent>
                     </Tooltip>
                     <ContextMenu>
                       <Tooltip>
@@ -2636,7 +1512,7 @@ export const MainContent: React.FC = () => {
                             </button>
                           </ContextMenuTrigger>
                         </TooltipTrigger>
-                        <TooltipContent side="top" align="center" className={TOOLTIP_CONTENT_CLASSNAME}>갤러리 뷰</TooltipContent>
+                        <TooltipContent side="top" align="center" className={FIELD_TOOLTIP_CLASSNAME}>갤러리 뷰</TooltipContent>
                       </Tooltip>
                       <ContextMenuContent className="min-w-[220px]">
                         <ContextMenuLabel>갤러리 표시 항목</ContextMenuLabel>
@@ -2697,359 +1573,75 @@ export const MainContent: React.FC = () => {
             ) : (
               <div className="flex-1 flex flex-col min-h-0">
                 {showGalleryView ? (
-                  <div
-                    ref={tableContainerRef}
-                    className="relative flex-1 min-h-0 overflow-auto discord-scrollbar px-6 py-6"
+                  <RecordGalleryView
+                    tableContainerRef={tableContainerRef}
+                    paginatedRecords={paginatedRecords}
+                    galleryTitleField={galleryTitleField}
+                    galleryDetailFields={galleryDetailFields}
+                    fileField={fileField}
+                    selectedRecordId={selectedRecordId}
+                    selectedCategoryId={selectedCategorySafe?.id || ''}
+                    categories={categoriesSafe}
+                    getCategoryRecords={getCategoryRecords}
+                    getRecordFieldValue={getRecordFieldValue}
+                    getGalleryFieldText={getGalleryFieldText}
+                    galleryCardMinWidth={galleryCardMinWidth}
+                    galleryThumbnailHeight={galleryThumbnailHeight}
+                    galleryZoom={galleryZoom}
+                    galleryZoomFeedbackVisible={galleryZoomFeedbackVisible}
+                    listThumbnailFit={listThumbnailFit}
+                    videoHoverPreviewEnabled={videoHoverPreviewEnabled}
                     onWheel={handleGalleryWheel}
-                  >
-                    {galleryZoomFeedbackVisible && (
-                      <div className="pointer-events-none absolute bottom-6 right-6 z-20">
-                        <div className="rounded-md border border-gray-600 bg-discord-sidebar/95 px-3 py-1.5 text-xs font-medium text-discord-text shadow-lg backdrop-blur-sm">
-                          갤러리 크기 {galleryZoom}%
-                        </div>
-                      </div>
-                    )}
-                    <div
-                      className="grid gap-3"
-                      style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${galleryCardMinWidth}px, 1fr))` }}
-                    >
-                      {paginatedRecords.map((record) => {
-                        const title = galleryTitleField ? getGalleryFieldText(record, galleryTitleField) : record.id;
-                        const selectGalleryRecord = () => setSelectedRecordId(record.id);
-                        return (
-                          <ContextMenu key={record.id}>
-                            <ContextMenuTrigger asChild>
-                              <article
-                                data-record-id={record.id}
-                                className={cn(
-                                  "group overflow-hidden rounded-xl border bg-discord-sidebar/70 shadow-sm transition-colors",
-                                  selectedRecordId === record.id
-                                    ? "border-discord-accent bg-discord-hover"
-                                    : "border-gray-700 hover:border-gray-500 hover:bg-discord-hover"
-                                )}
-                                onClick={() => setSelectedRecordId(record.id)}
-                                onDoubleClick={() => {
-                                  setSelectedRecordId(record.id);
-                                  handleView(record);
-                                }}
-                              >
-                                <div className="border-b border-gray-800 bg-black/20 p-3">
-                                  <ThumbnailCell
-                                    filePath={resolveFilePath(record.data[fileField?.id || ''], fileField) || undefined}
-                                    record={record}
-                                    thumbnailFit={listThumbnailFit}
-                                    thumbnailOnly={fileField?.thumbnailOnly}
-                                    sizeClassName="w-full"
-                                    sizeStyle={{ height: `${galleryThumbnailHeight}px` }}
-                                    videoHoverPreviewEnabled={videoHoverPreviewEnabled}
-                                    inlineVideoPreview
-                                    onPreviewChange={undefined}
-                                    onThumbnailClick={(filePath) => {
-                                      setViewerFilePath(filePath);
-                                      setViewerFileType(null);
-                                      setViewerCategoryId(selectedCategorySafe?.id || '');
-                                      setViewerRecordId(record.id);
-                                      setViewerModalOpen(true);
-                                    }}
-                                  />
-                                </div>
-                                <div className="space-y-3 p-4">
-                                  <div>
-                                    <div className="min-w-0 text-sm font-semibold text-discord-text">
-                                      {galleryTitleField
-                                        ? formatFieldValue(
-                                            galleryTitleField,
-                                            getRecordFieldValue(record, galleryTitleField.id),
-                                            categoriesSafe,
-                                            getCategoryRecords,
-                                            handleViewRelatedRecord,
-                                            selectGalleryRecord,
-                                            record.data as Record<string, unknown>
-                                          )
-                                        : renderGalleryCopyableText(
-                                            title,
-                                            '값이 클립보드에 복사되었습니다.',
-                                            selectGalleryRecord,
-                                            'block truncate rounded px-1 py-0.5 transition-colors hover:bg-discord-hover/50'
-                                          )}
-                                    </div>
-                                  </div>
-                                  <div className="space-y-2">
-                                    {galleryDetailFields.map((field) => (
-                                      <div key={field.id} className="flex items-center gap-3 text-xs">
-                                        <span className="shrink-0 self-center text-discord-muted">{field.name} :</span>
-                                        <div className="min-w-0 flex-1 text-discord-text">
-                                          {formatFieldValue(
-                                            field,
-                                            getRecordFieldValue(record, field.id),
-                                            categoriesSafe,
-                                            getCategoryRecords,
-                                            handleViewRelatedRecord,
-                                            selectGalleryRecord,
-                                            record.data as Record<string, unknown>
-                                          )}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              </article>
-                            </ContextMenuTrigger>
-                            <ContextMenuContent>
-                              <ContextMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedRecordId(record.id);
-                                  handleView(record);
-                                }}
-                              >
-                                상세
-                              </ContextMenuItem>
-                              <ContextMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedRecordId(record.id);
-                                  handleEdit(record);
-                                }}
-                              >
-                                수정
-                              </ContextMenuItem>
-                              <ContextMenuItem
-                                className="text-discord-danger focus:text-discord-danger"
-                                onClick={async (e) => {
-                                  await handleContextMenuDelete(e, record);
-                                }}
-                              >
-                                삭제
-                              </ContextMenuItem>
-                            </ContextMenuContent>
-                          </ContextMenu>
-                        );
-                      })}
-                    </div>
-                  </div>
+                    onSelectRecord={setSelectedRecordId}
+                    onView={handleView}
+                    onEdit={handleEdit}
+                    onDelete={handleContextMenuDelete}
+                    onViewRelatedRecord={handleViewRelatedRecord}
+                    onThumbnailClick={(filePath, record) => {
+                      setViewerFilePath(filePath);
+                      setViewerFileType(null);
+                      setViewerCategoryId(selectedCategorySafe?.id || '');
+                      setViewerRecordId(record.id);
+                      setViewerModalOpen(true);
+                    }}
+                  />
                 ) : (
-                  <div ref={tableContainerRef} className="flex-1 min-h-0 overflow-auto discord-scrollbar">
-                    <table ref={tableRef} className="w-full table-fixed">
-                      <thead className="sticky top-0 z-10 bg-discord-sidebar border-b border-gray-700">
-                        <tr>
-                          {fileField && (
-                            <th 
-                              className="px-2 py-2 text-left text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover relative"
-                              style={{ width: `${getColumnWidth('__thumbnail')}px` }}
-                              onClick={() => handleSort('__thumbnail')}
-                            >
-                              <div className="flex items-center gap-1 select-none">
-                                썸네일
-                                {sortField === '__thumbnail' && (
-                                  sortDirection === 'asc' ? (
-                                    <SortAsc size={16} className="text-white" />
-                                  ) : (
-                                    <SortDesc size={16} className="text-white" />
-                                  )
-                                )}
-                              </div>
-                              <div
-                                className={`absolute top-0 right-0 w-2 h-full cursor-col-resize transition-colors ${
-                                  isResizing === '__thumbnail' 
-                                    ? 'bg-discord-accent' 
-                                    : 'bg-transparent hover:bg-discord-accent'
-                                }`}
-                                style={{ right: '0px' }}
-                                onMouseDown={(e) => handleResizeStart('__thumbnail', e)}
-                              />
-                            </th>
-                          )}
-                          {visibleFields.map(field => (
-                            <th
-                              key={field.id}
-                              className={
-                                field.type === 'checkbox'
-                                  ? 'px-2 py-2 text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover text-left truncate relative'
-                                  : 'px-2 py-2 text-left text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover relative'
-                              }
-                              style={{ width: `${getColumnWidth(field.id)}px` }}
-                              onClick={() => handleSort(field.id)}
-                            >
-                              <div className="flex items-center gap-1 select-none">
-                                {field.name}
-                                {sortField === field.id && (
-                                  sortDirection === 'asc' ? (
-                                    <SortAsc size={16} className="text-white" />
-                                  ) : (
-                                    <SortDesc size={16} className="text-white" />
-                                  )
-                                )}
-                              </div>
-                              <div
-                                className={`absolute top-0 right-0 w-2 h-full cursor-col-resize transition-colors ${
-                                  isResizing === field.id 
-                                    ? 'bg-discord-accent' 
-                                    : 'bg-transparent hover:bg-discord-accent'
-                                }`}
-                                style={{ right: '0px' }}
-                                onMouseDown={(e) => handleResizeStart(field.id, e)}
-                              />
-                            </th>
-                          ))}
-                          {hasIncomingReferences && (
-                            <th 
-                              className="px-2 py-2 text-left text-xs font-semibold text-discord-text cursor-pointer hover:bg-discord-hover relative"
-                              style={{ width: `${getColumnWidth('__refCount')}px` }}
-                              onClick={() => handleSort('__refCount')}
-                            >
-                              <div className="flex items-center gap-1 select-none">
-                                참조 횟수
-                                {sortField === '__refCount' && (
-                                  sortDirection === 'asc' ? (
-                                    <SortAsc size={16} className="text-white" />
-                                  ) : (
-                                    <SortDesc size={16} className="text-white" />
-                                  )
-                                )}
-                              </div>
-                              <div
-                                className={`absolute top-0 right-0 w-2 h-full cursor-col-resize transition-colors ${
-                                  isResizing === '__refCount' 
-                                    ? 'bg-discord-accent' 
-                                    : 'bg-transparent hover:bg-discord-accent'
-                                }`}
-                                style={{ right: '0px' }}
-                                onMouseDown={(e) => handleResizeStart('__refCount', e)}
-                              />
-                            </th>
-                          )}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {paginatedRecords.map((record) => (
-                          <ContextMenu key={record.id}>
-                            <ContextMenuTrigger asChild>
-                              <tr
-                                data-record-id={record.id}
-                                className={`${selectedRecordId === record.id ? 'bg-discord-hover' : 'hover:bg-discord-hover'} group cursor-default`}
-                                onClick={() => setSelectedRecordId(record.id)}
-                                onDoubleClick={() => {
-                                  setSelectedRecordId(record.id);
-                                  handleView(record);
-                                }}
-                              >
-                                {fileField && (
-                                  <td className="px-2 py-3 text-xs text-discord-text overflow-hidden relative" style={{ width: `${getColumnWidth('__thumbnail')}px` }}>
-                                    <ThumbnailCell
-                                      filePath={resolveFilePath(record.data[fileField.id], fileField) || undefined}
-                                      record={record}
-                                      thumbnailFit={listThumbnailFit}
-                                      thumbnailOnly={fileField.thumbnailOnly}
-                                      videoHoverPreviewEnabled={videoHoverPreviewEnabled}
-                                      onPreviewChange={setThumbnailPreview}
-                                      onThumbnailClick={(filePath) => {
-                                        setViewerFilePath(filePath);
-                                        setViewerFileType(null);
-                                        setViewerCategoryId(selectedCategorySafe?.id || '');
-                                        setViewerRecordId(record.id);
-                                        setViewerModalOpen(true);
-                                      }}
-                                    />
-                                  </td>
-                                )}
-                                {visibleFields.map(field => (
-                                  <td key={field.id} className={`${
-                                    field.type === 'checkbox'
-                                      ? 'px-2 py-3 text-xs text-discord-text text-left overflow-hidden'
-                                      : field.type === 'percentage'
-                                        ? 'px-2 py-2 text-xs text-discord-text'
-                                      : 'px-2 py-3 text-xs text-discord-text overflow-hidden'
-                                  }`} style={{ width: `${getColumnWidth(field.id)}px` }}>
-                                    {field.type === 'file' && field.thumbnailOnly
-                                      ? ''
-                                      : field.type === 'percentage'
-                                        ? (() => {
-                                            const currentValue = getRecordFieldValue(record, field.id);
-                                            const percentage = getPercentageMeta(field, currentValue);
-                                            const rawValue = currentValue && typeof currentValue === 'object' ? percentage.value : 0;
-                                            const rawMax = currentValue && typeof currentValue === 'object' ? percentage.max : 0;
-                                            return (
-                                              <div className="flex items-center gap-2">
-                                                <Input
-                                                  type="number"
-                                                  min={0}
-                                                  step="0.01"
-                                                  value={rawValue}
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setSelectedRecordId(record.id);
-                                                  }}
-                                                  onFocus={() => setSelectedRecordId(record.id)}
-                                                  onChange={(e) => {
-                                                    void updateInlinePercentageValue(record, field, e.target.value);
-                                                  }}
-                                                  className="h-8 min-w-0 bg-discord-sidebar border-gray-600 text-discord-text"
-                                                />
-                                                <span className="text-discord-muted">/</span>
-                                                <Input
-                                                  type="number"
-                                                  min={0}
-                                                  step="0.01"
-                                                  value={rawMax}
-                                                  readOnly
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setSelectedRecordId(record.id);
-                                                  }}
-                                                  onFocus={() => setSelectedRecordId(record.id)}
-                                                  className="h-8 min-w-0 bg-discord-sidebar/70 border-gray-600 text-discord-muted cursor-default"
-                                                />
-                                                <span className={`min-w-[42px] text-right ${getPercentageTextClassName(percentage.percent)}`}>
-                                                  {percentage.percent}%
-                                                </span>
-                                              </div>
-                                            );
-                                          })()
-                                        : formatFieldValue(field, getRecordFieldValue(record, field.id), categoriesSafe, getCategoryRecords, handleViewRelatedRecord, () => setSelectedRecordId(record.id), record.data as Record<string, unknown>)}
-                                  </td>
-                                ))}
-                                {hasIncomingReferences && selectedCategorySafe && (
-                                  <td className="px-2 py-3 text-xs text-discord-text text-left overflow-hidden" style={{ width: `${getColumnWidth('__refCount')}px` }}>
-                                    {getRecordReferenceCount(record.id, selectedCategorySafe.id)}
-                                  </td>
-                                )}
-                              </tr>
-                            </ContextMenuTrigger>
-                            <ContextMenuContent>
-                              <ContextMenuItem
-                                className="hidden"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedRecordId(record.id);
-                                  handleView(record);
-                                }}
-                              >
-                                상세
-                              </ContextMenuItem>
-                              <ContextMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedRecordId(record.id);
-                                  handleEdit(record);
-                                }}
-                              >
-                                수정
-                              </ContextMenuItem>
-                              <ContextMenuItem
-                                className="text-discord-danger focus:text-discord-danger"
-                                onClick={async (e) => {
-                                  await handleContextMenuDelete(e, record);
-                                }}
-                              >
-                                삭제
-                              </ContextMenuItem>
-                            </ContextMenuContent>
-                          </ContextMenu>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <RecordTableView
+                    tableContainerRef={tableContainerRef}
+                    tableRef={tableRef}
+                    paginatedRecords={paginatedRecords}
+                    visibleFields={visibleFields}
+                    fileField={fileField}
+                    hasIncomingReferences={hasIncomingReferences}
+                    selectedRecordId={selectedRecordId}
+                    selectedCategoryId={selectedCategorySafe?.id || ''}
+                    categories={categoriesSafe}
+                    getCategoryRecords={getCategoryRecords}
+                    getRecordFieldValue={getRecordFieldValue}
+                    getRecordReferenceCount={getRecordReferenceCount}
+                    getColumnWidth={getColumnWidth}
+                    isResizing={isResizing}
+                    sortField={sortField}
+                    sortDirection={sortDirection}
+                    listThumbnailFit={listThumbnailFit}
+                    videoHoverPreviewEnabled={videoHoverPreviewEnabled}
+                    onSort={handleSort}
+                    onResizeStart={handleResizeStart}
+                    onSelectRecord={setSelectedRecordId}
+                    onView={handleView}
+                    onEdit={handleEdit}
+                    onDelete={handleContextMenuDelete}
+                    onViewRelatedRecord={handleViewRelatedRecord}
+                    onThumbnailClick={(filePath, record) => {
+                      setViewerFilePath(filePath);
+                      setViewerFileType(null);
+                      setViewerCategoryId(selectedCategorySafe?.id || '');
+                      setViewerRecordId(record.id);
+                      setViewerModalOpen(true);
+                    }}
+                    onPreviewChange={setThumbnailPreview}
+                    onInlinePercentageChange={updateInlinePercentageValue}
+                  />
                 )}
 
                 {thumbnailPreview && (
