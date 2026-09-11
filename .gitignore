@@ -55,8 +55,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 # Editor
-.vscode/*
-!.vscode/extensions.json
+.vscode/
 .idea/
 .vs/
 .history/
