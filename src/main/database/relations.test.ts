@@ -1,25 +1,16 @@
-import { afterEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 import { cleanupRelationReferencesForDatabase } from './relations';
 import { applyDatabaseSchema } from './migrations';
-import { openTempSqlite } from '../../test/temp-sqlite';
+import { withTempSqlite } from '../../test/temp-sqlite';
 
-let cleanup: (() => void) | null = null;
+function seedRelationDb(database) {
+  applyDatabaseSchema(database);
 
-afterEach(() => {
-  cleanup?.();
-  cleanup = null;
-});
-
-function seedRelationDb() {
-  const temp = openTempSqlite();
-  cleanup = temp.close;
-  applyDatabaseSchema(temp.database);
-
-  temp.database.prepare(
+  database.prepare(
     'INSERT INTO profiles (id, name, createdAt, updatedAt) VALUES (?, ?, ?, ?)'
   ).run('profile-1', 'Default', '2024-01-01', '2024-01-01');
 
-  const insertCategory = temp.database.prepare(`
+  const insertCategory = database.prepare(`
     INSERT INTO categories (id, profileId, name, parentId, fields, order_num, createdAt, updatedAt)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
@@ -58,7 +49,7 @@ function seedRelationDb() {
     '2024-01-01'
   );
 
-  const insertRecord = temp.database.prepare(`
+  const insertRecord = database.prepare(`
     INSERT INTO records (id, profileId, categoryId, data, createdAt, updatedAt)
     VALUES (?, ?, ?, ?, ?, ?)
   `);
@@ -66,30 +57,32 @@ function seedRelationDb() {
   insertRecord.run('rec-multi', 'profile-1', 'cat-source', JSON.stringify({ actors: ['cat-deleted', 'keep-me'] }), '2024-01-01', '2024-01-01');
   insertRecord.run('rec-unrelated', 'profile-1', 'cat-source', JSON.stringify({ actor: 'missing-record-id' }), '2024-01-01', '2024-01-01');
   insertRecord.run('rec-corrupt', 'profile-1', 'cat-source', '{not-json', '2024-01-01', '2024-01-01');
-
-  return temp.database;
 }
 
 test('clears relation values that point at the deleted category id', () => {
-  const database = seedRelationDb();
-  const updated = cleanupRelationReferencesForDatabase(database, 'cat-deleted');
+  withTempSqlite((temp) => {
+    seedRelationDb(temp.database);
+    const updated = cleanupRelationReferencesForDatabase(temp.database, 'cat-deleted');
 
-  expect(updated).toBe(2);
-  expect(JSON.parse(database.prepare('SELECT data FROM records WHERE id = ?').get('rec-single').data)).toEqual({
-    actor: null,
-    studio: 'cat-deleted',
+    expect(updated).toBe(2);
+    expect(JSON.parse(temp.database.prepare('SELECT data FROM records WHERE id = ?').get('rec-single').data)).toEqual({
+      actor: null,
+      studio: 'cat-deleted',
+    });
+    expect(JSON.parse(temp.database.prepare('SELECT data FROM records WHERE id = ?').get('rec-multi').data)).toEqual({
+      actors: ['keep-me'],
+    });
+    expect(JSON.parse(temp.database.prepare('SELECT data FROM records WHERE id = ?').get('rec-unrelated').data)).toEqual({
+      actor: 'missing-record-id',
+    });
+    expect(temp.database.prepare('SELECT data FROM records WHERE id = ?').get('rec-corrupt').data).toBe('{not-json');
   });
-  expect(JSON.parse(database.prepare('SELECT data FROM records WHERE id = ?').get('rec-multi').data)).toEqual({
-    actors: ['keep-me'],
-  });
-  expect(JSON.parse(database.prepare('SELECT data FROM records WHERE id = ?').get('rec-unrelated').data)).toEqual({
-    actor: 'missing-record-id',
-  });
-  expect(database.prepare('SELECT data FROM records WHERE id = ?').get('rec-corrupt').data).toBe('{not-json');
 });
 
 test('returns zero for missing categories and does not throw on corrupt category JSON', () => {
-  const database = seedRelationDb();
-  expect(cleanupRelationReferencesForDatabase(database, 'does-not-exist')).toBe(0);
-  expect(cleanupRelationReferencesForDatabase(database, 'cat-corrupt-fields')).toBe(0);
+  withTempSqlite((temp) => {
+    seedRelationDb(temp.database);
+    expect(cleanupRelationReferencesForDatabase(temp.database, 'does-not-exist')).toBe(0);
+    expect(cleanupRelationReferencesForDatabase(temp.database, 'cat-corrupt-fields')).toBe(0);
+  });
 });

@@ -1,31 +1,26 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { afterEach, expect, test } from 'vitest';
+import Database from 'better-sqlite3';
+import { expect, test } from 'vitest';
 import {
   CURRENT_SCHEMA_VERSION,
   SCHEMA_MIGRATIONS,
   migrateDatabase,
 } from './migrations';
 import { getSchemaVersion, getTableColumns, tableExists } from './schema';
-import { openTempSqlite } from '../../test/temp-sqlite';
+import { isInsideDir, withTempSqlite } from '../../test/temp-sqlite';
 
-let cleanup: (() => void) | null = null;
-
-afterEach(() => {
-  cleanup?.();
-  cleanup = null;
-});
-
-function openMigrationDb() {
-  const temp = openTempSqlite();
-  cleanup = temp.close;
-  expect(temp.file).toContain('local-erp-test-');
-  expect(path.basename(temp.file)).not.toBe('erp.db');
-  expect(temp.file.includes(`${path.sep}Local ERP${path.sep}`)).toBe(false);
-  return {
-    ...temp,
-    backupDir: path.join(temp.dir, 'backups'),
-  };
+function withMigrationDb(run) {
+  return withTempSqlite((temp) => {
+    expect(temp.file).toContain('local-erp-test-');
+    expect(path.basename(temp.file)).not.toBe('erp.db');
+    expect(temp.file.includes(`${path.sep}Local ERP${path.sep}`)).toBe(false);
+    expect(isInsideDir(temp.dir, temp.file)).toBe(true);
+    return run({
+      ...temp,
+      backupDir: path.join(temp.dir, 'backups'),
+    });
+  });
 }
 
 function migrate(database, backupDir, extra = {}) {
@@ -143,114 +138,147 @@ function expectLatestSchema(database) {
 }
 
 test('creates the latest schema version on an empty database', () => {
-  const temp = openMigrationDb();
-  const result = migrate(temp.database, temp.backupDir);
+  withMigrationDb((temp) => {
+    const result = migrate(temp.database, temp.backupDir);
 
-  expect(result.version).toBe(CURRENT_SCHEMA_VERSION);
-  expect(result.appliedVersions).toEqual(SCHEMA_MIGRATIONS.map((migration) => migration.version));
-  expect(fs.existsSync(result.backupPath)).toBe(true);
-  expectLatestSchema(temp.database);
+    expect(result.version).toBe(CURRENT_SCHEMA_VERSION);
+    expect(result.appliedVersions).toEqual(SCHEMA_MIGRATIONS.map((migration) => migration.version));
+    expect(fs.existsSync(result.backupPath)).toBe(true);
+    expect(isInsideDir(temp.backupDir, result.backupPath)).toBe(true);
+    expect(path.basename(result.backupPath)).toMatch(/^pre-migration-v0-.+\.db$/);
+    expect(path.basename(result.backupPath)).not.toBe('erp.db');
+    expect(result.backupPath.includes(`${path.sep}Local ERP${path.sep}`)).toBe(false);
+    expectLatestSchema(temp.database);
+  });
 });
 
 test('migrates a legacy schema to the latest version and preserves rows', () => {
-  const temp = openMigrationDb();
-  seedLegacySchema(temp.database);
+  withMigrationDb((temp) => {
+    seedLegacySchema(temp.database);
 
-  const result = migrate(temp.database, temp.backupDir);
+    const result = migrate(temp.database, temp.backupDir);
 
-  expect(result.version).toBe(CURRENT_SCHEMA_VERSION);
-  expectLatestSchema(temp.database);
-  expect(temp.database.prepare('SELECT * FROM profiles WHERE id = ?').get('profile-1')).toMatchObject({
-    id: 'profile-1',
-    name: 'Studio',
-    createdAt: '2024-01-01',
-    updatedAt: '2024-01-02',
+    expect(result.version).toBe(CURRENT_SCHEMA_VERSION);
+    expectLatestSchema(temp.database);
+    expect(temp.database.prepare('SELECT * FROM profiles WHERE id = ?').get('profile-1')).toMatchObject({
+      id: 'profile-1',
+      name: 'Studio',
+      createdAt: '2024-01-01',
+      updatedAt: '2024-01-02',
+    });
+    expect(temp.database.prepare('SELECT data FROM records WHERE id = ?').get('rec-1').data).toBe('{"title":"kept"}');
   });
-  expect(temp.database.prepare('SELECT data FROM records WHERE id = ?').get('rec-1').data).toBe('{"title":"kept"}');
 });
 
 test('stamps an existing v1.1.19 database without rewriting user data', () => {
-  const temp = openMigrationDb();
-  seedCurrentUnversionedSchema(temp.database);
+  withMigrationDb((temp) => {
+    seedCurrentUnversionedSchema(temp.database);
 
-  const result = migrate(temp.database, temp.backupDir);
+    const result = migrate(temp.database, temp.backupDir);
 
-  expect(result.version).toBe(CURRENT_SCHEMA_VERSION);
-  expectLatestSchema(temp.database);
-  expect(temp.database.prepare('SELECT * FROM records WHERE id = ?').get('rec-1')).toMatchObject({
-    id: 'rec-1',
-    profileId: 'profile-1',
-    data: '{"title":"v1.1.19"}',
-    duration: 12,
+    expect(result.version).toBe(CURRENT_SCHEMA_VERSION);
+    expectLatestSchema(temp.database);
+    expect(temp.database.prepare('SELECT * FROM records WHERE id = ?').get('rec-1')).toMatchObject({
+      id: 'rec-1',
+      profileId: 'profile-1',
+      data: '{"title":"v1.1.19"}',
+      duration: 12,
+    });
+    const indexCount = temp.database.prepare(
+      "SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'index' AND name = 'idx_record_view_counts_profile_category'"
+    ).get();
+    expect(indexCount.count).toBe(1);
   });
-  const indexCount = temp.database.prepare(
-    "SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'index' AND name = 'idx_record_view_counts_profile_category'"
-  ).get();
-  expect(indexCount.count).toBe(1);
 });
 
 test('re-running migrations on the latest database is a no-op', () => {
-  const temp = openMigrationDb();
-  migrate(temp.database, temp.backupDir);
-  const before = fs.readdirSync(temp.backupDir);
+  withMigrationDb((temp) => {
+    migrate(temp.database, temp.backupDir);
+    const before = fs.readdirSync(temp.backupDir);
 
-  const result = migrate(temp.database, temp.backupDir);
+    const result = migrate(temp.database, temp.backupDir);
 
-  expect(result).toEqual({
-    appliedVersions: [],
-    version: CURRENT_SCHEMA_VERSION,
-    backupPath: null,
+    expect(result).toEqual({
+      appliedVersions: [],
+      version: CURRENT_SCHEMA_VERSION,
+      backupPath: null,
+    });
+    expect(fs.readdirSync(temp.backupDir)).toEqual(before);
+    expectLatestSchema(temp.database);
   });
-  expect(fs.readdirSync(temp.backupDir)).toEqual(before);
-  expectLatestSchema(temp.database);
 });
 
 test('rolls back the whole run when a later migration fails', () => {
-  const temp = openMigrationDb();
-  seedLegacySchema(temp.database);
+  withMigrationDb((temp) => {
+    seedLegacySchema(temp.database);
 
-  const failingMigrations = [
-    ...SCHEMA_MIGRATIONS,
-    {
-      version: CURRENT_SCHEMA_VERSION + 1,
-      name: 'intentional_failure',
-      up() {
-        throw new Error('migration boom');
+    const failingMigrations = [
+      ...SCHEMA_MIGRATIONS,
+      {
+        version: CURRENT_SCHEMA_VERSION + 1,
+        name: 'intentional_failure',
+        up() {
+          throw new Error('migration boom');
+        },
       },
-    },
-  ];
+    ];
 
-  expect(() => migrate(temp.database, temp.backupDir, { migrations: failingMigrations }))
-    .toThrow(/migration boom/);
+    expect(() => migrate(temp.database, temp.backupDir, { migrations: failingMigrations }))
+      .toThrow(/migration boom/);
 
-  expect(getSchemaVersion(temp.database)).toBe(0);
-  expect(getTableColumns(temp.database, 'records')).toEqual([
-    'id', 'categoryId', 'data', 'createdAt', 'updatedAt',
-  ]);
-  expect(tableExists(temp.database, 'record_view_counts')).toBe(false);
-  expect(temp.database.prepare('SELECT data FROM records WHERE id = ?').get('rec-1').data).toBe('{"title":"kept"}');
-  expect(temp.database.prepare('SELECT name FROM profiles WHERE id = ?').get('profile-1').name).toBe('Studio');
+    expect(getSchemaVersion(temp.database)).toBe(0);
+    expect(getTableColumns(temp.database, 'records')).toEqual([
+      'id', 'categoryId', 'data', 'createdAt', 'updatedAt',
+    ]);
+    expect(tableExists(temp.database, 'record_view_counts')).toBe(false);
+    expect(temp.database.prepare('SELECT data FROM records WHERE id = ?').get('rec-1').data).toBe('{"title":"kept"}');
+    expect(temp.database.prepare('SELECT name FROM profiles WHERE id = ?').get('profile-1').name).toBe('Studio');
+  });
 });
 
 test('preserves existing profile and record data through a successful upgrade', () => {
-  const temp = openMigrationDb();
-  seedLegacySchema(temp.database);
+  withMigrationDb((temp) => {
+    seedLegacySchema(temp.database);
 
-  migrate(temp.database, temp.backupDir);
+    migrate(temp.database, temp.backupDir);
 
-  const profile = temp.database.prepare('SELECT * FROM profiles WHERE id = ?').get('profile-1');
-  const record = temp.database.prepare('SELECT * FROM records WHERE id = ?').get('rec-1');
-  expect(profile).toMatchObject({
-    id: 'profile-1',
-    name: 'Studio',
-    createdAt: '2024-01-01',
-    updatedAt: '2024-01-02',
+    const profile = temp.database.prepare('SELECT * FROM profiles WHERE id = ?').get('profile-1');
+    const record = temp.database.prepare('SELECT * FROM records WHERE id = ?').get('rec-1');
+    expect(profile).toMatchObject({
+      id: 'profile-1',
+      name: 'Studio',
+      createdAt: '2024-01-01',
+      updatedAt: '2024-01-02',
+    });
+    expect(record).toMatchObject({
+      id: 'rec-1',
+      categoryId: 'cat-1',
+      data: '{"title":"kept"}',
+      createdAt: '2024-01-03',
+      updatedAt: '2024-01-04',
+    });
   });
-  expect(record).toMatchObject({
-    id: 'rec-1',
-    categoryId: 'cat-1',
-    data: '{"title":"kept"}',
-    createdAt: '2024-01-03',
-    updatedAt: '2024-01-04',
+});
+
+test('copies the pre-migration database into the temp backup directory', () => {
+  withMigrationDb((temp) => {
+    seedLegacySchema(temp.database);
+
+    const result = migrate(temp.database, temp.backupDir);
+    expect(isInsideDir(temp.backupDir, result.backupPath)).toBe(true);
+
+    const backup = new Database(result.backupPath, { readonly: true, fileMustExist: true });
+    try {
+      expect(getTableColumns(backup, 'records')).toEqual([
+        'id', 'categoryId', 'data', 'createdAt', 'updatedAt',
+      ]);
+      expect(tableExists(backup, 'record_view_counts')).toBe(false);
+      expect(backup.prepare('SELECT data FROM records WHERE id = ?').get('rec-1').data).toBe('{"title":"kept"}');
+      expect(backup.prepare('SELECT name FROM profiles WHERE id = ?').get('profile-1').name).toBe('Studio');
+    } finally {
+      backup.close();
+    }
+
+    expectLatestSchema(temp.database);
   });
 });

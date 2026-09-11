@@ -21,8 +21,11 @@ test('parseExternalHttpUrl allows only http and https', () => {
 
 test('resolveUserFilePath rejects URL schemes and keeps Windows paths', () => {
   const rootDir = 'C:\\app-data';
-  assert.equal(resolveUserFilePath('C:\\media\\clip.mp4', rootDir), path.resolve('C:\\media\\clip.mp4'));
-  assert.equal(resolveUserFilePath('relative\\cover.png', rootDir), path.resolve(rootDir, 'relative\\cover.png'));
+  assert.equal(resolveUserFilePath('C:\\media\\clip.mp4', rootDir), path.win32.resolve('C:\\media\\clip.mp4'));
+  assert.equal(
+    resolveUserFilePath('relative\\cover.png', rootDir),
+    path.win32.resolve(rootDir, 'relative\\cover.png')
+  );
   assert.equal(resolveUserFilePath('file:///C:/secret.txt', rootDir), null);
   assert.equal(resolveUserFilePath('javascript:alert(1)', rootDir), null);
   assert.equal(resolveUserFilePath('http://example.com/a.mp4', rootDir), null);

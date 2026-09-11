@@ -10,7 +10,7 @@ export const FILE_EXTENSIONS = {
 export function getFileTypeFromPath(filePath) {
   if (!filePath || typeof filePath !== 'string') return 'other';
 
-  const extension = path.extname(filePath).toLowerCase();
+  const extension = path.win32.extname(filePath).toLowerCase();
   if (FILE_EXTENSIONS.image.has(extension)) return 'image';
   if (FILE_EXTENSIONS.video.has(extension)) return 'video';
   if (FILE_EXTENSIONS.archive.has(extension)) return 'archive';

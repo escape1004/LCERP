@@ -30,9 +30,9 @@ export function resolveUserFilePath(input, rootDir) {
   if (!trimmed || trimmed.length > 4096 || trimmed.includes('\0')) return null;
   if (hasDisallowedPathScheme(trimmed)) return null;
 
-  const resolved = path.isAbsolute(trimmed)
-    ? path.resolve(trimmed)
-    : path.resolve(String(rootDir || ''), trimmed);
+  const resolved = path.win32.isAbsolute(trimmed)
+    ? path.win32.resolve(trimmed)
+    : path.win32.resolve(String(rootDir || ''), trimmed);
 
   if (!resolved || resolved.includes('\0')) return null;
   return resolved;

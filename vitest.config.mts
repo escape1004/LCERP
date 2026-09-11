@@ -11,14 +11,21 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.test.ts'],
     pool: 'forks',
+    isolate: true,
+    restoreMocks: true,
+    unstubEnvs: true,
+    unstubGlobals: true,
+    sequence: {
+      concurrent: false,
+    },
     passWithNoTests: false,
     server: {
       deps: {
-        external: ['better-sqlite3'],
+        external: ['better-sqlite3', 'electron'],
       },
     },
   },
   ssr: {
-    external: ['better-sqlite3'],
+    external: ['better-sqlite3', 'electron'],
   },
 });
