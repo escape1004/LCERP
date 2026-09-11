@@ -124,7 +124,10 @@ export const MainContent: React.FC = () => {
     () => (selectedCategoryId ? categoryById.get(selectedCategoryId) ?? null : null),
     [categoryById, selectedCategoryId]
   );
-  const currentRecordsSafe = selectedCategoryId ? recordsByCategory[selectedCategoryId] ?? [] : [];
+  const currentRecordsSafe = useMemo(
+    () => (selectedCategoryId ? recordsByCategory[selectedCategoryId] ?? [] : []),
+    [recordsByCategory, selectedCategoryId],
+  );
   const getInlinePercentageKey = useCallback((recordId: string, fieldId: string) => `${recordId}:${fieldId}`, []);
 
   useEffect(() => {

@@ -5,7 +5,8 @@ import AdmZip from 'adm-zip';
 import * as path from 'path';
 import * as fs from 'fs';
 import crypto from 'crypto';
-const ffmpegStatic = require('ffmpeg-static');
+import ffmpegStatic from 'ffmpeg-static';
+import ffprobeStatic from 'ffprobe-static';
 
 // Configure ffmpeg path
 if (ffmpegStatic && fs.existsSync(ffmpegStatic)) {
@@ -59,6 +60,21 @@ export function getThumbnailHash(filePath: string): string {
   return crypto.createHash('sha1').update(normalizedPath).digest('hex');
 }
 
+function resolveMediaBinaryPath(binary: { path: string } | string | null | undefined): string | null {
+  if (typeof binary === 'string' && binary.length > 0) return binary;
+  if (binary && typeof binary === 'object' && typeof binary.path === 'string' && binary.path.length > 0) {
+    return binary.path;
+  }
+  return null;
+}
+
+function configureFfprobePath() {
+  const ffprobePath = resolveMediaBinaryPath(ffprobeStatic);
+  if (ffprobePath && fs.existsSync(ffprobePath)) {
+    ffmpeg.setFfprobePath(ffprobePath);
+  }
+}
+
 function getAutoThumbnailTimestamp(duration: number | null): number {
   if (duration === null || !Number.isFinite(duration)) {
     return 1;
@@ -99,12 +115,8 @@ export async function generateThumbnail(filePath: string, timestampSec?: number 
           .toFile(thumbnailPath);
         return thumbnailPath;
 
-      case 'video':
-        // Read video duration
-        const ffprobeStatic = require('ffprobe-static');
-        if (ffprobeStatic && fs.existsSync(ffprobeStatic)) {
-          ffmpeg.setFfprobePath(ffprobeStatic);
-        }
+      case 'video': {
+        configureFfprobePath();
         
         // Inspect duration with ffprobe
         const duration = await new Promise<number | null>((resolve) => {
@@ -135,8 +147,9 @@ export async function generateThumbnail(filePath: string, timestampSec?: number 
               reject(err);
             });
         });
+      }
 
-      case 'archive':
+      case 'archive': {
         const zip = new AdmZip(filePath);
         const zipEntries = zip.getEntries();
         const imageEntry = zipEntries.find(entry => 
@@ -155,6 +168,7 @@ export async function generateThumbnail(filePath: string, timestampSec?: number 
           }
         }
         return null;
+      }
 
       default:
         return null;
@@ -185,9 +199,5 @@ export async function openFile(filePath: string): Promise<void> {
     throw new Error('Invalid or unauthorized file path');
   }
 
-  try {
-    await shell.openPath(filePath);
-  } catch (error) {
-    throw error;
-  }
+  await shell.openPath(filePath);
 }

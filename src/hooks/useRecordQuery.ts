@@ -44,7 +44,7 @@ export function useRecordQuery({
   getRecordReferenceCount,
   categoryId,
 }: UseRecordQueryOptions) {
-  const search = {
+  const search = useMemo(() => ({
     searchTerm,
     normalizedSearchTerm,
     normalizedMultiSearchTerms,
@@ -52,7 +52,15 @@ export function useRecordQuery({
     isMultiValueSearchField,
     hasActiveSearch,
     fileTypeFilter,
-  };
+  }), [
+    searchTerm,
+    normalizedSearchTerm,
+    normalizedMultiSearchTerms,
+    effectiveSearchField,
+    isMultiValueSearchField,
+    hasActiveSearch,
+    fileTypeFilter,
+  ]);
 
   const filteredRecords = useMemo(
     () => filterRecords({
@@ -67,13 +75,7 @@ export function useRecordQuery({
     }),
     [
       records,
-      searchTerm,
-      normalizedSearchTerm,
-      normalizedMultiSearchTerms,
-      effectiveSearchField,
-      isMultiValueSearchField,
-      hasActiveSearch,
-      fileTypeFilter,
+      search,
       fileField,
       visibleFields,
       fieldMap,

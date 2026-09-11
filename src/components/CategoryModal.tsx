@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, GripVertical, Plus, Trash2, ChevronDown, ChevronUp, Check, ChevronsUpDown } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { useERPStore } from '../hooks/useERPStore';
@@ -210,7 +210,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     }
   }, [formData, initialFormData, isOpen]);
 
-  const checkDuplicateValues = async () => {
+  const checkDuplicateValues = useCallback(async () => {
     if (!category) return true;
 
     try {
@@ -239,14 +239,14 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
       });
       return false;
     }
-  };
+  }, [category, formData.fields, getCategoryRecords]);
 
   // unique 속성이 변경될 때마다 중복 체크 실행
   useEffect(() => {
     if (category && formData.fields.some(field => field.unique)) {
-      checkDuplicateValues();
+      void checkDuplicateValues();
     }
-  }, [category, formData.fields]);
+  }, [category, checkDuplicateValues, formData.fields]);
 
   const validateForm = async () => {
     const newErrors: Record<string, string> = {};

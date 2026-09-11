@@ -46,6 +46,9 @@ export const DatabaseViewer: React.FC = () => {
   const { selectCategory } = useERPStore();
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const tableRequestIdRef = useRef(0);
+  const selectedTableRef = useRef<string | null>(null);
+  const didInitializeRef = useRef(false);
+  selectedTableRef.current = selectedTable;
 
   const showSuccessToast = (message: string) => {
     toast({
@@ -62,12 +65,16 @@ export const DatabaseViewer: React.FC = () => {
     });
   };
 
-  const handleApiError = (error: unknown, fallbackMessage: string) => {
+  const handleApiError = useCallback((error: unknown, fallbackMessage: string) => {
     const message = error instanceof Error ? error.message : fallbackMessage;
-    showErrorToast(message);
-  };
+    toast({
+      title: message,
+      variant: 'destructive',
+      className: 'bg-[#3a2a2a] border border-[#ff4040] text-white',
+    });
+  }, [toast]);
 
-  const loadTableData = async (tableName: string, page = 1, nextPageSize = pageSize) => {
+  const loadTableData = useCallback(async (tableName: string, page = 1, nextPageSize = pageSize) => {
     const requestId = ++tableRequestIdRef.current;
     setIsTableLoading(true);
     try {
@@ -90,7 +97,7 @@ export const DatabaseViewer: React.FC = () => {
         setIsTableLoading(false);
       }
     }
-  };
+  }, [handleApiError, pageSize]);
 
   const handleSelectTable = (tableName: string) => {
     setCurrentPage(1);
@@ -125,29 +132,29 @@ export const DatabaseViewer: React.FC = () => {
     void loadTableData(selectedTable, 1, nextPageSize);
   };
 
-  const loadTables = async () => {
+  const loadTables = useCallback(async () => {
     try {
       const nextTables = await window.electronAPI.getTables();
       setTables(nextTables);
 
-      if (nextTables.length > 0 && !selectedTable) {
+      if (nextTables.length > 0 && !selectedTableRef.current) {
         await loadTableData(nextTables[0].name);
       }
     } catch (error) {
       handleApiError(error, '테이블 목록을 불러오지 못했습니다.');
     }
-  };
+  }, [handleApiError, loadTableData]);
 
-  const loadFileSize = async (filePath: string) => {
+  const loadFileSize = useCallback(async (filePath: string) => {
     try {
       const result = await window.electronAPI.getFileSize(filePath);
       setFileSize(result.success ? result.size : '');
     } catch {
       setFileSize('');
     }
-  };
+  }, []);
 
-  const loadConfig = async () => {
+  const loadConfig = useCallback(async () => {
     try {
       const nextConfig = await window.electronAPI.getConfig();
       setDbPath(nextConfig.dbPath);
@@ -155,7 +162,7 @@ export const DatabaseViewer: React.FC = () => {
     } catch (error) {
       handleApiError(error, '설정을 불러오지 못했습니다.');
     }
-  };
+  }, [handleApiError, loadFileSize]);
 
   const handleOpenFile = async () => {
     try {
@@ -188,6 +195,9 @@ export const DatabaseViewer: React.FC = () => {
   };
 
   useEffect(() => {
+    if (didInitializeRef.current) return;
+    didInitializeRef.current = true;
+
     const initializeViewer = async () => {
       try {
         await loadConfig();
@@ -197,9 +207,9 @@ export const DatabaseViewer: React.FC = () => {
       }
     };
 
-    initializeViewer();
+    void initializeViewer();
     selectCategory(null);
-  }, []);
+  }, [handleApiError, loadConfig, loadTables, selectCategory]);
 
   useEffect(() => {
     if (!selectedTable) return;
