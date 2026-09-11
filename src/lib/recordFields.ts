@@ -143,3 +143,19 @@ export const formatStoredDate = (value: unknown) => {
   }
   return format(new Date(raw), 'yyyy-MM-dd');
 };
+
+export const toScalarInputValue = (value: unknown): string | number => {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  return '';
+};
+
+export const toDateInputValue = (value: unknown): string => (
+  typeof value === 'string' ? value : ''
+);
+
+export const toDisplayText = (value: unknown): string => {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return '';
+};

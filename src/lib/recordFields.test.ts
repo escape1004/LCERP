@@ -14,6 +14,9 @@ import {
   normalizePercentageValue,
   parseHashtags,
   parseNonNegativeNumberInput,
+  toDateInputValue,
+  toDisplayText,
+  toScalarInputValue,
 } from './recordFields';
 import { isStoredDateValue as isStoredDateValueFromDateParse } from './dateParse';
 
@@ -73,4 +76,16 @@ test('formats stored dates the same way as the record detail modal', () => {
   expect(isStoredDateValueFromDateParse('2024-03-09')).toBe(true);
   expect(isStoredDateValueFromDateParse('2024-03')).toBe(true);
   expect(isStoredDateValueFromDateParse('2024-3-9')).toBe(false);
+});
+
+test('normalizes unknown field values for inputs and display', () => {
+  expect(toScalarInputValue('title')).toBe('title');
+  expect(toScalarInputValue(12)).toBe(12);
+  expect(toScalarInputValue(null)).toBe('');
+  expect(toScalarInputValue({ value: 1, max: 2 })).toBe('');
+  expect(toDateInputValue('2024-03-09')).toBe('2024-03-09');
+  expect(toDateInputValue(new Date('2024-03-09'))).toBe('');
+  expect(toDisplayText('option-a')).toBe('option-a');
+  expect(toDisplayText(3)).toBe('3');
+  expect(toDisplayText(['a', 'b'])).toBe('');
 });

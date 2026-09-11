@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Category, DataRecord, NewCategory, NewRecord, Profile } from '@/types';
+import { Category, DataRecord, DeleteCategoryResult, NewCategory, NewRecord, Profile } from '@/types';
 
 interface ERPStore {
   categories: Category[];
@@ -16,7 +16,7 @@ interface ERPStore {
   loadRecords: (categoryId: string) => Promise<void>;
   addCategory: (category: NewCategory) => Promise<string>;
   updateCategory: (id: string, updates: any) => Promise<void>;
-  deleteCategory: (id: string) => Promise<{ success: boolean; thumbnailCleanupCount: number; relationCleanupCount: number }>;
+  deleteCategory: (id: string) => Promise<DeleteCategoryResult>;
   reorderCategories: (categories: Category[]) => Promise<void>;
   addRecord: (record: NewRecord) => Promise<string>;
   updateRecord: (id: string, data: Record<string, any>) => Promise<void>;
@@ -147,11 +147,7 @@ export const useERPStore = create<ERPStore>((set, get) => ({
   },
 
   addCategory: async (categoryData: NewCategory) => {
-    const id = Math.random().toString(36).substring(2);
-    await window.electronAPI.addCategory({
-      id,
-      ...categoryData,
-    });
+    const id = await window.electronAPI.addCategory(categoryData);
     await get().loadCategories();
     return id;
   },
@@ -195,7 +191,11 @@ export const useERPStore = create<ERPStore>((set, get) => ({
     });
     categoryIdsToDelete.forEach(categoryId => get().invalidateCache(categoryId));
     await get().loadCategories();
-    return result;
+    return {
+      success: result.success === true,
+      thumbnailCleanupCount: Number(result.thumbnailCleanupCount) || 0,
+      relationCleanupCount: Number(result.relationCleanupCount) || 0,
+    };
   },
 
   reorderCategories: async (categories) => {

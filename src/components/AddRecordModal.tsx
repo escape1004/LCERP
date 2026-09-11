@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { v4 as uuidv4 } from 'uuid';
-import { Category, DataRecord } from '../types';
+import { Category, NewRecord } from '../types';
 import { useERPStore } from '../hooks/useERPStore';
 
 interface AddRecordModalProps {
@@ -42,12 +41,12 @@ const AddRecordModal: React.FC<AddRecordModalProps> = ({ category, onClose }) =>
         }
       }
 
-      const newRecord: DataRecord = {
-        id: uuidv4(),
+      const now = new Date().toISOString();
+      const newRecord: NewRecord = {
         categoryId: category.id,
         data: formData,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: now,
+        updatedAt: now,
       };
 
       await addRecord(newRecord);

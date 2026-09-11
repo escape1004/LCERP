@@ -23,6 +23,9 @@ import {
   getPercentageTextClassName,
   normalizePercentageValue,
   parseNonNegativeNumberInput,
+  toDateInputValue,
+  toDisplayText,
+  toScalarInputValue,
 } from '../lib/recordFields';
 import { getRelationDisplayLabel, getRelationPrimaryLabel, getRelationSecondaryLabel } from '../utils/relationDisplay';
 import type { Config } from '../types';
@@ -627,7 +630,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
               <Input
                 type="text"
                 placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
-                value={value}
+                value={toScalarInputValue(value)}
                 onChange={(e) => updateFieldValue(field.id, normalizeTextFieldInput(field, e.target.value))}
                 className={inputClassName}
                 ref={isFirstField ? firstFieldRef as React.Ref<HTMLInputElement> : undefined}
@@ -649,7 +652,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
               <Input
                 type="text"
                 placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
-                value={value}
+                value={toScalarInputValue(value)}
                 onChange={(e) => updateFieldValue(field.id, normalizeTextFieldInput(field, e.target.value))}
                 className={cn(
                   inputClassName,
@@ -674,7 +677,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
           <div className="space-y-1">
             <textarea
               placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
-              value={value}
+              value={toScalarInputValue(value)}
               onChange={(e) => updateFieldValue(field.id, e.target.value)}
               className={cn(
                 "flex w-full rounded-md border px-3 py-2 text-sm shadow-sm transition-colors",
@@ -697,7 +700,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
             <Input
               type="number"
               placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
-              value={value}
+              value={toScalarInputValue(value)}
               onChange={(e) => updateFieldValue(field.id, e.target.value)}
               className={inputClassName}
               ref={isFirstField ? firstFieldRef as React.Ref<HTMLInputElement> : undefined}
@@ -711,8 +714,9 @@ export const RecordModal: React.FC<RecordModalProps> = ({
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               {(() => {
-                const currentValue = value && typeof value === 'object' ? value.value ?? 0 : 0;
-                const maxValue = value && typeof value === 'object' ? value.max ?? 0 : 0;
+                const percentage = getEditablePercentageValue(formData[field.id]);
+                const currentValue = percentage.value;
+                const maxValue = percentage.max;
                 const safeCurrent = Math.max(0, Number(currentValue || 0));
                 const safeMax = Math.max(0, Number(maxValue || 0));
                 const clampedCurrent = clampPercentageValue(safeCurrent, safeMax);
@@ -781,7 +785,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
         return (
           <div className="space-y-1">
             <DatePicker
-              value={value}
+              value={toDateInputValue(value)}
               onChange={(dateValue) => updateFieldValue(field.id, dateValue)}
               className={inputClassName}
               placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
@@ -956,7 +960,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                     aria-expanded={openComboboxes[field.id]}
                     className={cn(inputClassName, "w-full justify-between")}
                   >
-                    {value || `${field.name} 선택`}
+                    {toDisplayText(value) || `${field.name} 선택`}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
@@ -1195,8 +1199,9 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                     className={cn(inputClassName, "w-full justify-between")}
                   >
                     {value ? (() => {
-                      const selectedRecord = relatedRecords.find(r => r.id === value);
-                      return selectedRecord ? getRelationLabel(selectedRecord, field) : value;
+                      const selectedId = toDisplayText(value);
+                      const selectedRecord = relatedRecords.find(r => r.id === selectedId);
+                      return selectedRecord ? getRelationLabel(selectedRecord, field) : selectedId;
                     })() : `${field.name} 선택`}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
@@ -1299,7 +1304,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
             <Input
               type="text"
               placeholder="파일 경로를 입력하거나 파일 선택 버튼을 클릭하세요"
-              value={value}
+              value={toScalarInputValue(value)}
               onChange={(e) => updateFieldValue(field.id, e.target.value)}
               className={inputClassName + ' flex-1'}
               readOnly

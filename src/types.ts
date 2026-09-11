@@ -119,6 +119,12 @@ export interface ThumbnailSyncCleanupResult {
   }>;
 }
 
+export interface DeleteCategoryResult {
+  success: boolean;
+  thumbnailCleanupCount: number;
+  relationCleanupCount: number;
+}
+
 export interface Config {
   dbPath: string;
   backupDir: string;
@@ -128,6 +134,9 @@ export interface Config {
   muteAudioWhenBackgrounded?: boolean;
   zoomPercent?: number;
   hasAppPassword?: boolean;
+  passwordLockMaxAttempts?: number;
+  passwordLockDurationMinutes?: number;
+  passwordLockUntil?: number | null;
   idleLockMinutes?: number;
   hasOpenAiApiKey?: boolean;
   videoSeekSeconds?: number;
@@ -208,7 +217,7 @@ export interface ElectronAPI {
   openDbFile: () => Promise<void>;
   addCategory: (category: NewCategory) => Promise<string>;
   updateCategory: (id: string, updates: CategoryUpdate) => Promise<void>;
-  deleteCategory: (id: string) => Promise<void>;
+  deleteCategory: (id: string) => Promise<DeleteCategoryResult>;
   moveCategoryToProfile: (categoryId: string, targetProfileId: string) => Promise<{ success: boolean; error?: string }>;
   exportCategoryRecords: (categoryId: string, format: 'csv' | 'xlsx') => Promise<{ success: boolean; canceled?: boolean; path?: string; recordCount?: number; format?: 'csv' | 'xlsx'; error?: string }>;
   importCategoryRecords: (categoryId: string, format: 'csv' | 'xlsx') => Promise<{ success: boolean; canceled?: boolean; path?: string; importedCount?: number; duplicateCount?: number; skippedCount?: number; unresolvedRelationCount?: number; duplicateFields?: string[]; format?: 'csv' | 'xlsx'; error?: string }>;
@@ -222,7 +231,7 @@ export interface ElectronAPI {
   backupDatabase: () => Promise<{ success: boolean; path?: string; error?: string }>;
   resetDatabase: () => Promise<{ success: boolean; backupPath?: string; error?: string }>;
   openBackupLocation: () => Promise<{ success: boolean; error?: string }>;
-  getConfig: () => Promise<any>;
+  getConfig: () => Promise<Config>;
   setBackupDir: () => Promise<{ success: boolean; path?: string; error?: string }>;
   setBackupInterval: (minutes: number) => Promise<{ success: boolean; error?: string }>;
   setBackupEnabled: (enabled: boolean) => Promise<{ success: boolean; backupEnabled?: boolean; error?: string }>;
