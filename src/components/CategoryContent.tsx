@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Download, Edit, Eye, Filter, Plus, Search, Trash2, X } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { Button } from './ui/button';
@@ -73,76 +73,16 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
 
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
-  const scrollTableToTop = () => {
+  const scrollTableToTop = useCallback(() => {
     if (tableContainerRef.current) {
       tableContainerRef.current.scrollTop = 0;
     }
-  };
+  }, []);
 
   useEffect(() => {
     setCurrentPage(1);
     scrollTableToTop();
-  }, [categoryId, setCurrentPage]);
-
-  // 키보드 단축키 핸들러
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      const isEditableTarget = !!target && (
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.tagName === 'SELECT' ||
-        target.isContentEditable
-      );
-
-      // 모달이 열려있으면 단축키 비활성화
-      if (isRecordModalOpen || isViewModalOpen || isConfirmDialogOpen || isAlertDialogOpen) {
-        return;
-      }
-
-      if (e.ctrlKey && e.key === 'n') {
-        e.preventDefault();
-        if (categoryId) {
-          setEditingRecord(null);
-          setIsRecordModalOpen(true);
-        }
-      } else if (e.key === 'F2' && selectedRecordId) {
-        e.preventDefault();
-        const selectedRecord = paginatedRecords.find(record => record.id === selectedRecordId)
-          || sortedRecords.find(record => record.id === selectedRecordId);
-        if (selectedRecord) {
-          handleEdit(selectedRecord);
-        }
-      } else if (!e.ctrlKey && !e.metaKey && !e.altKey && !isEditableTarget && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-        if (paginatedRecords.length === 0) {
-          return;
-        }
-
-        e.preventDefault();
-        const currentIndex = paginatedRecords.findIndex(record => record.id === selectedRecordId);
-
-        if (e.key === 'ArrowUp') {
-          const nextIndex = currentIndex <= 0 ? 0 : currentIndex - 1;
-          setSelectedRecordId(paginatedRecords[nextIndex].id);
-        } else {
-          const nextIndex = currentIndex < 0 ? 0 : Math.min(currentIndex + 1, paginatedRecords.length - 1);
-          setSelectedRecordId(paginatedRecords[nextIndex].id);
-        }
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [categoryId, selectedRecordId, paginatedRecords, sortedRecords, isRecordModalOpen, isViewModalOpen, isConfirmDialogOpen, isAlertDialogOpen]);
-
-  useEffect(() => {
-    if (!selectedRecordId) return;
-    const exists = sortedRecords.some(record => record.id === selectedRecordId);
-    if (!exists) {
-      setSelectedRecordId(null);
-    }
-  }, [selectedRecordId, sortedRecords]);
+  }, [categoryId, setCurrentPage, scrollTableToTop]);
 
   const getRecordReferenceCount = useCallback((recordId: string, categoryId: string): number => {
     let count = 0;
@@ -175,22 +115,9 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
     return count;
   }, [categories, records]);
 
-  if (!categoryId) {
-    return (
-      <div className="flex items-center justify-center h-full text-discord-muted">
-        카테고리를 선택해주세요
-      </div>
-    );
-  }
-
-  const selectedCategory = categories.find(c => c.id === categoryId);
-  if (!selectedCategory) {
-    return (
-      <div className="flex items-center justify-center h-full text-discord-muted">
-        존재하지 않는 카테고리입니다
-      </div>
-    );
-  }
+  const selectedCategory = categoryId
+    ? categories.find(c => c.id === categoryId)
+    : undefined;
 
   const getParentPath = (category: Category): Category[] => {
     const path: Category[] = [];
@@ -206,8 +133,14 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
     selectCategory(id);
   };
 
-  const categoryRecords = records[categoryId] || [];
-  const sortedRecords = [...categoryRecords]
+  const categoryRecords = useMemo(
+    () => (categoryId ? records[categoryId] || [] : []),
+    [categoryId, records],
+  );
+
+  const sortedRecords = useMemo(() => {
+    if (!selectedCategory) return [];
+    return [...categoryRecords]
     .filter(record => {
       if (!searchTerm) return true;
       
@@ -411,10 +344,79 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
       }
       return sortDirection === 'asc' ? comparison : -comparison;
     });
+  }, [categoryRecords, searchTerm, searchField, sortField, sortDirection, selectedCategory, categories, records, getRecordReferenceCount]);
 
   const totalPages = Math.ceil(sortedRecords.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedRecords = sortedRecords.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedRecords = useMemo(
+    () => sortedRecords.slice(startIndex, startIndex + itemsPerPage),
+    [sortedRecords, startIndex, itemsPerPage],
+  );
+
+  const handleEdit = useCallback((record: DataRecord) => {
+    setEditingRecord(record);
+    setIsRecordModalOpen(true);
+  }, []);
+
+  // 키보드 단축키 핸들러
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isEditableTarget = !!target && (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      );
+
+      // 모달이 열려있으면 단축키 비활성화
+      if (isRecordModalOpen || isViewModalOpen || isConfirmDialogOpen || isAlertDialogOpen) {
+        return;
+      }
+
+      if (e.ctrlKey && e.key === 'n') {
+        e.preventDefault();
+        if (categoryId) {
+          setEditingRecord(null);
+          setIsRecordModalOpen(true);
+        }
+      } else if (e.key === 'F2' && selectedRecordId) {
+        e.preventDefault();
+        const selectedRecord = paginatedRecords.find(record => record.id === selectedRecordId)
+          || sortedRecords.find(record => record.id === selectedRecordId);
+        if (selectedRecord) {
+          handleEdit(selectedRecord);
+        }
+      } else if (!e.ctrlKey && !e.metaKey && !e.altKey && !isEditableTarget && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        if (paginatedRecords.length === 0) {
+          return;
+        }
+
+        e.preventDefault();
+        const currentIndex = paginatedRecords.findIndex(record => record.id === selectedRecordId);
+
+        if (e.key === 'ArrowUp') {
+          const nextIndex = currentIndex <= 0 ? 0 : currentIndex - 1;
+          setSelectedRecordId(paginatedRecords[nextIndex].id);
+        } else {
+          const nextIndex = currentIndex < 0 ? 0 : Math.min(currentIndex + 1, paginatedRecords.length - 1);
+          setSelectedRecordId(paginatedRecords[nextIndex].id);
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [categoryId, selectedRecordId, paginatedRecords, sortedRecords, isRecordModalOpen, isViewModalOpen, isConfirmDialogOpen, isAlertDialogOpen, handleEdit]);
+
+  useEffect(() => {
+    if (!selectedRecordId || !selectedCategory) return;
+    const exists = sortedRecords.some(record => record.id === selectedRecordId);
+    if (!exists) {
+      setSelectedRecordId(null);
+    }
+  }, [selectedRecordId, sortedRecords, selectedCategory]);
 
   // Ctrl+마우스 휠 페이지 이동 핸들러
   useEffect(() => {
@@ -445,7 +447,23 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
     return () => {
       document.removeEventListener('wheel', handleWheel);
     };
-  }, [categoryId, currentPage, totalPages, isRecordModalOpen, isViewModalOpen, isConfirmDialogOpen, isAlertDialogOpen]);
+  }, [categoryId, currentPage, totalPages, isRecordModalOpen, isViewModalOpen, isConfirmDialogOpen, isAlertDialogOpen, setCurrentPage, scrollTableToTop]);
+
+  if (!categoryId) {
+    return (
+      <div className="flex items-center justify-center h-full text-discord-muted">
+        카테고리를 선택해주세요
+      </div>
+    );
+  }
+
+  if (!selectedCategory) {
+    return (
+      <div className="flex items-center justify-center h-full text-discord-muted">
+        존재하지 않는 카테고리입니다
+      </div>
+    );
+  }
 
   const handleSort = (fieldId: string) => {
     if (sortField === fieldId) {
@@ -462,9 +480,9 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
     setIsViewModalOpen(true);
   };
 
-  const handleEdit = (record: DataRecord) => {
-    setEditingRecord(record);
-    setIsRecordModalOpen(true);
+  const showAlert = (title: string, message: string, variant: 'error' | 'warning' | 'info' | 'success' = 'info') => {
+    setAlertDialogProps({ title, message, variant });
+    setIsAlertDialogOpen(true);
   };
 
   const handleDelete = async (record: DataRecord) => {
@@ -486,11 +504,6 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
       }
       setRecordToDelete(null);
     }
-  };
-
-  const showAlert = (title: string, message: string, variant: 'error' | 'warning' | 'info' | 'success' = 'info') => {
-    setAlertDialogProps({ title, message, variant });
-    setIsAlertDialogOpen(true);
   };
 
   const handleExportRecords = async (format: 'csv' | 'xlsx') => {
@@ -653,7 +666,7 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
         }
         return String(value);
       
-      case 'relation':
+      case 'relation': {
         if (!field.relationCategoryId) return String(value);
         
         const relatedCategory = categories.find(cat => cat.id === field.relationCategoryId);
@@ -686,6 +699,7 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
             (categoryId) => records[categoryId] || []
           ) || '-';
         }
+      }
       
       default:
         return String(value);

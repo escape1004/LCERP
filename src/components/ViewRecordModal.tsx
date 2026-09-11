@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { X, ChevronRight, HelpCircle, Upload, Archive, ImageOff } from 'lucide-react';
 import { useERPStore } from '../hooks/useERPStore';
 import { useLoadingStore } from '../hooks/useLoadingStore';
-import { Category, DataRecord, FieldDefinition } from '../types';
+import { Category, DataRecord } from '../types';
 import { Button } from './ui/button';
 import { toast } from './ui/use-toast';
 import { ViewerModal } from './ViewerModal';
@@ -23,7 +23,7 @@ declare global {
 interface ViewRecordModalProps {
   isOpen: boolean;
   onClose: () => void;
-  category: Category;
+  category: Category | null;
   record: DataRecord | null;
   onViewRecord?: (record: DataRecord, category: Category) => void;
 }
@@ -41,8 +41,6 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   record,
   onViewRecord,
 }) => {
-  if (!record || !category) return null;
-
   const { categories, getCategoryRecords, selectCategory, loadRecords } = useERPStore();
   const { showLoading, hideLoading, setLoading: setGlobalLoading } = useLoadingStore();
 
@@ -94,7 +92,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   }, [selectCategory, onClose]);
 
   // Footer 관련 변수들
-  const fileField = category.fields.find(f => f.type === 'file');
+  const fileField = category?.fields.find(f => f.type === 'file');
   const filePath = resolveFilePath(fileField ? record?.data[fileField.id] : null, fileField);
   const isThumbnailOnlyFile = !!fileField?.thumbnailOnly;
 
@@ -135,10 +133,9 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                 try {
                   if ((window.electronAPI as any).removeAllBookmarks) {
                     const result = await (window.electronAPI as any).removeAllBookmarks(category.id, record.id);
-                    if (result && result.success) {
-                    } else if (result && result.error) {
+                    if (result && !result.success && result.error) {
                       console.error('북마크 삭제 실패:', result.error);
-                }
+                    }
                   }
                 } catch (error) {
                   console.error('북마크 삭제 중 오류:', error);
@@ -200,231 +197,45 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
     return count;
   }, [categories, getCategoryRecords]);
 
-  const formatFieldValue = (field: FieldDefinition, value: any, onViewRecord?: (record: DataRecord, category: Category) => void) => {
-    // 파일 필드 특별 처리
-    if (field.type === 'file') {
-      const resolvedPath = resolveFilePath(value, field);
-      if (!resolvedPath) return '-';
-      
-      const ext = resolvedPath ? resolvedPath.slice(resolvedPath.lastIndexOf('.')).toLowerCase() : '';
-      const [thumbnailDataUrl, setThumbnailDataUrl] = React.useState<string | null>(null);
-      const [loading, setLoading] = React.useState(false);
-      const [error, setError] = React.useState<string | null>(null);
-      const [resolvedExists, setResolvedExists] = React.useState<boolean | null>(null);
+  const handleViewRelatedRecord = useCallback((relatedRecord: DataRecord, relatedCategory: Category) => {
+    onClose();
+    window.setTimeout(() => {
+      onViewRecord?.(relatedRecord, relatedCategory);
+    }, 200);
+  }, [onClose, onViewRecord]);
 
-      React.useEffect(() => {
-        let ignore = false;
-        if (SUPPORTED_THUMBNAIL_EXTS.includes(ext) && resolvedPath) {
-          setLoading(true);
-          if (!record) {
-            setLoading(false);
-            setThumbnailDataUrl(null);
-            setError(null);
-            return () => { ignore = true; };
-          }
-          window.electronAPI.getThumbnailDataUrlHybrid(record, resolvedPath)
-            .then(res => {
-              if (!ignore) {
-                if (res) {
-                  setThumbnailDataUrl(res);
-                  setError(null);
-                } else {
-                  setThumbnailDataUrl(null);
-                  setError(null);
-                }
-                setLoading(false);
-              }
-            })
-            .catch(e => {
-              if (!ignore) {
-                setThumbnailDataUrl(null);
-                setError(String(e));
-                setLoading(false);
-              }
-            });
-        } else {
-          setThumbnailDataUrl(null);
-          setError(null);
-        }
-        return () => { ignore = true; };
-      }, [resolvedPath, record, ext]);
-
-      React.useEffect(() => {
-        let ignore = false;
-        if (field.thumbnailOnly) {
-          setResolvedExists(true);
-          return () => { ignore = true; };
-        }
-        if (resolvedPath) {
-          window.electronAPI.checkFileExists(resolvedPath).then(exists => {
-            if (!ignore) setResolvedExists(exists);
-          });
-        } else {
-          setResolvedExists(null);
-        }
-        return () => { ignore = true; };
-      }, [resolvedPath, field.thumbnailOnly]);
-
-      // 썸네일 재생성 이벤트 처리
-      React.useEffect(() => {
-        const handleThumbnailRegenerated = (event: CustomEvent<{ filePath: string }>) => {
-          if (event.detail.filePath === resolvedPath) {
-            // 해당 파일의 썸네일이 재생성되었으므로 다시 로드
-            setLoading(true);
-            if (!record) {
-              setLoading(false);
-              setThumbnailDataUrl(null);
-              setError(null);
-              return;
-            }
-            window.electronAPI.getThumbnailDataUrlHybrid(record, resolvedPath)
-              .then(res => {
-                if (res) {
-                  setThumbnailDataUrl(res);
-                  setError(null);
-                } else {
-                  setThumbnailDataUrl(null);
-                  setError(null);
-                }
-                setLoading(false);
-              })
-              .catch(e => {
-                setThumbnailDataUrl(null);
-                setError(String(e));
-                setLoading(false);
-              });
-          }
-        };
-
-        window.addEventListener('thumbnail:regenerated', handleThumbnailRegenerated as EventListener);
-        return () => {
-          window.removeEventListener('thumbnail:regenerated', handleThumbnailRegenerated as EventListener);
-        };
-      }, [resolvedPath, record]);
-
-      const missingFile = !field.thumbnailOnly && resolvedExists === false;
-      const canOpen = resolvedExists !== false && !field.thumbnailOnly;
-
-      if (SUPPORTED_THUMBNAIL_EXTS.includes(ext)) {
-        return (
-          <div className="flex flex-col items-start gap-2">
-            {loading ? (
-              <div className="w-[96px] h-[96px] bg-gray-800 flex items-center justify-center text-xs text-gray-400">로딩중...</div>
-            ) : thumbnailDataUrl ? (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="relative">
-                      <img
-                        src={thumbnailDataUrl}
-                        alt="썸네일"
-                        className={`w-[96px] h-[96px] object-contain bg-black rounded border border-gray-700 ${canOpen ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
-                        onClick={() => canOpen && handleThumbnailClick(resolvedPath)}
-                      />
-                      {missingFile && (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <HelpCircle size={16} className="text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]" />
-                        </div>
-                      )}
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-                    {resolvedPath ? (missingFile ? '원본 파일이 존재하지 않습니다' : thumbnailDataUrl ? '썸네일 클릭 시 뷰어 모달 열기' : '클릭 시 뷰어 모달 열기 (썸네일 없음)') : '첨부파일이 없습니다'}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ) : resolvedPath ? (
-              <div 
-                className={`w-[96px] h-[96px] bg-gray-900 flex items-center justify-center text-xs text-gray-500 border border-gray-700 rounded transition-colors ${canOpen ? 'cursor-pointer hover:bg-gray-800' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
-                onClick={() => canOpen && handleThumbnailClick(resolvedPath)}
-              >
-                {missingFile ? '파일 없음' : ['.zip', '.7z'].includes(ext) ? (
-                  <Archive size={28} className="text-yellow-400/80" />
-                ) : '썸네일 없음'}
-              </div>
-            ) : (
-              // 파일이 없는 경우
-              <div className="w-[96px] h-[96px] bg-gray-950 flex items-center justify-center text-xs text-gray-600 border border-gray-800 rounded">
-                파일 없음
-              </div>
-            )}
-            {!field.thumbnailOnly && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all text-left"
-                      onClick={async () => {
-                        try {
-                          await navigator.clipboard.writeText(resolvedPath);
-                          toast({ title: '경로가 복사되었습니다.' });
-                        } catch (e) {
-                          toast({ title: '복사 실패', description: String(e), variant: 'destructive' });
-                        }
-                      }}
-                    >
-                      {resolvedPath}
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-                    복사하기
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-          </div>
-        );
-      }
-      if (field.thumbnailOnly) return '-';
-      // 미지원 확장자: 기존 경로 복사 버튼만
-      return (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                className="px-2 py-1 rounded bg-discord-sidebar text-discord-text border border-gray-600 hover:bg-discord-hover cursor-pointer text-xs select-all text-left"
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(resolvedPath);
-                    toast({ title: '경로가 복사되었습니다.' });
-                  } catch (e) {
-                    toast({ title: '복사 실패', description: String(e), variant: 'destructive' });
-                  }
-                }}
-              >
-                {resolvedPath}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top" align="center" className="relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words">
-              복사하기
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      );
-    }
-
-    return (
-      <FieldValueRenderer
-        variant="detail"
-        field={field}
-        value={value}
-        categories={categories}
-        getCategoryRecords={getCategoryRecords}
-        recordData={record.data as Record<string, unknown>}
-        onViewRelatedRecord={(relatedRecord, relatedCategory) => {
-          onClose();
-          setTimeout(() => {
-            onViewRecord?.(relatedRecord, relatedCategory);
-          }, 200);
-        }}
-      />
-    );
-  };
+  if (!record || !category) return null;
 
   // 썸네일 전용 컴포넌트(상단에만 렌더)
-  const TopThumbnail: React.FC<{ filePath: string; canOpenFile: boolean; categoryId?: string }> = ({ filePath, canOpenFile, categoryId }) => {
+  const TopThumbnail: React.FC<{
+    filePath: string;
+    canOpenFile: boolean;
+    categoryId?: string;
+    record: DataRecord;
+    hh: number;
+    mm: number;
+    ss: number;
+    duration: number | null;
+    setHh: React.Dispatch<React.SetStateAction<number>>;
+    setMm: React.Dispatch<React.SetStateAction<number>>;
+    setSs: React.Dispatch<React.SetStateAction<number>>;
+    setDuration: React.Dispatch<React.SetStateAction<number | null>>;
+    setLastValidDuration: React.Dispatch<React.SetStateAction<number | null>>;
+  }> = ({
+    filePath,
+    canOpenFile,
+    categoryId,
+    record,
+    hh,
+    mm,
+    ss,
+    duration,
+    setHh,
+    setMm,
+    setSs,
+    setDuration,
+    setLastValidDuration,
+  }) => {
     const [dataUrl, setDataUrl] = React.useState<string | null>(null);
     const [loading, setLoading] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
@@ -461,7 +272,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         setDuration(null);
       }
       return () => { ignore = true; };
-    }, [isVideo, filePath, record]);
+    }, [isVideo, filePath, record, setDuration, setLastValidDuration]);
 
     React.useEffect(() => {
       let ignore = false;
@@ -509,7 +320,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
           setLoading(false);
           throw e;
         });
-    }, [filePath]);
+    }, [filePath, record]);
 
     const handleRemoveCustomThumbnail = React.useCallback(async () => {
       if (!filePath) return;
@@ -565,7 +376,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         setDataUrl(null);
         setError(null);
       }
-    }, [filePath, reloadThumbnail]);
+    }, [filePath, reloadThumbnail, ext]);
 
     // 썸네일 재생성 이벤트 처리
     React.useEffect(() => {
@@ -597,7 +408,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         setMm(newMm);
         setSs(newSs);
       }
-    }, [hh, mm, ss, duration, isVideo]);
+    }, [hh, mm, ss, duration, isVideo, setHh, setMm, setSs]);
 
     // duration이 0이거나 null이면 시간 입력 UI를 렌더하지 않음
     const effectiveDuration = lastValidDuration;
@@ -941,7 +752,21 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         {/* 썸네일 최상단 렌더 */}
         {fileField && filePath && (
           <div className="flex flex-col items-center py-6 border-b border-gray-700 bg-discord-sidebar">
-            <TopThumbnail filePath={filePath} canOpenFile={canOpenFile} categoryId={category.id} />
+            <TopThumbnail
+              filePath={filePath}
+              canOpenFile={canOpenFile}
+              categoryId={category.id}
+              record={record}
+              hh={hh}
+              mm={mm}
+              ss={ss}
+              duration={duration}
+              setHh={setHh}
+              setMm={setMm}
+              setSs={setSs}
+              setDuration={setDuration}
+              setLastValidDuration={setLastValidDuration}
+            />
           </div>
         )}
 
@@ -989,7 +814,15 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                         );
                       })()
                     ) : (
-                      formatFieldValue(field, record.data[field.id], onViewRecord)
+                      <FieldValueRenderer
+                        variant="detail"
+                        field={field}
+                        value={record.data[field.id]}
+                        categories={categories}
+                        getCategoryRecords={getCategoryRecords}
+                        recordData={record.data as Record<string, unknown>}
+                        onViewRelatedRecord={handleViewRelatedRecord}
+                      />
                     )}
                   </div>
                 </div>
