@@ -155,3 +155,21 @@ Local ERP는 컴퓨터에 보관한 파일과 관련 정보를 한곳에서 정�
 - 압축파일 내부의 이미지, 동영상, 텍스트 탐색 방식 개선
 - 카테고리 통계, 데이터베이스 보기 및 여러 화면의 사용성 개선
 - 커스텀 썸네일 저장과 카테고리 이동 안정성 개선
+
+## 로컬 검증
+
+GitHub Actions와 같은 검사를 로컬에서 실행하려면 다음을 사용합니다.
+
+```bash
+npm ci
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
+
+Windows에서 설치 패키지 구성만 확인하려면 아래 명령을 추가로 실행합니다. 릴리스 업로드는 하지 않습니다.
+
+```bash
+npx electron-builder --dir --win --publish never
+```

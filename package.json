@@ -13,6 +13,7 @@
     "build:electron": "npm run clean:electron && npm run build:main && npm run build:preload",
     "build:preload": "vite build --mode preload",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit --pretty false --project tsconfig.app.json && tsc --noEmit --pretty false --project tsconfig.main.json && tsc --noEmit --pretty false --project tsconfig.node.json",
     "preview": "vite preview",
     "start": "cross-env ELECTRON=true electron .",
     "electron:dev": "npm run build:electron && concurrently --kill-others \"npm run dev\" \"wait-on tcp:5174 && cross-env VITE_DEV_SERVER_URL=http://localhost:5174 electron .\"",

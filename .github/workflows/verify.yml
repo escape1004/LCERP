@@ -1,0 +1,83 @@
+name: Verify
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-linux:
+    name: Verify lint, types, tests, and production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          # Cache the npm download cache only. Installs always use npm ci, so a
+          # lockfile mismatch still fails instead of reusing node_modules.
+          cache: npm
+
+      - name: Install Linux libraries for Electron-as-Node tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libasound2 \
+            libatk-bridge2.0-0 \
+            libgbm1 \
+            libgtk-3-0 \
+            libnss3
+
+      - name: Install dependencies with npm ci
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run TypeScript typecheck
+        run: npm run typecheck
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Build production Electron main and renderer
+        run: npm run build
+
+  verify-windows-package:
+    name: Verify Windows Electron package
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          # Cache the npm download cache only. Installs always use npm ci, so a
+          # lockfile mismatch still fails instead of reusing node_modules.
+          cache: npm
+
+      - name: Install dependencies with npm ci
+        run: npm ci
+
+      - name: Build production Electron main and renderer
+        run: npm run build
+
+      - name: Package unpacked Windows app without publishing
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx --no-install electron-builder --dir --win --publish never
