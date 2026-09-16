@@ -66,6 +66,10 @@ export function normalizeTranslationModel(value) {
     : DEFAULT_TRANSLATION_MODEL;
 }
 
+export function normalizeTranslationDisplayMode(value) {
+  return value === 'inline-hover' ? 'inline-hover' : 'tooltip';
+}
+
 export function normalizeBackupInterval(value) {
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue)) return null;

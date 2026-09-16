@@ -6,6 +6,7 @@ import {
   getTranslationMetaFieldId,
   isTranslationEnabledField,
   isTranslationSupportedField,
+  normalizeTranslationDisplayMode,
 } from './translation';
 
 test('builds translation metadata field ids', () => {
@@ -27,6 +28,12 @@ test('reads translated values and ignores non-string data', () => {
   expect(getTranslatedFieldValue(undefined, 'title')).toBe('');
   expect(getTranslatedFieldValue({ title__translated: 12 }, 'title')).toBe('');
   expect(getTranslatedFieldValue({ title__translated: '안녕' }, 'title')).toBe('안녕');
+});
+
+test('normalizes translation display modes', () => {
+  expect(normalizeTranslationDisplayMode('tooltip')).toBe('tooltip');
+  expect(normalizeTranslationDisplayMode('inline-hover')).toBe('inline-hover');
+  expect(normalizeTranslationDisplayMode('other')).toBe('tooltip');
 });
 
 test('returns null for missing or corrupt translation metadata', () => {

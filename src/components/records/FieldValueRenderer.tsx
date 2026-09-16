@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Check, ExternalLink, Languages, X } from 'lucide-react';
 import type { Category, DataRecord, FieldDefinition } from '../../types';
 import { toast } from '../ui/use-toast';
@@ -12,7 +12,14 @@ import {
   isUrlString,
   type FieldValue,
 } from '../../lib/recordFields';
-import { getTranslatedFieldValue, getTranslationMeta, isTranslationEnabledField } from '../../lib/translation';
+import {
+  DEFAULT_TRANSLATION_DISPLAY_MODE,
+  getTranslatedFieldValue,
+  getTranslationMeta,
+  isTranslationEnabledField,
+  normalizeTranslationDisplayMode,
+  type TranslationDisplayMode,
+} from '../../lib/translation';
 import { getRelationDisplayLabel } from '../../utils/relationDisplay';
 
 export const FIELD_TOOLTIP_CLASSNAME = "relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words";
@@ -78,6 +85,50 @@ export function renderTextWithHashtags(text: string) {
   }
 
   return parts;
+}
+
+let sharedTranslationDisplayMode: TranslationDisplayMode = DEFAULT_TRANSLATION_DISPLAY_MODE;
+const translationDisplayModeListeners = new Set<(mode: TranslationDisplayMode) => void>();
+let translationDisplayModeStarted = false;
+
+function notifyTranslationDisplayMode(mode: TranslationDisplayMode) {
+  sharedTranslationDisplayMode = mode;
+  translationDisplayModeListeners.forEach((listener) => listener(mode));
+}
+
+function ensureTranslationDisplayModeSubscription() {
+  if (translationDisplayModeStarted || typeof window === 'undefined' || !window.electronAPI?.getConfig) {
+    return;
+  }
+
+  translationDisplayModeStarted = true;
+  window.electronAPI.getConfig().then((config) => {
+    notifyTranslationDisplayMode(normalizeTranslationDisplayMode(config?.translationDisplayMode));
+  }).catch(() => {
+    notifyTranslationDisplayMode(DEFAULT_TRANSLATION_DISPLAY_MODE);
+  });
+
+  window.addEventListener('config:updated', (event) => {
+    const mode = (event as CustomEvent<{ translationDisplayMode?: TranslationDisplayMode }>).detail?.translationDisplayMode;
+    if (mode) {
+      notifyTranslationDisplayMode(normalizeTranslationDisplayMode(mode));
+    }
+  });
+}
+
+function useTranslationDisplayMode() {
+  const [mode, setMode] = useState(sharedTranslationDisplayMode);
+
+  useEffect(() => {
+    ensureTranslationDisplayModeSubscription();
+    translationDisplayModeListeners.add(setMode);
+    setMode(sharedTranslationDisplayMode);
+    return () => {
+      translationDisplayModeListeners.delete(setMode);
+    };
+  }, []);
+
+  return mode;
 }
 
 function UrlValue({
@@ -244,6 +295,9 @@ export const FieldValueRenderer: React.FC<FieldValueRendererProps> = ({
   onViewRelatedRecord,
   fileValue,
 }) => {
+  const translationDisplayMode = useTranslationDisplayMode();
+  const [isShowingTranslation, setIsShowingTranslation] = useState(false);
+
   if (field.type === 'file') {
     return <>{fileValue ?? <span className="text-gray-500">-</span>}</>;
   }
@@ -299,18 +353,28 @@ export const FieldValueRenderer: React.FC<FieldValueRendererProps> = ({
         ? getTranslatedFieldValue(recordData, field.id)
         : '';
       const translationMeta = translatedText ? getTranslationMeta(recordData, field.id) : null;
+      const showTranslatedInline = translationDisplayMode === 'inline-hover' && Boolean(translatedText) && isShowingTranslation;
+      const displayedText = showTranslatedInline ? translatedText : formattedValue;
       if (isUrlString(formattedValue, isDetail)) {
         return <UrlValue url={formattedValue} variant={variant} onSelectRow={onSelectRow} />;
       }
 
       const textClassName = !isDetail
-        ? 'min-w-0 flex-1 text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block'
+        ? `min-w-0 flex-1 hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block ${showTranslatedInline ? 'text-blue-200' : 'text-discord-text'}`
         : field.type === 'longtext'
-          ? 'whitespace-pre-wrap text-discord-text break-words overflow-wrap-anywhere px-3 py-2 rounded transition-colors border border-gray-600 max-h-[240px] overflow-y-auto block w-full'
-          : 'whitespace-pre-wrap text-discord-text break-words overflow-wrap-anywhere px-1 py-0.5 rounded transition-colors inline-block';
+          ? `whitespace-pre-wrap break-words overflow-wrap-anywhere px-3 py-2 rounded transition-colors border border-gray-600 max-h-[240px] overflow-y-auto block w-full ${showTranslatedInline ? 'text-blue-200' : 'text-discord-text'}`
+          : `whitespace-pre-wrap break-words overflow-wrap-anywhere px-1 py-0.5 rounded transition-colors inline-block ${showTranslatedInline ? 'text-blue-200' : 'text-discord-text'}`;
 
       return (
-        <div className={isDetail ? 'flex items-start gap-1' : 'flex items-center gap-1 min-w-0'}>
+        <div
+          className={isDetail ? 'flex items-start gap-1' : 'flex items-center gap-1 min-w-0'}
+          onMouseEnter={() => {
+            if (translationDisplayMode === 'inline-hover' && translatedText) {
+              setIsShowingTranslation(true);
+            }
+          }}
+          onMouseLeave={() => setIsShowingTranslation(false)}
+        >
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -318,37 +382,39 @@ export const FieldValueRenderer: React.FC<FieldValueRendererProps> = ({
                   <div
                     className={textClassName}
                     onClick={(event) => {
-                      void copyOnCtrlClick(event, formattedValue, '긴 텍스트가 클립보드에 복사되었습니다.');
+                      void copyOnCtrlClick(event, displayedText, '긴 텍스트가 클립보드에 복사되었습니다.');
                     }}
                   >
-                    {renderTextWithHashtags(formattedValue)}
+                    {renderTextWithHashtags(displayedText)}
                   </div>
                 ) : isDetail ? (
                   <div
                     className={textClassName}
                     onClick={(event) => {
-                      void copyOnCtrlClick(event, formattedValue, '텍스트가 클립보드에 복사되었습니다.');
+                      void copyOnCtrlClick(event, displayedText, '텍스트가 클립보드에 복사되었습니다.');
                     }}
                   >
-                    {renderTextWithHashtags(formattedValue)}
+                    {renderTextWithHashtags(displayedText)}
                   </div>
                 ) : (
                   <span
                     className={textClassName}
                     onClick={(event) => {
-                      void copyOnCtrlClick(event, formattedValue, '값이 클립보드에 복사되었습니다.', onSelectRow);
+                      void copyOnCtrlClick(event, displayedText, '값이 클립보드에 복사되었습니다.', onSelectRow);
                     }}
                   >
-                    {renderTextWithHashtags(formattedValue)}
+                    {renderTextWithHashtags(displayedText)}
                   </span>
                 )}
               </TooltipTrigger>
-              <TooltipContent side="top" align="center" className={FIELD_TOOLTIP_CLASSNAME}>
-                Ctrl+클릭하여 복사
-              </TooltipContent>
+              {!(translationDisplayMode === 'inline-hover' && translatedText) && (
+                <TooltipContent side="top" align="center" className={FIELD_TOOLTIP_CLASSNAME}>
+                  Ctrl+클릭하여 복사
+                </TooltipContent>
+              )}
             </Tooltip>
           </TooltipProvider>
-          {translatedText && (
+          {translatedText && translationDisplayMode === 'tooltip' && (
             <TooltipProvider delayDuration={0} skipDelayDuration={0}>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -370,6 +436,13 @@ export const FieldValueRenderer: React.FC<FieldValueRendererProps> = ({
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+          )}
+          {translatedText && translationDisplayMode === 'inline-hover' && (
+            <span
+              className={`inline-flex shrink-0 items-center rounded p-1 text-blue-300 ${isDetail ? 'mt-0.5' : ''}`}
+            >
+              <Languages size={14} />
+            </span>
           )}
         </div>
       );

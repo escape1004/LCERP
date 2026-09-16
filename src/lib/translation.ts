@@ -57,6 +57,13 @@ export const getTranslatedFieldValue = (
   return typeof translatedValue === 'string' ? translatedValue : '';
 };
 
+export type TranslationDisplayMode = 'tooltip' | 'inline-hover';
+export const DEFAULT_TRANSLATION_DISPLAY_MODE: TranslationDisplayMode = 'tooltip';
+
+export const normalizeTranslationDisplayMode = (value: unknown): TranslationDisplayMode => (
+  value === 'inline-hover' ? 'inline-hover' : DEFAULT_TRANSLATION_DISPLAY_MODE
+);
+
 export const getTranslationMeta = (
   recordData: Record<string, unknown> | null | undefined,
   fieldId: string

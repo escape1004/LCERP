@@ -36,6 +36,7 @@ import {
   normalizeDefaultGalleryZoom,
   getConfiguredDefaultGalleryZoom,
   normalizeTranslationTargetLanguage,
+  normalizeTranslationDisplayMode,
   getConfiguredTranslationTargetLanguage,
   normalizeTranslationModel,
   getConfiguredTranslationModel,
@@ -213,6 +214,15 @@ export function registerTranslationHandlers() {
     appConfig.translationModel = normalizedModel;
     saveAppConfig();
     return { success: true, translationModel: normalizedModel };
+  });
+
+  ipcMain.handle('setTranslationDisplayMode', (_event, mode) => {
+    appConfig.translationDisplayMode = normalizeTranslationDisplayMode(mode);
+    saveAppConfig();
+    return {
+      success: true,
+      translationDisplayMode: appConfig.translationDisplayMode
+    };
   });
 
   ipcMain.handle('setOpenAiApiKey', (_event, apiKey) => {

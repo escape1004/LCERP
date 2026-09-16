@@ -22,6 +22,7 @@ import {
   normalizePasswordLockDurationMinutes,
   normalizePasswordLockMaxAttempts,
   normalizeThumbnailPreviewScale,
+  normalizeTranslationDisplayMode,
   normalizeTranslationModel,
   normalizeTranslationTargetLanguage,
   normalizeZoomPercent
@@ -48,6 +49,7 @@ export {
   normalizePasswordLockDurationMinutes,
   normalizePasswordLockMaxAttempts,
   normalizeThumbnailPreviewScale,
+  normalizeTranslationDisplayMode,
   normalizeTranslationModel,
   normalizeTranslationTargetLanguage,
   normalizeZoomPercent
@@ -117,6 +119,7 @@ export const defaultConfig = {
   openAiApiKeyEncrypted: '',
   translationTargetLanguage: 'ko',
   translationModel: DEFAULT_TRANSLATION_MODEL,
+  translationDisplayMode: 'tooltip',
   videoSeekSeconds: 5,
   videoAutoPlay: true,
   listThumbnailFit: 'cover',
@@ -208,6 +211,10 @@ export function getConfiguredTranslationTargetLanguage() {
 
 export function getConfiguredTranslationModel() {
   return normalizeTranslationModel(appConfig.translationModel);
+}
+
+export function getConfiguredTranslationDisplayMode() {
+  return normalizeTranslationDisplayMode(appConfig.translationDisplayMode);
 }
 
 export function getConfiguredBackupInterval() {

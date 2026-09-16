@@ -36,9 +36,11 @@ import {
   normalizeDefaultGalleryZoom,
   getConfiguredDefaultGalleryZoom,
   normalizeTranslationTargetLanguage,
+  normalizeTranslationDisplayMode,
   getConfiguredTranslationTargetLanguage,
   normalizeTranslationModel,
   getConfiguredTranslationModel,
+  getConfiguredTranslationDisplayMode,
   normalizeBackupInterval,
   getConfiguredBackupInterval,
   getConfiguredBackupDir,
@@ -214,7 +216,8 @@ export function registerSettingsHandlers() {
       dateParseFormats: normalizeDateParseFormats(appConfig.dateParseFormats),
       hasOpenAiApiKey: hasOpenAiApiKey(),
       translationTargetLanguage: getConfiguredTranslationTargetLanguage(),
-      translationModel: getConfiguredTranslationModel()
+      translationModel: getConfiguredTranslationModel(),
+      translationDisplayMode: getConfiguredTranslationDisplayMode()
     };
   });
 

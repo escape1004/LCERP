@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/t
 import type { AppUpdateState, Config } from '../types';
 import { DEFAULT_DATE_PARSE_FORMATS } from './ui/date-picker';
 import { useLoadingStore } from '../hooks/useLoadingStore';
-import { OPENAI_TRANSLATION_MODEL, OPENAI_TRANSLATION_MODELS } from '../lib/translation';
+import { DEFAULT_TRANSLATION_DISPLAY_MODE, OPENAI_TRANSLATION_MODEL, OPENAI_TRANSLATION_MODELS, type TranslationDisplayMode } from '../lib/translation';
 
 interface AppSettingsModalProps {
   open: boolean;
@@ -663,6 +663,33 @@ export function AppSettingsModal({
     } catch (error) {
       setConfig((prev) => (prev ? { ...prev, translationModel: previousModel } : prev));
       setTranslationMessage(error instanceof Error ? error.message : '번역 모델 저장에 실패했습니다.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleTranslationDisplayModeChange = async (mode: TranslationDisplayMode) => {
+    if (!config) return;
+
+    const previousMode = config.translationDisplayMode === 'inline-hover' ? 'inline-hover' : DEFAULT_TRANSLATION_DISPLAY_MODE;
+    setConfig((prev) => (prev ? { ...prev, translationDisplayMode: mode } : prev));
+    setTranslationMessage('');
+    setIsSaving(true);
+
+    try {
+      const result = await window.electronAPI.setTranslationDisplayMode(mode);
+      if (result.success) {
+        const savedMode = result.translationDisplayMode === 'inline-hover' ? 'inline-hover' : DEFAULT_TRANSLATION_DISPLAY_MODE;
+        setConfig((prev) => (prev ? { ...prev, translationDisplayMode: savedMode } : prev));
+        window.dispatchEvent(new CustomEvent('config:updated', { detail: { translationDisplayMode: savedMode } }));
+        return;
+      }
+
+      setConfig((prev) => (prev ? { ...prev, translationDisplayMode: previousMode } : prev));
+      setTranslationMessage(result.error || '번역 표시 방식 저장에 실패했습니다.');
+    } catch (error) {
+      setConfig((prev) => (prev ? { ...prev, translationDisplayMode: previousMode } : prev));
+      setTranslationMessage(error instanceof Error ? error.message : '번역 표시 방식 저장에 실패했습니다.');
     } finally {
       setIsSaving(false);
     }
@@ -1410,6 +1437,40 @@ export function AppSettingsModal({
                   {language.label}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-700 bg-discord-sidebar p-5">
+        <div className="text-sm font-medium text-white">번역 텍스트 표시</div>
+        <p className="text-sm text-discord-muted mt-2 leading-6">
+          리스트와 레코드 상세에서 번역문을 어떻게 볼지 선택합니다.
+        </p>
+
+        <div className="mt-5 max-w-md">
+          <div className="text-xs text-discord-muted mb-2">표시 방식</div>
+          <Select
+            value={config?.translationDisplayMode === 'inline-hover' ? 'inline-hover' : DEFAULT_TRANSLATION_DISPLAY_MODE}
+            onValueChange={(value: TranslationDisplayMode) => void handleTranslationDisplayModeChange(value)}
+            disabled={!config || isSaving}
+          >
+            <SelectTrigger className="bg-discord-sidebar border-gray-600 text-discord-text">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-discord-sidebar border-gray-600 text-discord-text">
+              <SelectItem
+                value="tooltip"
+                className="text-discord-text focus:bg-discord-hover focus:text-discord-text hover:bg-discord-hover"
+              >
+                호버 시 툴팁으로 출력
+              </SelectItem>
+              <SelectItem
+                value="inline-hover"
+                className="text-discord-text focus:bg-discord-hover focus:text-discord-text hover:bg-discord-hover"
+              >
+                호버 시 번역 대상 텍스트 대신 번역 텍스트 출력
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>

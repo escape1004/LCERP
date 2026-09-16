@@ -10,6 +10,7 @@ import {
   normalizePasswordLockDurationMinutes,
   normalizePasswordLockMaxAttempts,
   normalizeThumbnailPreviewScale,
+  normalizeTranslationDisplayMode,
   normalizeTranslationModel,
   normalizeTranslationTargetLanguage,
   normalizeZoomPercent
@@ -38,6 +39,9 @@ test('normalizeTranslation helpers keep supported values', () => {
   assert.equal(normalizeTranslationTargetLanguage('fr'), 'ko');
   assert.equal(normalizeTranslationModel('gpt-5-mini'), 'gpt-5-mini');
   assert.equal(normalizeTranslationModel('unknown'), DEFAULT_TRANSLATION_MODEL);
+  assert.equal(normalizeTranslationDisplayMode('inline-hover'), 'inline-hover');
+  assert.equal(normalizeTranslationDisplayMode('tooltip'), 'tooltip');
+  assert.equal(normalizeTranslationDisplayMode('unknown'), 'tooltip');
 });
 
 test('lock and backup helpers reject invalid numbers', () => {
