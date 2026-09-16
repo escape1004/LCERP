@@ -127,7 +127,7 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
   timelinePreview,
   toolbarOverlayClassName,
   layout = 'page',
-  videoClassName = 'max-w-full max-h-[80vh] h-full object-contain bg-black',
+  videoClassName = 'h-full w-full bg-black object-contain',
   subtitleCues,
   subtitleOffset,
   subtitleSize,
@@ -183,8 +183,8 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
   return (
   <div
     className={layout === 'page'
-      ? 'relative w-full h-full flex flex-col items-center justify-center'
-      : 'relative w-full h-full flex items-center justify-center'}
+      ? 'relative flex h-full min-h-0 w-full flex-1 flex-col items-center justify-center self-stretch bg-black'
+      : 'relative flex h-full min-h-0 w-full flex-1 items-center justify-center self-stretch bg-black'}
     onMouseMove={onContainerMouseMove}
     onMouseLeave={onContainerMouseLeave}
     tabIndex={0}
@@ -193,10 +193,11 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
     {layout === 'page' ? (
     <div
       ref={containerRef}
-      className="flex-1 w-full h-full flex items-center justify-center"
-      style={{ overflow: scale > 1 ? 'hidden' : 'visible' }}
+      className="flex h-full min-h-0 w-full flex-1 items-center justify-center overflow-hidden bg-black"
     >
-      <div style={{
+      <div
+        className="flex h-full w-full items-center justify-center"
+        style={{
         transform: `scale(${scale}) translate(${offset.x / scale}px, ${offset.y / scale}px) rotate(${rotation}deg)`,
         transition: isPanning ? 'none' : 'transform 0.2s',
       }}>
@@ -229,7 +230,7 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
             </button>
           </div>
         ) : (
-          <div className="relative inline-block max-w-full">
+          <div className="relative h-full w-full bg-black">
             <SubtitleController
               onPlayInPictureInPicture={onPictureInPicture}
               subtitles={subtitleMenu.subtitles}
@@ -251,8 +252,6 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
                 controls={false}
                 className={videoClassName}
                 style={{
-                  maxWidth: rotation % 180 !== 0 ? '80vh' : '100%',
-                  maxHeight: rotation % 180 !== 0 ? '95vw' : '80vh',
                   cursor: scale > 1 ? (isPanning ? 'grabbing' : 'grab') : 'default',
                 }}
                 onMouseDown={(event) => {
@@ -296,7 +295,9 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
       </div>
     </div>
     ) : (
-      <div style={{
+      <div
+        className="flex h-full w-full items-center justify-center overflow-hidden bg-black"
+        style={{
         transform: `scale(${scale}) translate(${offset.x / scale}px, ${offset.y / scale}px) rotate(${rotation}deg)`,
         transition: isPanning ? 'none' : 'transform 0.2s',
       }}>
@@ -329,7 +330,7 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
             </button>
           </div>
         ) : (
-          <div className="relative inline-block max-w-full">
+          <div className="relative h-full w-full bg-black">
             <SubtitleController
               onPlayInPictureInPicture={onPictureInPicture}
               subtitles={subtitleMenu.subtitles}
@@ -351,8 +352,6 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
                 controls={false}
                 className={videoClassName}
                 style={{
-                  maxWidth: rotation % 180 !== 0 ? '80vh' : '100%',
-                  maxHeight: rotation % 180 !== 0 ? '95vw' : '80vh',
                   cursor: scale > 1 ? (isPanning ? 'grabbing' : 'grab') : 'default',
                 }}
                 onMouseDown={(event) => {
