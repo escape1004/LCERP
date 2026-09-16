@@ -478,15 +478,19 @@ export default function Dashboard() {
   const selectedWarningCounts = selectedRootCategory ? filteredWarningCounts : warningCounts;
 
   const totalStats = useMemo(() => {
+    const statsForTotals = selectedRootCategory
+      ? scopedCategoryStats
+      : scopedCategoryStats.filter((stat) => !stat.category.parentId);
+
     return {
       totalCategories: rootCategories.length,
-      totalRecords: scopedCategoryStats.reduce((sum, stat) => sum + stat.recordCount, 0),
-      totalImages: scopedCategoryStats.reduce((sum, stat) => sum + stat.imageCount, 0),
-      totalVideos: scopedCategoryStats.reduce((sum, stat) => sum + stat.videoCount, 0),
-      totalArchives: scopedCategoryStats.reduce((sum, stat) => sum + stat.archiveCount, 0),
+      totalRecords: statsForTotals.reduce((sum, stat) => sum + stat.recordCount, 0),
+      totalImages: statsForTotals.reduce((sum, stat) => sum + stat.imageCount, 0),
+      totalVideos: statsForTotals.reduce((sum, stat) => sum + stat.videoCount, 0),
+      totalArchives: statsForTotals.reduce((sum, stat) => sum + stat.archiveCount, 0),
       totalChildCategories: descendantCategoryStats.length,
     };
-  }, [descendantCategoryStats.length, rootCategories.length, scopedCategoryStats]);
+  }, [descendantCategoryStats.length, rootCategories.length, scopedCategoryStats, selectedRootCategory]);
 
   const summaryCards = useMemo(() => {
     const cards: Array<{
