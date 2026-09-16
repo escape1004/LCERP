@@ -1,31 +1,28 @@
 import { app, BrowserWindow } from 'electron';
-import { db, migratePersistedOpenAiSecrets } from './store';
-import { createWindow, registerProtocol } from './app/window';
-import { initializeDatabase } from './database';
-import { startAutomaticBackup, stopAutomaticBackup } from './services/backup';
-import { registerLocalVideoProtocol, startVideoHttpServer } from './services/videoServer';
-import { registerAllIpcHandlers } from './ipc';
 
-registerAllIpcHandlers();
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.escape.local-erp');
+}
 
-app.whenReady().then(() => {
-  migratePersistedOpenAiSecrets();
-  registerProtocol();
-  initializeDatabase();
-  startAutomaticBackup({ runImmediately: true });
-  createWindow();
-  startVideoHttpServer();
-  registerLocalVideoProtocol();
+const gotTheLock = app.requestSingleInstanceLock();
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  let handleSecondInstance = () => {
+    const window = BrowserWindow.getAllWindows().find((item) => !item.isDestroyed());
+    if (!window) return;
+    if (window.isMinimized()) window.restore();
+    if (!window.isVisible()) window.show();
+    window.focus();
+  };
+
+  app.on('second-instance', () => {
+    handleSecondInstance();
   });
-});
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    stopAutomaticBackup();
-    db.close();
-    app.quit();
-  }
-});
+  void import('./start').then(({ focusExistingInstance, startMainApp }) => {
+    handleSecondInstance = focusExistingInstance;
+    startMainApp();
+  });
+}
