@@ -562,31 +562,16 @@ export default function Dashboard() {
     );
 
     return rootCategories
-      .map((rootCategory) => {
-        let recordCount = 0;
-        const visitedCategoryIds = new Set<string>();
-        const stack = [rootCategory.id];
-
-        while (stack.length > 0) {
-          const categoryId = stack.pop();
-          if (!categoryId || visitedCategoryIds.has(categoryId)) continue;
-
-          visitedCategoryIds.add(categoryId);
-          recordCount += statsByCategoryId.get(categoryId)?.recordCount ?? 0;
-          (childrenByParentId.get(categoryId) || []).forEach((child) => stack.push(child.id));
-        }
-
-        return {
-          name: rootCategory.name,
-          fullName: rootCategory.name,
-          records: recordCount,
-          categoryId: rootCategory.id,
-        };
-      })
+      .map((rootCategory) => ({
+        name: rootCategory.name,
+        fullName: rootCategory.name,
+        records: statsByCategoryId.get(rootCategory.id)?.recordCount ?? 0,
+        categoryId: rootCategory.id,
+      }))
       .filter((item) => item.records > 0)
       .sort((a, b) => b.records - a.records)
-      .slice(0, 10)
-  }, [categoryStats, childrenByParentId, rootCategories]);
+      .slice(0, 10);
+  }, [categoryStats, rootCategories]);
 
   const childCategoryRecordData = useMemo(() => {
     return descendantCategoryStats
@@ -602,12 +587,24 @@ export default function Dashboard() {
   }, [descendantCategoryStats]);
 
   const fileTypeData = useMemo(() => {
+    const sourceStats = selectedRootCategory
+      ? scopedCategoryStats
+      : scopedCategoryStats.filter((stat) => !stat.category.parentId);
+    const totals = sourceStats.reduce(
+      (acc, stat) => ({
+        images: acc.images + stat.imageCount,
+        videos: acc.videos + stat.videoCount,
+        archives: acc.archives + stat.archiveCount,
+      }),
+      { images: 0, videos: 0, archives: 0 }
+    );
+
     return [
-      { name: '이미지', value: totalStats.totalImages, color: '#A855F7' },
-      { name: '동영상', value: totalStats.totalVideos, color: '#EF4444' },
-      { name: '압축파일', value: totalStats.totalArchives, color: '#EAB308' },
+      { name: '이미지', value: totals.images, color: '#A855F7' },
+      { name: '동영상', value: totals.videos, color: '#EF4444' },
+      { name: '압축파일', value: totals.archives, color: '#EAB308' },
     ].filter((item) => item.value > 0);
-  }, [totalStats]);
+  }, [scopedCategoryStats, selectedRootCategory]);
 
   const dateTrendData = useMemo(() => {
     const dateMap = new Map<string, number>();
@@ -713,13 +710,10 @@ export default function Dashboard() {
           imageCount: subtreeStats.reduce((sum, stat) => sum + stat.imageCount, 0),
           videoCount: subtreeStats.reduce((sum, stat) => sum + stat.videoCount, 0),
           archiveCount: subtreeStats.reduce((sum, stat) => sum + stat.archiveCount, 0),
-          recentRecords: subtreeStats
-            .flatMap((stat) => stat.recentRecords.map((record) => ({
-              record,
-              category: stat.category,
-            })))
-            .sort((a, b) => new Date(b.record.createdAt).getTime() - new Date(a.record.createdAt).getTime())
-            .slice(0, 5),
+          recentRecords: (statsByCategoryId.get(rootCategory.id)?.recentRecords || []).map((record) => ({
+            record,
+            category: rootCategory,
+          })),
         };
       })
       .filter((stat) => stat.recordCount > 0)
