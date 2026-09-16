@@ -10,6 +10,7 @@ import {
   clampPanOffset,
   findArchiveSubtitles,
   formatMediaTime,
+  getOpenViewerSourceKey,
   hasBookmarkAtTime,
   isVideoFileName,
   nextWheelScale,
@@ -31,6 +32,9 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const [displayFileType, setDisplayFileType] = useState(fileType);
   const [displayCategoryId, setDisplayCategoryId] = useState(categoryId);
   const [displayRecordId, setDisplayRecordId] = useState(recordId);
+  const [displaySourceKey, setDisplaySourceKey] = useState(() => (
+    getOpenViewerSourceKey(isOpen, categoryId, recordId, filePath)
+  ));
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [detectedFileType, setDetectedFileType] = useState<ViewerFileType | null>(null);
@@ -88,6 +92,29 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   const archiveImgScaleRef = useRef(1);
   const archiveVideoScaleRef = useRef(1);
   const countedViewKeyRef = useRef<string | null>(null);
+  const incomingSourceKey = getOpenViewerSourceKey(isOpen, categoryId, recordId, filePath);
+  if (incomingSourceKey && incomingSourceKey !== displaySourceKey) {
+    setDisplaySourceKey(incomingSourceKey);
+    setDisplayFilePath(filePath);
+    setDisplayFileType(fileType);
+    setDisplayCategoryId(categoryId);
+    setDisplayRecordId(recordId);
+    setDataUrl(null);
+    setDetectedFileType(fileType);
+    setFileNotFound(false);
+    setLoading(true);
+    setImgScale(1);
+    setImgOffset({ x: 0, y: 0 });
+    setVideoScale(1);
+    setVideoOffset({ x: 0, y: 0 });
+    setArchiveImgScale(1);
+    setArchiveImgOffset({ x: 0, y: 0 });
+    setArchiveVideoScale(1);
+    setArchiveVideoOffset({ x: 0, y: 0 });
+    setImgRotation(0);
+    setVideoRotation(0);
+    setArchiveImgRotation(0);
+  }
 
   const archive = useArchiveViewer({
     isOpen,
@@ -266,19 +293,6 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   }, [archive.archiveFiles, archive.currentArchiveIndex, detectedFileType, displayFilePath, displayFileType, isOpen]);
 
   useEffect(() => {
-    if (filePath) setDisplayFilePath(filePath);
-  }, [filePath]);
-  useEffect(() => {
-    if (fileType !== undefined) setDisplayFileType(fileType);
-  }, [fileType]);
-  useEffect(() => {
-    if (categoryId) setDisplayCategoryId(categoryId);
-  }, [categoryId]);
-  useEffect(() => {
-    if (recordId) setDisplayRecordId(recordId);
-  }, [recordId]);
-
-  useEffect(() => {
     playback.clearLoopSelection();
   }, [archive.currentArchiveIndex, displayFilePath, displayFileType, isOpen, playback.clearLoopSelection]);
 
@@ -334,25 +348,36 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       return;
     }
 
+    let cancelled = false;
+    const applyDataUrl = (url: string | null) => {
+      if (cancelled) return;
+      if (url === null || url === 'error') {
+        setFileNotFound(true);
+        setDataUrl(null);
+      } else {
+        setDataUrl(url);
+      }
+      setLoading(false);
+    };
+
     if (!displayFileType) {
       setLoading(true);
       setFileNotFound(false);
       setDetectedFileType(null);
       window.electronAPI.getFileType(displayFilePath).then((detectedType) => {
+        if (cancelled) return;
         setDetectedFileType(toViewerFileType(detectedType));
         if (detectedType === 'image' || detectedType === 'video') {
           playback.setPlaybackSpeed(1.0);
           window.electronAPI.getFileDataUrl(displayFilePath).then(async (url) => {
-            if (url === null || url === 'error') {
-              setFileNotFound(true);
-              setDataUrl(null);
-            } else if (detectedType === 'video' && url === 'stream') {
-              setDataUrl(await getLocalVideoHttpUrl(displayFilePath));
-            } else {
-              setDataUrl(url);
+            if (cancelled) return;
+            if (detectedType === 'video' && url === 'stream') {
+              applyDataUrl(await getLocalVideoHttpUrl(displayFilePath));
+              return;
             }
-            setLoading(false);
+            applyDataUrl(url);
           }).catch((error) => {
+            if (cancelled) return;
             console.error('파일 로드 실패:', error);
             setFileNotFound(true);
             setDataUrl(null);
@@ -360,6 +385,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
           });
         } else if (detectedType === 'archive') {
           archive.loadArchiveFiles().catch((error) => {
+            if (cancelled) return;
             console.error('압축파일 로드 실패:', error);
             setFileNotFound(true);
             setLoading(false);
@@ -370,12 +396,15 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
           setLoading(false);
         }
       }).catch((error) => {
+        if (cancelled) return;
         console.error('파일 타입 확인 실패:', error);
         setFileNotFound(true);
         setDataUrl(null);
         setLoading(false);
       });
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
 
     if (displayFileType === 'image' || displayFileType === 'video') {
@@ -383,16 +412,14 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       setLoading(true);
       setFileNotFound(false);
       window.electronAPI.getFileDataUrl(displayFilePath).then(async (url) => {
-        if (url === null || url === 'error') {
-          setFileNotFound(true);
-          setDataUrl(null);
-        } else if (displayFileType === 'video' && url === 'stream') {
-          setDataUrl(await getLocalVideoHttpUrl(displayFilePath));
-        } else {
-          setDataUrl(url);
+        if (cancelled) return;
+        if (displayFileType === 'video' && url === 'stream') {
+          applyDataUrl(await getLocalVideoHttpUrl(displayFilePath));
+          return;
         }
-        setLoading(false);
+        applyDataUrl(url);
       }).catch((error) => {
+        if (cancelled) return;
         console.error('파일 로드 실패:', error);
         setFileNotFound(true);
         setDataUrl(null);
@@ -405,6 +432,10 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     } else {
       setDataUrl(null);
     }
+
+    return () => {
+      cancelled = true;
+    };
   }, [archive.loadArchiveFiles, archive.resetArchiveState, displayFilePath, displayFileType, playback.setIsPlaying, playback.setPlaybackSpeed, playback.setVideoError]);
 
   useEffect(() => {
@@ -556,7 +587,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
     });
   };
 
-  if (!displayFilePath) return null;
+  if (!isOpen || !displayFilePath) return null;
 
   const currentFile = archive.archiveFiles[archive.currentArchiveIndex];
   const fileName = displayFilePath.split(/[\\/]/).pop() || '';
@@ -692,6 +723,8 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
       isOpen={isOpen}
       className="bg-black/95"
       contentClassName="relative bg-discord-bg rounded-xl shadow-2xl w-[95vw] h-[95vh] flex flex-col"
+      animateContent={false}
+      exitAnimation={false}
     >
       <div
         ref={modalContainerRef}

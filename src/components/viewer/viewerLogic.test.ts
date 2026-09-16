@@ -11,6 +11,7 @@ import {
   getLoopRangePercents,
   getNavigableArchiveFiles,
   getNativeContainedVideoScale,
+  getOpenViewerSourceKey,
   getSeekTimeFromPointer,
   hasBookmarkAtTime,
   isEditableKeyboardTarget,
@@ -26,6 +27,12 @@ test('keeps native video size unless the frame is larger than the viewer', () =>
   expect(getNativeContainedVideoScale(1920, 1080, 960, 540)).toBe(0.5);
   expect(getNativeContainedVideoScale(800, 600, 400, 400)).toBe(0.5);
   expect(getNativeContainedVideoScale(0, 360, 1920, 1080)).toBe(0);
+});
+
+test('identifies the open viewer source only while the modal is showing a file', () => {
+  expect(getOpenViewerSourceKey(false, 'cat', 'rec', 'C:\\clip.mp4')).toBe('');
+  expect(getOpenViewerSourceKey(true, 'cat', 'rec', '')).toBe('');
+  expect(getOpenViewerSourceKey(true, 'cat', 'rec', 'C:\\clip.mp4')).toBe('cat:rec:C:\\clip.mp4');
 });
 
 test('formats media time and clamps invalid values', () => {

@@ -1,13 +1,15 @@
 export async function exitPictureInPicture() {
   const pictureInPictureVideo = document.pictureInPictureElement;
+  if (!pictureInPictureVideo) {
+    return;
+  }
+
   if (pictureInPictureVideo instanceof HTMLVideoElement) {
     pictureInPictureVideo.pause();
   }
 
   try {
-    if (document.pictureInPictureElement) {
-      await document.exitPictureInPicture();
-    }
+    await document.exitPictureInPicture();
   } catch (error) {
     if (document.pictureInPictureElement) {
       console.error('PIP 종료 실패:', error);

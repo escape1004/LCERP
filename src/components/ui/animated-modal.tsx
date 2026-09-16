@@ -6,6 +6,8 @@ interface AnimatedModalProps {
   children: React.ReactNode;
   className?: string;
   contentClassName?: string;
+  animateContent?: boolean;
+  exitAnimation?: boolean;
 }
 
 const ANIMATION_DURATION_MS = 200;
@@ -15,6 +17,8 @@ export function AnimatedModal({
   children,
   className,
   contentClassName,
+  animateContent = true,
+  exitAnimation = true,
 }: AnimatedModalProps) {
   const [shouldRender, setShouldRender] = useState(isOpen);
   const [isVisible, setIsVisible] = useState(isOpen);
@@ -29,29 +33,33 @@ export function AnimatedModal({
     }
 
     setIsVisible(false);
+    if (!exitAnimation) {
+      setShouldRender(false);
+      return undefined;
+    }
+
     const timeout = window.setTimeout(() => {
       setShouldRender(false);
     }, ANIMATION_DURATION_MS);
 
     return () => window.clearTimeout(timeout);
-  }, [isOpen]);
+  }, [exitAnimation, isOpen]);
 
   if (!shouldRender) return null;
 
   return (
     <div
       className={cn(
-        'fixed inset-0 z-50 flex items-center justify-center bg-black/50 duration-200',
-        isVisible ? 'animate-in fade-in-0' : 'animate-out fade-out-0',
+        'fixed inset-0 z-50 flex items-center justify-center bg-black/50 transition-opacity duration-200',
+        isVisible ? 'opacity-100' : 'opacity-0',
         className
       )}
     >
       <div
         className={cn(
-          'overflow-hidden rounded-xl duration-200',
-          isVisible
-            ? 'animate-in fade-in-0 zoom-in-95'
-            : 'animate-out fade-out-0 zoom-out-95',
+          'overflow-hidden rounded-xl',
+          animateContent && 'transition-all duration-200',
+          animateContent && (isVisible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'),
           contentClassName
         )}
       >

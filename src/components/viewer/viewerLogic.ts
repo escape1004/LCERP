@@ -29,6 +29,16 @@ export function toViewerFileType(type: string | null | undefined): ViewerFileTyp
   return type === 'image' || type === 'video' || type === 'archive' ? type : null;
 }
 
+export function getOpenViewerSourceKey(
+  isOpen: boolean,
+  categoryId: string,
+  recordId: string,
+  filePath: string,
+) {
+  if (!isOpen || !filePath) return '';
+  return `${categoryId}:${recordId}:${filePath}`;
+}
+
 export function isImageFileName(name?: string) {
   return Boolean(name && IMAGE_FILE_PATTERN.test(name));
 }

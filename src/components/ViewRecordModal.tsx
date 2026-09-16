@@ -728,6 +728,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   };
 
   return (
+    <>
     <AnimatedModal isOpen={isOpen} contentClassName="bg-discord-bg rounded-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between p-6 border-b border-gray-700">
@@ -901,16 +902,15 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
             닫기
           </Button>
         </div>
-      {viewerModalOpen && (
-        <ViewerModal
-          isOpen={viewerModalOpen}
-          onClose={handleViewerClose}
-          filePath={viewerFilePath}
-          fileType={viewerFileType}
-          categoryId={category.id}
-          recordId={record.id}
-        />
-      )}
     </AnimatedModal>
+    <ViewerModal
+      isOpen={viewerModalOpen}
+      onClose={handleViewerClose}
+      filePath={viewerFilePath}
+      fileType={viewerFileType}
+      categoryId={category.id}
+      recordId={record.id}
+    />
+    </>
   );
 };
