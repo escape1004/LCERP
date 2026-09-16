@@ -4,10 +4,12 @@ import crypto from 'crypto';
 import XLSX from 'xlsx';
 import AdmZip from 'adm-zip';
 import {
+  appDataDir,
   db,
   getCurrentProfileIdOrThrow,
   normalizeImportedDateValue,
 } from './store';
+import { resolveRecordFileSystemPath } from './lib/files';
 import {
   createDefaultRecordData,
   getHeaderFieldMap,
@@ -233,25 +235,27 @@ export function getDashboardWarnings(previewLimit = 8, profileId = getCurrentPro
         ? String(record.data[displayField.id])
         : `${new Date(record.createdAt).toLocaleDateString('ko-KR')} 항목`;
 
-      if (fileField && !fileField.thumbnailOnly && record.data[fileField.id]) {
-        const filePath = String(record.data[fileField.id]);
-        let exists = false;
-        try {
-          exists = fs.existsSync(filePath);
-        } catch (_error) {
-          exists = false;
-        }
+      if (fileField && !fileField.thumbnailOnly) {
+        const resolvedPath = resolveRecordFileSystemPath(record.data[fileField.id], fileField, appDataDir);
+        if (resolvedPath) {
+          let exists = false;
+          try {
+            exists = fs.existsSync(resolvedPath);
+          } catch (_error) {
+            exists = false;
+          }
 
-        if (!exists) {
-          counts.missingFiles += 1;
-          pushPreviewItem({
-            id: `missing-file-${record.id}`,
-            categoryId: category.id,
-            recordId: record.id,
-            title: '원본 파일 누락',
-            description: `${category.name} / ${displayValue}`,
-            type: 'missing-file'
-          });
+          if (!exists) {
+            counts.missingFiles += 1;
+            pushPreviewItem({
+              id: `missing-file-${record.id}`,
+              categoryId: category.id,
+              recordId: record.id,
+              title: '원본 파일 누락',
+              description: `${category.name} / ${displayValue}`,
+              type: 'missing-file'
+            });
+          }
         }
       }
 
