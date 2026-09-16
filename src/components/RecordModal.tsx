@@ -440,6 +440,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
               value={translationValue}
               onChange={(e) => updateTranslationValue(field.id, e.target.value, false)}
               placeholder="번역문을 입력하세요"
+              disabled={isTranslating}
               className="min-h-[100px] bg-discord-sidebar border-gray-600 pr-28 text-discord-text placeholder:text-gray-500"
             />
             <TooltipProvider>
@@ -471,6 +472,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
               value={translationValue}
               onChange={(e) => updateTranslationValue(field.id, e.target.value, false)}
               placeholder="번역문을 입력하세요"
+              disabled={isTranslating}
               className="bg-discord-sidebar border-gray-600 text-discord-text flex-1"
             />
             <TooltipProvider>
@@ -607,6 +609,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
           : formData[field.id] ?? '';
     const hasError = !!errors[field.id];
     const hasDuplicateError = !!duplicateErrors[field.id];
+    const isTranslating = translatingFieldIds.has(field.id);
     const inputClassName = cn(
       "bg-discord-sidebar border-gray-600 text-discord-text",
       (hasError || hasDuplicateError) && "border-red-500"
@@ -632,6 +635,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                 placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
                 value={toScalarInputValue(value)}
                 onChange={(e) => updateFieldValue(field.id, normalizeTextFieldInput(field, e.target.value))}
+                disabled={isTranslating}
                 className={inputClassName}
                 ref={isFirstField ? firstFieldRef as React.Ref<HTMLInputElement> : undefined}
               />
@@ -654,6 +658,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                 placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
                 value={toScalarInputValue(value)}
                 onChange={(e) => updateFieldValue(field.id, normalizeTextFieldInput(field, e.target.value))}
+                disabled={isTranslating}
                 className={cn(
                   inputClassName,
                   'h-10 border-0 shadow-none rounded-none bg-transparent px-0',
@@ -679,6 +684,7 @@ export const RecordModal: React.FC<RecordModalProps> = ({
               placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
               value={toScalarInputValue(value)}
               onChange={(e) => updateFieldValue(field.id, e.target.value)}
+              disabled={isTranslating}
               className={cn(
                 "flex w-full rounded-md border px-3 py-2 text-sm shadow-sm transition-colors",
                 "placeholder:text-gray-500",
