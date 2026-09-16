@@ -612,6 +612,7 @@ export default function Dashboard() {
   const dateTrendData = useMemo(() => {
     const dateMap = new Map<string, number>();
     const today = new Date();
+    const rootCategoryStats = scopedCategoryStats.filter((stat) => !stat.category.parentId);
 
     if (dateUnit === 'day') {
       for (let i = 29; i >= 0; i -= 1) {
@@ -621,7 +622,7 @@ export default function Dashboard() {
         dateMap.set(dateStr, 0);
       }
 
-      scopedCategoryStats.forEach((stat) => {
+      rootCategoryStats.forEach((stat) => {
         const records = getCategoryRecords(stat.category.id) || [];
         records.forEach((record) => {
           const dateStr = record.createdAt.split('T')[0];
@@ -645,7 +646,7 @@ export default function Dashboard() {
         dateMap.set(monthStr, 0);
       }
 
-      scopedCategoryStats.forEach((stat) => {
+      rootCategoryStats.forEach((stat) => {
         const records = getCategoryRecords(stat.category.id) || [];
         records.forEach((record) => {
           const recordDate = new Date(record.createdAt);
@@ -669,7 +670,7 @@ export default function Dashboard() {
       dateMap.set(yearStr, 0);
     }
 
-    scopedCategoryStats.forEach((stat) => {
+    rootCategoryStats.forEach((stat) => {
       const records = getCategoryRecords(stat.category.id) || [];
       records.forEach((record) => {
         const yearStr = String(new Date(record.createdAt).getFullYear());
