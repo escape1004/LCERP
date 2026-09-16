@@ -130,7 +130,7 @@ export const RecordGalleryView: React.FC<RecordGalleryViewProps> = ({
                           title,
                           '값이 클립보드에 복사되었습니다.',
                           selectGalleryRecord,
-                          'block truncate rounded px-1 py-0.5 transition-colors hover:bg-discord-hover/50',
+                          'inline-block max-w-full truncate rounded px-1 py-0.5 transition-colors hover:bg-discord-hover/50',
                         )}
                     </div>
                   </div>

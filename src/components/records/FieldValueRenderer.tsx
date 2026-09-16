@@ -182,7 +182,7 @@ function UrlValue({
               </button>
             ) : (
               <span
-                className="text-discord-accent px-1 py-0.5 rounded transition-colors truncate flex-1 cursor-pointer"
+                className="text-discord-accent px-1 py-0.5 rounded transition-colors inline-block max-w-full truncate cursor-pointer"
                 onClick={copyUrl}
               >
                 {url}
@@ -323,7 +323,7 @@ export const FieldValueRenderer: React.FC<FieldValueRendererProps> = ({
               className={options?.className ?? (
                 isDetail
                   ? 'text-discord-text px-1 py-0.5 rounded transition-colors'
-                  : 'text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block'
+                  : 'text-discord-text hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors inline-block max-w-full truncate'
               )}
               onClick={async (event) => {
                 if (clickToCopy) {
@@ -360,14 +360,14 @@ export const FieldValueRenderer: React.FC<FieldValueRendererProps> = ({
       }
 
       const textClassName = !isDetail
-        ? `min-w-0 flex-1 hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate block ${showTranslatedInline ? 'text-blue-200' : 'text-discord-text'}`
+        ? `inline-block max-w-full min-w-0 hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate ${showTranslatedInline ? 'text-blue-200' : 'text-discord-text'}`
         : field.type === 'longtext'
           ? `whitespace-pre-wrap break-words overflow-wrap-anywhere px-3 py-2 rounded transition-colors border border-gray-600 max-h-[240px] overflow-y-auto block w-full ${showTranslatedInline ? 'text-blue-200' : 'text-discord-text'}`
           : `whitespace-pre-wrap break-words overflow-wrap-anywhere px-1 py-0.5 rounded transition-colors inline-block ${showTranslatedInline ? 'text-blue-200' : 'text-discord-text'}`;
 
       return (
         <div
-          className={isDetail ? 'flex items-start gap-1' : 'flex items-center gap-1 min-w-0'}
+          className={isDetail ? 'flex items-start gap-1' : 'inline-flex max-w-full min-w-0 items-center gap-1'}
           onMouseEnter={() => {
             if (translationDisplayMode === 'inline-hover' && translatedText) {
               setIsShowingTranslation(true);
@@ -460,7 +460,7 @@ export const FieldValueRenderer: React.FC<FieldValueRendererProps> = ({
     case 'percentage': {
       const percentage = getPercentageMeta(field, value);
       return (
-        <span className={isDetail ? undefined : 'text-discord-text px-1 py-0.5 rounded truncate block'}>
+        <span className={isDetail ? undefined : 'text-discord-text px-1 py-0.5 rounded inline-block max-w-full truncate'}>
           {percentage.value} / {percentage.max}{' '}
           <span className={getPercentageTextClassName(percentage.percent)}>
             ({percentage.percent}%)
@@ -591,7 +591,7 @@ export const FieldValueRenderer: React.FC<FieldValueRendererProps> = ({
 
       const relatedRecord = relatedRecords.find((record) => record.id === value);
       if (!relatedRecord) {
-        return isDetail ? <>{String(value)}</> : <span className="truncate block">{String(value)}</span>;
+        return isDetail ? <>{String(value)}</> : <span className="inline-block max-w-full truncate">{String(value)}</span>;
       }
       const label = getRelationDisplayLabel(relatedRecord, field, categories, getCategoryRecords);
       return (
@@ -599,7 +599,7 @@ export const FieldValueRenderer: React.FC<FieldValueRendererProps> = ({
           <Tooltip>
             <TooltipTrigger asChild>
               <span
-                className={isDetail ? 'text-green-500 cursor-pointer hover:underline' : 'text-green-500 hover:underline cursor-pointer truncate block'}
+                className={isDetail ? 'text-green-500 cursor-pointer hover:underline' : 'text-green-500 hover:underline cursor-pointer inline-block max-w-full truncate'}
                 onClick={(event) => openRelated(relatedRecord, event, label)}
               >
                 {label}
