@@ -232,7 +232,7 @@ export const ArchiveViewer: React.FC<ArchiveViewerProps> = ({
           </div>
         ) : isVideoFileName(currentFile.name) ? (
           currentArchiveDataUrl && videoViewer ? (
-            <VideoViewer {...videoViewer} src={currentArchiveDataUrl} layout="embedded" videoClassName="h-full w-full bg-black object-contain" toolbarOverlayClassName="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity duration-300" />
+            <VideoViewer {...videoViewer} src={currentArchiveDataUrl} layout="embedded" toolbarOverlayClassName="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity duration-300" />
           ) : (
             <div className="text-discord-muted">동영상을 로드할 수 없습니다.</div>
           )

@@ -6,6 +6,20 @@ export const SUBTITLE_FILE_PATTERN = /\.(srt|vtt|ass)$/i;
 export const VIDEO_FILE_PATTERN = /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i;
 export const IMAGE_FILE_PATTERN = /\.(jpg|jpeg|png|gif|webp)$/i;
 export const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+export const NATIVE_VIDEO_CLASSNAME = 'max-h-full max-w-full min-h-0 min-w-0 h-auto w-auto block bg-black object-contain';
+
+export function getNativeContainedVideoScale(
+  videoWidth: number,
+  videoHeight: number,
+  containerWidth: number,
+  containerHeight: number,
+) {
+  if (!(videoWidth > 0 && videoHeight > 0 && containerWidth > 0 && containerHeight > 0)) {
+    return 0;
+  }
+
+  return Math.min(1, containerWidth / videoWidth, containerHeight / videoHeight);
+}
 
 export function isVideoFileName(name?: string) {
   return Boolean(name && VIDEO_FILE_PATTERN.test(name));

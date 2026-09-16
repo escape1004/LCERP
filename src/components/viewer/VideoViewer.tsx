@@ -13,6 +13,7 @@ import type {
   SubtitleSource,
 } from './types';
 import type { SubtitleCue } from '../../lib/subtitle';
+import { NATIVE_VIDEO_CLASSNAME } from './viewerLogic';
 
 interface VideoViewerProps {
   src: string;
@@ -127,7 +128,7 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
   timelinePreview,
   toolbarOverlayClassName,
   layout = 'page',
-  videoClassName = 'h-full w-full bg-black object-contain',
+  videoClassName = NATIVE_VIDEO_CLASSNAME,
   subtitleCues,
   subtitleOffset,
   subtitleSize,
@@ -230,7 +231,12 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
             </button>
           </div>
         ) : (
-          <div className="relative h-full w-full bg-black">
+          <div
+            className="relative grid h-full w-full place-items-center bg-black"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) onVideoClick();
+            }}
+          >
             <SubtitleController
               onPlayInPictureInPicture={onPictureInPicture}
               subtitles={subtitleMenu.subtitles}
@@ -330,7 +336,12 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
             </button>
           </div>
         ) : (
-          <div className="relative h-full w-full bg-black">
+          <div
+            className="relative grid h-full w-full place-items-center bg-black"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) onVideoClick();
+            }}
+          >
             <SubtitleController
               onPlayInPictureInPicture={onPictureInPicture}
               subtitles={subtitleMenu.subtitles}

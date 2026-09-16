@@ -10,6 +10,7 @@ import {
   getArchiveNavigationIndex,
   getLoopRangePercents,
   getNavigableArchiveFiles,
+  getNativeContainedVideoScale,
   getSeekTimeFromPointer,
   hasBookmarkAtTime,
   isEditableKeyboardTarget,
@@ -19,6 +20,13 @@ import {
   nextWheelScale,
   prepareArchiveEntries,
 } from './viewerLogic';
+
+test('keeps native video size unless the frame is larger than the viewer', () => {
+  expect(getNativeContainedVideoScale(640, 360, 1920, 1080)).toBe(1);
+  expect(getNativeContainedVideoScale(1920, 1080, 960, 540)).toBe(0.5);
+  expect(getNativeContainedVideoScale(800, 600, 400, 400)).toBe(0.5);
+  expect(getNativeContainedVideoScale(0, 360, 1920, 1080)).toBe(0);
+});
 
 test('formats media time and clamps invalid values', () => {
   expect(formatMediaTime(0)).toBe('0:00');
