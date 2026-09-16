@@ -10,6 +10,7 @@ import type { AppUpdateState, Config } from '../types';
 import { DEFAULT_DATE_PARSE_FORMATS } from './ui/date-picker';
 import { useLoadingStore } from '../hooks/useLoadingStore';
 import { DEFAULT_TRANSLATION_DISPLAY_MODE, OPENAI_TRANSLATION_MODEL, OPENAI_TRANSLATION_MODELS, type TranslationDisplayMode } from '../lib/translation';
+import { toast } from './ui/use-toast';
 
 interface AppSettingsModalProps {
   open: boolean;
@@ -331,13 +332,29 @@ export function AppSettingsModal({
     setBackupMessage('');
     try {
       const result = await window.electronAPI.backupDatabase();
-      setBackupMessage(
-        result.success
-          ? '데이터베이스 백업이 완료되었습니다.'
-          : result.error || '데이터베이스 백업에 실패했습니다.'
-      );
+      if (result.success) {
+        toast({
+          title: '백업 완료',
+          description: '데이터베이스 백업이 완료되었습니다.',
+        });
+        return;
+      }
+
+      const errorMessage = result.error || '데이터베이스 백업에 실패했습니다.';
+      setBackupMessage(errorMessage);
+      toast({
+        title: '백업 실패',
+        description: errorMessage,
+        variant: 'destructive',
+      });
     } catch (error) {
-      setBackupMessage(error instanceof Error ? error.message : '데이터베이스 백업에 실패했습니다.');
+      const errorMessage = error instanceof Error ? error.message : '데이터베이스 백업에 실패했습니다.';
+      setBackupMessage(errorMessage);
+      toast({
+        title: '백업 실패',
+        description: errorMessage,
+        variant: 'destructive',
+      });
     } finally {
       setIsSaving(false);
     }
