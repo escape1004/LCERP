@@ -10,6 +10,7 @@ import {
   isEmptyValue,
   isFieldMultiple,
   isUrlString,
+  isCustomThumbnailRecord,
   isVideoHoverPreviewFile,
   normalizePercentageValue,
   parseHashtags,
@@ -22,6 +23,13 @@ import { isStoredDateValue as isStoredDateValueFromDateParse } from './dateParse
 
 const textField = { id: 'title', name: '제목', type: 'text' } as FieldDefinition;
 const percentField = { id: 'progress', name: '진행', type: 'percentage' } as FieldDefinition;
+
+test('detects persisted custom thumbnail records', () => {
+  expect(isCustomThumbnailRecord(undefined)).toBe(false);
+  expect(isCustomThumbnailRecord({ data: {} })).toBe(false);
+  expect(isCustomThumbnailRecord({ data: { __customThumbnail: false } })).toBe(false);
+  expect(isCustomThumbnailRecord({ data: { __customThumbnail: true } })).toBe(true);
+});
 
 test('classifies list file types without treating hover-only videos as filter videos', () => {
   expect(getFileTypeFromPath('cover.PNG')).toBe('image');

@@ -18,6 +18,11 @@ export const SUPPORTED_THUMBNAIL_EXTS = [
   ...VIDEO_FILTER_EXTENSIONS,
   ...ARCHIVE_EXTENSIONS,
 ];
+export const CUSTOM_THUMBNAIL_FLAG = '__customThumbnail';
+
+export const isCustomThumbnailRecord = (
+  record?: { data?: Record<string, unknown> } | null,
+) => record?.data?.[CUSTOM_THUMBNAIL_FLAG] === true;
 
 export const isPercentageValue = (value: unknown): value is PercentageValue => (
   typeof value === 'object'

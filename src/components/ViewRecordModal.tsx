@@ -13,6 +13,8 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } 
 import { resolveFilePath } from '../lib/pathResolver';
 import { AnimatedModal } from './ui/animated-modal';
 import { FieldValueRenderer } from './records/FieldValueRenderer';
+import { CustomThumbnailBadge } from './records/ThumbnailCell';
+import { isCustomThumbnailRecord } from '../lib/recordFields';
 
 declare global {
   interface WindowEventMap {
@@ -241,6 +243,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
     const [error, setError] = React.useState<string | null>(null);
     const [regenLoading, setRegenLoading] = React.useState(false);
     const [hasEmbeddedCover, setHasEmbeddedCover] = React.useState(false);
+    const [customThumbnailApplied, setCustomThumbnailApplied] = React.useState(false);
     const ext = filePath ? filePath.slice(filePath.lastIndexOf('.')).toLowerCase() : '';
     const isVideo = /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(ext);
     const loadRecords = useERPStore(state => state.loadRecords);
@@ -250,6 +253,10 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
       recordId: record.id,
       categoryId: categoryId || record.categoryId,
     }), [categoryId, record.id, record.categoryId]);
+
+    React.useEffect(() => {
+      setCustomThumbnailApplied(false);
+    }, [record.id]);
 
     // duration: record에서 우선 사용, 없으면 lazy fetch
     React.useEffect(() => {
@@ -343,6 +350,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         const codecInfo = await window.electronAPI.getVideoCodecInfo(filePath);
         const hasCoverAfterRemoval = codecInfo?.hasEmbeddedCover === true;
         setHasEmbeddedCover(hasCoverAfterRemoval);
+        setCustomThumbnailApplied(false);
         if (hasCoverAfterRemoval) {
           toast({
             title: '커스텀 썸네일 제거 실패',
@@ -413,6 +421,10 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
     // duration이 0이거나 null이면 시간 입력 UI를 렌더하지 않음
     const effectiveDuration = lastValidDuration;
 
+    const showCustomThumbnailBadge = customThumbnailApplied
+      || isCustomThumbnailRecord(record)
+      || hasEmbeddedCover;
+
     if (!SUPPORTED_THUMBNAIL_EXTS.includes(ext)) return null;
 
     const thumbnailBody = loading ? (
@@ -425,6 +437,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
           className={`w-[320px] h-[320px] object-contain bg-black rounded-xl border border-gray-700 transition ${canOpenFile ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} ${missingFile ? 'opacity-40' : ''}`}
           onClick={() => canOpenFile && handleThumbnailClick(filePath)}
         />
+        {showCustomThumbnailBadge && <CustomThumbnailBadge size={20} />}
         {missingFile && (
           <div className="absolute inset-0 flex items-center justify-center">
             <HelpCircle size={32} className="text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]" />
@@ -554,6 +567,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                               const res = await window.electronAPI.setCustomThumbnail(filePath, imagePath, thumbnailContext);
                               if (res) {
                                 setHasEmbeddedCover(true);
+                                setCustomThumbnailApplied(true);
                                 toast({ title: '커스텀 썸네일이 적용되었습니다.' });
                                 window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));
                                 await reloadThumbnail();
@@ -622,6 +636,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                       try {
                         const res = await window.electronAPI.regenerateThumbnail(filePath, thumbnailContext);
                         if (res) {
+                          setCustomThumbnailApplied(false);
                           toast({ title: '썸네일이 재생성되었습니다.' });
                           window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));
                           await reloadThumbnail();
@@ -670,6 +685,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
 
                         const res = await window.electronAPI.setCustomThumbnail(filePath, imagePath, thumbnailContext);
                         if (res) {
+                          setCustomThumbnailApplied(true);
                           toast({ title: '커스텀 썸네일이 적용되었습니다.' });
                           window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));
                           await reloadThumbnail();

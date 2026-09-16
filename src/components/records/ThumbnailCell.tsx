@@ -1,11 +1,22 @@
 import React from 'react';
-import { Archive, HelpCircle, ImageOff, RefreshCw } from 'lucide-react';
+import { Archive, HelpCircle, ImageOff, ImagePlus, RefreshCw } from 'lucide-react';
 import type { DataRecord } from '../../types';
 import { getLocalVideoHttpUrl } from '../../lib/local-media';
-import { VIDEO_HOVER_PREVIEW_PATTERN } from '../../lib/recordFields';
+import { isCustomThumbnailRecord, VIDEO_HOVER_PREVIEW_PATTERN } from '../../lib/recordFields';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { FIELD_TOOLTIP_CLASSNAME } from './FieldValueRenderer';
+
+const embeddedCoverCache = new Map<string, boolean>();
+
+export const CustomThumbnailBadge: React.FC<{ size?: number }> = ({ size = 14 }) => (
+  <div
+    className="absolute top-1 left-1 z-20 rounded bg-black/70 p-0.5"
+    title="커스텀 썸네일"
+  >
+    <ImagePlus size={size} className="text-white" />
+  </div>
+);
 
 export const HoverVideoPreview: React.FC<{
   filePath: string;
@@ -87,6 +98,7 @@ export const ThumbnailCell: React.FC<{
   const [dataUrl, setDataUrl] = React.useState<string | null>(null);
   const [fileExists, setFileExists] = React.useState<boolean | null>(null);
   const [isHovered, setIsHovered] = React.useState(false);
+  const [hasEmbeddedCover, setHasEmbeddedCover] = React.useState(false);
   const hasRetriedAfterErrorRef = React.useRef(false);
   const reloadThumbnail = React.useCallback(() => {
     if (!filePath || !record) {
@@ -147,6 +159,7 @@ export const ThumbnailCell: React.FC<{
   React.useEffect(() => {
     const handleThumbnailRegenerated = (event: CustomEvent<{ filePath: string }>) => {
       if (filePath && event.detail.filePath === filePath) {
+        embeddedCoverCache.delete(filePath);
         setDataUrl(null);
         reloadThumbnail();
       }
@@ -163,11 +176,42 @@ export const ThumbnailCell: React.FC<{
   const canOpen = !!filePath && fileExists !== false && !thumbnailOnly;
   const isArchiveFile = !!filePath && /\.(zip|7z)$/i.test(filePath);
   const isVideoFile = !!filePath && VIDEO_HOVER_PREVIEW_PATTERN.test(filePath);
+  const flaggedCustomThumbnail = isCustomThumbnailRecord(record);
+  const showCustomThumbnailBadge = flaggedCustomThumbnail || hasEmbeddedCover;
   const showInlineVideoPreview = videoHoverPreviewEnabled
     && inlineVideoPreview
     && isHovered
     && isVideoFile
     && canOpen;
+
+  React.useEffect(() => {
+    if (!isVideoFile || !filePath || flaggedCustomThumbnail) {
+      setHasEmbeddedCover(false);
+      return undefined;
+    }
+
+    const cached = embeddedCoverCache.get(filePath);
+    if (cached !== undefined) {
+      setHasEmbeddedCover(cached);
+      return undefined;
+    }
+
+    let ignore = false;
+    window.electronAPI.getVideoCodecInfo(filePath)
+      .then((info) => {
+        const hasCover = info?.hasEmbeddedCover === true;
+        embeddedCoverCache.set(filePath, hasCover);
+        if (!ignore) setHasEmbeddedCover(hasCover);
+      })
+      .catch(() => {
+        embeddedCoverCache.set(filePath, false);
+        if (!ignore) setHasEmbeddedCover(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [filePath, flaggedCustomThumbnail, isVideoFile]);
 
   React.useEffect(() => {
     if (!onPreviewChange) return;
@@ -201,7 +245,8 @@ export const ThumbnailCell: React.FC<{
             onClick={() => filePath && canOpen && onThumbnailClick(filePath)}
             onError={handleThumbnailImageError}
           />
-          {isHashBased && (
+          {showCustomThumbnailBadge && <CustomThumbnailBadge />}
+          {isHashBased && !showCustomThumbnailBadge && (
             <div className="absolute top-1 left-1 z-10">
               <RefreshCw size={16} className="text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.7)]" />
             </div>

@@ -28,6 +28,36 @@ import { extractEmbeddedVideoCover } from './video-cover';
 
 export { getAutoThumbnailTimestamp };
 
+export const CUSTOM_THUMBNAIL_FLAG = '__customThumbnail';
+
+export function setRecordCustomThumbnailFlag(recordId, enabled) {
+  if (!recordId) return;
+
+  try {
+    const row = db.prepare('SELECT data FROM records WHERE id = ?').get(recordId);
+    if (!row?.data) return;
+
+    const data = JSON.parse(row.data);
+    const currentlyEnabled = data[CUSTOM_THUMBNAIL_FLAG] === true;
+    if (enabled) {
+      if (currentlyEnabled) return;
+      data[CUSTOM_THUMBNAIL_FLAG] = true;
+    } else if (Object.prototype.hasOwnProperty.call(data, CUSTOM_THUMBNAIL_FLAG)) {
+      delete data[CUSTOM_THUMBNAIL_FLAG];
+    } else {
+      return;
+    }
+
+    db.prepare('UPDATE records SET data = ? WHERE id = ?').run(JSON.stringify(data), recordId);
+  } catch (error) {
+    log('커스텀 썸네일 플래그 갱신 실패:', {
+      recordId,
+      enabled,
+      error: error?.message,
+    });
+  }
+}
+
 export function generateUUID() {
   return crypto.randomUUID();
 }

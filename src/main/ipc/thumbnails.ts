@@ -136,7 +136,8 @@ import {
   generateThumbnailFromArchive,
   generateThumbnail,
   cleanupThumbnailsForCategory,
-  cleanupRelationReferences
+  cleanupRelationReferences,
+  setRecordCustomThumbnailFlag
 } from '../media/thumbnails';
 import {
   hasEmbeddedVideoCover,
@@ -331,6 +332,10 @@ export function registerThumbnailHandlers() {
         if (!archiveThumbnail) return null;
       }
 
+      if (context?.recordId) {
+        setRecordCustomThumbnailFlag(context.recordId, false);
+      }
+
       return thumbnailPath;
     } catch (e) {
       log('썸네일 재생성 에러:', e);
@@ -393,6 +398,7 @@ export function registerThumbnailHandlers() {
       fs.copyFileSync(temporaryThumbnailPath, thumbnailPath);
       if (context?.recordId) {
         db.prepare('UPDATE records SET thumbnailPath = ? WHERE id = ?').run(thumbnailPath, context.recordId);
+        setRecordCustomThumbnailFlag(context.recordId, true);
       }
 
       log('커스텀 썸네일 생성 완료:', thumbnailPath);
@@ -426,6 +432,9 @@ export function registerThumbnailHandlers() {
     const stillHasEmbeddedCover = removed ? await hasEmbeddedVideoCover(filePath) : true;
     if (removed && !stillHasEmbeddedCover) {
       deleteThumbnail(filePath, context);
+      if (context?.recordId) {
+        setRecordCustomThumbnailFlag(context.recordId, false);
+      }
       return true;
     }
     return false;
