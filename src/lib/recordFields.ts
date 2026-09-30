@@ -24,6 +24,16 @@ export const isCustomThumbnailRecord = (
   record?: { data?: Record<string, unknown> } | null,
 ) => record?.data?.[CUSTOM_THUMBNAIL_FLAG] === true;
 
+export const shouldShowCustomThumbnailBadge = ({
+  flagged,
+  hasEmbeddedCover,
+  override = null,
+}: {
+  flagged: boolean;
+  hasEmbeddedCover: boolean;
+  override?: boolean | null;
+}) => (override ?? flagged) || hasEmbeddedCover;
+
 export const isPercentageValue = (value: unknown): value is PercentageValue => (
   typeof value === 'object'
   && value !== null

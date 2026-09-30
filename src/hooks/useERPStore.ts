@@ -13,7 +13,7 @@ interface ERPStore {
   currentProfile: Profile | null;
 
   loadCategories: () => Promise<void>;
-  loadRecords: (categoryId: string) => Promise<void>;
+  loadRecords: (categoryId: string, options?: { force?: boolean }) => Promise<void>;
   addCategory: (category: NewCategory) => Promise<string>;
   updateCategory: (id: string, updates: any) => Promise<void>;
   deleteCategory: (id: string) => Promise<DeleteCategoryResult>;
@@ -57,7 +57,7 @@ export const useERPStore = create<ERPStore>((set, get) => ({
     set({ categories });
   },
 
-  loadRecords: async (categoryId: string) => {
+  loadRecords: async (categoryId: string, options?: { force?: boolean }) => {
     try {
       const profileId = get().currentProfile?.id;
       if (!profileId) {
@@ -76,7 +76,9 @@ export const useERPStore = create<ERPStore>((set, get) => ({
       const cacheTimestamp = localStorage.getItem(`${cacheKey}_timestamp`);
       
       // 캐시가 5분 이내인지 확인 (5분 = 300000ms)
-      const isCacheValid = cacheTimestamp && (Date.now() - parseInt(cacheTimestamp)) < 300000;
+      const isCacheValid = !options?.force
+        && cacheTimestamp
+        && (Date.now() - parseInt(cacheTimestamp)) < 300000;
       
       if (cachedData && isCacheValid) {
         try {

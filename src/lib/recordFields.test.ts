@@ -11,6 +11,7 @@ import {
   isFieldMultiple,
   isUrlString,
   isCustomThumbnailRecord,
+  shouldShowCustomThumbnailBadge,
   isVideoHoverPreviewFile,
   normalizePercentageValue,
   parseHashtags,
@@ -29,6 +30,15 @@ test('detects persisted custom thumbnail records', () => {
   expect(isCustomThumbnailRecord({ data: {} })).toBe(false);
   expect(isCustomThumbnailRecord({ data: { __customThumbnail: false } })).toBe(false);
   expect(isCustomThumbnailRecord({ data: { __customThumbnail: true } })).toBe(true);
+});
+
+test('shows the custom thumbnail badge from the record flag, embedded cover, or pending override', () => {
+  expect(shouldShowCustomThumbnailBadge({ flagged: false, hasEmbeddedCover: false })).toBe(false);
+  expect(shouldShowCustomThumbnailBadge({ flagged: true, hasEmbeddedCover: false })).toBe(true);
+  expect(shouldShowCustomThumbnailBadge({ flagged: false, hasEmbeddedCover: true })).toBe(true);
+  expect(shouldShowCustomThumbnailBadge({ flagged: false, hasEmbeddedCover: false, override: true })).toBe(true);
+  expect(shouldShowCustomThumbnailBadge({ flagged: true, hasEmbeddedCover: false, override: false })).toBe(false);
+  expect(shouldShowCustomThumbnailBadge({ flagged: false, hasEmbeddedCover: true, override: false })).toBe(true);
 });
 
 test('classifies list file types without treating hover-only videos as filter videos', () => {

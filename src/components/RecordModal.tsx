@@ -39,7 +39,7 @@ import {
 
 declare global {
   interface WindowEventMap {
-    'thumbnail:regenerated': CustomEvent<{ filePath: string }>;
+    'thumbnail:regenerated': CustomEvent<{ filePath: string; customThumbnail?: boolean }>;
   }
 }
 

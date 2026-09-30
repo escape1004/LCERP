@@ -18,7 +18,7 @@ import { isCustomThumbnailRecord } from '../lib/recordFields';
 
 declare global {
   interface WindowEventMap {
-    'thumbnail:regenerated': CustomEvent<{ filePath: string }>;
+    'thumbnail:regenerated': CustomEvent<{ filePath: string; customThumbnail?: boolean }>;
   }
 }
 
@@ -247,6 +247,10 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
     const ext = filePath ? filePath.slice(filePath.lastIndexOf('.')).toLowerCase() : '';
     const isVideo = /\.(mp4|avi|mkv|mov|wmv|flv|webm)$/i.test(ext);
     const loadRecords = useERPStore(state => state.loadRecords);
+    const refreshCategoryRecords = React.useCallback(async () => {
+      if (!categoryId) return;
+      await loadRecords(categoryId, { force: true });
+    }, [categoryId, loadRecords]);
     const { showLoading: showGlobalLoading, hideLoading: hideGlobalLoading, setLoading: setGlobalLoading } = useLoadingStore();
     const missingFile = fileExists === false;
     const thumbnailContext = React.useMemo(() => ({
@@ -359,11 +363,9 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
           });
           return;
         }
-        window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));
+        window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath, customThumbnail: false } }));
         await reloadThumbnail();
-        if (categoryId) {
-          await loadRecords(categoryId);
-        }
+        await refreshCategoryRecords();
         toast({ title: '커스텀 썸네일을 제거했습니다.' });
       } catch (e) {
         toast({
@@ -375,7 +377,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         setRegenLoading(false);
         hideGlobalLoading();
       }
-    }, [filePath, categoryId, loadRecords, reloadThumbnail, hideGlobalLoading, setGlobalLoading, showGlobalLoading, thumbnailContext]);
+    }, [filePath, categoryId, refreshCategoryRecords, reloadThumbnail, hideGlobalLoading, setGlobalLoading, showGlobalLoading, thumbnailContext]);
 
     React.useEffect(() => {
       if (SUPPORTED_THUMBNAIL_EXTS.includes(ext) && filePath) {
@@ -527,9 +529,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                       await window.electronAPI.updateRecord(record.id, { ...record.data, __thumbnailTimestamp: totalSeconds });
                       window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));
                       await reloadThumbnail();
-                      if (categoryId) {
-                        await loadRecords(categoryId);
-                      }
+                      await refreshCategoryRecords();
                     } else {
                       toast({ title: '썸네일 재생성 실패', description: '', variant: 'destructive' });
                     }
@@ -569,11 +569,9 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                                 setHasEmbeddedCover(true);
                                 setCustomThumbnailApplied(true);
                                 toast({ title: '커스텀 썸네일이 적용되었습니다.' });
-                                window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));
+                                window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath, customThumbnail: true } }));
                                 await reloadThumbnail();
-                                if (categoryId) {
-                                  await loadRecords(categoryId);
-                                }
+                                await refreshCategoryRecords();
                               } else {
                                 toast({
                                   title: '커스텀 썸네일 적용 실패',
@@ -638,11 +636,9 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                         if (res) {
                           setCustomThumbnailApplied(false);
                           toast({ title: '썸네일이 재생성되었습니다.' });
-                          window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));
+                          window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath, customThumbnail: false } }));
                           await reloadThumbnail();
-                          if (categoryId) {
-                            await loadRecords(categoryId);
-                          }
+                          await refreshCategoryRecords();
                         } else {
                           toast({ title: '썸네일 재생성 실패', description: '', variant: 'destructive' });
                         }
@@ -687,11 +683,9 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
                         if (res) {
                           setCustomThumbnailApplied(true);
                           toast({ title: '커스텀 썸네일이 적용되었습니다.' });
-                          window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath } }));
+                          window.dispatchEvent(new CustomEvent('thumbnail:regenerated', { detail: { filePath, customThumbnail: true } }));
                           await reloadThumbnail();
-                          if (categoryId) {
-                            await loadRecords(categoryId);
-                          }
+                          await refreshCategoryRecords();
                         } else {
                           toast({
                             title: '커스텀 썸네일 적용 실패',

@@ -54,7 +54,7 @@ import { HoverVideoPreview } from './records/ThumbnailCell';
 declare global {
   interface WindowEventMap {
     'erp:categoryChange': CustomEvent<{ categoryId: string }>;
-    'thumbnail:regenerated': CustomEvent<{ filePath: string }>;
+    'thumbnail:regenerated': CustomEvent<{ filePath: string; customThumbnail?: boolean }>;
     'config:updated': CustomEvent<{
       listThumbnailFit?: 'cover' | 'contain';
       videoHoverPreviewEnabled?: boolean;
@@ -575,7 +575,7 @@ export const MainContent: React.FC = () => {
     const handler = () => {
       if (selectedCategoryId) {
         showLoading('썸네일 업데이트 중...', 15000, true); // 15초 타임아웃, 취소 버튼 표시
-        loadRecords(selectedCategoryId).finally(() => {
+        loadRecords(selectedCategoryId, { force: true }).finally(() => {
           hideLoading();
         });
       }

@@ -2,7 +2,7 @@ import React from 'react';
 import { Archive, HelpCircle, ImageOff, ImagePlus, RefreshCw } from 'lucide-react';
 import type { DataRecord } from '../../types';
 import { getLocalVideoHttpUrl } from '../../lib/local-media';
-import { isCustomThumbnailRecord, VIDEO_HOVER_PREVIEW_PATTERN } from '../../lib/recordFields';
+import { isCustomThumbnailRecord, shouldShowCustomThumbnailBadge, VIDEO_HOVER_PREVIEW_PATTERN } from '../../lib/recordFields';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { FIELD_TOOLTIP_CLASSNAME } from './FieldValueRenderer';
@@ -99,6 +99,7 @@ export const ThumbnailCell: React.FC<{
   const [fileExists, setFileExists] = React.useState<boolean | null>(null);
   const [isHovered, setIsHovered] = React.useState(false);
   const [hasEmbeddedCover, setHasEmbeddedCover] = React.useState(false);
+  const [customThumbnailOverride, setCustomThumbnailOverride] = React.useState<boolean | null>(null);
   const hasRetriedAfterErrorRef = React.useRef(false);
   const reloadThumbnail = React.useCallback(() => {
     if (!filePath || !record) {
@@ -156,20 +157,6 @@ export const ThumbnailCell: React.FC<{
       });
   }, [filePath, record, reloadThumbnail]);
 
-  React.useEffect(() => {
-    const handleThumbnailRegenerated = (event: CustomEvent<{ filePath: string }>) => {
-      if (filePath && event.detail.filePath === filePath) {
-        embeddedCoverCache.delete(filePath);
-        setDataUrl(null);
-        reloadThumbnail();
-      }
-    };
-    window.addEventListener('thumbnail:regenerated', handleThumbnailRegenerated as EventListener);
-    return () => {
-      window.removeEventListener('thumbnail:regenerated', handleThumbnailRegenerated as EventListener);
-    };
-  }, [filePath, record, reloadThumbnail]);
-
   const getFileExtension = (path: string) => path.slice(path.lastIndexOf('.')).toLowerCase();
   const isHashBased = record && !record.thumbnailPath;
   const missingFile = !thumbnailOnly && !!filePath && fileExists === false;
@@ -177,7 +164,53 @@ export const ThumbnailCell: React.FC<{
   const isArchiveFile = !!filePath && /\.(zip|7z)$/i.test(filePath);
   const isVideoFile = !!filePath && VIDEO_HOVER_PREVIEW_PATTERN.test(filePath);
   const flaggedCustomThumbnail = isCustomThumbnailRecord(record);
-  const showCustomThumbnailBadge = flaggedCustomThumbnail || hasEmbeddedCover;
+  const showCustomThumbnailBadge = shouldShowCustomThumbnailBadge({
+    flagged: flaggedCustomThumbnail,
+    hasEmbeddedCover,
+    override: customThumbnailOverride,
+  });
+
+  React.useEffect(() => {
+    setCustomThumbnailOverride(null);
+  }, [filePath, record?.id]);
+
+  React.useEffect(() => {
+    if (customThumbnailOverride == null) return;
+    if (customThumbnailOverride === flaggedCustomThumbnail) {
+      setCustomThumbnailOverride(null);
+    }
+  }, [customThumbnailOverride, flaggedCustomThumbnail]);
+
+  React.useEffect(() => {
+    const handleThumbnailRegenerated = (event: CustomEvent<{ filePath: string; customThumbnail?: boolean }>) => {
+      if (filePath && event.detail.filePath === filePath) {
+        embeddedCoverCache.delete(filePath);
+        setDataUrl(null);
+        reloadThumbnail();
+        if (typeof event.detail.customThumbnail === 'boolean') {
+          setCustomThumbnailOverride(event.detail.customThumbnail);
+        }
+        if (!isVideoFile) {
+          setHasEmbeddedCover(false);
+          return;
+        }
+        window.electronAPI.getVideoCodecInfo(filePath)
+          .then((info) => {
+            const hasCover = info?.hasEmbeddedCover === true;
+            embeddedCoverCache.set(filePath, hasCover);
+            setHasEmbeddedCover(hasCover);
+          })
+          .catch(() => {
+            embeddedCoverCache.set(filePath, false);
+            setHasEmbeddedCover(false);
+          });
+      }
+    };
+    window.addEventListener('thumbnail:regenerated', handleThumbnailRegenerated as EventListener);
+    return () => {
+      window.removeEventListener('thumbnail:regenerated', handleThumbnailRegenerated as EventListener);
+    };
+  }, [filePath, isVideoFile, record, reloadThumbnail]);
   const showInlineVideoPreview = videoHoverPreviewEnabled
     && inlineVideoPreview
     && isHovered
