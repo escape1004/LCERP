@@ -21,6 +21,7 @@ import {
   type TranslationDisplayMode,
 } from '../../lib/translation';
 import { getRelationDisplayLabel } from '../../utils/relationDisplay';
+import { cn } from '../../lib/utils';
 
 export const FIELD_TOOLTIP_CLASSNAME = "relative bg-[#23272a] bg-opacity-95 text-white border border-gray-700 rounded shadow-2xl px-3 py-2 text-xs after:content-[''] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-8 after:border-x-transparent after:border-b-transparent after:border-t-[#23272a] after:mt-0.5 max-w-xs break-words";
 
@@ -86,6 +87,52 @@ export function renderTextWithHashtags(text: string) {
 
   return parts;
 }
+
+const FieldTextHoverSlot = React.forwardRef<
+  HTMLDivElement | HTMLSpanElement,
+  {
+    as: 'span' | 'div';
+    originalText: string;
+    translationText: string;
+    displayedText: string;
+    reserveSpace: boolean;
+    slotClassName: string;
+    layerClassName: string;
+    onClick: (event: React.MouseEvent) => void;
+  }
+>(({
+  as: Component,
+  originalText,
+  translationText,
+  displayedText,
+  reserveSpace,
+  slotClassName,
+  layerClassName,
+  onClick,
+}, ref) => {
+  if (!reserveSpace) {
+    return (
+      <Component ref={ref as never} className={slotClassName} onClick={onClick}>
+        {renderTextWithHashtags(displayedText)}
+      </Component>
+    );
+  }
+
+  return (
+    <Component ref={ref as never} className={slotClassName} onClick={onClick}>
+      <span className={cn(layerClassName, 'invisible pointer-events-none')} aria-hidden>
+        {renderTextWithHashtags(originalText)}
+      </span>
+      <span className={cn(layerClassName, 'invisible pointer-events-none')} aria-hidden>
+        {renderTextWithHashtags(translationText)}
+      </span>
+      <span className={layerClassName}>
+        {renderTextWithHashtags(displayedText)}
+      </span>
+    </Component>
+  );
+});
+FieldTextHoverSlot.displayName = 'FieldTextHoverSlot';
 
 let sharedTranslationDisplayMode: TranslationDisplayMode = DEFAULT_TRANSLATION_DISPLAY_MODE;
 const translationDisplayModeListeners = new Set<(mode: TranslationDisplayMode) => void>();
@@ -355,15 +402,24 @@ export const FieldValueRenderer: React.FC<FieldValueRendererProps> = ({
       const translationMeta = translatedText ? getTranslationMeta(recordData, field.id) : null;
       const showTranslatedInline = translationDisplayMode === 'inline-hover' && Boolean(translatedText) && isShowingTranslation;
       const displayedText = showTranslatedInline ? translatedText : formattedValue;
+      const reserveHoverSpace = translationDisplayMode === 'inline-hover' && Boolean(translatedText);
       if (isUrlString(formattedValue, isDetail)) {
         return <UrlValue url={formattedValue} variant={variant} onSelectRow={onSelectRow} />;
       }
 
-      const textClassName = !isDetail
-        ? `inline-block max-w-full min-w-0 hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors truncate ${showTranslatedInline ? 'text-blue-200' : 'text-discord-text'}`
+      const textColorClassName = showTranslatedInline ? 'text-blue-200' : 'text-discord-text';
+      const chromeClassName = !isDetail
+        ? cn('max-w-full min-w-0 hover:bg-discord-hover/50 px-1 py-0.5 rounded transition-colors', textColorClassName)
         : field.type === 'longtext'
-          ? `whitespace-pre-wrap break-words overflow-wrap-anywhere px-3 py-2 rounded transition-colors border border-gray-600 max-h-[240px] overflow-y-auto block w-full ${showTranslatedInline ? 'text-blue-200' : 'text-discord-text'}`
-          : `whitespace-pre-wrap break-words overflow-wrap-anywhere px-1 py-0.5 rounded transition-colors inline-block ${showTranslatedInline ? 'text-blue-200' : 'text-discord-text'}`;
+          ? cn('w-full min-w-0 px-3 py-2 rounded transition-colors border border-gray-600 max-h-[240px] overflow-y-auto', textColorClassName)
+          : cn('min-w-0 px-1 py-0.5 rounded transition-colors', textColorClassName);
+      const wrapClassName = !isDetail
+        ? 'truncate'
+        : 'whitespace-pre-wrap break-words overflow-wrap-anywhere';
+      const slotClassName = reserveHoverSpace
+        ? cn(isDetail && field.type === 'longtext' ? 'grid' : 'inline-grid', chromeClassName)
+        : cn(!isDetail || field.type !== 'longtext' ? 'inline-block' : 'block', chromeClassName, wrapClassName);
+      const layerClassName = cn('col-start-1 row-start-1 min-w-0 w-full', wrapClassName);
 
       return (
         <div
@@ -378,34 +434,26 @@ export const FieldValueRenderer: React.FC<FieldValueRendererProps> = ({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                {isDetail && field.type === 'longtext' ? (
-                  <div
-                    className={textClassName}
-                    onClick={(event) => {
+                <FieldTextHoverSlot
+                  as={isDetail ? 'div' : 'span'}
+                  originalText={formattedValue}
+                  translationText={translatedText}
+                  displayedText={displayedText}
+                  reserveSpace={reserveHoverSpace}
+                  slotClassName={slotClassName}
+                  layerClassName={layerClassName}
+                  onClick={(event) => {
+                    if (isDetail && field.type === 'longtext') {
                       void copyOnCtrlClick(event, displayedText, '긴 텍스트가 클립보드에 복사되었습니다.');
-                    }}
-                  >
-                    {renderTextWithHashtags(displayedText)}
-                  </div>
-                ) : isDetail ? (
-                  <div
-                    className={textClassName}
-                    onClick={(event) => {
+                      return;
+                    }
+                    if (isDetail) {
                       void copyOnCtrlClick(event, displayedText, '텍스트가 클립보드에 복사되었습니다.');
-                    }}
-                  >
-                    {renderTextWithHashtags(displayedText)}
-                  </div>
-                ) : (
-                  <span
-                    className={textClassName}
-                    onClick={(event) => {
-                      void copyOnCtrlClick(event, displayedText, '값이 클립보드에 복사되었습니다.', onSelectRow);
-                    }}
-                  >
-                    {renderTextWithHashtags(displayedText)}
-                  </span>
-                )}
+                      return;
+                    }
+                    void copyOnCtrlClick(event, displayedText, '값이 클립보드에 복사되었습니다.', onSelectRow);
+                  }}
+                />
               </TooltipTrigger>
               {!(translationDisplayMode === 'inline-hover' && translatedText) && (
                 <TooltipContent side="top" align="center" className={FIELD_TOOLTIP_CLASSNAME}>
