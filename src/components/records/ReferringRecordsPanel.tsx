@@ -3,11 +3,14 @@ import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import type { Category, DataRecord } from '../../types';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
+import { resolveFilePath } from '../../lib/pathResolver';
 import {
   filterRecordsByQuery,
+  getCategoryFileField,
   getCategoryRecordLabel,
   paginateItems,
 } from '../../lib/referringRecords';
+import { ThumbnailCell } from './ThumbnailCell';
 
 export const ReferringRecordsPanel: React.FC<{
   category: Category;
@@ -16,6 +19,7 @@ export const ReferringRecordsPanel: React.FC<{
 }> = ({ category, records, onSelectRecord }) => {
   const [query, setQuery] = React.useState('');
   const [page, setPage] = React.useState(1);
+  const fileField = React.useMemo(() => getCategoryFileField(category), [category]);
 
   const labeledRecords = React.useMemo(
     () => records.map((record) => ({
@@ -40,12 +44,9 @@ export const ReferringRecordsPanel: React.FC<{
   }, [query, records]);
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col overflow-hidden rounded-xl border border-gray-700 bg-discord-bg">
+    <aside className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl border border-gray-700 bg-discord-bg">
       <div className="flex-shrink-0 border-b border-gray-700 p-4">
-        <div className="text-sm font-semibold text-discord-text">{category.name}</div>
-        <div className="mt-1 text-xs text-discord-muted">
-          이 항목을 참조하는 레코드 {records.length.toLocaleString()}개
-        </div>
+        <div className="text-sm font-semibold text-discord-text">이 항목을 참조하는 레코드</div>
         <div className="relative mt-3">
           <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-discord-muted" />
           <Input
@@ -69,10 +70,24 @@ export const ReferringRecordsPanel: React.FC<{
                 key={record.id}
                 type="button"
                 onClick={() => onSelectRecord(record)}
-                className="w-full truncate rounded-md px-2.5 py-2 text-left text-sm text-discord-text hover:bg-discord-hover"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-discord-text hover:bg-discord-hover"
                 title={label}
               >
-                {label}
+                {fileField && (
+                  <div className="pointer-events-none shrink-0">
+                    <ThumbnailCell
+                      filePath={resolveFilePath(record.data[fileField.id], fileField) || undefined}
+                      record={record}
+                      thumbnailFit="cover"
+                      thumbnailOnly
+                      showStatusIcons={false}
+                      videoHoverPreviewEnabled={false}
+                      sizeClassName="w-14 h-14"
+                      onThumbnailClick={() => undefined}
+                    />
+                  </div>
+                )}
+                <span className="min-w-0 flex-1 truncate">{label}</span>
               </button>
             ))}
           </div>

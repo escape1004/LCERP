@@ -82,6 +82,7 @@ export const ThumbnailCell: React.FC<{
   sizeStyle?: React.CSSProperties;
   videoHoverPreviewEnabled?: boolean;
   inlineVideoPreview?: boolean;
+  showStatusIcons?: boolean;
   onPreviewChange?: (preview: ThumbnailPreviewState | null) => void;
 }> = ({
   filePath,
@@ -93,6 +94,7 @@ export const ThumbnailCell: React.FC<{
   sizeStyle,
   videoHoverPreviewEnabled = true,
   inlineVideoPreview = false,
+  showStatusIcons = true,
   onPreviewChange,
 }) => {
   const [dataUrl, setDataUrl] = React.useState<string | null>(null);
@@ -218,7 +220,7 @@ export const ThumbnailCell: React.FC<{
     && canOpen;
 
   React.useEffect(() => {
-    if (!isVideoFile || !filePath || flaggedCustomThumbnail) {
+    if (!showStatusIcons || !isVideoFile || !filePath || flaggedCustomThumbnail) {
       setHasEmbeddedCover(false);
       return undefined;
     }
@@ -244,7 +246,7 @@ export const ThumbnailCell: React.FC<{
     return () => {
       ignore = true;
     };
-  }, [filePath, flaggedCustomThumbnail, isVideoFile]);
+  }, [filePath, flaggedCustomThumbnail, isVideoFile, showStatusIcons]);
 
   React.useEffect(() => {
     if (!onPreviewChange) return;
@@ -278,8 +280,8 @@ export const ThumbnailCell: React.FC<{
             onClick={() => filePath && canOpen && onThumbnailClick(filePath)}
             onError={handleThumbnailImageError}
           />
-          {showCustomThumbnailBadge && <CustomThumbnailBadge />}
-          {isHashBased && !showCustomThumbnailBadge && (
+          {showStatusIcons && showCustomThumbnailBadge && <CustomThumbnailBadge />}
+          {showStatusIcons && isHashBased && !showCustomThumbnailBadge && (
             <div className="absolute top-1 left-1 z-10">
               <RefreshCw size={16} className="text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.7)]" />
             </div>

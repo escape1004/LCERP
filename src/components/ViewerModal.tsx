@@ -721,7 +721,7 @@ export const ViewerModal: React.FC<ViewerModalProps> = ({ isOpen, filePath, file
   return (
     <AnimatedModal
       isOpen={isOpen}
-      className="bg-black/95"
+      className="z-[60] bg-black/95"
       contentClassName="relative bg-discord-bg rounded-xl shadow-2xl w-[95vw] h-[95vh] flex flex-col"
       animateContent={false}
       exitAnimation={false}

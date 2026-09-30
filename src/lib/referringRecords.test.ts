@@ -2,6 +2,7 @@ import { expect, test } from 'vitest';
 import type { Category, DataRecord, FieldDefinition } from '../types';
 import {
   filterRecordsByQuery,
+  getCategoryFileField,
   getCategoryRecordLabel,
   getIncomingRelationFields,
   getReferringRecords,
@@ -91,6 +92,18 @@ test('finds unique root records that reference a subcategory record', () => {
 
   expect(fields.map((field) => field.id)).toEqual(['actor', 'tags']);
   expect(referring.map((record) => record.id)).toEqual(['m1', 'm2', 'm3']);
+});
+
+test('finds a file field when the source category has attachments', () => {
+  expect(getCategoryFileField(rootCategory)).toBeUndefined();
+  const withFile = {
+    ...rootCategory,
+    fields: [
+      ...rootCategory.fields,
+      { id: 'file', name: '파일', type: 'file' } as FieldDefinition,
+    ],
+  };
+  expect(getCategoryFileField(withFile)?.id).toBe('file');
 });
 
 test('labels records from the first visible text field and paginates large lists', () => {

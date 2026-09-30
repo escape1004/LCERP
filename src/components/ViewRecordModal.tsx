@@ -17,6 +17,7 @@ import { CustomThumbnailBadge } from './records/ThumbnailCell';
 import { ReferringRecordsPanel } from './records/ReferringRecordsPanel';
 import { isCustomThumbnailRecord } from '../lib/recordFields';
 import {
+  getCategoryFileField,
   getIncomingRelationFields,
   getReferringRecords,
   getReferringSourceCategory,
@@ -56,6 +57,8 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   const [viewerModalOpen, setViewerModalOpen] = useState(false);
   const [viewerFilePath, setViewerFilePath] = useState<string>('');
   const [viewerFileType, setViewerFileType] = useState<'image' | 'video' | 'archive' | null>(null);
+  const [viewerCategoryId, setViewerCategoryId] = useState('');
+  const [viewerRecordId, setViewerRecordId] = useState('');
   const [hh, setHh] = React.useState(0);
   const [mm, setMm] = React.useState(0);
   const [ss, setSs] = React.useState(1); // 기본 1초
@@ -64,12 +67,36 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   const [lastValidDuration, setLastValidDuration] = React.useState<number | null>(null);
   const [regenLoading, setRegenLoading] = React.useState(false);
 
+  const openViewer = useCallback((
+    nextFilePath: string,
+    nextCategoryId: string,
+    nextRecordId: string,
+  ) => {
+    setViewerFilePath(nextFilePath);
+    setViewerFileType(null);
+    setViewerCategoryId(nextCategoryId);
+    setViewerRecordId(nextRecordId);
+    setViewerModalOpen(true);
+  }, []);
+
+  const handleViewerClose = useCallback(() => {
+    setViewerModalOpen(false);
+    setViewerFilePath('');
+    setViewerFileType(null);
+    setViewerCategoryId('');
+    setViewerRecordId('');
+  }, []);
+
   // ESC 키로 모달 닫기
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
+      if (e.key !== 'Escape' || !isOpen) return;
+      if (viewerModalOpen) {
+        e.preventDefault();
+        handleViewerClose();
+        return;
       }
+      onClose();
     };
 
     if (isOpen) {
@@ -79,7 +106,7 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [handleViewerClose, isOpen, onClose, viewerModalOpen]);
 
   // Get parent categories path
   const getParentPath = useCallback((currentCategory: Category): Category[] => {
@@ -163,16 +190,8 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   const canOpenFile = !!filePath && filePath !== '' && filePath !== '-' && fileExists !== false && !isThumbnailOnlyFile;
 
   const handleThumbnailClick = (filePath: string) => {
-    // 즉시 모달 열기 (파일 타입 확인은 모달 내에서 처리)
-    setViewerFilePath(filePath);
-    setViewerFileType(null); // null로 설정하여 모달 내에서 타입 확인
-    setViewerModalOpen(true);
-  };
-
-  const handleViewerClose = () => {
-    setViewerModalOpen(false);
-    setViewerFilePath('');
-    setViewerFileType(null);
+    if (!category || !record) return;
+    openViewer(filePath, category.id, record.id);
   };
 
   // 참조 횟수 계산 함수
@@ -246,8 +265,17 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
 
   const handleSelectReferringRecord = useCallback((referringRecord: DataRecord) => {
     if (!referringSourceCategory) return;
-    onViewRecord?.(referringRecord, referringSourceCategory);
-  }, [onViewRecord, referringSourceCategory]);
+    const sourceFileField = getCategoryFileField(referringSourceCategory);
+    const sourceFilePath = resolveFilePath(
+      sourceFileField ? referringRecord.data[sourceFileField.id] : null,
+      sourceFileField,
+    );
+    if (!sourceFilePath) {
+      toast({ title: '첨부파일이 없습니다.', variant: 'destructive' });
+      return;
+    }
+    openViewer(sourceFilePath, referringSourceCategory.id, referringRecord.id);
+  }, [openViewer, referringSourceCategory]);
 
   if (!record || !category) return null;
 
@@ -767,8 +795,9 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
   return (
     <>
     <AnimatedModal isOpen={isOpen} contentClassName="w-full bg-transparent overflow-visible">
-      <div className="flex w-full max-h-[90vh] items-stretch justify-center gap-3 px-4">
-      <div className="bg-discord-bg rounded-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="flex w-full max-h-[90vh] items-start justify-center px-4">
+      <div className="relative w-full max-w-3xl max-h-[90vh]">
+      <div className="bg-discord-bg rounded-xl w-full max-h-[90vh] min-h-0 flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between p-6 border-b border-gray-700">
           <div className="flex items-end">
@@ -943,13 +972,16 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
         </div>
       </div>
       {showReferringRecordsPanel && referringSourceCategory && (
-        <ReferringRecordsPanel
-          key={record.id}
-          category={referringSourceCategory}
-          records={referringRecords}
-          onSelectRecord={handleSelectReferringRecord}
-        />
+        <div className="absolute left-[calc(100%+0.75rem)] top-0 h-full w-80">
+          <ReferringRecordsPanel
+            key={record.id}
+            category={referringSourceCategory}
+            records={referringRecords}
+            onSelectRecord={handleSelectReferringRecord}
+          />
+        </div>
       )}
+      </div>
       </div>
     </AnimatedModal>
     <ViewerModal
@@ -957,8 +989,8 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
       onClose={handleViewerClose}
       filePath={viewerFilePath}
       fileType={viewerFileType}
-      categoryId={category.id}
-      recordId={record.id}
+      categoryId={viewerCategoryId}
+      recordId={viewerRecordId}
     />
     </>
   );

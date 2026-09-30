@@ -72,6 +72,11 @@ export function getReferringRecords(
   return sourceRecords.filter((record) => recordReferencesTarget(record, relationFields, targetRecordId));
 }
 
+export function getCategoryFileField(category: Category) {
+  return category.fields.find((field) => field.type === 'file' && !field.hidden)
+    ?? category.fields.find((field) => field.type === 'file');
+}
+
 export function getCategoryRecordLabel(record: DataRecord, category: Category): string {
   const preferredField = category.fields.find((field) => field.type === 'text' && !field.hidden)
     ?? category.fields.find((field) => field.type !== 'file' && !field.hidden)
