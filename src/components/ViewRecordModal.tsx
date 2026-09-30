@@ -796,8 +796,8 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
     <>
     <AnimatedModal isOpen={isOpen} contentClassName="w-full bg-transparent overflow-visible">
       <div className="flex w-full max-h-[90vh] items-start justify-center px-4">
-      <div className="relative w-full max-w-3xl max-h-[90vh]">
-      <div className="bg-discord-bg rounded-xl w-full max-h-[90vh] min-h-0 flex flex-col overflow-hidden">
+      <div className="relative w-full max-w-3xl min-h-[70vh] max-h-[90vh]">
+      <div className="bg-discord-bg rounded-xl flex h-full min-h-[70vh] w-full max-h-[90vh] flex-col overflow-hidden">
         {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between p-6 border-b border-gray-700">
           <div className="flex items-end">

@@ -82,7 +82,7 @@ export const ReferringRecordsPanel: React.FC<{
                       thumbnailOnly
                       showStatusIcons={false}
                       videoHoverPreviewEnabled={false}
-                      sizeClassName="w-14 h-14"
+                      sizeClassName="w-[84px] h-[84px]"
                       onThumbnailClick={() => undefined}
                     />
                   </div>
