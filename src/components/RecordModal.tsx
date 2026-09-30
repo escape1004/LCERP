@@ -28,6 +28,7 @@ import {
   toScalarInputValue,
 } from '../lib/recordFields';
 import { getRelationDisplayLabel, getRelationPrimaryLabel, getRelationSecondaryLabel } from '../utils/relationDisplay';
+import { TextCaseContextMenu } from './records/TextCaseContextMenu';
 import type { Config } from '../types';
 import { OPENAI_TRANSLATION_MODEL, getTranslatedFieldId, getTranslationMetaFieldId, isTranslationEnabledField } from '../lib/translation';
 import {
@@ -436,13 +437,19 @@ export const RecordModal: React.FC<RecordModalProps> = ({
 
         {field.type === 'longtext' ? (
           <div className="relative">
-            <Textarea
+            <TextCaseContextMenu
               value={translationValue}
-              onChange={(e) => updateTranslationValue(field.id, e.target.value, false)}
-              placeholder="번역문을 입력하세요"
+              onValueChange={(next) => updateTranslationValue(field.id, next, false)}
               disabled={isTranslating}
-              className="min-h-[100px] bg-discord-sidebar border-gray-600 pr-28 text-discord-text placeholder:text-gray-500"
-            />
+            >
+              <Textarea
+                value={translationValue}
+                onChange={(e) => updateTranslationValue(field.id, e.target.value, false)}
+                placeholder="번역문을 입력하세요"
+                disabled={isTranslating}
+                className="min-h-[100px] bg-discord-sidebar border-gray-600 pr-28 text-discord-text placeholder:text-gray-500"
+              />
+            </TextCaseContextMenu>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -467,14 +474,21 @@ export const RecordModal: React.FC<RecordModalProps> = ({
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            <Input
-              type="text"
+            <TextCaseContextMenu
               value={translationValue}
-              onChange={(e) => updateTranslationValue(field.id, e.target.value, false)}
-              placeholder="번역문을 입력하세요"
+              onValueChange={(next) => updateTranslationValue(field.id, next, false)}
               disabled={isTranslating}
-              className="bg-discord-sidebar border-gray-600 text-discord-text flex-1"
-            />
+              className="flex-1"
+            >
+              <Input
+                type="text"
+                value={translationValue}
+                onChange={(e) => updateTranslationValue(field.id, e.target.value, false)}
+                placeholder="번역문을 입력하세요"
+                disabled={isTranslating}
+                className="bg-discord-sidebar border-gray-600 text-discord-text"
+              />
+            </TextCaseContextMenu>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -630,15 +644,21 @@ export const RecordModal: React.FC<RecordModalProps> = ({
         if (!field.textPrefix && !field.textSuffix) {
           return (
             <div className="space-y-1">
-              <Input
-                type="text"
-                placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
-                value={toScalarInputValue(value)}
-                onChange={(e) => updateFieldValue(field.id, normalizeTextFieldInput(field, e.target.value))}
+              <TextCaseContextMenu
+                value={toDisplayText(value)}
+                onValueChange={(next) => updateFieldValue(field.id, normalizeTextFieldInput(field, next))}
                 disabled={isTranslating}
-                className={inputClassName}
-                ref={isFirstField ? firstFieldRef as React.Ref<HTMLInputElement> : undefined}
-              />
+              >
+                <Input
+                  type="text"
+                  placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
+                  value={toScalarInputValue(value)}
+                  onChange={(e) => updateFieldValue(field.id, normalizeTextFieldInput(field, e.target.value))}
+                  disabled={isTranslating}
+                  className={inputClassName}
+                  ref={isFirstField ? firstFieldRef as React.Ref<HTMLInputElement> : undefined}
+                />
+              </TextCaseContextMenu>
               {renderTranslationInput(field)}
               {renderError()}
             </div>
@@ -653,19 +673,26 @@ export const RecordModal: React.FC<RecordModalProps> = ({
                   {field.textPrefix}
                 </div>
               )}
-              <Input
-                type="text"
-                placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
-                value={toScalarInputValue(value)}
-                onChange={(e) => updateFieldValue(field.id, normalizeTextFieldInput(field, e.target.value))}
+              <TextCaseContextMenu
+                value={toDisplayText(value)}
+                onValueChange={(next) => updateFieldValue(field.id, normalizeTextFieldInput(field, next))}
                 disabled={isTranslating}
-                className={cn(
-                  inputClassName,
-                  'h-10 border-0 shadow-none rounded-none bg-transparent px-0',
-                  'focus-visible:ring-0 focus-visible:ring-offset-0'
-                )}
-                ref={isFirstField ? firstFieldRef as React.Ref<HTMLInputElement> : undefined}
-              />
+                className="flex-1"
+              >
+                <Input
+                  type="text"
+                  placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
+                  value={toScalarInputValue(value)}
+                  onChange={(e) => updateFieldValue(field.id, normalizeTextFieldInput(field, e.target.value))}
+                  disabled={isTranslating}
+                  className={cn(
+                    inputClassName,
+                    'h-10 border-0 shadow-none rounded-none bg-transparent px-0',
+                    'focus-visible:ring-0 focus-visible:ring-offset-0'
+                  )}
+                  ref={isFirstField ? firstFieldRef as React.Ref<HTMLInputElement> : undefined}
+                />
+              </TextCaseContextMenu>
               {field.textSuffix && (
                 <div className="flex items-center px-2 text-discord-muted text-sm whitespace-nowrap leading-none">
                   {field.textSuffix}
@@ -680,21 +707,27 @@ export const RecordModal: React.FC<RecordModalProps> = ({
       case 'longtext':
         return (
           <div className="space-y-1">
-            <textarea
-              placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
-              value={toScalarInputValue(value)}
-              onChange={(e) => updateFieldValue(field.id, e.target.value)}
+            <TextCaseContextMenu
+              value={toDisplayText(value)}
+              onValueChange={(next) => updateFieldValue(field.id, next)}
               disabled={isTranslating}
-              className={cn(
-                "flex w-full rounded-md border px-3 py-2 text-sm shadow-sm transition-colors",
-                "placeholder:text-gray-500",
-                "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                "disabled:cursor-not-allowed disabled:opacity-50",
-                "min-h-[100px] resize-y",
-                inputClassName
-              )}
-              ref={isFirstField ? firstFieldRef as React.Ref<HTMLTextAreaElement> : undefined}
-            />
+            >
+              <textarea
+                placeholder={`${field.name}${field.required ? ' (필수)' : ''}`}
+                value={toScalarInputValue(value)}
+                onChange={(e) => updateFieldValue(field.id, e.target.value)}
+                disabled={isTranslating}
+                className={cn(
+                  "flex w-full rounded-md border px-3 py-2 text-sm shadow-sm transition-colors",
+                  "placeholder:text-gray-500",
+                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                  "disabled:cursor-not-allowed disabled:opacity-50",
+                  "min-h-[100px] resize-y",
+                  inputClassName
+                )}
+                ref={isFirstField ? firstFieldRef as React.Ref<HTMLTextAreaElement> : undefined}
+              />
+            </TextCaseContextMenu>
             {renderTranslationInput(field)}
             {renderError()}
           </div>
