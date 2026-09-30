@@ -1127,6 +1127,11 @@ export const CategoryContent: React.FC<CategoryContentProps> = ({ categoryId }) 
         }}
         category={categories.find(cat => cat.id === viewingCategory) || selectedCategory}
         record={viewingRecord}
+        onViewRecord={(nextRecord, nextCategory) => {
+          setViewingRecord(nextRecord);
+          setViewingCategory(nextCategory.id);
+          setIsViewModalOpen(true);
+        }}
       />
 
       {/* 커스텀 다이얼로그들 */}

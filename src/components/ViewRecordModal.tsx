@@ -14,7 +14,13 @@ import { resolveFilePath } from '../lib/pathResolver';
 import { AnimatedModal } from './ui/animated-modal';
 import { FieldValueRenderer } from './records/FieldValueRenderer';
 import { CustomThumbnailBadge } from './records/ThumbnailCell';
+import { ReferringRecordsPanel } from './records/ReferringRecordsPanel';
 import { isCustomThumbnailRecord } from '../lib/recordFields';
+import {
+  getIncomingRelationFields,
+  getReferringRecords,
+  getReferringSourceCategory,
+} from '../lib/referringRecords';
 
 declare global {
   interface WindowEventMap {
@@ -199,12 +205,49 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
     return count;
   }, [categories, getCategoryRecords]);
 
+  const referringSourceCategory = React.useMemo(
+    () => (category ? getReferringSourceCategory(category, categories) : null),
+    [category, categories],
+  );
+  const referringRelationFields = React.useMemo(
+    () => (
+      category && referringSourceCategory
+        ? getIncomingRelationFields(referringSourceCategory, category.id)
+        : []
+    ),
+    [category, referringSourceCategory],
+  );
+  const referringRecords = React.useMemo(
+    () => {
+      if (!record || !referringSourceCategory || referringRelationFields.length === 0) return [];
+      return getReferringRecords(
+        getCategoryRecords(referringSourceCategory.id),
+        referringRelationFields,
+        record.id,
+      );
+    },
+    [getCategoryRecords, record, referringRelationFields, referringSourceCategory],
+  );
+  const showReferringRecordsPanel = Boolean(
+    isOpen && category?.parentId && referringSourceCategory && referringRelationFields.length > 0
+  );
+
+  React.useEffect(() => {
+    if (!showReferringRecordsPanel || !referringSourceCategory) return;
+    void loadRecords(referringSourceCategory.id);
+  }, [loadRecords, referringSourceCategory, showReferringRecordsPanel]);
+
   const handleViewRelatedRecord = useCallback((relatedRecord: DataRecord, relatedCategory: Category) => {
     onClose();
     window.setTimeout(() => {
       onViewRecord?.(relatedRecord, relatedCategory);
     }, 200);
   }, [onClose, onViewRecord]);
+
+  const handleSelectReferringRecord = useCallback((referringRecord: DataRecord) => {
+    if (!referringSourceCategory) return;
+    onViewRecord?.(referringRecord, referringSourceCategory);
+  }, [onViewRecord, referringSourceCategory]);
 
   if (!record || !category) return null;
 
@@ -723,7 +766,9 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
 
   return (
     <>
-    <AnimatedModal isOpen={isOpen} contentClassName="bg-discord-bg rounded-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+    <AnimatedModal isOpen={isOpen} contentClassName="w-full bg-transparent overflow-visible">
+      <div className="flex w-full max-h-[90vh] items-stretch justify-center gap-3 px-4">
+      <div className="bg-discord-bg rounded-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between p-6 border-b border-gray-700">
           <div className="flex items-end">
@@ -896,6 +941,16 @@ export const ViewRecordModal: React.FC<ViewRecordModalProps> = ({
             닫기
           </Button>
         </div>
+      </div>
+      {showReferringRecordsPanel && referringSourceCategory && (
+        <ReferringRecordsPanel
+          key={record.id}
+          category={referringSourceCategory}
+          records={referringRecords}
+          onSelectRecord={handleSelectReferringRecord}
+        />
+      )}
+      </div>
     </AnimatedModal>
     <ViewerModal
       isOpen={viewerModalOpen}
